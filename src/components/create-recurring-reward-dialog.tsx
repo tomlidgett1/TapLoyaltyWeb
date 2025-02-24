@@ -2,7 +2,7 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Coffee, Percent, ChevronRight, ArrowLeft } from "lucide-react"
+import { Coffee, Percent, ChevronRight, ArrowLeft, Loader2, CheckCircle } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
@@ -13,6 +13,9 @@ import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/auth-context'
 import { toast } from "@/components/ui/use-toast"
+import { collection, query, where, getDocs } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import { playSuccessSound } from '@/lib/audio'
 
 interface CreateRecurringRewardDialogProps {
   open: boolean
@@ -22,6 +25,7 @@ interface CreateRecurringRewardDialogProps {
 export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurringRewardDialogProps) {
   const { user } = useAuth()
   const [screen, setScreen] = useState<'options' | 'coffee'>('options')
+  const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     pin: '',
     freeRewardTiming: 'after' as 'before' | 'after',
@@ -46,8 +50,24 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
 
   const saveCoffeeProgram = async () => {
     if (!user?.uid) return
+    setLoading(true)
 
     try {
+      // Check if coffee program exists
+      const rewardsRef = collection(db, 'merchants', user.uid, 'rewards')
+      const q = query(rewardsRef, where('programtype', '==', 'coffee'))
+      const querySnapshot = await getDocs(q)
+
+      if (!querySnapshot.empty) {
+        toast({
+          title: "Error",
+          description: "Coffee program already exists",
+          variant: "destructive"
+        })
+        setLoading(false)
+        return
+      }
+
       const coffeeprogram = httpsCallable(functions, 'coffeeprogram')
       
       const data = {
@@ -61,15 +81,21 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
       console.log("Sending data:", JSON.stringify(data, null, 2))
       
       const result = await coffeeprogram(data)
+      playSuccessSound()
+      toast({
+        title: (
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-green-500" />
+            <span>Success</span>
+          </div>
+        ),
+        description: "Coffee program created successfully",
+      })
       onOpenChange(false)
     } catch (error: any) {
-      if (error?.message === "Coffee program rewards already exist for this merchant.") {
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Coffee program rewards already exist for this merchant."
-        })
-      }
+      // No error handling needed here
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -209,8 +235,18 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
             {screen === 'options' ? 'Cancel' : 'Back'}
           </Button>
           {screen === 'coffee' && (
-            <Button onClick={saveCoffeeProgram}>
-              Create Program
+            <Button 
+              onClick={saveCoffeeProgram} 
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create Program'
+              )}
             </Button>
           )}
         </div>

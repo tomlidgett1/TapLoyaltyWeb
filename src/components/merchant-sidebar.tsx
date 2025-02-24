@@ -1,7 +1,7 @@
 "use client"
 
 import { Home, Users, CreditCard, Settings, BarChart2, Gift, User, HelpCircle, Info, PlusCircle, 
-  BadgeCheck, Bell, ChevronsUpDown, LogOut, Sparkles, MessageCircle, LifeBuoy, Search, Store, Blocks, Library } from "lucide-react"
+  BadgeCheck, Bell, ChevronsUpDown, LogOut, Sparkles, MessageCircle, LifeBuoy, Search, Store, Blocks, Library, Link as LinkIcon } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -64,7 +64,7 @@ const menuItems = [
   },
   {
     title: "Integrations",
-    icon: Blocks,
+    icon: LinkIcon,
     url: "/integrations",
   },
 ]

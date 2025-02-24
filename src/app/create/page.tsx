@@ -5,9 +5,19 @@ import { CreateRewardDialog } from "@/components/create-reward-dialog"
 import { CreatePointsRuleDialog } from "@/components/create-points-rule-dialog"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
 import { useState } from "react"
-import { Sparkles, Settings, ImagePlus, MessageSquare, Clock, Repeat, Bot, ChevronRight, ListFilter, Eye, HelpCircle } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
+import { 
+  Sparkles, 
+  Settings, 
+  ImagePlus, 
+  MessageSquare, 
+  Clock, 
+  Repeat, 
+  Bot, 
+  ChevronRight,
+  Rocket,
+  Users,
+  ArrowRight
+} from "lucide-react"
 
 export default function CreatePage() {
   const [createRewardOpen, setCreateRewardOpen] = useState(false)
@@ -16,8 +26,8 @@ export default function CreatePage() {
 
   const sections = [
     {
-      title: "Rewards",
-      description: "Create and manage different types of rewards for your customers",
+      id: "rewards",
+      title: "Rewards & Incentives",
       items: [
         {
           title: "Individual Reward",
@@ -38,142 +48,103 @@ export default function CreatePage() {
           icon: Bot,
           action: () => console.log("Create AI reward"),
           badge: "New"
-        },
-        {
-          title: "Scheduled Reward",
-          description: "Plan rewards for future campaigns",
-          icon: Clock,
-          action: () => console.log("Create scheduled reward")
-        },
+        }
       ]
     },
     {
+      id: "program",
       title: "Program Settings",
-      description: "Configure core settings for your loyalty program",
       items: [
         {
-          title: "Point Rules",
+          title: "Points Rules",
           description: "Configure earning and redemption rules",
           icon: Settings,
-          action: () => setPointsRuleDialogOpen(true)
+          action: () => setPointsRuleDialogOpen(true),
+          color: "orange"
         },
+        {
+          title: "Tiers & Levels",
+          description: "Set up customer loyalty tiers",
+          icon: Users,
+          action: () => console.log("Create tiers"),
+          color: "pink"
+        }
+      ]
+    },
+    {
+      id: "marketing",
+      title: "Marketing & Communication",
+      items: [
         {
           title: "Homepage Banner",
           description: "Update your store's featured content",
           icon: ImagePlus,
-          action: () => console.log("Create banner")
+          action: () => console.log("Create banner"),
+          color: "yellow"
         },
         {
           title: "Broadcast Message",
           description: "Send updates to all your customers",
           icon: MessageSquare,
-          action: () => console.log("Create broadcast")
+          action: () => console.log("Create broadcast"),
+          color: "indigo"
         }
       ]
     }
   ]
 
   return (
-    <div className="p-4">
-      <div className="max-w-[1200px] mx-auto space-y-8">
-        <div className="flex flex-col">
-          <div className="flex justify-between items-center gap-4">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Create</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Create and manage your loyalty program content
-              </p>
-            </div>
-          </div>
+    <div className="p-6">
+      <div className="max-w-[1200px] mx-auto">
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold tracking-tight">Create</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Create and manage your loyalty program content
+          </p>
         </div>
 
         <div className="space-y-8">
           {sections.map((section) => (
-            <div key={section.title} className="space-y-4">
-              <div className="border-b pb-2 flex items-center justify-between">
-                <h2 className="text-sm font-medium text-muted-foreground">{section.title}</h2>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  className={cn(
-                    "h-7 text-xs",
-                    "text-muted-foreground",
-                    "hover:text-[#007AFF] hover:bg-transparent",
-                    "transition-colors"
-                  )}
-                  onClick={() => console.log(`View all ${section.title}`)}
-                >
-                  <Eye className="h-3.5 w-3.5 mr-1.5" />
-                  View all
-                </Button>
-              </div>
+            <div key={section.id}>
+              <h2 className="text-sm font-medium mb-3 text-muted-foreground">
+                {section.title}
+              </h2>
 
-              <div className="grid gap-3 grid-cols-1 md:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                 {section.items.map((item) => (
-                  <Card 
+                  <Card
                     key={item.title}
-                    className="group cursor-pointer transition-all hover:shadow-sm hover:border-[#007AFF]/30"
+                    className="group cursor-pointer hover:bg-slate-50 transition-colors"
                     onClick={item.action}
                   >
-                    <div className="p-4 flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-md bg-[#007AFF]/10 flex items-center justify-center flex-shrink-0">
-                        <item.icon className="h-4 w-4 text-[#007AFF]" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-sm font-medium truncate">{item.title}</h3>
-                          {item.badge && (
-                            <span className={cn(
-                              "text-[10px] font-medium px-1.5 py-0.5 rounded-full",
-                              item.badge === "New" 
-                                ? "text-[#007AFF] bg-[#007AFF]/10" 
-                                : "text-green-600 bg-green-50"
-                            )}>
-                              {item.badge}
-                            </span>
-                          )}
+                    <div className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="shrink-0">
+                          <item.icon className="h-4 w-4 text-slate-600" />
                         </div>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {item.description}
-                        </p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-medium truncate">
+                              {item.title}
+                            </h3>
+                            {item.badge && (
+                              <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                                {item.badge}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                            {item.description}
+                          </p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
                       </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-[#007AFF] transition-colors" />
                     </div>
                   </Card>
                 ))}
               </div>
             </div>
           ))}
-        </div>
-
-        <div className="border-t pt-6">
-          <Card className="bg-[#007AFF]/5 border-none">
-            <div className="p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-full bg-[#007AFF]/10 flex items-center justify-center">
-                  <HelpCircle className="h-4 w-4 text-[#007AFF]" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium">Need help getting started?</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Check out our help guides and tutorials
-                  </p>
-                </div>
-              </div>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                className={cn(
-                  "text-xs font-medium",
-                  "text-[#007AFF]",
-                  "hover:bg-[#007AFF]/10",
-                  "transition-colors"
-                )}
-              >
-                View guides
-              </Button>
-            </div>
-          </Card>
         </div>
       </div>
 

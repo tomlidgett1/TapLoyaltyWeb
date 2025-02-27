@@ -11,7 +11,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Search, Filter, Plus, MoreVertical, Gift } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { Timestamp } from "firebase/firestore"
+import { collection, query, orderBy, getDocs } from "firebase/firestore"
+import { useToast } from "@/components/ui/use-toast"
+import { db } from "@/lib/firebase"
+import { useAuth } from "@/contexts/auth-context"
+import { safelyGetDate } from "@/lib/utils"
 
 // Mock data - replace with real data later
 const rewards = [
@@ -31,6 +37,58 @@ const rewards = [
 
 export default function RewardsPage() {
   const [searchQuery, setSearchQuery] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [rewards, setRewards] = useState([])
+  const { toast } = useToast()
+  const { user } = useAuth()
+
+  useEffect(() => {
+    if (user?.uid) {
+      fetchRewards()
+    }
+  }, [user])
+
+  const fetchRewards = async () => {
+    if (!user?.uid) return
+    
+    try {
+      setLoading(true)
+      const rewardsRef = collection(db, 'merchants', user.uid, 'rewards')
+      const q = query(rewardsRef, orderBy('createdAt', 'desc'))
+      const querySnapshot = await getDocs(q)
+      
+      const rewardsData: any[] = []
+      
+      querySnapshot.forEach(doc => {
+        try {
+          const data = doc.data()
+          
+          const createdAt = safelyGetDate(data.createdAt)
+          const updatedAt = safelyGetDate(data.updatedAt || data.createdAt)
+          
+          rewardsData.push({
+            ...data,
+            id: doc.id,
+            createdAt,
+            updatedAt
+          })
+        } catch (err) {
+          console.error("Error processing document:", err)
+        }
+      })
+      
+      setRewards(rewardsData)
+    } catch (error) {
+      console.error("Error fetching rewards:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load rewards. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div className="p-6">

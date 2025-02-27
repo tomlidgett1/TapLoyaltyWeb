@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Sparkles, Send, Plus, Settings, MessageSquare, ChevronDown, ChevronUp, HelpCircle, CheckCircle, Edit, MoreHorizontal, Pencil, Trash2, Gift, Repeat, Sparkles as SparklesIcon, DollarSign, Calendar, Clock, Users, Award, History, Timer, Wallet, BadgeCheck, CalendarRange, UserCheck, Ban, Mic, MicOff } from "lucide-react"
+import { Sparkles, Send, Plus, Settings, MessageSquare, ChevronDown, ChevronUp, HelpCircle, CheckCircle, Edit, MoreHorizontal, Pencil, Trash2, Gift, Repeat, Sparkles as SparklesIcon, DollarSign, Calendar, Clock, Users, Award, History, Timer, Wallet, BadgeCheck, CalendarRange, UserCheck, Ban, Mic, MicOff, Eye, Coffee } from "lucide-react"
 import { getAIResponse } from "@/lib/openai"
 import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
@@ -25,7 +25,7 @@ import {
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, setDoc, getDoc, collection, getDocs, query, orderBy, deleteDoc, writeBatch } from "firebase/firestore"
+import { doc, setDoc, getDoc, collection, getDocs, query, orderBy, deleteDoc, writeBatch, Timestamp } from "firebase/firestore"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
 import { useCustomers } from '@/hooks/use-customers'
 import { Command, CommandGroup, CommandItem } from '@/components/ui/command'
@@ -47,6 +47,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
+import { format } from "date-fns"
+import { Badge } from "@/components/ui/badge"
 
 interface Conversation {
   id: string
@@ -77,24 +79,33 @@ interface RewardData {
   conditions: Array<{
     type: string
     amount?: number
-    value?: number
+    value?: number | string
   }>
   limitations: Array<{
     type: string
-    value: number
+    value: number | string[] | { startTime?: string; endTime?: string; startDate?: string; endDate?: string }
   }>
 }
 
-function isJsonString(str: string): boolean {
+const isJsonString = (str: string) => {
+  if (typeof str !== 'string') return false;
   try {
-    JSON.parse(str)
-    return true
+    const result = JSON.parse(str);
+    return typeof result === 'object' && result !== null;
   } catch (e) {
-    return false
+    return false;
   }
-}
+};
 
-function RewardCard({ reward }: { reward: RewardData }) {
+function RewardCard({ 
+  reward, 
+  setSavingReward, 
+  setPinDialogOpen 
+}: { 
+  reward: RewardData; 
+  setSavingReward: (reward: any) => void;
+  setPinDialogOpen: (open: boolean) => void;
+}) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [isUsed, setIsUsed] = useState(false)
@@ -152,6 +163,10 @@ function RewardCard({ reward }: { reward: RewardData }) {
     switch (visibility.type) {
       case 'totalLifetimeSpend':
         return `Visible after $${visibility.value} total spend`
+      case 'minimumTransactions':
+        return `Visible after ${visibility.value} transactions`
+      case 'daysSinceJoined':
+        return `Visible after ${visibility.value} days of membership`
       default:
         return `Visible after ${visibility.type}: ${visibility.value}`
     }
@@ -193,6 +208,84 @@ function RewardCard({ reward }: { reward: RewardData }) {
 
   const handleEdit = (e: React.MouseEvent) => {
     e.stopPropagation()
+    
+    // Map the reward data to the format expected by CreateRewardDialog
+    const editFormData = {
+      rewardName: reward.rewardName,
+      description: reward.description,
+      type: reward.programtype, 
+      rewardVisibility: reward.rewardVisibility || 'global',
+      pin: "",
+      pointsCost: reward.pointsCost,
+      isActive: reward.isActive,
+      delayedVisibility: !!reward.delayedVisibility,
+      isTargeted: false,
+      discountAmount: 0,
+      itemName: "",
+      voucherAmount: reward.voucherAmount,
+      
+      // Map conditions
+      conditions: {
+        newCustomer: false,
+        minimumTransactions: reward.conditions?.find(c => c.type === 'minimumTransactions')?.value?.toString() || "",
+        maximumTransactions: reward.conditions?.find(c => c.type === 'maximumTransactions')?.value?.toString() || "",
+        daysSinceJoined: reward.conditions?.find(c => c.type === 'daysSinceJoined')?.value?.toString() || "",
+        daysSinceLastVisit: reward.conditions?.find(c => c.type === 'daysSinceLastVisit')?.value?.toString() || "",
+        minimumLifetimeSpend: reward.conditions?.find(c => c.type === 'minimumLifetimeSpend')?.value?.toString() || "",
+        minimumPointsBalance: reward.conditions?.find(c => c.type === 'minimumPointsBalance')?.value?.toString() || "",
+        membershipLevel: reward.conditions?.find(c => c.type === 'membershipLevel')?.value?.toString() || "",
+        
+        // Add flags for condition sections
+        useTransactionRequirements: !!(
+          reward.conditions?.find(c => c.type === 'minimumTransactions')?.value ||
+          reward.conditions?.find(c => c.type === 'maximumTransactions')?.value
+        ),
+        useTimeRequirements: !!(
+          reward.conditions?.find(c => c.type === 'daysSinceJoined')?.value ||
+          reward.conditions?.find(c => c.type === 'daysSinceLastVisit')?.value
+        ),
+        useSpendingRequirements: !!(
+          reward.conditions?.find(c => c.type === 'minimumLifetimeSpend')?.value ||
+          reward.conditions?.find(c => c.type === 'minimumPointsBalance')?.value
+        )
+      },
+      
+      // Map limitations
+      limitations: {
+        totalRedemptionLimit: reward.limitations?.find(l => l.type === 'totalRedemptionLimit')?.value?.toString() || "",
+        perCustomerLimit: reward.limitations?.find(l => l.type === 'customerLimit')?.value?.toString() || "",
+        
+        // Handle day restrictions
+        dayRestrictions: reward.limitations?.find(l => l.type === 'daysOfWeek')?.value as string[] || [],
+        
+        // Handle time of day
+        startTime: reward.limitations?.find(l => l.type === 'timeOfDay')?.value?.startTime || "",
+        endTime: reward.limitations?.find(l => l.type === 'timeOfDay')?.value?.endTime || "",
+        
+        // Handle active period
+        startDate: reward.limitations?.find(l => l.type === 'activePeriod')?.value?.startDate || null,
+        endDate: reward.limitations?.find(l => l.type === 'activePeriod')?.value?.endDate || null,
+        
+        // Add flags for limitation sections
+        useTimeRestrictions: !!reward.limitations?.find(l => l.type === 'timeOfDay'),
+        useDayRestrictions: !!reward.limitations?.find(l => l.type === 'daysOfWeek'),
+      },
+      
+      // Handle delayed visibility settings
+      delayedVisibilityType: reward.delayedVisibility?.type === 'totalLifetimeSpend' ? 'spend' : 
+                            reward.delayedVisibility?.type === 'minimumTransactions' ? 'transactions' : '',
+      delayedVisibilitySpend: reward.delayedVisibility?.type === 'totalLifetimeSpend' ? reward.delayedVisibility.value.toString() : '',
+      delayedVisibilityTransactions: reward.delayedVisibility?.type === 'minimumTransactions' ? reward.delayedVisibility.value.toString() : '',
+      
+      // Handle active period flag
+      hasActivePeriod: !!reward.limitations?.find(l => l.type === 'activePeriod'),
+      activePeriod: {
+        startDate: reward.limitations?.find(l => l.type === 'activePeriod')?.value?.startDate || '',
+        endDate: reward.limitations?.find(l => l.type === 'activePeriod')?.value?.endDate || ''
+      }
+    }
+    
+    setCreateRewardData(editFormData)
     setEditDialogOpen(true)
   }
 
@@ -209,6 +302,7 @@ function RewardCard({ reward }: { reward: RewardData }) {
       return
     }
 
+    setSaving(true)
     setSavingReward(reward)
     setPinDialogOpen(true)
   }
@@ -218,40 +312,135 @@ function RewardCard({ reward }: { reward: RewardData }) {
 
     try {
       setSaving(true)
-      const rewardId = Date.now().toString()
+      const now = Timestamp.now()
+      const batch = writeBatch(db)
       
-      const rewardData = {
-        ...savingReward,
-        pin: pin.trim(),
-        createdAt: new Date().toISOString(),
-        status: status,
-        isActive: status === 'live',
-        id: rewardId,
-        merchantId: user.uid,
-        updatedAt: new Date().toISOString()
+      console.log("Saving reward:", savingReward);
+      
+      // Check if this is a program with multiple rewards
+      if (savingReward.isProgram && Array.isArray(savingReward.rewards)) {
+        console.log(`Program detected with ${savingReward.rewards.length} rewards`);
+        console.log("Rewards array:", JSON.stringify(savingReward.rewards));
+        
+        // Create a program record first
+        const programId = `program-${Date.now()}`
+        console.log("Created program ID:", programId);
+        
+        // Create a clean copy of the program data without the rewards array
+        // to avoid circular references
+        const { rewards, ...programWithoutRewards } = savingReward;
+        
+        const programData = {
+          ...programWithoutRewards,
+          pin: pin.trim(),
+          createdAt: now,
+          status: status,
+          isActive: status === 'live',
+          id: programId,
+          merchantId: user.uid,
+          updatedAt: now,
+          category: 'program',
+          rewardCount: rewards.length
+        }
+        
+        // Save program record
+        console.log("Saving program record:", programData);
+        const merchantProgramRef = doc(db, 'merchants', user.uid, 'rewards', programId)
+        batch.set(merchantProgramRef, programData)
+        
+        const globalProgramRef = doc(db, 'rewards', programId)
+        batch.set(globalProgramRef, programData)
+        
+        const tapAiProgramRef = doc(db, 'merchants', user.uid, 'tapaiRewards', programId)
+        batch.set(tapAiProgramRef, programData)
+        
+        // Then create each individual reward in the program
+        console.log("Starting to process individual rewards...");
+        
+        // Create an array to store all the reward IDs we're creating
+        const createdRewardIds = [];
+        
+        // Make sure we're iterating through the rewards array correctly
+        const rewardsArray = Array.isArray(rewards) ? rewards : [];
+        console.log(`Processing ${rewardsArray.length} rewards`);
+        
+        for (let i = 0; i < rewardsArray.length; i++) {
+          const reward = rewardsArray[i];
+          console.log(`Processing reward ${i+1}/${rewardsArray.length}:`, reward.rewardName);
+          
+          // Generate a truly unique ID for each reward
+          const uniqueTimestamp = Date.now() + i; // Add index to ensure uniqueness
+          const randomSuffix = Math.floor(Math.random() * 10000);
+          const rewardId = `${programId}-reward-${uniqueTimestamp}-${randomSuffix}`;
+          
+          console.log(`Created unique ID for reward ${i+1}:`, rewardId);
+          
+          const rewardData = {
+            ...reward,
+            pin: pin.trim(),
+            createdAt: now,
+            status: status,
+            isActive: status === 'live',
+            id: rewardId,
+            merchantId: user.uid,
+            updatedAt: now,
+            programId: programId,
+            category: 'individual'
+          }
+          
+          // Save individual reward
+          console.log(`Saving reward ${i+1} to Firestore:`, rewardData);
+          
+          const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId)
+          batch.set(merchantRewardRef, rewardData)
+          
+          const globalRewardRef = doc(db, 'rewards', rewardId)
+          batch.set(globalRewardRef, rewardData)
+          
+          const tapAiRewardRef = doc(db, 'merchants', user.uid, 'tapaiRewards', rewardId)
+          batch.set(tapAiRewardRef, rewardData)
+          
+          createdRewardIds.push(rewardId);
+          console.log(`Reward ${i+1} added to batch`);
+        }
+        
+        console.log(`All ${rewardsArray.length} rewards processed. Created IDs:`, createdRewardIds);
+      } else {
+        // Handle single reward (existing code)
+        console.log("Processing single reward");
+        const rewardId = Date.now().toString()
+        const rewardData = {
+          ...savingReward,
+          pin: pin.trim(),
+          createdAt: now,
+          status: status,
+          isActive: status === 'live',
+          id: rewardId,
+          merchantId: user.uid,
+          updatedAt: now,
+          category: 'individual'
+        }
+        
+        const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId)
+        batch.set(merchantRewardRef, rewardData)
+        
+        const globalRewardRef = doc(db, 'rewards', rewardId)
+        batch.set(globalRewardRef, rewardData)
+        
+        const tapAiRewardRef = doc(db, 'merchants', user.uid, 'tapaiRewards', rewardId)
+        batch.set(tapAiRewardRef, rewardData)
       }
 
-      // Save in all three locations
-      const batch = writeBatch(db)
-
-      // 1. merchants/merchantId/rewards
-      const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId)
-      batch.set(merchantRewardRef, rewardData)
-
-      // 2. rewards/rewardId
-      const globalRewardRef = doc(db, 'rewards', rewardId)
-      batch.set(globalRewardRef, rewardData)
-
-      // 3. merchants/merchantId/tapaiRewards
-      const tapAiRewardRef = doc(db, 'merchants', user.uid, 'tapaiRewards', rewardId)
-      batch.set(tapAiRewardRef, rewardData)
-
       // Commit all writes
+      console.log("Committing batch to Firestore...");
       await batch.commit()
+      console.log("Batch committed successfully");
 
       toast({
         title: "Success",
-        description: `Reward ${status === 'draft' ? 'saved as draft' : 'published live'}`,
+        description: savingReward.isProgram 
+          ? `Program with ${savingReward.rewards.length} rewards ${status === 'draft' ? 'saved as draft' : 'published live'}`
+          : `Reward ${status === 'draft' ? 'saved as draft' : 'published live'}`,
       })
       setPinDialogOpen(false)
       setPin('')
@@ -433,77 +622,70 @@ function RewardCard({ reward }: { reward: RewardData }) {
   )
 }
 
-function MessageContent({ 
-  content, 
-  user,
-  setSavingReward,
+function ProgramCard({ 
+  program, 
+  rewards, 
+  setSavingReward, 
   setPinDialogOpen,
-  className
+  onEdit
 }: { 
-  content: string
-  user: any
-  setSavingReward: (reward: any) => void
-  setPinDialogOpen: (open: boolean) => void
-  className?: string
+  program: any;
+  rewards: any[];
+  setSavingReward: (reward: any) => void;
+  setPinDialogOpen: (open: boolean) => void;
+  onEdit: (reward: any) => void;
 }) {
-  const router = useRouter()
-  const { toast } = useToast()
-  const [saving, setSaving] = useState(false)
-  const [expandedCards, setExpandedCards] = useState<number[]>([])
-  const [selectedQuickAction, setSelectedQuickAction] = useState<string | null>(null)
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [expandedRewards, setExpandedRewards] = useState<Set<number>>(new Set());
+  const { user } = useAuth();
+  const router = useRouter();
+  const { toast } = useToast();
+
+  // Get program type and format it for display
+  const programType = program.programtype || rewards[0]?.programtype || 'points';
+  const formattedProgramType = programType.charAt(0).toUpperCase() + programType.slice(1);
   
-  const toggleCard = (index: number) => {
-    setExpandedCards(prev => 
-      prev.includes(index) 
-        ? prev.filter(i => i !== index)
-        : [...prev, index]
-    )
-  }
-
-  const handleEdit = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    // Add edit functionality if needed
-  }
-
-  const handleUseTemplate = async (e: React.MouseEvent, reward: any) => {
-    e.stopPropagation()
-    
-    if (!user?.uid) {
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in to save rewards",
-        variant: "destructive"
-      })
-      router.push('/login')
-      return
-    }
-
-    setSavingReward(reward)
-    setPinDialogOpen(true)
-  }
-
+  // Get a count of rewards in the program
+  const rewardCount = rewards.length;
+  
+  // Calculate total points cost across all rewards
+  const totalPointsCost = rewards.reduce((sum, reward) => sum + (reward.pointsCost || 0), 0);
+  
+  const toggleRewardExpansion = (index: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedRewards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
+  
   const formatCondition = (condition: { type: string; amount?: number; value?: number | string }) => {
     switch (condition.type) {
       case 'minimumSpend':
-        return `Min spend $${condition.amount}`
+        return `Minimum spend of $${condition.amount}`
       case 'minimumLifetimeSpend':
-        return `Total spend $${condition.value}`
+        return `Total lifetime spend of $${condition.value}`
       case 'minimumTransactions':
-        return `Min ${condition.value} transactions`
+        return `Minimum ${condition.value} transactions`
       case 'maximumTransactions':
-        return `Max ${condition.value} transactions`
+        return `Maximum ${condition.value} transactions`
       case 'minimumPointsBalance':
-        return `Min ${condition.value} points`
+        return `Minimum ${condition.value} points balance`
       case 'membershipLevel':
-        return `${condition.value} level required`
+        return `${condition.value} membership level required`
       case 'daysSinceJoined':
-        return `${condition.value} days since joining`
+        return `Account age: ${condition.value} days`
       case 'daysSinceLastVisit':
-        return `${condition.value} days since visit`
+        return `${condition.value} days since last visit`
       default:
         return condition.type
     }
-  }
+  };
 
   const formatLimitation = (limitation: { 
     type: string; 
@@ -515,10 +697,272 @@ function MessageContent({
       case 'totalRedemptionLimit':
         return `${limitation.value} total available`
       case 'daysOfWeek':
-        return `Valid on ${(limitation.value as string[]).join(', ')}`
+        return `Available on ${(limitation.value as string[]).join(', ')}`
       case 'timeOfDay':
         const timeValue = limitation.value as { startTime: string; endTime: string }
-        return `${timeValue.startTime} - ${timeValue.endTime}`
+        return `Available ${timeValue.startTime} - ${timeValue.endTime}`
+      case 'activePeriod':
+        const dateValue = limitation.value as { startDate: string; endDate: string }
+        return `Valid ${new Date(dateValue.startDate).toLocaleDateString()} - ${new Date(dateValue.endDate).toLocaleDateString()}`
+      default:
+        return `${limitation.type}: ${limitation.value}`
+    }
+  };
+  
+  return (
+    <div className="border rounded-lg overflow-hidden bg-white shadow-sm transition-shadow hover:shadow-md w-full">
+      {/* Program Header */}
+      <div 
+        className="p-4 cursor-pointer bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+              {programType === 'coffee' ? (
+                <Coffee className="h-5 w-5 text-blue-600" />
+              ) : programType === 'voucher' ? (
+                <DollarSign className="h-5 w-5 text-green-600" />
+              ) : programType === 'points' ? (
+                <Award className="h-5 w-5 text-purple-600" />
+              ) : (
+                <Gift className="h-5 w-5 text-indigo-600" />
+              )}
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">{program.programName || `${formattedProgramType} Program`}</h3>
+              <p className="text-sm text-gray-600">{program.description || `A ${programType} rewards program with ${rewardCount} rewards`}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-sm font-medium text-gray-500">{rewardCount} Rewards</div>
+              <div className="text-sm font-semibold text-blue-600">{totalPointsCost} Total Points</div>
+            </div>
+            {isExpanded ? (
+              <ChevronUp className="h-5 w-5 text-gray-500" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-gray-500" />
+            )}
+          </div>
+        </div>
+      </div>
+      
+      {/* Expanded Content */}
+      {isExpanded && (
+        <div className="p-4 space-y-4">
+          {/* Program Description */}
+          {program.longDescription && (
+            <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+              <p className="text-sm text-gray-700">{program.longDescription}</p>
+            </div>
+          )}
+          
+          {/* Rewards List */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <Gift className="h-4 w-4 text-blue-500" />
+              Program Rewards
+            </h4>
+            
+            <div className="grid grid-cols-1 gap-3">
+              {rewards.map((reward, index) => (
+                <div key={index} className="border rounded-lg overflow-hidden bg-white shadow-sm">
+                  <div 
+                    className="p-3 flex items-center justify-between border-b border-gray-100 cursor-pointer"
+                    onClick={(e) => toggleRewardExpansion(index, e)}
+                  >
+                    <div>
+                      <h5 className="font-medium">{reward.rewardName}</h5>
+                      <p className="text-sm text-gray-600">{reward.description}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right">
+                        <span className="text-sm font-semibold text-blue-600">{reward.pointsCost || 0} points</span>
+                      </div>
+                      {expandedRewards.has(index) ? (
+                        <ChevronUp className="h-4 w-4 text-gray-500" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-gray-500" />
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Expanded reward details */}
+                  {expandedRewards.has(index) && (
+                    <div className="p-3 bg-gray-50 border-b border-gray-100">
+                      {/* Conditions */}
+                      {Array.isArray(reward.conditions) && reward.conditions.length > 0 && (
+                        <div className="mb-3">
+                          <h6 className="text-xs font-semibold text-gray-700 mb-1">Conditions</h6>
+                          <ul className="space-y-1">
+                            {reward.conditions.map((condition, i) => (
+                              <li key={i} className="text-xs text-gray-600 flex items-center gap-1">
+                                <div className="h-1.5 w-1.5 rounded-full bg-blue-500"></div>
+                                {formatCondition(condition)}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {/* Limitations */}
+                      {Array.isArray(reward.limitations) && reward.limitations.length > 0 && (
+                        <div>
+                          <h6 className="text-xs font-semibold text-gray-700 mb-1">Limitations</h6>
+                          <ul className="space-y-1">
+                            {reward.limitations.map((limitation, i) => (
+                              <li key={i} className="text-xs text-gray-600 flex items-center gap-1">
+                                <div className="h-1.5 w-1.5 rounded-full bg-amber-500"></div>
+                                {formatLimitation(limitation)}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  <div className="p-3 bg-gray-50 flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-md"
+                      onClick={() => onEdit(reward)}
+                    >
+                      <Edit className="h-3 w-3 mr-1" />
+                      Edit
+                    </Button>
+                    
+                    <Button
+                      size="sm"
+                      className="h-8 rounded-md bg-[#007AFF] hover:bg-[#0066CC] text-white"
+                      onClick={() => {
+                        if (!user?.uid) {
+                          toast({
+                            title: "Authentication Required",
+                            description: "Please sign in to save rewards",
+                            variant: "destructive"
+                          });
+                          router.push('/login');
+                          return;
+                        }
+                        
+                        setSavingReward(reward);
+                        setPinDialogOpen(true);
+                      }}
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Use
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Program Actions */}
+          <div className="pt-3 border-t border-gray-200 flex justify-end gap-2">
+            <Button
+              variant="outline"
+              className="rounded-md"
+              onClick={() => onEdit(program)}
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Edit Program
+            </Button>
+            
+            <Button
+              className="rounded-md bg-[#007AFF] hover:bg-[#0066CC] text-white"
+              onClick={() => {
+                if (!user?.uid) {
+                  toast({
+                    title: "Authentication Required",
+                    description: "Please sign in to save rewards",
+                    variant: "destructive"
+                  });
+                  router.push('/login');
+                  return;
+                }
+                
+                // Create a combined program object with the rewards array
+                const programWithRewards = {
+                  ...program,
+                  rewards: rewards, // Make sure rewards array is included
+                  isProgram: true
+                };
+                
+                console.log("Creating program with rewards:", programWithRewards);
+                
+                // Pass the program with rewards to the parent component
+                setSavingReward(programWithRewards);
+                setPinDialogOpen(true);
+              }}
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Use Entire Program
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MessageContent({ 
+  content, 
+  user,
+  onEdit,
+  onUseTemplate,
+  className
+}: { 
+  content: string
+  user: any
+  onEdit: (reward: any) => void
+  onUseTemplate: (reward: any) => void
+  className?: string
+}) {
+  const router = useRouter()
+  const { toast } = useToast()
+  const [expandedRewards, setExpandedRewards] = useState<Set<string>>(new Set())
+  
+  const formatCondition = (condition: { type: string; amount?: number; value?: number | string }) => {
+    switch (condition.type) {
+      case 'minimumSpend':
+        return `Minimum spend of $${condition.amount}`
+      case 'minimumLifetimeSpend':
+        return `Total lifetime spend of $${condition.value}`
+      case 'minimumTransactions':
+        return `Minimum ${condition.value} transactions`
+      case 'maximumTransactions':
+        return `Maximum ${condition.value} transactions`
+      case 'minimumPointsBalance':
+        return `Minimum ${condition.value} points balance`
+      case 'membershipLevel':
+        return `${condition.value} membership level required`
+      case 'daysSinceJoined':
+        return `Account age: ${condition.value} days`
+      case 'daysSinceLastVisit':
+        return `${condition.value} days since last visit`
+      default:
+        return condition.type
+    }
+  }
+
+  const formatLimitation = (limitation: { 
+    type: string; 
+    value: any 
+  }) => {
+    switch (limitation.type) {
+      case 'customerLimit':
+        return `${limitation.value} per customer`
+      case 'totalRedemptionLimit':
+        return `${limitation.value} total available`
+      case 'daysOfWeek':
+        return `Available on ${(limitation.value as string[]).join(', ')}`
+      case 'timeOfDay':
+        const timeValue = limitation.value as { startTime: string; endTime: string }
+        return `Available ${timeValue.startTime} - ${timeValue.endTime}`
       case 'activePeriod':
         const dateValue = limitation.value as { startDate: string; endDate: string }
         return `Valid ${new Date(dateValue.startDate).toLocaleDateString()} - ${new Date(dateValue.endDate).toLocaleDateString()}`
@@ -526,215 +970,329 @@ function MessageContent({
         return `${limitation.type}: ${limitation.value}`
     }
   }
-  
-  const findJSON = (text: string) => {
-    try {
-      const jsonRegex = /```json\s*(\{[\s\S]*?\}|\[[\s\S]*?\])\s*```|(\{[\s\S]*?\}|\[[\s\S]*?\])/g
-      const matches = text.matchAll(jsonRegex)
-      let allRewards = []
 
-      for (const match of matches) {
-        const jsonStr = (match[1] || match[2])
-          .replace(/\/\/[^\n]*\n/g, '')
-          .replace(/[\u0000-\u001F]+/g, '')
-          .trim()
-
-        try {
-          const parsed = JSON.parse(jsonStr)
-          if (Array.isArray(parsed)) {
-            allRewards.push(...parsed.filter(item => item.rewardName))
-          } else if (parsed && parsed.rewardName) {
-            allRewards.push(parsed)
-          }
-        } catch (e) {
-          continue
-        }
-      }
-      
-      return allRewards.length > 0 ? allRewards : null
-    } catch (e) {
-      console.log('JSON parsing failed:', e)
-      return null
+  const formatDelayedVisibility = (visibility: { type: string; value: number }) => {
+    switch (visibility.type) {
+      case 'totalLifetimeSpend':
+        return `Visible after $${visibility.value} total spend`
+      case 'minimumTransactions':
+        return `Visible after ${visibility.value} transactions`
+      case 'daysSinceJoined':
+        return `Visible after ${visibility.value} days of membership`
+      default:
+        return `Visible after ${visibility.type}: ${visibility.value}`
     }
   }
 
-  const rewards = findJSON(content)
-  
-  if (rewards && rewards.length > 0) {
-    const textContent = content
-      .replace(/```json[\s\S]*?```/g, '')
-      .replace(/\[\s*\{[\s\S]*?\}\s*\]/g, '')
-      .replace(/\{\s*"rewardName[\s\S]*?\}/g, '')
-      .replace(/\s*\n{2,}/g, '\n')
-      .replace(/^\s+|\s+$/g, '')
-      .trim()
+  const extractJsonFromContent = (content: string) => {
+    // Look for content between ```json and ``` tags
+    const jsonRegex = /```json\n([\s\S]*?)\n```/g;
+    const matches = [...content.matchAll(jsonRegex)];
     
+    if (matches.length > 0) {
+      try {
+        // Combine all JSON blocks into a single array
+        const allRewards = [];
+        
+        for (const match of matches) {
+          if (match[1]) {
+            const parsed = JSON.parse(match[1].trim());
+            if (Array.isArray(parsed)) {
+              allRewards.push(...parsed);
+            } else {
+              allRewards.push(parsed);
+            }
+          }
+        }
+        
+        return allRewards;
+      } catch (e) {
+        console.error("Failed to parse extracted JSON:", e);
+        return null;
+      }
+    }
+    
+    // If no ```json blocks found, try to parse the entire content as JSON
+    if (isJsonString(content)) {
+      try {
+        const parsed = JSON.parse(content);
+        return Array.isArray(parsed) ? parsed : [parsed];
+      } catch (e) {
+        return null;
+      }
+    }
+    
+    return null;
+  };
+
+  const toggleRewardExpansion = (rewardId: string) => {
+    setExpandedRewards(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(rewardId)) {
+        newSet.delete(rewardId)
+      } else {
+        newSet.add(rewardId)
+      }
+      return newSet
+    })
+  }
+
+  const renderReward = (reward: any, width: string, rewardId: string) => {
+    const isExpanded = expandedRewards.has(rewardId);
+    
+    if (!reward.programtype) {
+      if (reward.voucherAmount && reward.voucherAmount > 0) {
+        reward.programtype = 'voucher';
+      } else {
+        reward.programtype = 'points';
+      }
+    }
+    
+    const handleEdit = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onEdit(reward);
+    };
+    
+    const handleUseTemplate = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      
+      if (!user?.uid) {
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in to save rewards",
+          variant: "destructive"
+        });
+        router.push('/login');
+        return;
+      }
+      
+      // Set the savingReward state before opening the PIN dialog
+      onUseTemplate(reward);
+    };
+
     return (
-      <div className="space-y-6 animate-fadeIn">
-        {textContent && (
-          <div className="flex justify-start">
-            <div className="rounded-lg px-3 py-2 max-w-[80%] bg-gray-50 shadow-sm">
-              <p className="whitespace-pre-wrap leading-relaxed text-gray-700">{textContent}</p>
+      <div className={`border rounded-lg overflow-hidden bg-white shadow-sm transition-shadow hover:shadow-md ${width}`}>
+        <div 
+          className="p-4 border-b cursor-pointer"
+          onClick={() => toggleRewardExpansion(rewardId)}
+        >
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold">{reward.rewardName}</h3>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className={cn(
+                "rounded-full px-3 py-1 text-xs font-medium",
+                reward.programtype === 'points' ? "bg-blue-50 text-blue-700 border-blue-200" :
+                reward.programtype === 'voucher' ? "bg-green-50 text-green-700 border-green-200" :
+                "bg-purple-50 text-purple-700 border-purple-200"
+              )}>
+                <div className="flex items-center gap-1">
+                  {reward.programtype === 'points' ? (
+                    <Award className="h-3 w-3" />
+                  ) : reward.programtype === 'voucher' ? (
+                    <DollarSign className="h-3 w-3" />
+                  ) : (
+                    <BadgeCheck className="h-3 w-3" />
+                  )}
+                  <span className="capitalize">{reward.programtype}</span>
+                </div>
+              </Badge>
+              {isExpanded ? (
+                <ChevronUp className="h-4 w-4 text-gray-500" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-gray-500" />
+              )}
             </div>
           </div>
-        )}
-        <div className={cn(
-          "grid gap-6",
-          rewards.length === 1 ? "grid-cols-1 max-w-[75%]" : "grid-cols-2"
-        )}>
-          {rewards.map((reward, index) => (
-            <div 
-              key={index} 
-              className={cn(
-                "animate-slideIn bg-white rounded-xl border-2 border-[#007AFF]/10 overflow-hidden shadow-[0_2px_8px_-1px_rgba(0,0,0,0.05)] hover:shadow-[0_4px_12px_-1px_rgba(0,0,0,0.1)] hover:border-[#007AFF]/20 transition-all duration-300",
-                rewards.length === 1 ? "w-[500px]" : "w-[400px]"
-              )}
-              style={{ animationDelay: `${index * 150}ms` }}
-            >
-              <div 
-                className="p-6 cursor-pointer hover:bg-gray-50/50 transition-colors duration-200"
-                onClick={() => toggleCard(index)}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                      {reward.rewardName}
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-[#007AFF]">
-                        Individual
-                      </span>
-                    </h3>
-                    <p className="text-sm text-gray-600">{reward.description}</p>
+          <p className="text-sm text-gray-600 mt-1">{reward.description}</p>
+        </div>
+        
+        {isExpanded && (
+          <>
+            <div className="p-4 bg-gray-50">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                    <Award className="h-4 w-4 text-gray-500" />
+                    Points Cost
+                  </h4>
+                  <p className="text-lg font-semibold">{reward.pointsCost}</p>
+                </div>
+                
+                {reward.programtype === 'voucher' && reward.voucherAmount && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                      <DollarSign className="h-4 w-4 text-gray-500" />
+                      Voucher Value
+                    </h4>
+                    <p className="text-lg font-semibold">${reward.voucherAmount}</p>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <div className="text-base font-semibold text-[#007AFF]">
-                        {reward.pointsCost > 0 ? `${reward.pointsCost.toLocaleString()}pts` : 'Free'}
-                      </div>
-                    </div>
-                    <ChevronDown 
-                      className={cn(
-                        "h-5 w-5 text-gray-400 transition-transform duration-200",
-                        expandedCards.includes(index) && "transform rotate-180"
-                      )} 
-                    />
-                  </div>
+                )}
+                
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                    <Eye className="h-4 w-4 text-gray-500" />
+                    Visibility
+                  </h4>
+                  <p className="text-sm font-medium capitalize">{reward.rewardVisibility}</p>
+                  {reward.delayedVisibility && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {formatDelayedVisibility(reward.delayedVisibility)}
+                    </p>
+                  )}
                 </div>
               </div>
-
-              {expandedCards.includes(index) && (
-                <>
-                  <div className="px-6 pb-6 space-y-3 border-t border-gray-100">
-                    {reward.conditions?.length > 0 && (
-                      <div className="space-y-2 pt-4">
-                        <div className="flex items-center gap-2 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          <div className="h-px flex-1 bg-gray-100"></div>
-                          Conditions
-                          <div className="h-px flex-1 bg-gray-100"></div>
+            </div>
+            
+            {(reward.conditions?.length > 0 || reward.limitations?.length > 0) && (
+              <div className="p-4 border-t">
+                {reward.conditions?.length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                      <CheckCircle className="h-4 w-4 text-gray-500" />
+                      Conditions
+                    </h4>
+                    <div className="grid grid-cols-1 gap-2">
+                      {reward.conditions.map((condition, i) => (
+                        <div 
+                          key={i}
+                          className="flex items-center gap-2 text-sm text-gray-600 bg-white border border-gray-100 px-3 py-2 rounded-lg shadow-sm"
+                        >
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>{formatCondition(condition)}</span>
                         </div>
-                        <div className="grid grid-cols-1 gap-2">
-                          {reward.conditions.map((condition, i) => (
-                            <div 
-                              key={i}
-                              className="flex items-center gap-2 text-sm text-gray-600 bg-white border border-gray-100 px-3 py-2 rounded-lg shadow-sm"
-                            >
-                              {condition.type === 'minimumSpend' && <DollarSign className="h-4 w-4 text-[#007AFF]" />}
-                              {condition.type === 'minimumLifetimeSpend' && <Wallet className="h-4 w-4 text-[#007AFF]" />}
-                              {condition.type === 'minimumTransactions' && <History className="h-4 w-4 text-[#007AFF]" />}
-                              {condition.type === 'maximumTransactions' && <Ban className="h-4 w-4 text-[#007AFF]" />}
-                              {condition.type === 'minimumPointsBalance' && <Award className="h-4 w-4 text-[#007AFF]" />}
-                              {condition.type === 'membershipLevel' && <BadgeCheck className="h-4 w-4 text-[#007AFF]" />}
-                              {condition.type === 'daysSinceJoined' && <UserCheck className="h-4 w-4 text-[#007AFF]" />}
-                              {condition.type === 'daysSinceLastVisit' && <Timer className="h-4 w-4 text-[#007AFF]" />}
-                              {formatCondition(condition)}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {reward.limitations?.length > 0 && (
-                      <div className="space-y-2 pt-4">
-                        <div className="flex items-center gap-2 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          <div className="h-px flex-1 bg-gray-100"></div>
-                          Limitations
-                          <div className="h-px flex-1 bg-gray-100"></div>
-                        </div>
-                        <div className="grid grid-cols-1 gap-2">
-                          {reward.limitations.map((limitation, i) => (
-                            <div 
-                              key={i}
-                              className="flex items-center gap-2 text-sm text-gray-600 bg-white border border-gray-100 px-3 py-2 rounded-lg shadow-sm"
-                            >
-                              {limitation.type === 'customerLimit' && <Users className="h-4 w-4 text-[#007AFF]" />}
-                              {limitation.type === 'totalRedemptionLimit' && <Award className="h-4 w-4 text-[#007AFF]" />}
-                              {limitation.type === 'daysOfWeek' && <Calendar className="h-4 w-4 text-[#007AFF]" />}
-                              {limitation.type === 'timeOfDay' && <Clock className="h-4 w-4 text-[#007AFF]" />}
-                              {limitation.type === 'activePeriod' && <CalendarRange className="h-4 w-4 text-[#007AFF]" />}
-                              {formatLimitation(limitation)}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="px-6 py-4 bg-gray-50/75 border-t border-gray-200/75">
-                    <div className="flex items-center justify-between gap-3">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-9 px-4 bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 hover:text-[#007AFF] transition-colors duration-200 rounded-xl flex-1"
-                        onClick={(e) => handleEdit(e)}
-                      >
-                        <Edit className="h-4 w-4 mr-2" />
-                        Customize
-                      </Button>
-                      <Button
-                        onClick={(e) => handleUseTemplate(e, reward)}
-                        disabled={saving}
-                        className="h-9 bg-[#007AFF] hover:bg-[#0066CC] text-white rounded-xl px-4 flex-1"
-                      >
-                        {saving ? (
-                          <div className="flex items-center gap-2">
-                            <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            Saving...
-                          </div>
-                        ) : (
-                          <>Use Template</>
-                        )}
-                      </Button>
+                      ))}
                     </div>
                   </div>
-                </>
-              )}
+                )}
+                
+                {reward.limitations?.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                      <Ban className="h-4 w-4 text-gray-500" />
+                      Limitations
+                    </h4>
+                    <div className="grid grid-cols-1 gap-2">
+                      {reward.limitations.map((limitation, i) => (
+                        <div 
+                          key={i}
+                          className="flex items-center gap-2 text-sm text-gray-600 bg-white border border-gray-100 px-3 py-2 rounded-lg shadow-sm"
+                        >
+                          <Ban className="h-4 w-4 text-red-500" />
+                          <span>{formatLimitation(limitation)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <div className="p-4 border-t bg-gray-50 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-md"
+                onClick={handleEdit}
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+              
+              <Button
+                size="sm"
+                className="h-9 rounded-md bg-[#007AFF] hover:bg-[#0066CC]"
+                onClick={handleUseTemplate}
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Use Template
+              </Button>
             </div>
-          ))}
-        </div>
+          </>
+        )}
       </div>
-    )
-  }
+    );
+  };
 
   return (
     <div className={className}>
-      {isJsonString(content) ? (
-        <div className="space-y-4">
-          {JSON.parse(content).map((reward: any, index: number) => (
-            <div 
-              key={index} 
-              className={cn(
-                "border rounded-lg overflow-hidden bg-white shadow-sm transition-shadow hover:shadow-md",
-                JSON.parse(content).length === 1 ? "w-[500px]" : "w-[400px]"
+      {(() => {
+        const extractedJson = extractJsonFromContent(content);
+        
+        if (extractedJson) {
+          const rewards = Array.isArray(extractedJson) ? extractedJson : [extractedJson];
+          
+          // Remove all JSON blocks from the content before displaying
+          const cleanedContent = content
+            .replace(/```json\n[\s\S]*?\n```/g, '')
+            // Remove excessive newlines (more than 2 consecutive)
+            .replace(/\n{3,}/g, '\n\n')
+            // Trim whitespace
+            .trim();
+          
+          // Check if this is a program (multiple rewards with same programtype)
+          const isProgram = rewards.length > 1 && 
+            rewards.every(r => r.programtype) && 
+            rewards[0].programtype === rewards[1].programtype;
+          
+          // If it's a program, find or create a program object
+          let programObject = rewards.find(r => r.isProgram);
+          
+          if (isProgram && !programObject) {
+            const programType = rewards[0].programtype || 'points';
+            const formattedType = programType.charAt(0).toUpperCase() + programType.slice(1);
+            
+            programObject = {
+              programName: `${formattedType} Program`,
+              description: `A collection of ${rewards.length} rewards for your ${programType} program`,
+              programtype: programType
+            };
+          }
+          
+          return (
+            <div>
+              {cleanedContent && (
+                <p className="whitespace-pre-wrap leading-relaxed mb-4">
+                  {cleanedContent}
+                </p>
               )}
-            >
-              {/* ... rest of reward card content ... */}
-      </div>
-          ))}
-        </div>
-      ) : (
-        <p className="whitespace-pre-wrap leading-relaxed">{content}</p>
-      )}
+              
+              <div className="space-y-4">
+                {isProgram ? (
+                  <ProgramCard
+                    program={programObject}
+                    rewards={rewards}
+                    setSavingReward={onUseTemplate}
+                    setPinDialogOpen={(open) => {
+                      // Just use onUseTemplate to handle the reward
+                      if (open) {
+                        onUseTemplate(programObject);
+                      }
+                    }}
+                    onEdit={onEdit}
+                  />
+                ) : (
+                  rewards.map((reward, index) => {
+                    const rewardId = reward.id || `reward-${index}`;
+                    return (
+                      <div key={rewardId}>
+                        {renderReward(
+                          reward, 
+                          rewards.length === 1 ? "w-[500px]" : "w-[400px]",
+                          rewardId
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          );
+        } else {
+          return <p className="whitespace-pre-wrap leading-relaxed">{content}</p>;
+        }
+      })()}
     </div>
-  )
+  );
 }
 
 export function TapAiDialog({
@@ -769,6 +1327,9 @@ export function TapAiDialog({
   const [pinDialogOpen, setPinDialogOpen] = useState(false)
   const [pin, setPin] = useState('')
   const [savingReward, setSavingReward] = useState<any>(null)
+  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [createRewardData, setCreateRewardData] = useState<any>(null)
 
   const currentMessages = conversations.find(c => c.id === currentConversation)?.messages || []
 
@@ -821,7 +1382,6 @@ export function TapAiDialog({
           setConversations(savedConversations)
           setCurrentConversation(savedConversations[0].id)
         } else {
-          // Create initial chat with welcome message
           const thread = await createThread()
           const newId = Date.now().toString()
           
@@ -891,7 +1451,6 @@ export function TapAiDialog({
     const cursorPos = e.target.selectionStart || 0
     setCursorPosition(cursorPos)
 
-    // Check for @ symbol and get the query text after it
     const lastAtSymbol = value.lastIndexOf('@', cursorPos)
     if (lastAtSymbol !== -1 && lastAtSymbol < cursorPos) {
       const query = value.slice(lastAtSymbol + 1, cursorPos)
@@ -931,7 +1490,6 @@ export function TapAiDialog({
       { role: 'user', content: userMessage }
     ]
 
-    // Update messages immediately to show user's message
     setConversations(prev => prev.map(conv => 
       conv.id === currentConversation 
         ? {
@@ -1100,42 +1658,46 @@ export function TapAiDialog({
     }
 
     try {
-      const SpeechRecognition = window.webkitSpeechRecognition
-      const recognition = new SpeechRecognition()
-      
-      recognition.continuous = true
-      recognition.interimResults = true
-      recognition.lang = 'en-US'
-      
-      recognition.onstart = () => {
-        setIsRecording(true)
-      }
-      
-      recognition.onresult = (event) => {
-        const lastResult = Array.from(event.results).pop()
-        if (lastResult) {
-          const transcript = lastResult[0].transcript
-          if (lastResult.isFinal) {
-            const cleanTranscript = transcript.trim()
-            setInput(prev => {
-              const prevClean = prev.trim()
-              return prevClean ? `${prevClean} ${cleanTranscript}` : cleanTranscript
-            })
+      if (!recognitionRef.current) {
+        const SpeechRecognition = window.webkitSpeechRecognition
+        recognitionRef.current = new SpeechRecognition()
+        
+        recognitionRef.current.continuous = true
+        recognitionRef.current.interimResults = true
+        recognitionRef.current.lang = 'en-US'
+        
+        recognitionRef.current.onstart = () => {
+          setIsRecording(true)
+        }
+        
+        recognitionRef.current.onresult = (event) => {
+          const lastResult = Array.from(event.results).pop()
+          if (lastResult) {
+            const transcript = lastResult[0].transcript
+            if (lastResult.isFinal) {
+              const cleanTranscript = transcript.trim()
+              setInput(prev => {
+                const prevClean = prev.trim()
+                return prevClean ? `${prevClean} ${cleanTranscript}` : cleanTranscript
+              })
+            }
           }
         }
-      }
-      
-      recognition.onend = () => {
-        if (isRecording) {
-          recognition.start()
+        
+        recognitionRef.current.onend = () => {
+          if (isRecording) {
+            recognitionRef.current?.start()
+          } else {
+            setIsRecording(false)
+          }
         }
       }
 
       if (isRecording) {
         setIsRecording(false)
-        recognition.stop()
+        recognitionRef.current.stop()
       } else {
-        recognition.start()
+        recognitionRef.current.start()
       }
 
     } catch (error) {
@@ -1154,40 +1716,135 @@ export function TapAiDialog({
 
     try {
       setSaving(true)
-      const rewardId = Date.now().toString()
+      const now = Timestamp.now()
+      const batch = writeBatch(db)
       
-      const rewardData = {
-        ...savingReward,
-        pin: pin.trim(),
-        createdAt: new Date().toISOString(),
-        status: status,
-        isActive: status === 'live',
-        id: rewardId,
-        merchantId: user.uid,
-        updatedAt: new Date().toISOString()
+      console.log("Saving reward:", savingReward);
+      
+      // Check if this is a program with multiple rewards
+      if (savingReward.isProgram && Array.isArray(savingReward.rewards)) {
+        console.log(`Program detected with ${savingReward.rewards.length} rewards`);
+        console.log("Rewards array:", JSON.stringify(savingReward.rewards));
+        
+        // Create a program record first
+        const programId = `program-${Date.now()}`
+        console.log("Created program ID:", programId);
+        
+        // Create a clean copy of the program data without the rewards array
+        // to avoid circular references
+        const { rewards, ...programWithoutRewards } = savingReward;
+        
+        const programData = {
+          ...programWithoutRewards,
+          pin: pin.trim(),
+          createdAt: now,
+          status: status,
+          isActive: status === 'live',
+          id: programId,
+          merchantId: user.uid,
+          updatedAt: now,
+          category: 'program',
+          rewardCount: rewards.length
+        }
+        
+        // Save program record
+        console.log("Saving program record:", programData);
+        const merchantProgramRef = doc(db, 'merchants', user.uid, 'rewards', programId)
+        batch.set(merchantProgramRef, programData)
+        
+        const globalProgramRef = doc(db, 'rewards', programId)
+        batch.set(globalProgramRef, programData)
+        
+        const tapAiProgramRef = doc(db, 'merchants', user.uid, 'tapaiRewards', programId)
+        batch.set(tapAiProgramRef, programData)
+        
+        // Then create each individual reward in the program
+        console.log("Starting to process individual rewards...");
+        
+        // Create an array to store all the reward IDs we're creating
+        const createdRewardIds = [];
+        
+        // Make sure we're iterating through the rewards array correctly
+        const rewardsArray = Array.isArray(rewards) ? rewards : [];
+        console.log(`Processing ${rewardsArray.length} rewards`);
+        
+        for (let i = 0; i < rewardsArray.length; i++) {
+          const reward = rewardsArray[i];
+          console.log(`Processing reward ${i+1}/${rewardsArray.length}:`, reward.rewardName);
+          
+          // Generate a truly unique ID for each reward
+          const uniqueTimestamp = Date.now() + i; // Add index to ensure uniqueness
+          const randomSuffix = Math.floor(Math.random() * 10000);
+          const rewardId = `${programId}-reward-${uniqueTimestamp}-${randomSuffix}`;
+          
+          console.log(`Created unique ID for reward ${i+1}:`, rewardId);
+          
+          const rewardData = {
+            ...reward,
+            pin: pin.trim(),
+            createdAt: now,
+            status: status,
+            isActive: status === 'live',
+            id: rewardId,
+            merchantId: user.uid,
+            updatedAt: now,
+            programId: programId,
+            category: 'individual'
+          }
+          
+          // Save individual reward
+          console.log(`Saving reward ${i+1} to Firestore:`, rewardData);
+          
+          const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId)
+          batch.set(merchantRewardRef, rewardData)
+          
+          const globalRewardRef = doc(db, 'rewards', rewardId)
+          batch.set(globalRewardRef, rewardData)
+          
+          const tapAiRewardRef = doc(db, 'merchants', user.uid, 'tapaiRewards', rewardId)
+          batch.set(tapAiRewardRef, rewardData)
+          
+          createdRewardIds.push(rewardId);
+          console.log(`Reward ${i+1} added to batch`);
+        }
+        
+        console.log(`All ${rewardsArray.length} rewards processed. Created IDs:`, createdRewardIds);
+      } else {
+        // Handle single reward (existing code)
+        console.log("Processing single reward");
+        const rewardId = Date.now().toString()
+        const rewardData = {
+          ...savingReward,
+          pin: pin.trim(),
+          createdAt: now,
+          status: status,
+          isActive: status === 'live',
+          id: rewardId,
+          merchantId: user.uid,
+          updatedAt: now,
+          category: 'individual'
+        }
+        
+        const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId)
+        batch.set(merchantRewardRef, rewardData)
+        
+        const globalRewardRef = doc(db, 'rewards', rewardId)
+        batch.set(globalRewardRef, rewardData)
+        
+        const tapAiRewardRef = doc(db, 'merchants', user.uid, 'tapaiRewards', rewardId)
+        batch.set(tapAiRewardRef, rewardData)
       }
 
-      // Save in all three locations
-      const batch = writeBatch(db)
-
-      // 1. merchants/merchantId/rewards
-      const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId)
-      batch.set(merchantRewardRef, rewardData)
-
-      // 2. rewards/rewardId
-      const globalRewardRef = doc(db, 'rewards', rewardId)
-      batch.set(globalRewardRef, rewardData)
-
-      // 3. merchants/merchantId/tapaiRewards
-      const tapAiRewardRef = doc(db, 'merchants', user.uid, 'tapaiRewards', rewardId)
-      batch.set(tapAiRewardRef, rewardData)
-
       // Commit all writes
+      console.log("Committing batch to Firestore...");
       await batch.commit()
+      console.log("Batch committed successfully");
 
       toast({
         title: "Success",
-        description: `Reward ${status === 'draft' ? 'saved as draft' : 'published live'}`,
+        description: savingReward.isProgram 
+          ? `Program with ${savingReward.rewards.length} rewards ${status === 'draft' ? 'saved as draft' : 'published live'}`
+          : `Reward ${status === 'draft' ? 'saved as draft' : 'published live'}`,
       })
       setPinDialogOpen(false)
       setPin('')
@@ -1203,6 +1860,83 @@ export function TapAiDialog({
       setSaving(false)
     }
   }
+
+  const formatConversationDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (diffInDays === 0) {
+      return format(date, 'h:mm a');
+    } else if (diffInDays === 1) {
+      return 'Yesterday';
+    } else if (diffInDays < 7) {
+      return format(date, 'EEEE');
+    } else {
+      return format(date, 'MMM d');
+    }
+  };
+
+  const handleEditReward = (reward: any) => {
+    console.log("Editing reward:", reward);
+    
+    // Ensure conditions and limitations are arrays
+    const conditions = Array.isArray(reward.conditions) ? reward.conditions : [];
+    const limitations = Array.isArray(reward.limitations) ? reward.limitations : [];
+    
+    // Map the reward data to the format expected by CreateRewardDialog
+    const editFormData = {
+      rewardName: reward.rewardName || '',
+      description: reward.description || '',
+      type: reward.programtype || 'points', 
+      rewardVisibility: reward.rewardVisibility || 'global',
+      pin: '',
+      pointsCost: reward.pointsCost?.toString() || '0',
+      isActive: reward.isActive !== false,
+      delayedVisibility: !!reward.delayedVisibility,
+      delayedVisibilityType: 'transactions',
+      delayedVisibilityTransactions: '',
+      delayedVisibilitySpend: '',
+      isTargeted: false,
+      discountAmount: '0',
+      itemName: '',
+      voucherAmount: reward.voucherAmount?.toString() || '',
+      spendThreshold: '',
+      
+      conditions: {
+        useTransactionRequirements: false,
+        useSpendingRequirements: false,
+        useTimeRequirements: false,
+        newCustomer: false,
+        minimumTransactions: '',
+        maximumTransactions: '',
+        daysSinceJoined: '',
+        daysSinceLastVisit: '',
+        minimumLifetimeSpend: conditions.find(c => c.type === 'minimumSpend')?.amount?.toString() || '',
+        minimumPointsBalance: '',
+        membershipLevel: ''
+      },
+      
+      limitations: {
+        totalRedemptionLimit: limitations.find(l => l.type === 'totalRedemptionLimit')?.value?.toString() || '',
+        perCustomerLimit: limitations.find(l => l.type === 'customerLimit')?.value?.toString() || '',
+        useTimeRestrictions: false,
+        startTime: '',
+        endTime: '',
+        useDayRestrictions: false,
+        dayRestrictions: [],
+      },
+      
+      hasActivePeriod: false,
+      activePeriod: {
+        startDate: '',
+        endDate: ''
+      }
+    };
+    
+    setCreateRewardData(editFormData);
+    setEditDialogOpen(true);
+  };
 
   if (authLoading) {
     return (
@@ -1220,7 +1954,6 @@ export function TapAiDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[1400px] h-[90vh] flex flex-col p-0 border-0 rounded-xl overflow-hidden">
         <div className="flex h-full">
-          {/* Sidebar - Updated colors */}
           <div className="w-72 bg-gray-100 text-gray-900 p-4 flex flex-col gap-4 border-r border-gray-200">
             <Button 
               onClick={handleNewChat}
@@ -1233,59 +1966,65 @@ export function TapAiDialog({
             
             <ScrollArea className="flex-1">
               <div className="space-y-2">
-                {conversations.map(conv => (
+                {conversations.map(conversation => (
                   <div
-                    key={conv.id}
+                    key={conversation.id}
                     className={cn(
-                      "group flex items-center gap-2 pr-2",
-                      currentConversation === conv.id ? "bg-white" : "hover:bg-gray-50"
+                      "flex items-center justify-between px-3 py-2 rounded-md cursor-pointer transition-colors",
+                      currentConversation === conversation.id 
+                        ? "bg-gray-200" 
+                        : "hover:bg-gray-100"
                     )}
+                    onClick={() => setCurrentConversation(conversation.id)}
                   >
-                    <Button
-                      variant="ghost"
-                      className={cn(
-                        "flex-1 justify-start gap-2 text-sm h-9",
-                        currentConversation === conv.id ? "bg-white" : "hover:bg-transparent"
-                    )}
-                    onClick={() => setCurrentConversation(conv.id)}
-                  >
-                      <MessageSquare className="h-4 w-4 flex-shrink-0" />
-                      <span className="truncate">{conv.title}</span>
-                  </Button>
-
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setSelectedConversation(conv.id)
-                            setNewTitle(conv.title)
-                            setRenameDialogOpen(true)
-                          }}
-                          className="cursor-pointer"
-                        >
-                          <Pencil className="h-4 w-4 mr-2" />
-                          Rename
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setSelectedConversation(conv.id)
-                            setDeleteDialogOpen(true)
-                          }}
-                          className="cursor-pointer text-red-600 focus:text-red-600"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <MessageSquare className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                      <span className="text-sm font-medium truncate">
+                        {conversation.title || "New conversation"}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">
+                        {formatConversationDate(conversation.updatedAt)}
+                      </span>
+                      
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            className="h-8 w-8 p-0 rounded-md"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40 rounded-md">
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedConversation(conversation.id)
+                              setNewTitle(conversation.title)
+                              setRenameDialogOpen(true)
+                            }}
+                          >
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Rename
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedConversation(conversation.id)
+                              setDeleteDialogOpen(true)
+                            }}
+                            className="text-red-600 focus:text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1300,7 +2039,6 @@ export function TapAiDialog({
             </Button>
           </div>
 
-          {/* Main Content */}
           <div className="flex-1 flex flex-col bg-white">
             <DialogHeader className="p-3 border-b border-gray-100">
               <div className="flex items-center justify-between">
@@ -1334,8 +2072,11 @@ export function TapAiDialog({
                     <MessageContent 
                       content={message.content} 
                       user={user} 
-                      setSavingReward={setSavingReward}
-                      setPinDialogOpen={setPinDialogOpen}
+                      onEdit={handleEditReward}
+                      onUseTemplate={(reward) => {
+                        setSavingReward(reward);
+                        setPinDialogOpen(true);
+                      }}
                       className={cn(
                         "max-w-[80%] p-4 rounded-2xl",
                         message.role === 'user' 
@@ -1495,7 +2236,6 @@ export function TapAiDialog({
           </div>
         </div>
 
-        {/* Rename Dialog */}
         <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
           <DialogContent className="sm:max-w-[400px]">
             <DialogHeader>
@@ -1533,7 +2273,6 @@ export function TapAiDialog({
           </DialogContent>
         </Dialog>
 
-        {/* Delete Dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -1562,7 +2301,6 @@ export function TapAiDialog({
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* PIN Dialog */}
         <Dialog open={pinDialogOpen} onOpenChange={setPinDialogOpen}>
           <DialogContent className="sm:max-w-[400px]">
             <DialogHeader>
@@ -1629,6 +2367,12 @@ export function TapAiDialog({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <CreateRewardDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          defaultValues={createRewardData}
+        />
       </DialogContent>
     </Dialog>
   )

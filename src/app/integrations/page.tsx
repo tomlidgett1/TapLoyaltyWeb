@@ -1,136 +1,174 @@
 "use client"
 
-import { Card } from "@/components/ui/card"
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Search, ArrowRight, CheckCircle2, AlertCircle } from "lucide-react"
-import { useState } from "react"
+import { Badge } from "@/components/ui/badge"
+import { useAuth } from "@/contexts/auth-context"
+import { db } from "@/lib/firebase"
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore"
+import { toast } from "@/components/ui/use-toast"
 
-interface Integration {
-  id: string
-  name: string
-  description: string
-  status: "available" | "connected" | "maintenance"
-  category: "pos" | "payment" | "ecommerce"
-  logo: string
-}
+// Import icons for different POS systems
+import { LightspeedIcon } from "@/components/icons/lightspeed-icon"
+import { SquareIcon } from "@/components/icons/square-icon"
+import { CloverIcon } from "@/components/icons/clover-icon"
+import { ShopifyIcon } from "@/components/icons/shopify-icon"
 
 export default function IntegrationsPage() {
-  const [searchQuery, setSearchQuery] = useState("")
-
-  const integrations: Integration[] = [
-    {
-      id: "lightspeed",
-      name: "Lightspeed Retail",
-      description: "Connect your Lightspeed POS to sync products, customers, and transactions",
-      status: "available",
-      category: "pos",
-      logo: "/integrations/ls.png"
-    },
-    {
-      id: "square",
-      name: "Square",
-      description: "Sync your Square POS data and manage your loyalty program",
-      status: "connected",
-      category: "pos",
-      logo: "/integrations/square.PNG"
-    },
-    {
-      id: "shopify",
-      name: "Shopify",
-      description: "Connect your online store to enable omnichannel loyalty",
-      status: "maintenance",
-      category: "ecommerce",
-      logo: "/integrations/shopify.svg"
+  const { user } = useAuth()
+  const [connecting, setConnecting] = useState<string | null>(null)
+  const [integrations, setIntegrations] = useState({
+    lightspeed: { connected: false, data: null },
+    square: { connected: false, data: null },
+    clover: { connected: false, data: null },
+    shopify: { connected: false, data: null }
+  })
+  
+  useEffect(() => {
+    // Check if we have existing integrations
+    const checkIntegrations = async () => {
+      if (!user?.uid) return
+      
+      try {
+        const lightspeedDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'lightspeed'))
+        if (lightspeedDoc.exists() && lightspeedDoc.data().connected) {
+          setIntegrations(prev => ({
+            ...prev,
+            lightspeed: { 
+              connected: true, 
+              data: lightspeedDoc.data() 
+            }
+          }))
+        }
+      } catch (error) {
+        console.error("Error checking integrations:", error)
+      }
     }
-  ]
+    
+    checkIntegrations()
+  }, [user])
 
-  const getStatusBadge = (status: Integration["status"]) => {
-    switch (status) {
-      case "connected":
-        return (
-          <div className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full text-xs font-medium">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            Connected
-          </div>
-        )
-      case "maintenance":
-        return (
-          <div className="flex items-center gap-1.5 text-amber-600 bg-amber-50 px-2 py-1 rounded-full text-xs font-medium">
-            <AlertCircle className="h-3.5 w-3.5" />
-            Maintenance
-          </div>
-        )
-      default:
-        return (
-          <div className="flex items-center gap-1.5 text-slate-600 bg-slate-100 px-2 py-1 rounded-full text-xs font-medium">
-            Available
-          </div>
-        )
+  // Lightspeed integration
+  const connectLightspeed = async () => {
+    if (!user) return
+    
+    setConnecting("lightspeed")
+    
+    try {
+      // Updated Lightspeed OAuth parameters with new client ID
+      const clientId = "29779b997b21d643fab9e936cf815463813172b51c7da085b7b378864761953d"
+      
+      // Store the state in localStorage to verify when the user returns
+      const state = Math.random().toString(36).substring(2, 15)
+      localStorage.setItem('lightspeed_state', state)
+      
+      // Store the merchant ID in localStorage to associate with the integration
+      localStorage.setItem('merchant_id', user.uid)
+      
+      // Add redirect_uri to the authorization URL
+      const redirectUri = `${window.location.origin}/dashboard`
+      
+      // Use the OIDC endpoint with redirect_uri included
+      const authUrl = `https://api.lightspeed.app/oidc/authorize?`
+        + `client_id=${clientId}`
+        + `&state=${state}`
+        + `&response_type=code`
+        + `&scope=openid`
+        + `&product=retail`
+        + `&redirect_uri=${encodeURIComponent(redirectUri)}`
+      
+      console.log("Redirecting to authorization URL:", authUrl)
+      
+      // Redirect to Lightspeed authorization page
+      window.location.href = authUrl
+    } catch (error) {
+      console.error("Error connecting to Lightspeed:", error)
+      toast({
+        title: "Connection Failed",
+        description: "Failed to connect to Lightspeed. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setConnecting(null)
+    }
+  }
+
+  // Disconnect Lightspeed
+  const disconnectLightspeed = async () => {
+    if (!user) return
+    
+    try {
+      await updateDoc(doc(db, 'merchants', user.uid, 'integrations', 'lightspeed'), {
+        connected: false
+      })
+      
+      setIntegrations(prev => ({
+        ...prev,
+        lightspeed: { connected: false, data: null }
+      }))
+      
+      toast({
+        title: "Disconnected",
+        description: "Your Lightspeed account has been disconnected."
+      })
+    } catch (error) {
+      console.error("Error disconnecting Lightspeed:", error)
+      toast({
+        title: "Error",
+        description: "Failed to disconnect Lightspeed. Please try again.",
+        variant: "destructive"
+      })
     }
   }
 
   return (
-    <div className="p-6">
-      <div className="max-w-[1200px] mx-auto space-y-8">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Integrations</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Connect your business tools to enhance your loyalty program
-          </p>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Search integrations..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <Button variant="outline" className="text-sm">
-            View Connected
-          </Button>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {integrations.map((integration) => (
-            <Card
-              key={integration.id}
-              className="group cursor-pointer hover:border-slate-400 transition-colors"
-              onClick={() => console.log(`Connect ${integration.name}`)}
-            >
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="h-12 w-12 rounded-lg bg-slate-100 flex items-center justify-center p-2">
-                    <img
-                      src={integration.logo}
-                      alt={integration.name}
-                      className="h-full w-full object-contain"
-                    />
-                  </div>
-                  {getStatusBadge(integration.status)}
+    <div className="p-4">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Integrations</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Connect your point of sale system to automatically sync customer data and transactions
+        </p>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Lightspeed Integration Card */}
+        <Card className="rounded-lg overflow-hidden">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-10 w-10 rounded-md bg-[#FF6B00] flex items-center justify-center">
+                  <LightspeedIcon className="h-6 w-6 text-white" />
                 </div>
-                
                 <div>
-                  <h3 className="font-medium mb-1">{integration.name}</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    {integration.description}
-                  </p>
-                  <Button 
-                    variant="ghost" 
-                    className="text-sm p-0 h-auto hover:bg-transparent group-hover:text-blue-600"
-                  >
-                    Learn more
-                    <ArrowRight className="h-4 w-4 ml-1 group-hover:translate-x-0.5 transition-transform" />
-                  </Button>
+                  <CardTitle className="text-lg">Lightspeed Retail</CardTitle>
+                  <CardDescription>Connect your Lightspeed POS</CardDescription>
                 </div>
               </div>
-            </Card>
-          ))}
-        </div>
+              <Badge variant={integrations.lightspeed.connected ? "default" : "outline"}>
+                {integrations.lightspeed.connected ? "Connected" : "Not Connected"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="pb-2">
+            <p className="text-sm text-muted-foreground">
+              Sync customer data, transactions, and inventory with your Lightspeed Retail account.
+            </p>
+          </CardContent>
+          <CardFooter>
+            <Button 
+              variant={integrations.lightspeed.connected ? "outline" : "default"}
+              className="w-full rounded-md"
+              onClick={integrations.lightspeed.connected ? disconnectLightspeed : connectLightspeed}
+              disabled={connecting === "lightspeed"}
+            >
+              {connecting === "lightspeed" ? "Connecting..." : 
+               integrations.lightspeed.connected ? "Disconnect" : "Connect"}
+            </Button>
+          </CardFooter>
+        </Card>
+        
+        {/* Add other integration cards here */}
       </div>
     </div>
   )

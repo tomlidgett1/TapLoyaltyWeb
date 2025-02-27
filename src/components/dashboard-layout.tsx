@@ -1,199 +1,234 @@
 "use client"
 
-import { MerchantSidebar } from "@/components/merchant-sidebar"
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { Separator } from "@/components/ui/separator"
-import { 
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import { ChevronRight, Home, Bell } from "lucide-react"
-import { usePathname, useSearchParams } from "next/navigation"
-import { Suspense, useEffect, useState } from "react"
-import { LoadingScreen } from "@/components/ui/loading"
+import { SideNav } from "@/components/side-nav"
+import { usePathname } from "next/navigation"
+import { Bell, Search, Command, FileText, Check, X, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { useState, useEffect } from "react"
+import { Badge } from "@/components/ui/badge"
+import { formatDistanceToNow } from "date-fns"
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
+import { cn } from "@/lib/utils"
 
-export function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+interface Notification {
+  id: string
+  title: string
+  description: string
+  timestamp: Date
+  read: boolean
+  type: "info" | "success" | "warning" | "error"
+}
+
+export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const [isLoading, setIsLoading] = useState(false)
-
-  // Handle route changes
+  const [searchQuery, setSearchQuery] = useState("")
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  
   useEffect(() => {
-    const handleStart = () => setIsLoading(true)
-    const handleComplete = () => setIsLoading(false)
-
-    window.addEventListener('routeChangeStart', handleStart)
-    window.addEventListener('routeChangeComplete', handleComplete)
-    window.addEventListener('routeChangeError', handleComplete)
-
-    return () => {
-      window.removeEventListener('routeChangeStart', handleStart)
-      window.removeEventListener('routeChangeComplete', handleComplete)
-      window.removeEventListener('routeChangeError', handleComplete)
-    }
+    // Mock notifications data
+    const mockNotifications: Notification[] = [
+      {
+        id: "1",
+        title: "New customer sign up",
+        description: "Emma Wilson just joined your loyalty program",
+        timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
+        read: false,
+        type: "info"
+      },
+      {
+        id: "2",
+        title: "Reward redeemed",
+        description: "Free Coffee reward was redeemed 5 times today",
+        timestamp: new Date(Date.now() - 1000 * 60 * 120), // 2 hours ago
+        read: false,
+        type: "success"
+      },
+      {
+        id: "3",
+        title: "Points rule update",
+        description: "Your 'Purchase Points' rule was automatically updated",
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
+        read: true,
+        type: "warning"
+      },
+      {
+        id: "4",
+        title: "Integration connected",
+        description: "Your POS system was successfully connected",
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2), // 2 days ago
+        read: true,
+        type: "success"
+      }
+    ]
+    
+    setNotifications(mockNotifications)
+    setUnreadCount(mockNotifications.filter(n => !n.read).length)
   }, [])
 
-  // Reset loading state when route changes
-  useEffect(() => {
-    setIsLoading(false)
-  }, [pathname, searchParams])
+  const markAsRead = (id: string) => {
+    setNotifications(prev => 
+      prev.map(notification => 
+        notification.id === id 
+          ? { ...notification, read: true } 
+          : notification
+      )
+    )
+    setUnreadCount(prev => Math.max(0, prev - 1))
+  }
 
-  // Function to generate breadcrumb title
-  const getBreadcrumbTitle = (path: string) => {
-    const parts = path.split('/')
-    const currentPage = parts[parts.length - 1]
-    
-    switch (currentPage) {
-      case 'dashboard':
-        return 'Home'
-      case 'create':
-        return 'Create'
-      case 'customers':
-        return 'Customers'
-      case 'rewards':
-        return 'Reward Library'
-      case 'store':
-        return 'My Store'
-      case 'integrations':
-        return 'Integrations'
+  const markAllAsRead = () => {
+    setNotifications(prev => 
+      prev.map(notification => ({ ...notification, read: true }))
+    )
+    setUnreadCount(0)
+  }
+
+  const formatTimeAgo = (date: Date) => {
+    return formatDistanceToNow(date, { addSuffix: true })
+  }
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case "success":
+        return <Check className="h-4 w-4 text-green-500" />
+      case "warning":
+        return <Bell className="h-4 w-4 text-amber-500" />
+      case "error":
+        return <X className="h-4 w-4 text-red-500" />
       default:
-        return 'Home'
+        return <Bell className="h-4 w-4 text-blue-500" />
     }
+  }
+  
+  // Function to get the current page title based on pathname
+  const getPageTitle = () => {
+    const path = pathname.split('/')[1]
+    if (!path) return 'Dashboard'
+    
+    // Convert path to title case (e.g., "store" -> "Store")
+    return path.charAt(0).toUpperCase() + path.slice(1)
   }
 
   return (
-    <SidebarProvider>
-      <div className="flex h-screen w-full">
-        <MerchantSidebar />
-        <SidebarInset className="flex-1 flex flex-col bg-white">
-          <div className="flex-1 overflow-auto">
-            <div className="max-w-[2000px] mx-auto">
-              <header className="h-12 flex items-center justify-between border-b px-4">
-                <div className="flex items-center gap-1.5">
-                  <SidebarTrigger />
-                  <Separator orientation="vertical" className="h-3 mx-1.5" />
-                  <Breadcrumb>
-                    <BreadcrumbList>
-                      <BreadcrumbItem>
-                        <BreadcrumbLink href="/dashboard" className="flex items-center gap-2">
-                          <Home className="h-4 w-4" />
-                          Tap Loyalty
-                        </BreadcrumbLink>
-                      </BreadcrumbItem>
-                      <BreadcrumbSeparator>
-                        <ChevronRight className="h-4 w-4" />
-                      </BreadcrumbSeparator>
-                      <BreadcrumbItem>
-                        <BreadcrumbPage>
-                          <span className="inline-flex items-center rounded-md bg-[#007AFF]/10 px-2 py-1 text-xs font-medium text-[#007AFF] ring-1 ring-inset ring-[#007AFF]/20">
-                            {getBreadcrumbTitle(pathname)}
-                          </span>
-                        </BreadcrumbPage>
-                      </BreadcrumbItem>
-                    </BreadcrumbList>
-                  </Breadcrumb>
+    <div className="flex h-screen overflow-hidden">
+      <SideNav />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Header */}
+        <header className="h-14 border-b flex items-center justify-between px-6 bg-white">
+          <h1 className="text-xl font-semibold">{getPageTitle()}</h1>
+          
+          <div className="flex items-center gap-4">
+            <div className="relative w-64">
+              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Search..." 
+                className="pl-8 pr-10 h-9 w-full"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1 text-xs text-muted-foreground bg-gray-100 px-1.5 py-0.5 rounded">
+                <Command className="h-3 w-3" />
+                K
+              </div>
+            </div>
+            
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-9 gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              Docs
+            </Button>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="relative">
+                  <Bell className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80 rounded-md">
+                <div className="flex items-center justify-between px-4 py-2 border-b">
+                  <h3 className="font-medium">Notifications</h3>
+                  {unreadCount > 0 && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 text-xs rounded-md"
+                      onClick={markAllAsRead}
+                    >
+                      Mark all as read
+                    </Button>
+                  )}
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 w-8 p-0 relative"
-                      >
-                        <Bell className="h-4 w-4" />
-                        <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-[10px] font-medium text-white flex items-center justify-center">
-                          3
-                        </span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-[380px]">
-                      <div className="flex items-center justify-between px-3 py-2 border-b">
-                        <h4 className="font-medium text-sm">Notifications</h4>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-8 text-xs hover:text-[#007AFF] hover:bg-[#007AFF]/10"
-                        >
-                          Mark all as read
-                        </Button>
-                      </div>
-                      <div className="py-2">
-                        {[
-                          {
-                            title: "New reward claimed",
-                            description: "John Smith claimed Free Coffee reward",
-                            time: "2 minutes ago"
-                          },
-                          {
-                            title: "Points rule activated",
-                            description: "Double Points Weekends is now active",
-                            time: "1 hour ago"
-                          },
-                          {
-                            title: "Broadcast sent",
-                            description: "Valentine's Day message sent to 1,234 customers",
-                            time: "2 hours ago"
-                          }
-                        ].map((notification, i) => (
-                          <DropdownMenuItem key={i} className="px-3 py-2 cursor-pointer">
-                            <div className="flex items-start gap-3">
-                              <div className="h-8 w-8 rounded-full bg-[#007AFF]/10 flex items-center justify-center flex-shrink-0">
-                                <Bell className="h-4 w-4 text-[#007AFF]" />
-                              </div>
-                              <div className="flex-1 space-y-1">
-                                <p className="text-sm font-medium">{notification.title}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {notification.description}
-                                </p>
-                                <p className="text-[10px] text-muted-foreground">
-                                  {notification.time}
-                                </p>
-                              </div>
-                            </div>
-                          </DropdownMenuItem>
-                        ))}
-                      </div>
-                      <div className="p-2 border-t">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="w-full justify-center text-xs hover:text-[#007AFF] hover:bg-[#007AFF]/10"
-                        >
-                          View all notifications
-                        </Button>
-                      </div>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </header>
-              
-              <main>
-                <Suspense fallback={<LoadingScreen />}>
-                  {isLoading ? (
-                    <div className="flex items-center justify-center h-[calc(100vh-48px)]">
-                      <LoadingScreen />
+                <div className="max-h-[400px] overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="py-6 text-center">
+                      <Bell className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">No notifications yet</p>
                     </div>
                   ) : (
-                    children
+                    notifications.map((notification) => (
+                      <div 
+                        key={notification.id} 
+                        className={cn(
+                          "px-4 py-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors cursor-pointer",
+                          !notification.read && "bg-blue-50/50"
+                        )}
+                        onClick={() => markAsRead(notification.id)}
+                      >
+                        <div className="flex gap-3">
+                          <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+                            {getNotificationIcon(notification.type)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-start">
+                              <h4 className="text-sm font-medium">{notification.title}</h4>
+                              <p className="text-xs text-muted-foreground">
+                                {formatTimeAgo(notification.timestamp)}
+                              </p>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {notification.description}
+                            </p>
+                            {!notification.read && (
+                              <Badge className="mt-2 rounded-md bg-blue-50 text-blue-700 border-blue-200">
+                                New
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))
                   )}
-                </Suspense>
-              </main>
-            </div>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="justify-center" asChild>
+                  <a href="/notifications" className="w-full text-center cursor-pointer">
+                    View all notifications
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-        </SidebarInset>
+        </header>
+        
+        {/* Main Content */}
+        <main className="flex-1 overflow-auto">
+          {children}
+        </main>
       </div>
-    </SidebarProvider>
+    </div>
   )
 } 

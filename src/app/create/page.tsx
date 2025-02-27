@@ -1,166 +1,206 @@
 "use client"
 
 import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
 import { CreatePointsRuleDialog } from "@/components/create-points-rule-dialog"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
 import { useState } from "react"
 import { 
-  Sparkles, 
-  Settings, 
-  ImagePlus, 
+  Gift, 
+  Zap, 
+  ArrowRight, 
   MessageSquare, 
-  Clock, 
-  Repeat, 
-  Bot, 
-  ChevronRight,
-  Rocket,
-  Users,
-  ArrowRight
+  ImagePlus,
+  Bell,
+  Coffee,
+  CalendarClock,
+  HelpCircle,
+  Store
 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { cn } from "@/lib/utils"
+
+// Define type for options
+interface OptionType {
+  title: string
+  description: string
+  icon: React.ReactNode
+  type: "reward" | "program" | "recurring"
+}
 
 export default function CreatePage() {
+  const router = useRouter()
   const [createRewardOpen, setCreateRewardOpen] = useState(false)
-  const [pointsRuleDialogOpen, setPointsRuleDialogOpen] = useState(false)
-  const [recurringRewardOpen, setRecurringRewardOpen] = useState(false)
+  const [createProgramOpen, setCreateProgramOpen] = useState(false)
+  const [createRecurringOpen, setCreateRecurringOpen] = useState(false)
+  const [createRuleOpen, setCreateRuleOpen] = useState(false)
+  const [selectedOption, setSelectedOption] = useState<OptionType | null>(null)
 
-  const sections = [
+  const rewardOptions: OptionType[] = [
     {
-      id: "rewards",
-      title: "Rewards & Incentives",
-      items: [
-        {
-          title: "Individual Reward",
-          description: "Create a single reward for your customers",
-          icon: Sparkles,
-          action: () => setCreateRewardOpen(true),
-          badge: "Popular"
-        },
-        {
-          title: "Recurring Reward",
-          description: "Set up rewards that repeat on a schedule",
-          icon: Repeat,
-          action: () => setRecurringRewardOpen(true)
-        },
-        {
-          title: "AI-Generated Reward",
-          description: "Let AI help you create optimized rewards",
-          icon: Bot,
-          action: () => console.log("Create AI reward"),
-          badge: "New"
-        }
-      ]
+      title: "Individual Reward",
+      description: "Create a new reward that customers can redeem with their points",
+      icon: Gift,
+      type: "reward"
     },
     {
-      id: "program",
-      title: "Program Settings",
-      items: [
-        {
-          title: "Points Rules",
-          description: "Configure earning and redemption rules",
-          icon: Settings,
-          action: () => setPointsRuleDialogOpen(true),
-          color: "orange"
-        },
-        {
-          title: "Tiers & Levels",
-          description: "Set up customer loyalty tiers",
-          icon: Users,
-          action: () => console.log("Create tiers"),
-          color: "pink"
-        }
-      ]
+      title: "Coffee Program",
+      description: "Set up a buy-X-get-1-free coffee or loyalty program",
+      icon: Coffee,
+      type: "program"
     },
     {
-      id: "marketing",
-      title: "Marketing & Communication",
-      items: [
-        {
-          title: "Homepage Banner",
-          description: "Update your store's featured content",
-          icon: ImagePlus,
-          action: () => console.log("Create banner"),
-          color: "yellow"
-        },
-        {
-          title: "Broadcast Message",
-          description: "Send updates to all your customers",
-          icon: MessageSquare,
-          action: () => console.log("Create broadcast"),
-          color: "indigo"
-        }
-      ]
+      title: "Recurring Reward",
+      description: "Create rewards that repeat on a schedule",
+      icon: CalendarClock,
+      type: "recurring"
     }
   ]
+  
+  const pointsRuleOptions: OptionType[] = [
+    {
+      title: "Points Rule",
+      description: "Set up rules for how customers earn points at your business",
+      icon: Zap,
+      type: "reward"
+    }
+  ]
+  
+  const communicationOptions: OptionType[] = [
+    {
+      title: "Create Banner",
+      description: "Add a promotional banner to your customer-facing app",
+      icon: ImagePlus,
+      type: "reward"
+    },
+    {
+      title: "Send Broadcast",
+      description: "Send a message to all or selected customers",
+      icon: Bell,
+      type: "reward"
+    }
+  ]
+  
+  const renderOptionCards = (options: OptionType[]) => {
+    return options.map((option) => (
+      <Card 
+        key={option.title}
+        className="overflow-hidden border hover:border-primary/30 hover:shadow-sm transition-all cursor-pointer rounded-lg"
+        onClick={() => handleOptionClick(option)}
+      >
+        <div className="p-6">
+          <div className="flex items-start gap-4">
+            <div className={cn(
+              "h-12 w-12 rounded-md flex items-center justify-center flex-shrink-0",
+              option.type === "reward" && "bg-purple-50",
+              option.type === "program" && "bg-amber-50",
+              option.type === "recurring" && "bg-indigo-50"
+            )}>
+              <option.icon className={cn(
+                "h-6 w-6",
+                option.type === "reward" && "text-purple-500",
+                option.type === "program" && "text-amber-500",
+                option.type === "recurring" && "text-indigo-500"
+              )} />
+            </div>
+            
+            <div className="flex-1">
+              <h3 className="text-lg font-medium">{option.title}</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {option.description}
+              </p>
+            </div>
+          </div>
+          
+          <div className="mt-6 flex justify-end">
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="h-9 gap-2 rounded-md"
+            >
+              <span>Get Started</span>
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </Card>
+    ))
+  }
+
+  const handleOptionClick = (option: OptionType) => {
+    setSelectedOption(option)
+    
+    if (option.type === "reward") {
+      setCreateRewardOpen(true)
+    } else if (option.type === "program") {
+      setCreateProgramOpen(true)
+    } else if (option.type === "recurring") {
+      setCreateRecurringOpen(true)
+    }
+  }
 
   return (
-    <div className="p-6">
-      <div className="max-w-[1200px] mx-auto">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight">Create</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Create and manage your loyalty program content
-          </p>
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Create</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Create new reward programs and loyalty offers for your customers
+        </p>
+      </div>
+
+      <div className="space-y-8">
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <Gift className="h-5 w-5 text-purple-500" />
+            <h2 className="text-xl font-medium">Rewards</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {renderOptionCards(rewardOptions)}
+          </div>
         </div>
-
-        <div className="space-y-8">
-          {sections.map((section) => (
-            <div key={section.id}>
-              <h2 className="text-sm font-medium mb-3 text-muted-foreground">
-                {section.title}
-              </h2>
-
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {section.items.map((item) => (
-                  <Card
-                    key={item.title}
-                    className="group cursor-pointer hover:bg-slate-50 transition-colors"
-                    onClick={item.action}
-                  >
-                    <div className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="shrink-0">
-                          <item.icon className="h-4 w-4 text-slate-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-sm font-medium truncate">
-                              {item.title}
-                            </h3>
-                            {item.badge && (
-                              <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                                {item.badge}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
-                            {item.description}
-                          </p>
-                        </div>
-                        <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          ))}
+        
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <Zap className="h-5 w-5 text-blue-500" />
+            <h2 className="text-xl font-medium">Points Rules</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {renderOptionCards(pointsRuleOptions)}
+          </div>
+        </div>
+        
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <Bell className="h-5 w-5 text-rose-500" />
+            <h2 className="text-xl font-medium">Communication</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {renderOptionCards(communicationOptions)}
+          </div>
         </div>
       </div>
 
+      {/* Dialogs */}
       <CreateRewardDialog 
         open={createRewardOpen} 
         onOpenChange={setCreateRewardOpen}
       />
-
-      <CreatePointsRuleDialog 
-        open={pointsRuleDialogOpen}
-        onOpenChange={setPointsRuleDialogOpen}
+      
+      <CreateRewardDialog 
+        open={createProgramOpen} 
+        onOpenChange={setCreateProgramOpen}
+        defaultType="program"
       />
-
+      
       <CreateRecurringRewardDialog 
-        open={recurringRewardOpen}
-        onOpenChange={setRecurringRewardOpen}
+        open={createRecurringOpen}
+        onOpenChange={setCreateRecurringOpen}
+      />
+      
+      <CreatePointsRuleDialog 
+        open={createRuleOpen}
+        onOpenChange={setCreateRuleOpen}
       />
     </div>
   )

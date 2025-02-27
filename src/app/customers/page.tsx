@@ -1,13 +1,33 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Card } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table"
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu"
 import { 
   Search, 
   Filter, 
-  MoreVertical, 
+  MoreHorizontal, 
   User, 
   ChevronUp, 
   ChevronDown,
@@ -25,25 +45,21 @@ import {
   UserPlus,
   BadgeCheck,
   Crown,
-  X
+  X,
+  Plus,
+  Eye,
+  Edit,
+  Trash
 } from "lucide-react"
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuLabel,
-} from "@/components/ui/dropdown-menu"
 import { useCustomers } from "@/hooks/use-customers"
 import { formatDistanceToNow } from 'date-fns'
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { SortField, SortDirection, CustomerCohort } from "@/lib/types"
 
 export default function CustomersPage() {
+  const router = useRouter()
   const { customers, loading } = useCustomers()
   const [search, setSearch] = useState("")
   const [sortField, setSortField] = useState<SortField>('lastTransactionDate')
@@ -168,34 +184,64 @@ export default function CustomersPage() {
            search.length > 0
   }
 
+  // Get cohort badge color
+  const getCohortBadge = (customer: any) => {
+    if (customer.daysSinceLastVisit <= 30) {
+      return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 rounded-md">Active</Badge>
+    } else if (customer.daysSinceLastVisit <= 90) {
+      return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 rounded-md">Engaged</Badge>
+    } else if (customer.daysSinceLastVisit <= 180) {
+      return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 rounded-md">At Risk</Badge>
+    } else {
+      return <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 rounded-md">Dormant</Badge>
+    }
+  }
+
   return (
-    <div className="p-4">
-      <div className="max-w-[1200px] mx-auto space-y-6">
-        <div className="flex justify-between items-center gap-4">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
+      <div>
+        <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Customers</h1>
             <p className="text-sm text-muted-foreground mt-1">
               Manage and track your customer base
             </p>
           </div>
+          
+          <Button 
+            className="h-9 gap-2 rounded-md"
+            onClick={() => router.push('/customers/invite')}
+          >
+            <Users className="h-4 w-4" />
+            Invite Customers
+          </Button>
         </div>
-
-        <Card>
-          <div className="p-4 border-b">
+        
+        <Tabs defaultValue="all" onValueChange={(value) => setCohort(value as CustomerCohort)}>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+            <TabsList className="h-9 rounded-md">
+              <TabsTrigger value="all">All Customers</TabsTrigger>
+              <TabsTrigger value="active">Active</TabsTrigger>
+              <TabsTrigger value="at-risk">At Risk</TabsTrigger>
+              <TabsTrigger value="dormant">Dormant</TabsTrigger>
+            </TabsList>
+            
             <div className="flex items-center gap-2">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input 
+                  type="search" 
                   placeholder="Search customers..." 
-                  className="pl-9"
+                  className="pl-9 h-9 w-[250px] rounded-md"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
+              
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="h-9">
-                    <ArrowUpDown className="h-4 w-4 mr-2" />
+                  <Button variant="outline" className="h-9 gap-2 rounded-md">
+                    <ArrowUpDown className="h-4 w-4" />
                     Sort
                     {sortField !== 'lastTransactionDate' && (
                       <span className="ml-2 text-xs text-muted-foreground">
@@ -204,7 +250,7 @@ export default function CustomersPage() {
                     )}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuContent align="end" className="w-56 rounded-md">
                   <DropdownMenuLabel>Sort by</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuRadioGroup 
@@ -262,14 +308,15 @@ export default function CustomersPage() {
                   </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
+              
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="h-9">
-                    <Filter className="h-4 w-4 mr-2" />
-                    {cohort === 'all' ? 'All Customers' : cohort}
+                  <Button variant="outline" className="h-9 gap-2 rounded-md">
+                    <Filter className="h-4 w-4" />
+                    Filter
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuContent align="end" className="w-56 rounded-md">
                   <DropdownMenuLabel>Customer Cohorts</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuRadioGroup value={cohort} onValueChange={(v) => setCohort(v as CustomerCohort)}>
@@ -309,10 +356,11 @@ export default function CustomersPage() {
                   </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
+              
               {hasActiveFilters() && (
                 <Button 
                   variant="ghost" 
-                  className="h-9 px-3 text-muted-foreground hover:text-foreground"
+                  className="h-9 gap-2 rounded-md px-3 text-muted-foreground hover:text-foreground"
                   onClick={() => {
                     setSortField('lastTransactionDate')
                     setSortDirection('desc')
@@ -320,104 +368,196 @@ export default function CustomersPage() {
                     setSearch('')
                   }}
                 >
-                  <X className="h-4 w-4 mr-2" />
+                  <X className="h-4 w-4" />
                   Clear
                 </Button>
               )}
             </div>
           </div>
-
-          <div className="divide-y">
-            <div className="px-4 py-2 bg-muted/50">
-              <div className="flex items-center gap-4">
-                <div className="w-10" /> {/* Avatar space */}
-                <div className="flex-1 grid grid-cols-5 gap-4 text-sm text-muted-foreground">
-                  <div>Customer</div>
-                  <div>Points</div>
-                  <div>Transactions</div>
-                  <div>Lifetime Spend</div>
-                  <div>Last Visit</div>
-                </div>
-                <div className="w-8" /> {/* Actions space */}
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="p-8 text-center text-muted-foreground">Loading customers...</div>
-            ) : filteredCustomers.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">No customers found</div>
-            ) : (
-              filteredCustomers.map((customer) => (
-                <Link 
-                  key={customer.customerId}
-                  href={`/customers/${customer.customerId}`}
-                  className="block"
-                >
-                  <div className="p-4 flex items-center gap-4 hover:bg-gray-50/50 transition-colors">
-                    <div className="h-10 w-10 rounded-full bg-[#007AFF]/10 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                      {customer.profileData?.shareProfileWithMerchants && customer.profileData?.profilePictureUrl ? (
-                        <img 
-                          src={customer.profileData.profilePictureUrl} 
-                          alt={customer.fullName}
-                          className="w-full h-full object-cover"
-                        />
+          
+          {["all", "active", "at-risk", "dormant", "new", "loyal", "vip"].map((category) => (
+            <TabsContent key={category} value={category} className="mt-0">
+              <Card className="rounded-lg overflow-hidden">
+                <CardHeader className="py-4">
+                  <CardTitle>
+                    {category === "all" ? "All Customers" : 
+                     category === "active" ? "Active Customers" : 
+                     category === "at-risk" ? "At-Risk Customers" :
+                     category === "dormant" ? "Dormant Customers" :
+                     category === "new" ? "New Customers" :
+                     category === "loyal" ? "Loyal Customers" :
+                     "VIP Customers"}
+                  </CardTitle>
+                  <CardDescription>
+                    {category === "all" ? "View and manage all your customers" : 
+                     category === "active" ? "Customers who visited in the last 30 days" : 
+                     category === "at-risk" ? "Customers who haven't visited in 90-180 days" :
+                     category === "dormant" ? "Customers who haven't visited in over 180 days" :
+                     category === "new" ? "Customers who joined in the last 30 days" :
+                     category === "loyal" ? "Customers with 10+ transactions" :
+                     "Your top 10% of customers by spend"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>
+                          <SortButton field="fullName">Customer</SortButton>
+                        </TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>
+                          <SortButton field="pointsBalance">Points</SortButton>
+                        </TableHead>
+                        <TableHead>
+                          <SortButton field="lifetimeTransactionCount">Transactions</SortButton>
+                        </TableHead>
+                        <TableHead>
+                          <SortButton field="totalLifetimeSpend">Lifetime Spend</SortButton>
+                        </TableHead>
+                        <TableHead>
+                          <SortButton field="lastTransactionDate">Last Visit</SortButton>
+                        </TableHead>
+                        <TableHead></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {loading ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="h-24 text-center">
+                            <div className="flex justify-center">
+                              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : filteredCustomers.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="h-24 text-center">
+                            <div className="flex flex-col items-center justify-center">
+                              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                                <Users className="h-6 w-6 text-muted-foreground" />
+                              </div>
+                              <h3 className="mt-4 text-lg font-medium">
+                                No customers found
+                              </h3>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {search ? "Try adjusting your search query" : 
+                                 `No ${category === "all" ? "" : category + " "}customers available`}
+                              </p>
+                              {!search && (
+                                <Button 
+                                  className="mt-4 h-9 gap-2 rounded-md"
+                                  onClick={() => router.push('/customers/invite')}
+                                >
+                                  <Users className="h-4 w-4" />
+                                  Invite Customers
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
                       ) : (
-                        <User className="h-5 w-5 text-[#007AFF]" />
+                        filteredCustomers.map((customer) => (
+                          <TableRow 
+                            key={customer.customerId} 
+                            className="hover:bg-muted/50 cursor-pointer"
+                            onClick={() => router.push(`/customers/${customer.customerId}`)}
+                          >
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-md bg-[#007AFF]/10 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                                  {customer.profileData?.shareProfileWithMerchants && customer.profileData?.profilePictureUrl ? (
+                                    <img 
+                                      src={customer.profileData.profilePictureUrl} 
+                                      alt={customer.fullName}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <User className="h-5 w-5 text-[#007AFF]" />
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="font-medium">{customer.fullName}</div>
+                                  {customer.membershipTier && (
+                                    <div className="text-xs text-muted-foreground">
+                                      {customer.membershipTier}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {getCohortBadge(customer)}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Award className="h-4 w-4 text-blue-600" />
+                                <span>{customer.pointsBalance.toLocaleString()}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                                <span>{customer.lifetimeTransactionCount}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <DollarSign className="h-4 w-4 text-green-600" />
+                                <span>${customer.totalLifetimeSpend}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {formatDate(customer.lastTransactionDate)}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex justify-end">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" className="h-8 w-8 p-0 rounded-md">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="rounded-md">
+                                    <DropdownMenuItem onClick={(e) => {
+                                      e.stopPropagation();
+                                      router.push(`/customers/${customer.customerId}`);
+                                    }}>
+                                      <Eye className="h-4 w-4 mr-2" />
+                                      View Details
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={(e) => {
+                                      e.stopPropagation();
+                                      router.push(`/customers/${customer.customerId}/edit`);
+                                    }}>
+                                      <Edit className="h-4 w-4 mr-2" />
+                                      Edit Customer
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem 
+                                      className="text-red-600"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        // Handle delete
+                                      }}
+                                    >
+                                      <Trash className="h-4 w-4 mr-2" />
+                                      Delete Customer
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
                       )}
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-medium">{customer.fullName}</h3>
-                        {customer.membershipTier && (
-                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#007AFF]/10 text-[#007AFF]">
-                            {customer.membershipTier}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-4 mt-1">
-                        <span className="text-xs text-muted-foreground">
-                          {customer.pointsBalance.toLocaleString()} points
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {customer.lifetimeTransactionCount} transactions
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          ${customer.totalLifetimeSpend} lifetime spend
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          Last visit: {formatDate(customer.lastTransactionDate)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          className="h-8 w-8 p-0"
-                        >
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
-                          View Details
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          Edit Customer
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-red-600">
-                          Delete Customer
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </Link>
-              ))
-            )}
-          </div>
-        </Card>
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          ))}
+        </Tabs>
       </div>
     </div>
   )

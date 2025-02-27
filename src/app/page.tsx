@@ -12,6 +12,33 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Link } from "next/navigation"
 
+// Add this function to safely handle Firestore timestamps or ISO strings
+const safelyGetDate = (dateField: any): Date => {
+  if (!dateField) return new Date();
+  
+  try {
+    // If it's a Firestore timestamp with toDate method
+    if (typeof dateField.toDate === 'function') {
+      return dateField.toDate();
+    }
+    // If it's an ISO string
+    else if (typeof dateField === 'string') {
+      return new Date(dateField);
+    }
+    // If it's already a Date
+    else if (dateField instanceof Date) {
+      return dateField;
+    }
+    // Fallback
+    else {
+      return new Date();
+    }
+  } catch (error) {
+    console.error("Error parsing date:", error);
+    return new Date();
+  }
+};
+
 export default function Home() {
   redirect('/dashboard')
 

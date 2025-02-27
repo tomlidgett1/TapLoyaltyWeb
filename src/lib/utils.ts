@@ -23,3 +23,29 @@ export function formatDateTime(timestamp: any) {
     return 'Invalid date'
   }
 }
+
+export const safelyGetDate = (dateField: any): Date => {
+  if (!dateField) return new Date();
+  
+  try {
+    // If it's a Firestore timestamp with toDate method
+    if (typeof dateField.toDate === 'function') {
+      return dateField.toDate();
+    }
+    // If it's an ISO string
+    else if (typeof dateField === 'string') {
+      return new Date(dateField);
+    }
+    // If it's already a Date
+    else if (dateField instanceof Date) {
+      return dateField;
+    }
+    // Fallback
+    else {
+      return new Date();
+    }
+  } catch (error) {
+    console.error("Error parsing date:", error);
+    return new Date();
+  }
+};

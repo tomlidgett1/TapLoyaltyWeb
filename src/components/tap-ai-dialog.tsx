@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Sparkles, Send, Plus, Settings, MessageSquare, ChevronDown, ChevronUp, HelpCircle, CheckCircle, Edit, MoreHorizontal, Pencil, Trash2, Gift, Repeat, Sparkles as SparklesIcon, DollarSign, Calendar, Clock, Users, Award, History, Timer, Wallet, BadgeCheck, CalendarRange, UserCheck, Ban, Mic, MicOff, Eye, Coffee } from "lucide-react"
+import { Sparkles, Send, Plus, Settings, MessageSquare, ChevronDown, ChevronUp, HelpCircle, CheckCircle, Edit, MoreHorizontal, Pencil, Trash2, Gift, Repeat, Sparkles as SparklesIcon, DollarSign, Calendar, Clock, Users, Award, History, Timer, Wallet, BadgeCheck, CalendarRange, UserCheck, Ban, Mic, MicOff, Eye, Coffee, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { getAIResponse } from "@/lib/openai"
 import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
@@ -308,29 +308,35 @@ function RewardCard({
   }
 
   const handleSaveWithPin = async (status: 'draft' | 'live') => {
-    if (!pin.trim() || !savingReward || !user?.uid) return
+    if (!pin.trim() || !user?.uid) {
+      console.log("Missing required data:", { 
+        pin: !!pin.trim(), 
+        userId: !!user?.uid 
+      });
+      return;
+    }
 
     try {
-      setSaving(true)
-      const now = Timestamp.now()
-      const batch = writeBatch(db)
+      setSaving(true);
+      const now = Timestamp.now();
+      const batch = writeBatch(db);
       
-      console.log("Saving reward:", savingReward);
+      // Check if we have program data in the ref
+      const programData = fullProgramDataRef.current;
+      console.log("Using data from ref:", programData);
       
-      // Check if this is a program with multiple rewards
-      if (savingReward.isProgram && Array.isArray(savingReward.rewards)) {
-        console.log(`Program detected with ${savingReward.rewards.length} rewards`);
-        console.log("Rewards array:", JSON.stringify(savingReward.rewards));
+      if (programData && programData.isProgram && Array.isArray(programData.rewards)) {
+        console.log(`Program detected with ${programData.rewards.length} rewards`);
+        console.log("Full rewards array:", JSON.stringify(programData.rewards));
         
         // Create a program record first
-        const programId = `program-${Date.now()}`
+        const programId = `program-${Date.now()}`;
         console.log("Created program ID:", programId);
         
         // Create a clean copy of the program data without the rewards array
-        // to avoid circular references
-        const { rewards, ...programWithoutRewards } = savingReward;
+        const { rewards, ...programWithoutRewards } = programData;
         
-        const programData = {
+        const programDataToSave = {
           ...programWithoutRewards,
           pin: pin.trim(),
           createdAt: now,
@@ -341,18 +347,18 @@ function RewardCard({
           updatedAt: now,
           category: 'program',
           rewardCount: rewards.length
-        }
+        };
         
         // Save program record
-        console.log("Saving program record:", programData);
-        const merchantProgramRef = doc(db, 'merchants', user.uid, 'rewards', programId)
-        batch.set(merchantProgramRef, programData)
+        console.log("Saving program record:", programDataToSave);
+        const merchantProgramRef = doc(db, 'merchants', user.uid, 'rewards', programId);
+        batch.set(merchantProgramRef, programDataToSave);
         
-        const globalProgramRef = doc(db, 'rewards', programId)
-        batch.set(globalProgramRef, programData)
+        const globalProgramRef = doc(db, 'rewards', programId);
+        batch.set(globalProgramRef, programDataToSave);
         
-        const tapAiProgramRef = doc(db, 'merchants', user.uid, 'tapaiRewards', programId)
-        batch.set(tapAiProgramRef, programData)
+        const tapAiProgramRef = doc(db, 'merchants', user.uid, 'tapaiRewards', programId);
+        batch.set(tapAiProgramRef, programDataToSave);
         
         // Then create each individual reward in the program
         console.log("Starting to process individual rewards...");
@@ -364,9 +370,14 @@ function RewardCard({
         const rewardsArray = Array.isArray(rewards) ? rewards : [];
         console.log(`Processing ${rewardsArray.length} rewards`);
         
+        // Process each reward
         for (let i = 0; i < rewardsArray.length; i++) {
           const reward = rewardsArray[i];
-          console.log(`Processing reward ${i+1}/${rewardsArray.length}:`, reward.rewardName);
+          console.log(`Processing reward ${i+1}/${rewardsArray.length}:`, {
+            name: reward.rewardName,
+            description: reward.description,
+            pointsCost: reward.pointsCost
+          });
           
           // Generate a truly unique ID for each reward
           const uniqueTimestamp = Date.now() + i; // Add index to ensure uniqueness
@@ -386,29 +397,29 @@ function RewardCard({
             updatedAt: now,
             programId: programId,
             category: 'individual'
-          }
+          };
           
           // Save individual reward
           console.log(`Saving reward ${i+1} to Firestore:`, rewardData);
           
-          const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId)
-          batch.set(merchantRewardRef, rewardData)
+          const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
+          batch.set(merchantRewardRef, rewardData);
           
-          const globalRewardRef = doc(db, 'rewards', rewardId)
-          batch.set(globalRewardRef, rewardData)
+          const globalRewardRef = doc(db, 'rewards', rewardId);
+          batch.set(globalRewardRef, rewardData);
           
-          const tapAiRewardRef = doc(db, 'merchants', user.uid, 'tapaiRewards', rewardId)
-          batch.set(tapAiRewardRef, rewardData)
+          const tapAiRewardRef = doc(db, 'merchants', user.uid, 'tapaiRewards', rewardId);
+          batch.set(tapAiRewardRef, rewardData);
           
           createdRewardIds.push(rewardId);
           console.log(`Reward ${i+1} added to batch`);
         }
         
         console.log(`All ${rewardsArray.length} rewards processed. Created IDs:`, createdRewardIds);
-      } else {
+      } else if (savingReward) {
         // Handle single reward (existing code)
         console.log("Processing single reward");
-        const rewardId = Date.now().toString()
+        const rewardId = Date.now().toString();
         const rewardData = {
           ...savingReward,
           pin: pin.trim(),
@@ -419,43 +430,47 @@ function RewardCard({
           merchantId: user.uid,
           updatedAt: now,
           category: 'individual'
-        }
+        };
         
-        const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId)
-        batch.set(merchantRewardRef, rewardData)
+        const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
+        batch.set(merchantRewardRef, rewardData);
         
-        const globalRewardRef = doc(db, 'rewards', rewardId)
-        batch.set(globalRewardRef, rewardData)
+        const globalRewardRef = doc(db, 'rewards', rewardId);
+        batch.set(globalRewardRef, rewardData);
         
-        const tapAiRewardRef = doc(db, 'merchants', user.uid, 'tapaiRewards', rewardId)
-        batch.set(tapAiRewardRef, rewardData)
+        const tapAiRewardRef = doc(db, 'merchants', user.uid, 'tapaiRewards', rewardId);
+        batch.set(tapAiRewardRef, rewardData);
+      } else {
+        console.error("No reward data found");
+        return;
       }
-
+      
       // Commit all writes
       console.log("Committing batch to Firestore...");
-      await batch.commit()
+      await batch.commit();
       console.log("Batch committed successfully");
 
       toast({
         title: "Success",
-        description: savingReward.isProgram 
-          ? `Program with ${savingReward.rewards.length} rewards ${status === 'draft' ? 'saved as draft' : 'published live'}`
-          : `Reward ${status === 'draft' ? 'saved as draft' : 'published live'}`,
-      })
-      setPinDialogOpen(false)
-      setPin('')
-      setSavingReward(null)
+        description: savingReward ? `Reward ${status === 'draft' ? 'saved as draft' : 'published live'}` : `Program with ${programData?.rewards?.length || 0} rewards ${status === 'draft' ? 'saved as draft' : 'published live'}`,
+      });
+      setPinDialogOpen(false);
+      setPin('');
+      setSavingRewardOriginal(null);
+      // Reset the ref after successful save
+      fullProgramDataRef.current = null;
     } catch (error) {
-      console.error('Error saving reward:', error)
+      console.error('Error saving reward:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
       toast({
         title: "Error",
         description: `Failed to save reward: ${(error as Error).message}`,
         variant: "destructive"
-      })
+      });
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   return (
     <>
@@ -627,13 +642,15 @@ function ProgramCard({
   rewards, 
   setSavingReward, 
   setPinDialogOpen,
-  onEdit
+  onEdit,
+  fullProgramDataRef  // Add this prop
 }: { 
   program: any;
   rewards: any[];
   setSavingReward: (reward: any) => void;
   setPinDialogOpen: (open: boolean) => void;
   onEdit: (reward: any) => void;
+  fullProgramDataRef: React.RefObject<any>;  // Add this type
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedRewards, setExpandedRewards] = useState<Set<number>>(new Set());
@@ -874,7 +891,9 @@ function ProgramCard({
             
             <Button
               className="rounded-md bg-[#007AFF] hover:bg-[#0066CC] text-white"
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
+                
                 if (!user?.uid) {
                   toast({
                     title: "Authentication Required",
@@ -886,17 +905,21 @@ function ProgramCard({
                 }
                 
                 // Create a combined program object with the rewards array
-                const programWithRewards = {
-                  ...program,
-                  rewards: [...rewards], // Create a new array to avoid reference issues
+                const programWithRewards = JSON.parse(JSON.stringify({
+                  programName: program.programName,
+                  description: program.description,
+                  programtype: program.programtype,
+                  rewards: rewards,
                   isProgram: true
-                };
+                }));
                 
                 console.log("Creating program with rewards:", programWithRewards);
                 console.log("Rewards array length:", programWithRewards.rewards.length);
                 
-                // Pass the program with rewards to the parent component
-                setSavingReward(programWithRewards);
+                // Store the program data in the ref
+                fullProgramDataRef.current = programWithRewards;
+                
+                // Open the PIN dialog directly
                 setPinDialogOpen(true);
               }}
             >
@@ -915,13 +938,15 @@ function MessageContent({
   user,
   onEdit,
   onUseTemplate,
-  className
+  className,
+  fullProgramDataRef  // Add this prop
 }: { 
   content: string
   user: any
   onEdit: (reward: any) => void
   onUseTemplate: (reward: any) => void
   className?: string
+  fullProgramDataRef?: React.RefObject<any>  // Add this type
 }) {
   const router = useRouter()
   const { toast } = useToast()
@@ -1270,6 +1295,7 @@ function MessageContent({
                       }
                     }}
                     onEdit={onEdit}
+                    fullProgramDataRef={fullProgramDataRef}  // Pass the ref here
                   />
                 ) : (
                   rewards.map((reward, index) => {
@@ -1298,10 +1324,12 @@ function MessageContent({
 
 export function TapAiDialog({
   open,
-  onOpenChange
+  onOpenChange,
+  initialPrompt = ""
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  initialPrompt?: string
 }) {
   const { toast } = useToast()
   const [assistant, setAssistant] = useState<any>(null)
@@ -1327,10 +1355,13 @@ export function TapAiDialog({
   const [selectedQuickAction, setSelectedQuickAction] = useState<string | null>(null)
   const [pinDialogOpen, setPinDialogOpen] = useState(false)
   const [pin, setPin] = useState('')
-  const [savingReward, setSavingReward] = useState<any>(null)
+  const [savingReward, setSavingRewardOriginal] = useState<any>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [createRewardData, setCreateRewardData] = useState<any>(null)
+  // Add a ref to store the full program data with rewards
+  const fullProgramDataRef = useRef<any>(null);
+  const [sidebarVisible, setSidebarVisible] = useState(true)
 
   const currentMessages = conversations.find(c => c.id === currentConversation)?.messages || []
 
@@ -1444,6 +1475,16 @@ export function TapAiDialog({
     
     fetchMerchantName()
   }, [user?.uid])
+
+  useEffect(() => {
+    if (initialPrompt && open) {
+      setInput(initialPrompt)
+      // Optionally auto-submit the prompt
+      if (initialPrompt.length > 10) {
+        handleSubmit(new Event('submit') as any)
+      }
+    }
+  }, [initialPrompt, open])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value
@@ -1713,29 +1754,35 @@ export function TapAiDialog({
   }
 
   const handleSaveWithPin = async (status: 'draft' | 'live') => {
-    if (!pin.trim() || !savingReward || !user?.uid) return
+    if (!pin.trim() || !user?.uid) {
+      console.log("Missing required data:", { 
+        pin: !!pin.trim(), 
+        userId: !!user?.uid 
+      });
+      return;
+    }
 
     try {
-      setSaving(true)
-      const now = Timestamp.now()
-      const batch = writeBatch(db)
+      setSaving(true);
+      const now = Timestamp.now();
+      const batch = writeBatch(db);
       
-      console.log("Saving reward:", savingReward);
+      // Check if we have program data in the ref
+      const programData = fullProgramDataRef.current;
+      console.log("Using data from ref:", programData);
       
-      // Check if this is a program with multiple rewards
-      if (savingReward.isProgram && Array.isArray(savingReward.rewards)) {
-        console.log(`Program detected with ${savingReward.rewards.length} rewards`);
-        console.log("Rewards array:", JSON.stringify(savingReward.rewards));
+      if (programData && programData.isProgram && Array.isArray(programData.rewards)) {
+        console.log(`Program detected with ${programData.rewards.length} rewards`);
+        console.log("Full rewards array:", JSON.stringify(programData.rewards));
         
         // Create a program record first
-        const programId = `program-${Date.now()}`
+        const programId = `program-${Date.now()}`;
         console.log("Created program ID:", programId);
         
         // Create a clean copy of the program data without the rewards array
-        // to avoid circular references
-        const { rewards, ...programWithoutRewards } = savingReward;
+        const { rewards, ...programWithoutRewards } = programData;
         
-        const programData = {
+        const programDataToSave = {
           ...programWithoutRewards,
           pin: pin.trim(),
           createdAt: now,
@@ -1746,18 +1793,18 @@ export function TapAiDialog({
           updatedAt: now,
           category: 'program',
           rewardCount: rewards.length
-        }
+        };
         
         // Save program record
-        console.log("Saving program record:", programData);
-        const merchantProgramRef = doc(db, 'merchants', user.uid, 'rewards', programId)
-        batch.set(merchantProgramRef, programData)
+        console.log("Saving program record:", programDataToSave);
+        const merchantProgramRef = doc(db, 'merchants', user.uid, 'rewards', programId);
+        batch.set(merchantProgramRef, programDataToSave);
         
-        const globalProgramRef = doc(db, 'rewards', programId)
-        batch.set(globalProgramRef, programData)
+        const globalProgramRef = doc(db, 'rewards', programId);
+        batch.set(globalProgramRef, programDataToSave);
         
-        const tapAiProgramRef = doc(db, 'merchants', user.uid, 'tapaiRewards', programId)
-        batch.set(tapAiProgramRef, programData)
+        const tapAiProgramRef = doc(db, 'merchants', user.uid, 'tapaiRewards', programId);
+        batch.set(tapAiProgramRef, programDataToSave);
         
         // Then create each individual reward in the program
         console.log("Starting to process individual rewards...");
@@ -1769,9 +1816,14 @@ export function TapAiDialog({
         const rewardsArray = Array.isArray(rewards) ? rewards : [];
         console.log(`Processing ${rewardsArray.length} rewards`);
         
+        // Process each reward
         for (let i = 0; i < rewardsArray.length; i++) {
           const reward = rewardsArray[i];
-          console.log(`Processing reward ${i+1}/${rewardsArray.length}:`, reward.rewardName);
+          console.log(`Processing reward ${i+1}/${rewardsArray.length}:`, {
+            name: reward.rewardName,
+            description: reward.description,
+            pointsCost: reward.pointsCost
+          });
           
           // Generate a truly unique ID for each reward
           const uniqueTimestamp = Date.now() + i; // Add index to ensure uniqueness
@@ -1791,29 +1843,29 @@ export function TapAiDialog({
             updatedAt: now,
             programId: programId,
             category: 'individual'
-          }
+          };
           
           // Save individual reward
           console.log(`Saving reward ${i+1} to Firestore:`, rewardData);
           
-          const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId)
-          batch.set(merchantRewardRef, rewardData)
+          const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
+          batch.set(merchantRewardRef, rewardData);
           
-          const globalRewardRef = doc(db, 'rewards', rewardId)
-          batch.set(globalRewardRef, rewardData)
+          const globalRewardRef = doc(db, 'rewards', rewardId);
+          batch.set(globalRewardRef, rewardData);
           
-          const tapAiRewardRef = doc(db, 'merchants', user.uid, 'tapaiRewards', rewardId)
-          batch.set(tapAiRewardRef, rewardData)
+          const tapAiRewardRef = doc(db, 'merchants', user.uid, 'tapaiRewards', rewardId);
+          batch.set(tapAiRewardRef, rewardData);
           
           createdRewardIds.push(rewardId);
           console.log(`Reward ${i+1} added to batch`);
         }
         
         console.log(`All ${rewardsArray.length} rewards processed. Created IDs:`, createdRewardIds);
-      } else {
+      } else if (savingReward) {
         // Handle single reward (existing code)
         console.log("Processing single reward");
-        const rewardId = Date.now().toString()
+        const rewardId = Date.now().toString();
         const rewardData = {
           ...savingReward,
           pin: pin.trim(),
@@ -1824,43 +1876,47 @@ export function TapAiDialog({
           merchantId: user.uid,
           updatedAt: now,
           category: 'individual'
-        }
+        };
         
-        const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId)
-        batch.set(merchantRewardRef, rewardData)
+        const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
+        batch.set(merchantRewardRef, rewardData);
         
-        const globalRewardRef = doc(db, 'rewards', rewardId)
-        batch.set(globalRewardRef, rewardData)
+        const globalRewardRef = doc(db, 'rewards', rewardId);
+        batch.set(globalRewardRef, rewardData);
         
-        const tapAiRewardRef = doc(db, 'merchants', user.uid, 'tapaiRewards', rewardId)
-        batch.set(tapAiRewardRef, rewardData)
+        const tapAiRewardRef = doc(db, 'merchants', user.uid, 'tapaiRewards', rewardId);
+        batch.set(tapAiRewardRef, rewardData);
+      } else {
+        console.error("No reward data found");
+        return;
       }
-
+      
       // Commit all writes
       console.log("Committing batch to Firestore...");
-      await batch.commit()
+      await batch.commit();
       console.log("Batch committed successfully");
 
       toast({
         title: "Success",
-        description: savingReward.isProgram 
-          ? `Program with ${savingReward.rewards.length} rewards ${status === 'draft' ? 'saved as draft' : 'published live'}`
-          : `Reward ${status === 'draft' ? 'saved as draft' : 'published live'}`,
-      })
-      setPinDialogOpen(false)
-      setPin('')
-      setSavingReward(null)
+        description: savingReward ? `Reward ${status === 'draft' ? 'saved as draft' : 'published live'}` : `Program with ${programData?.rewards?.length || 0} rewards ${status === 'draft' ? 'saved as draft' : 'published live'}`,
+      });
+      setPinDialogOpen(false);
+      setPin('');
+      setSavingRewardOriginal(null);
+      // Reset the ref after successful save
+      fullProgramDataRef.current = null;
     } catch (error) {
-      console.error('Error saving reward:', error)
+      console.error('Error saving reward:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
       toast({
         title: "Error",
         description: `Failed to save reward: ${(error as Error).message}`,
         variant: "destructive"
-      })
+      });
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const formatConversationDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -1939,6 +1995,28 @@ export function TapAiDialog({
     setEditDialogOpen(true);
   };
 
+  // Create a wrapper function that preserves program data
+  const setSavingReward = (reward: any) => {
+    console.log("setSavingReward called with:", JSON.stringify(reward));
+    
+    // Check if this is a program with rewards
+    if (reward && reward.isProgram && Array.isArray(reward.rewards)) {
+      console.log("Preserving program with rewards");
+      
+      // Create a deep copy using JSON.stringify/parse
+      const rewardCopy = JSON.parse(JSON.stringify(reward));
+      
+      console.log("Deep copied program with rewards:", JSON.stringify(rewardCopy));
+      console.log("Rewards count:", rewardCopy.rewards.length);
+      
+      // Set the state with the deep copy
+      setSavingRewardOriginal(rewardCopy);
+    } else {
+      // For normal rewards, just pass it through
+      setSavingRewardOriginal(reward);
+    }
+  };
+
   if (authLoading) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1955,95 +2033,113 @@ export function TapAiDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[1400px] h-[90vh] flex flex-col p-0 border-0 rounded-xl overflow-hidden">
         <div className="flex h-full">
-          <div className="w-72 bg-gray-100 text-gray-900 p-4 flex flex-col gap-4 border-r border-gray-200">
-            <Button 
-              onClick={handleNewChat}
-              variant="outline" 
-              className="w-full justify-start gap-2 bg-white hover:bg-gray-50"
-            >
-              <Plus className="h-4 w-4" />
-              New chat
-            </Button>
-            
-            <ScrollArea className="flex-1">
-              <div className="space-y-2">
-                {conversations.map(conversation => (
-                  <div
-                    key={conversation.id}
-                    className={cn(
-                      "flex items-center justify-between px-3 py-2 rounded-md cursor-pointer transition-colors",
-                      currentConversation === conversation.id 
-                        ? "bg-gray-200" 
-                        : "hover:bg-gray-100"
-                    )}
-                    onClick={() => setCurrentConversation(conversation.id)}
-                  >
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <MessageSquare className="h-4 w-4 text-gray-500 flex-shrink-0" />
-                      <span className="text-sm font-medium truncate">
-                        {conversation.title || "New conversation"}
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">
-                        {formatConversationDate(conversation.updatedAt)}
-                      </span>
+          {/* Conversations sidebar with conditional rendering based on visibility */}
+          {sidebarVisible && (
+            <div className="w-72 bg-gray-100 text-gray-900 p-4 flex flex-col gap-4 border-r border-gray-200">
+              <Button 
+                onClick={handleNewChat}
+                variant="outline" 
+                className="w-full justify-start gap-2 bg-white hover:bg-gray-50"
+              >
+                <Plus className="h-4 w-4" />
+                New chat
+              </Button>
+              
+              <ScrollArea className="flex-1">
+                <div className="space-y-2">
+                  {conversations.map(conversation => (
+                    <div
+                      key={conversation.id}
+                      className={cn(
+                        "flex items-center justify-between px-3 py-2 rounded-md cursor-pointer transition-colors",
+                        currentConversation === conversation.id 
+                          ? "bg-gray-200" 
+                          : "hover:bg-gray-100"
+                      )}
+                      onClick={() => setCurrentConversation(conversation.id)}
+                    >
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <MessageSquare className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                        <span className="text-sm font-medium truncate">
+                          {conversation.title || "New conversation"}
+                        </span>
+                      </div>
                       
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            className="h-8 w-8 p-0 rounded-md"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40 rounded-md">
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setSelectedConversation(conversation.id)
-                              setNewTitle(conversation.title)
-                              setRenameDialogOpen(true)
-                            }}
-                          >
-                            <Pencil className="h-4 w-4 mr-2" />
-                            Rename
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setSelectedConversation(conversation.id)
-                              setDeleteDialogOpen(true)
-                            }}
-                            className="text-red-600 focus:text-red-600"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500">
+                          {formatConversationDate(conversation.updatedAt)}
+                        </span>
+                        
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              className="h-8 w-8 p-0 rounded-md"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40 rounded-md">
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedConversation(conversation.id)
+                                setNewTitle(conversation.title)
+                                setRenameDialogOpen(true)
+                              }}
+                            >
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Rename
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedConversation(conversation.id)
+                                setDeleteDialogOpen(true)
+                              }}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
+                  ))}
+                </div>
+              </ScrollArea>
 
-            <Button 
-              variant="ghost" 
-              className="w-full justify-start gap-2 hover:bg-gray-50"
-            >
-              <Settings className="h-4 w-4" />
-              Settings
-            </Button>
-          </div>
-
-          <div className="flex-1 flex flex-col bg-white">
+              <Button 
+                variant="ghost" 
+                className="w-full justify-start gap-2 hover:bg-gray-50"
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </Button>
+            </div>
+          )}
+          
+          {/* Main content area */}
+          <div className="flex-1 flex flex-col h-full relative">
+            {/* Remove the absolute positioned button here */}
+            
             <DialogHeader className="p-3 border-b border-gray-100">
               <div className="flex items-center justify-between">
                 <DialogTitle className="text-base flex items-center">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 mr-2"
+                    onClick={() => setSidebarVisible(!sidebarVisible)}
+                    title={sidebarVisible ? "Hide conversations" : "Show conversations"}
+                  >
+                    {sidebarVisible ? 
+                      <PanelLeftClose className="h-4 w-4" /> : 
+                      <PanelLeftOpen className="h-4 w-4" />
+                    }
+                  </Button>
                   <Sparkles className="h-4 w-4 mr-2 text-[#007AFF]" />
                   <span className="font-extrabold text-[#007AFF]">Tap</span>
                   <span>AI</span>
@@ -2075,7 +2171,42 @@ export function TapAiDialog({
                       user={user} 
                       onEdit={handleEditReward}
                       onUseTemplate={(reward) => {
-                        setSavingReward(reward);
+                        console.log("onUseTemplate called with:", JSON.stringify(reward));
+                        
+                        // Create a deep copy to ensure we don't lose any data
+                        let rewardCopy;
+                        
+                        if (reward && reward.isProgram && Array.isArray(reward.rewards)) {
+                          console.log(`Program detected with ${reward.rewards.length} rewards`);
+                          console.log("Original rewards array:", JSON.stringify(reward.rewards));
+                          
+                          // Create a deep copy of the rewards array
+                          const rewardsDeepCopy = reward.rewards.map(r => ({...r}));
+                          
+                          console.log("Deep copied rewards array:", JSON.stringify(rewardsDeepCopy));
+                          console.log("Deep copied rewards array length:", rewardsDeepCopy.length);
+                          
+                          // Create a new program object with the deep copied rewards
+                          rewardCopy = {
+                            ...reward,
+                            rewards: rewardsDeepCopy,
+                            isProgram: true
+                          };
+                          
+                          console.log("Final program object to save:", JSON.stringify(rewardCopy));
+                          
+                          // Store in ref instead of state for programs
+                          if (fullProgramDataRef) {
+                            fullProgramDataRef.current = rewardCopy;
+                          }
+                        } else {
+                          // For single rewards
+                          rewardCopy = {...reward};
+                          console.log("Single reward to save:", JSON.stringify(rewardCopy));
+                        }
+                        
+                        // Set the reward to be saved
+                        setSavingReward(rewardCopy);
                         setPinDialogOpen(true);
                       }}
                       className={cn(
@@ -2084,6 +2215,7 @@ export function TapAiDialog({
                           ? "bg-[#007AFF] text-white"
                           : "bg-gray-50 text-gray-700"
                       )}
+                      fullProgramDataRef={fullProgramDataRef}  // Pass the ref here
                     />
                   </div>
                 ))}

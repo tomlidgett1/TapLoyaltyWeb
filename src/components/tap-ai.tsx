@@ -19,14 +19,12 @@ export function TapAi() {
   if (loading || !user || hiddenPaths.includes(pathname)) return null
 
   return (
-    <div className="fixed bottom-4 right-4 z-50">
+    <div className="fixed bottom-8 right-8 z-50">
       <Button
-        size="lg"
-        className="bg-[#007AFF] hover:bg-[#0066CC] shadow-lg gap-2"
         onClick={() => setOpen(true)}
+        className="h-12 w-12 rounded-full shadow-xl bg-[#007AFF] hover:bg-[#0066CC] flex items-center justify-center"
       >
-        <Sparkles className="h-5 w-5" />
-        TapAI
+        <Sparkles className="h-5 w-5 text-white" />
       </Button>
       <TapAiDialog open={open} onOpenChange={setOpen} />
     </div>

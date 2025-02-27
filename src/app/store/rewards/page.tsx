@@ -40,7 +40,11 @@ import {
   ChevronUp,
   Clock,
   User,
-  Users
+  Users,
+  Mic,
+  MicOff,
+  X,
+  Sparkles
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -51,6 +55,16 @@ import { db } from "@/lib/firebase"
 import { collection, getDocs, query, where, orderBy, doc, updateDoc, deleteDoc } from "firebase/firestore"
 import { toast } from "@/components/ui/use-toast"
 import { safelyGetDate } from "@/lib/utils"
+import { TapAiDialog } from "@/components/tap-ai-dialog"
+import { getAIResponse } from "@/lib/openai"
+import { CreateRewardDialog } from "@/components/create-reward-dialog"
+import { Card as ShadcnCard } from "@/components/ui/card"
+import { 
+  getOrCreateAssistant, 
+  createThread, 
+  addMessage, 
+  runAssistant 
+} from "@/lib/assistant"
 
 // Types
 type RewardCategory = "all" | "individual" | "customer-specific" | "programs"
@@ -73,6 +87,14 @@ interface Reward {
   punchCount?: number
   expiryDays?: number
   customerIds?: string[]
+  rewardVisibility?: string
+  conditions?: any[]
+  limitations?: any[]
+  hasActivePeriod: boolean
+  activePeriod: {
+    startDate: string
+    endDate: string
+  }
 }
 
 export default function RewardsPage() {
@@ -84,6 +106,11 @@ export default function RewardsPage() {
   const [sortField, setSortField] = useState<SortField>("rewardName")
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
   const [loading, setLoading] = useState(true)
+  const [aiDialogOpen, setAiDialogOpen] = useState(false)
+  const [voiceCommandResult, setVoiceCommandResult] = useState<any>(null)
+  const [createRewardDialogOpen, setCreateRewardDialogOpen] = useState(false)
+  const [createRewardData, setCreateRewardData] = useState<any>(null)
+  const [previewReward, setPreviewReward] = useState<any>(null)
 
   useEffect(() => {
     const fetchRewards = async () => {
@@ -343,6 +370,433 @@ export default function RewardsPage() {
       )}
     </button>
   )
+
+  const processVoiceCommand = async (transcript: string) => {
+    setProcessingVoiceCommand(true);
+    
+    try {
+      // Show a processing toast
+      toast({
+        title: "Processing voice command",
+        description: "Please wait while we process your request...",
+      });
+      
+      // Get or create the assistant
+      const assistant = await getOrCreateAssistant();
+      
+      // Create a new thread
+      const thread = await createThread();
+      
+      // Add the user's message to the thread
+      await addMessage(thread.id, transcript);
+      
+      // Run the assistant on the thread
+      const response = await runAssistant(assistant.id, thread.id);
+      
+      // Log the entire response for debugging
+      console.log("Full assistant response:", response);
+      
+      // Check if the response contains reward data
+      if (response && response.includes('```json')) {
+        // Extract JSON data from the response
+        const jsonMatch = response.match(/```json\n([\s\S]*?)\n```/);
+        if (jsonMatch && jsonMatch[1]) {
+          try {
+            const rewardData = JSON.parse(jsonMatch[1]);
+            
+            // Log the parsed JSON data
+            console.log("Parsed reward JSON data:", rewardData);
+            
+            // Format the reward data for preview
+            const previewData = {
+              ...rewardData,
+              // Keep conditions as an array if it already is one
+              conditions: Array.isArray(rewardData.conditions) 
+                ? rewardData.conditions 
+                : [],
+              // Keep limitations as an array if it already is one
+              limitations: Array.isArray(rewardData.limitations) 
+                ? rewardData.limitations 
+                : []
+            };
+            
+            // Set the preview data directly
+            setPreviewReward(previewData);
+            
+            // Format the reward data for the create dialog
+            const formattedRewardData = {
+              rewardName: rewardData.rewardName || "",
+              description: rewardData.description || "",
+              type: rewardData.type || "standard",
+              rewardVisibility: rewardData.rewardVisibility || "all",
+              pin: rewardData.pin || "",
+              pointsCost: rewardData.pointsCost?.toString() || "0",
+              isActive: rewardData.isActive !== undefined ? rewardData.isActive : true,
+              
+              // Improved delayedVisibility handling
+              delayedVisibility: !!rewardData.delayedVisibility,
+              delayedVisibilityType: rewardData.delayedVisibility?.type || "transactions",
+              delayedVisibilityTransactions: rewardData.delayedVisibility?.type === "transactions" 
+                ? rewardData.delayedVisibility.value?.toString() || "" 
+                : "",
+              delayedVisibilitySpend: rewardData.delayedVisibility?.type === "totalLifetimeSpend" 
+                ? rewardData.delayedVisibility.value?.toString() || "" 
+                : "",
+              
+              // Other fields
+              itemName: rewardData.itemName || "",
+              voucherAmount: rewardData.voucherAmount?.toString() || "",
+              spendThreshold: rewardData.spendThreshold?.toString() || "",
+              
+              // Process conditions array into the expected object format
+              conditions: {
+                useTransactionRequirements: false,
+                useSpendingRequirements: false,
+                useTimeRequirements: false,
+                minimumTransactions: "",
+                maximumTransactions: "",
+                daysSinceJoined: "",
+                daysSinceLastVisit: "",
+                minimumLifetimeSpend: "",
+                minimumPointsBalance: "",
+                membershipLevel: "",
+                newCustomer: false,
+                
+                // Map array conditions to object properties
+                ...(Array.isArray(rewardData.conditions) 
+                  ? rewardData.conditions.reduce((acc, condition) => {
+                      if (condition.type === "minimumSpend") {
+                        acc.useSpendingRequirements = true;
+                        acc.minimumSpend = condition.amount?.toString() || condition.value?.toString() || "";
+                      }
+                      if (condition.type === "minimumLifetimeSpend") {
+                        acc.useSpendingRequirements = true;
+                        acc.minimumLifetimeSpend = condition.amount?.toString() || condition.value?.toString() || "";
+                      }
+                      if (condition.type === "minimumTransactions") {
+                        acc.useTransactionRequirements = true;
+                        acc.minimumTransactions = condition.amount?.toString() || condition.value?.toString() || "";
+                      }
+                      if (condition.type === "maximumTransactions") {
+                        acc.useTransactionRequirements = true;
+                        acc.maximumTransactions = condition.amount?.toString() || condition.value?.toString() || "";
+                      }
+                      if (condition.type === "daysSinceJoined") {
+                        acc.useTimeRequirements = true;
+                        acc.daysSinceJoined = condition.amount?.toString() || condition.value?.toString() || "";
+                      }
+                      if (condition.type === "daysSinceLastVisit") {
+                        acc.useTimeRequirements = true;
+                        acc.daysSinceLastVisit = condition.amount?.toString() || condition.value?.toString() || "";
+                      }
+                      if (condition.type === "minimumPointsBalance") {
+                        acc.minimumPointsBalance = condition.amount?.toString() || condition.value?.toString() || "";
+                      }
+                      if (condition.type === "membershipLevel") {
+                        acc.membershipLevel = condition.value?.toString() || "";
+                      }
+                      if (condition.type === "newCustomer") {
+                        acc.newCustomer = true;
+                      }
+                      return acc;
+                    }, {})
+                  : {})
+              },
+              
+              // Process limitations array into the expected object format
+              limitations: {
+                totalRedemptionLimit: "",
+                perCustomerLimit: "",
+                useTimeRestrictions: false,
+                startTime: "",
+                endTime: "",
+                dayRestrictions: [],
+                
+                // Map array limitations to object properties
+                ...(Array.isArray(rewardData.limitations) 
+                  ? rewardData.limitations.reduce((acc, limitation) => {
+                      if (limitation.type === "customerLimit") {
+                        acc.perCustomerLimit = limitation.value?.toString() || "";
+                      }
+                      if (limitation.type === "totalRedemptionLimit") {
+                        acc.totalRedemptionLimit = limitation.value?.toString() || "";
+                      }
+                      if (limitation.type === "daysOfWeek") {
+                        acc.useTimeRestrictions = true;
+                        acc.dayRestrictions = Array.isArray(limitation.value) ? limitation.value : [];
+                      }
+                      if (limitation.type === "timeOfDay" || limitation.type === "timeRestriction") {
+                        acc.useTimeRestrictions = true;
+                        if (typeof limitation.value === 'object') {
+                          acc.startTime = limitation.value.startTime || "";
+                          acc.endTime = limitation.value.endTime || "";
+                        } else if (typeof limitation.startTime === 'string' && typeof limitation.endTime === 'string') {
+                          // Handle case where startTime and endTime are direct properties
+                          acc.startTime = limitation.startTime;
+                          acc.endTime = limitation.endTime;
+                        }
+                      }
+                      return acc;
+                    }, {})
+                  : {})
+              },
+              
+              // Handle active period
+              hasActivePeriod: false,
+              activePeriod: {
+                startDate: new Date().toISOString(),
+                endDate: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString(),
+              }
+            };
+            
+            setCreateRewardData(formattedRewardData);
+            
+            toast({
+              title: "Reward created",
+              description: "Your voice command has been processed successfully.",
+            });
+          } catch (error) {
+            console.error("Error parsing JSON:", error);
+            toast({
+              title: "Error",
+              description: "Could not create reward from voice command.",
+              variant: "destructive",
+            });
+          }
+        } else {
+          console.log("No JSON data found in response");
+        }
+      } else {
+        // Handle text response
+        setVoiceCommandResult(response);
+        
+        toast({
+          title: "Command processed",
+          description: "Your voice command has been processed.",
+        });
+      }
+    } catch (error) {
+      console.error("Error processing voice command:", error);
+      toast({
+        title: "Error",
+        description: "Failed to process voice command. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setProcessingVoiceCommand(false);
+    }
+  };
+
+  const RewardPreview = ({ reward, onClose }: { reward: any, onClose: () => void }) => {
+    const [showConditions, setShowConditions] = useState(false);
+    const [showLimitations, setShowLimitations] = useState(false);
+    
+    // Format the reward data for display
+    const formattedReward = {
+      ...reward,
+      // Ensure conditions is an array
+      conditions: Array.isArray(reward.conditions) 
+        ? reward.conditions 
+        : Object.entries(reward.conditions || {})
+            .filter(([key, value]) => value && !key.startsWith('use'))
+            .map(([key, value]) => ({ type: key, value })),
+      
+      // Ensure limitations is an array
+      limitations: Array.isArray(reward.limitations)
+        ? reward.limitations
+        : Object.entries(reward.limitations || {})
+            .filter(([key, value]) => value && !key.startsWith('use'))
+            .map(([key, value]) => ({ type: key, value }))
+    };
+    
+    // Helper function to format condition display text
+    const formatCondition = (condition: any) => {
+      switch (condition.type) {
+        case 'minimumSpend':
+          return `Minimum spend: $${condition.amount || condition.value}`;
+        case 'minimumLifetimeSpend':
+          return `Minimum lifetime spend: $${condition.amount || condition.value}`;
+        case 'minimumTransactions':
+          return `Minimum transactions: ${condition.amount || condition.value}`;
+        case 'maximumTransactions':
+          return `Maximum transactions: ${condition.amount || condition.value}`;
+        case 'daysSinceJoined':
+          return `Days since joined: ${condition.amount || condition.value}`;
+        case 'daysSinceLastVisit':
+          return `Days since last visit: ${condition.amount || condition.value}`;
+        case 'minimumPointsBalance':
+          return `Minimum points balance: ${condition.amount || condition.value}`;
+        case 'membershipLevel':
+          return `Membership level: ${condition.amount || condition.value}`;
+        default:
+          return `${condition.type}: ${condition.amount || condition.value}`;
+      }
+    };
+    
+    // Helper function to format limitation display text
+    const formatLimitation = (limitation: any) => {
+      switch (limitation.type) {
+        case 'customerLimit':
+          return `Limit per customer: ${limitation.value}`;
+        case 'totalRedemptionLimit':
+          return `Total redemption limit: ${limitation.value}`;
+        case 'daysOfWeek':
+          return `Available on: ${Array.isArray(limitation.value) ? limitation.value.join(', ') : limitation.value}`;
+        case 'timeOfDay':
+          if (typeof limitation.value === 'object') {
+            return `Available from ${limitation.value.startTime || '00:00'} to ${limitation.value.endTime || '23:59'}`;
+          }
+          return `Time restricted: ${limitation.value}`;
+        case 'activePeriod':
+          if (typeof limitation.value === 'object') {
+            const start = limitation.value.startDate ? new Date(limitation.value.startDate).toLocaleDateString() : 'anytime';
+            const end = limitation.value.endDate ? new Date(limitation.value.endDate).toLocaleDateString() : 'no end date';
+            return `Active from ${start} to ${end}`;
+          }
+          return `Active period: ${limitation.value}`;
+        default:
+          return `${limitation.type}: ${typeof limitation.value === 'object' ? JSON.stringify(limitation.value) : limitation.value}`;
+      }
+    };
+    
+    return (
+      <div className="fixed top-24 right-8 z-50 w-96 shadow-xl animate-fadeIn">
+        <ShadcnCard className="rounded-lg overflow-hidden border-2 border-[#007AFF]">
+          <div className="bg-[#007AFF] text-white p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Gift className="h-5 w-5" />
+              <h3 className="font-medium">New Reward Created</h3>
+            </div>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-8 w-8 p-0 text-white hover:bg-blue-600"
+              onClick={onClose}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          <div className="p-4">
+            <div className="flex justify-between items-start mb-3">
+              <Badge variant="outline" className={cn(
+                "rounded-md",
+                "bg-green-50 text-green-700 border-green-200"
+              )}>
+                {reward.type || "standard"}
+              </Badge>
+              
+              <Badge variant="outline" className={cn(
+                "rounded-md",
+                "bg-green-50 text-green-700 border-green-200"
+              )}>
+                {reward.isActive ? "active" : "draft"}
+              </Badge>
+            </div>
+            
+            <h4 className="text-lg font-medium mb-1">{reward.rewardName}</h4>
+            <p className="text-sm text-muted-foreground mb-4">
+              {reward.description}
+            </p>
+            
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Points Cost</p>
+                <div className="flex items-center mt-1">
+                  <Zap className="h-4 w-4 text-blue-600 mr-1" />
+                  <span className="font-medium">{reward.pointsCost}</span>
+                </div>
+              </div>
+              
+              <div className="text-right">
+                <p className="text-sm text-muted-foreground">Visibility</p>
+                <p className="font-medium mt-1">{reward.rewardVisibility || "global"}</p>
+              </div>
+            </div>
+            
+            {/* Conditions Dropdown */}
+            <div className="mb-3 border rounded-md overflow-hidden">
+              <button 
+                onClick={() => setShowConditions(!showConditions)}
+                className="w-full p-2 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                <span className="font-medium text-sm">Conditions</span>
+                {showConditions ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+              
+              {showConditions && (
+                <div className="p-3 text-sm">
+                  {formattedReward.conditions.length > 0 ? (
+                    <ul className="space-y-2">
+                      {formattedReward.conditions.map((condition: any, index: number) => (
+                        <li key={index} className="flex items-start gap-2">
+                          <div className="h-4 w-4 rounded-full bg-blue-100 flex items-center justify-center mt-0.5">
+                            <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                          </div>
+                          <span>{formatCondition(condition)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-gray-500">No conditions specified</p>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            {/* Limitations Dropdown */}
+            <div className="mb-4 border rounded-md overflow-hidden">
+              <button 
+                onClick={() => setShowLimitations(!showLimitations)}
+                className="w-full p-2 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                <span className="font-medium text-sm">Limitations</span>
+                {showLimitations ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+              
+              {showLimitations && (
+                <div className="p-3 text-sm">
+                  {formattedReward.limitations.length > 0 ? (
+                    <ul className="space-y-2">
+                      {formattedReward.limitations.map((limitation: any, index: number) => (
+                        <li key={index} className="flex items-start gap-2">
+                          <div className="h-4 w-4 rounded-full bg-red-100 flex items-center justify-center mt-0.5">
+                            <div className="h-2 w-2 rounded-full bg-red-500"></div>
+                          </div>
+                          <span>{formatLimitation(limitation)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-gray-500">No limitations specified</p>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                className="h-9 rounded-md flex-1"
+                onClick={onClose}
+              >
+                Dismiss
+              </Button>
+              <Button 
+                className="h-9 rounded-md flex-1 bg-[#007AFF] hover:bg-[#0066CC]"
+                onClick={() => {
+                  onClose();
+                  setCreateRewardDialogOpen(true);
+                }}
+              >
+                Create Reward
+              </Button>
+            </div>
+          </div>
+        </ShadcnCard>
+      </div>
+    );
+  };
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
@@ -738,6 +1192,21 @@ export default function RewardsPage() {
           ))}
         </Tabs>
       </div>
+      
+      {/* Reward preview card */}
+      {previewReward && (
+        <RewardPreview 
+          reward={previewReward} 
+          onClose={() => setPreviewReward(null)} 
+        />
+      )}
+      
+      {/* Create Reward Dialog */}
+      <CreateRewardDialog
+        open={createRewardDialogOpen}
+        onOpenChange={setCreateRewardDialogOpen}
+        defaultValues={createRewardData}
+      />
     </div>
   )
 } 

@@ -184,14 +184,13 @@ export function CreateRewardDialog({
 
   // Validation functions
   const validateBasicDetails = () => {
-    const { rewardName, description, pin, pointsCost } = formData
-    const numericPointsCost = pointsCost === "" ? 0 : Number(pointsCost)
-    return (
-      rewardName.trim() !== '' && 
-      description.trim() !== '' && 
-      pin.length === 4 && // Must be exactly 4 digits
-      numericPointsCost >= 0 // Changed from > 0 to >= 0
-    )
+    // Add null checks for all string values that might be undefined
+    const nameValid = formData.rewardName?.trim() !== '';
+    const descriptionValid = formData.description?.trim() !== '';
+    const pointsCostValid = formData.pointsCost?.trim() !== '';
+    
+    // Return validation result
+    return nameValid && descriptionValid && pointsCostValid;
   }
 
   const validateConditions = () => {

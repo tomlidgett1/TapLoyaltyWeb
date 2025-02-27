@@ -99,7 +99,7 @@ export default function RewardDetailsPage() {
       id: reward.id,
       rewardName: reward.rewardName,
       description: reward.description,
-      pointsCost: reward.pointsCost.toString(),
+      pointsCost: reward.pointsCost?.toString() || '0',
       pin: reward.pin || '',
       isActive: reward.status === 'active',
       rewardType: reward.rewardType || 'standard',
@@ -329,7 +329,7 @@ export default function RewardDetailsPage() {
                         <p className="text-sm text-muted-foreground">Points Cost</p>
                         <div className="flex items-center gap-2 mt-1">
                           <Star className="h-4 w-4 text-purple-500" />
-                          <p className="font-medium">{reward.pointsCost.toLocaleString()}</p>
+                          <p className="font-medium">{reward.pointsCost?.toLocaleString() || '0'}</p>
                         </div>
                       </div>
                       <div>
@@ -411,7 +411,7 @@ export default function RewardDetailsPage() {
                             </div>
                             <span className="text-sm">Points Spent</span>
                           </div>
-                          <span className="font-medium">{(reward.pointsCost * (reward.redemptionCount || 0)).toLocaleString()}</span>
+                          <span className="font-medium">{((reward.pointsCost || 0) * (reward.redemptionCount || 0)).toLocaleString()}</span>
                         </div>
                       </div>
                     </CardContent>

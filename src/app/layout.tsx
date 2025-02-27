@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from "@/contexts/auth-context"
 import { TapAi } from "@/components/tap-ai"
+import { FloatingMicrophone } from "@/components/floating-microphone"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,6 +33,7 @@ export default function RootLayout({
           {children}
           <Toaster />
           <TapAi />
+          <FloatingMicrophone />
         </AuthProvider>
       </body>
     </html>

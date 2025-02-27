@@ -88,7 +88,54 @@ module.exports = {
         pulse: {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.3' }
-        }
+        },
+        ping: {
+          '0%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(1.2)' },
+          '100%': { transform: 'scale(1)' }
+        },
+        'sound-wave-1': {
+          '0%, 100%': { height: '4px' },
+          '50%': { height: '10px' }
+        },
+        'sound-wave-2': {
+          '0%, 100%': { height: '8px' },
+          '50%': { height: '16px' }
+        },
+        'sound-wave-3': {
+          '0%, 100%': { height: '12px' },
+          '50%': { height: '24px' }
+        },
+        'sound-wave-4': {
+          '0%, 100%': { height: '8px' },
+          '50%': { height: '16px' }
+        },
+        'sound-wave-5': {
+          '0%, 100%': { height: '10px' },
+          '50%': { height: '20px' }
+        },
+        'gradient-x': {
+          '0%, 100%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
+        },
+        'float-slow': {
+          '0%, 100%': { transform: 'translateY(0) translateX(0)' },
+          '25%': { transform: 'translateY(-3px) translateX(2px)' },
+          '50%': { transform: 'translateY(-5px) translateX(-2px)' },
+          '75%': { transform: 'translateY(-3px) translateX(-4px)' },
+        },
+        'float-medium': {
+          '0%, 100%': { transform: 'translateY(0) translateX(0)' },
+          '25%': { transform: 'translateY(-5px) translateX(3px)' },
+          '50%': { transform: 'translateY(-8px) translateX(1px)' },
+          '75%': { transform: 'translateY(-5px) translateX(-2px)' },
+        },
+        'float-fast': {
+          '0%, 100%': { transform: 'translateY(0) translateX(0)' },
+          '25%': { transform: 'translateY(-7px) translateX(-3px)' },
+          '50%': { transform: 'translateY(-10px) translateX(2px)' },
+          '75%': { transform: 'translateY(-7px) translateX(4px)' },
+        },
       },
       animation: {
         fadeIn: 'fadeIn 0.3s ease-out forwards',
@@ -98,7 +145,19 @@ module.exports = {
         typing1: 'typing1 1s infinite',
         typing2: 'typing2 1s infinite 0.2s',
         typing3: 'typing3 1s infinite 0.4s',
-        pulse: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+        pulse: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'ping-slow': 'ping 2s cubic-bezier(0, 0, 0.2, 1) infinite',
+        'ping-medium': 'ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite',
+        'ping-fast': 'ping 1s cubic-bezier(0, 0, 0.2, 1) infinite',
+        'sound-wave-1': 'sound-wave-1 1s ease-in-out infinite',
+        'sound-wave-2': 'sound-wave-2 1.2s ease-in-out infinite',
+        'sound-wave-3': 'sound-wave-3 1.4s ease-in-out infinite',
+        'sound-wave-4': 'sound-wave-4 1.6s ease-in-out infinite',
+        'sound-wave-5': 'sound-wave-5 1.8s ease-in-out infinite',
+        'gradient-x': 'gradient-x 3s ease infinite',
+        'float-slow': 'float-slow 4s ease-in-out infinite',
+        'float-medium': 'float-medium 3s ease-in-out infinite',
+        'float-fast': 'float-fast 2.5s ease-in-out infinite',
       },
     },
   },

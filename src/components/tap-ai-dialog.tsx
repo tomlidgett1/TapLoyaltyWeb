@@ -888,11 +888,12 @@ function ProgramCard({
                 // Create a combined program object with the rewards array
                 const programWithRewards = {
                   ...program,
-                  rewards: rewards, // Make sure rewards array is included
+                  rewards: [...rewards], // Create a new array to avoid reference issues
                   isProgram: true
                 };
                 
                 console.log("Creating program with rewards:", programWithRewards);
+                console.log("Rewards array length:", programWithRewards.rewards.length);
                 
                 // Pass the program with rewards to the parent component
                 setSavingReward(programWithRewards);

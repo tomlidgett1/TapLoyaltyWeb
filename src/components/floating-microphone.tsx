@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Mic, MicOff, X } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -23,144 +23,135 @@ export function FloatingMicrophone() {
   const { user } = useAuth()
   const router = useRouter()
   const [showHelpTooltip, setShowHelpTooltip] = useState(false)
+  const recognitionRef = useRef<any>(null)
 
+  // Initialize speech recognition once on component mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // @ts-ignore - SpeechRecognition is not in the TypeScript types yet
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-      if (SpeechRecognition) {
-        const recognitionInstance = new SpeechRecognition()
-        recognitionInstance.continuous = true
-        recognitionInstance.interimResults = true
-        
-        recognitionInstance.onresult = (event: any) => {
-          // Get the transcript
-          const transcript = Array.from(event.results)
-            .map((result: any) => result[0])
-            .map((result: any) => result.transcript)
-            .join('')
-          
-          console.log("Transcript:", transcript)
-          setTranscriptText(transcript)
+    initializeSpeechRecognition()
+    
+    return () => {
+      // Clean up on unmount
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop()
+        } catch (e) {
+          console.error("Error stopping recognition on unmount:", e)
         }
-        
-        recognitionInstance.onend = () => {
-          if (isRecording) {
-            // If we're still supposed to be recording, restart
-            // This handles the case where the recognition service stops automatically
-            recognitionInstance.start()
-          }
-        }
-        
-        setRecognition(recognitionInstance)
       }
     }
-  }, [isRecording])
+  }, [])
 
+  // Show tooltip briefly on mount
   useEffect(() => {
-    // Show the tooltip briefly when component mounts
     setShowHelpTooltip(true)
     const timer = setTimeout(() => {
       setShowHelpTooltip(false)
-    }, 5000) // Hide after 5 seconds
+    }, 5000)
     
     return () => clearTimeout(timer)
   }, [])
 
+  const initializeSpeechRecognition = () => {
+    if (typeof window === 'undefined') return
+    
+    // @ts-ignore
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      console.error("Speech recognition not supported in this browser")
+      return
+    }
+    
+    // Create a new recognition instance
+    const recognitionInstance = new SpeechRecognition()
+    recognitionInstance.continuous = true
+    recognitionInstance.interimResults = true
+    
+    // Set up event handlers
+    recognitionInstance.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((result: any) => result[0])
+        .map((result: any) => result.transcript)
+        .join('')
+      
+      console.log("Transcript:", transcript)
+      setTranscriptText(transcript)
+    }
+    
+    recognitionInstance.onend = () => {
+      console.log("Recognition ended naturally")
+      // We don't auto-restart here - we'll handle that in the toggle function
+    }
+    
+    recognitionInstance.onerror = (event: any) => {
+      console.error("Recognition error:", event.error)
+      setIsRecording(false)
+    }
+    
+    // Store the instance in both state and ref
+    setRecognition(recognitionInstance)
+    recognitionRef.current = recognitionInstance
+  }
+
   const toggleRecording = () => {
     if (isRecording) {
-      // Make sure we stop the recognition
-      if (recognition) {
+      // Stop recording
+      console.log("Attempting to stop recording")
+      if (recognitionRef.current) {
         try {
-          recognition.stop();
-          console.log("Recognition stopped");
+          recognitionRef.current.stop()
+          console.log("Recognition stopped successfully")
         } catch (error) {
-          console.error("Error stopping recognition:", error);
+          console.error("Error stopping recognition:", error)
         }
       }
       
-      // Force the isRecording state to false
-      setIsRecording(false);
+      setIsRecording(false)
       
-      // Process the transcript if it's substantial
+      // Process transcript if substantial
       if (transcriptText.length > 10) {
-        processVoiceCommand(transcriptText);
+        processVoiceCommand(transcriptText)
       }
       
-      // Clear the transcript
-      setTranscriptText("");
+      // Clear transcript
+      setTranscriptText("")
     } else {
-      try {
-        if (recognition) {
-          recognition.start();
-          console.log("Recognition started");
-          setIsRecording(true);
-        } else {
-          console.error("Recognition not initialized");
-          // Try to reinitialize
-          initializeRecognition();
-        }
-      } catch (error) {
-        console.error("Error starting speech recognition:", error);
-        // If there's an error, try recreating the recognition instance
-        initializeRecognition();
+      // Start recording
+      console.log("Attempting to start recording")
+      
+      // If we don't have a recognition instance, initialize one
+      if (!recognitionRef.current) {
+        initializeSpeechRecognition()
       }
-    }
-  };
-
-  // Add a helper function to initialize recognition
-  const initializeRecognition = () => {
-    if (typeof window !== 'undefined') {
-      // @ts-ignore
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const newRecognition = new SpeechRecognition();
-        newRecognition.continuous = true;
-        newRecognition.interimResults = true;
-        
-        newRecognition.onresult = (event: any) => {
-          const transcript = Array.from(event.results)
-            .map((result: any) => result[0])
-            .map((result: any) => result.transcript)
-            .join('');
-          
-          console.log("Transcript:", transcript);
-          setTranscriptText(transcript);
-        };
-        
-        newRecognition.onend = () => {
-          console.log("Recognition ended naturally");
-          // Only restart if we're still supposed to be recording
-          if (isRecording) {
-            console.log("Restarting recognition because isRecording is true");
-            try {
-              newRecognition.start();
-            } catch (error) {
-              console.error("Error restarting recognition:", error);
-              setIsRecording(false);
-            }
-          } else {
-            console.log("Not restarting recognition because isRecording is false");
-          }
-        };
-        
-        newRecognition.onerror = (event: any) => {
-          console.error("Recognition error:", event.error);
-          setIsRecording(false);
-        };
-        
-        setRecognition(newRecognition);
-        
+      
+      if (recognitionRef.current) {
         try {
-          newRecognition.start();
-          setIsRecording(true);
-          console.log("New recognition started");
+          recognitionRef.current.start()
+          console.log("Recognition started successfully")
+          setIsRecording(true)
         } catch (error) {
-          console.error("Error starting new recognition:", error);
+          console.error("Error starting recognition:", error)
+          
+          // Try to recreate the recognition instance
+          initializeSpeechRecognition()
+          
+          // Try again with the new instance
+          setTimeout(() => {
+            if (recognitionRef.current) {
+              try {
+                recognitionRef.current.start()
+                setIsRecording(true)
+                console.log("Recognition started on second attempt")
+              } catch (retryError) {
+                console.error("Error starting recognition on retry:", retryError)
+              }
+            }
+          }, 100)
         }
+      } else {
+        console.error("Could not initialize speech recognition")
       }
     }
-  };
+  }
 
   const processVoiceCommand = async (transcript: string) => {
     setProcessingVoiceCommand(true)

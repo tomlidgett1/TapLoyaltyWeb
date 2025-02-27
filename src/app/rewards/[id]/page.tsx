@@ -131,34 +131,44 @@ export default function RewardDetailsPage() {
   const formatLimitation = (limitation: any) => {
     if (!limitation) return null;
     
-    const { type, value } = limitation;
-    
-    switch (type) {
-      case 'totalRedemptionLimit':
-        return `Maximum ${value} total redemptions`;
-      case 'perCustomerLimit':
-      case 'customerLimit':
-        return `Limit of ${value} per customer`;
-      case 'timeRestriction':
-        if (typeof value === 'object') {
-          const start = value.startTime || '00:00';
-          const end = value.endTime || '23:59';
-          return `Available from ${start} to ${end}`;
-        }
-        return `Time restricted: ${value}`;
-      case 'dayRestriction':
-      case 'daysOfWeek':
-        return `Available only on: ${Array.isArray(value) ? value.join(', ') : value}`;
-      case 'activePeriod':
-        if (typeof value === 'object') {
-          const start = value.startDate ? formatDate(value.startDate) : 'anytime';
-          const end = value.endDate ? formatDate(value.endDate) : 'no end date';
-          return `Active from ${start} to ${end}`;
-        }
-        return `Active period: ${value}`;
-      default:
-        return `${type}: ${typeof value === 'object' ? JSON.stringify(value) : value}`;
+    // Handle the case where limitation is an object with type and value properties
+    if (limitation.type && (limitation.value !== undefined || typeof limitation.value === 'object')) {
+      const { type, value } = limitation;
+      
+      switch (type) {
+        case 'totalRedemptionLimit':
+          return `Maximum ${value} total redemptions`;
+        case 'perCustomerLimit':
+        case 'customerLimit':
+          return `Limit of ${value} per customer`;
+        case 'timeOfDay':
+        case 'timeRestriction':
+          if (typeof value === 'object') {
+            const start = value.startTime || '00:00';
+            const end = value.endTime || '23:59';
+            return `Available from ${start} to ${end}`;
+          }
+          return `Time restricted: ${value}`;
+        case 'dayRestriction':
+        case 'daysOfWeek':
+          if (Array.isArray(value)) {
+            return `Available only on: ${value.join(', ')}`;
+          }
+          return `Day restricted: ${value}`;
+        case 'activePeriod':
+          if (typeof value === 'object') {
+            const start = value.startDate ? formatDate(value.startDate) : 'anytime';
+            const end = value.endDate ? formatDate(value.endDate) : 'no end date';
+            return `Active from ${start} to ${end}`;
+          }
+          return `Active period: ${value}`;
+        default:
+          return `${type}: ${JSON.stringify(value)}`;
+      }
     }
+    
+    // Handle the case where limitation is a direct key-value pair
+    return `${limitation}`;
   };
 
   const getStatusColor = (status: string) => {
@@ -359,18 +369,69 @@ export default function RewardDetailsPage() {
                       )}
                     </div>
                     
-                    {reward.limitations && Object.keys(reward.limitations).length > 0 && (
+                    {/* Conditions and Limitations */}
+                    {(reward.conditions?.length > 0 || (reward.limitations && (Array.isArray(reward.limitations) ? reward.limitations.length > 0 : Object.keys(reward.limitations).length > 0))) && (
                       <>
                         <Separator className="my-6" />
                         
-                        <h3 className="text-md font-medium mb-4">Limitations</h3>
-                        <div className="space-y-3">
-                          {Object.entries(reward.limitations).map(([key, limitation]) => (
-                            <div key={key} className="flex items-center gap-2">
-                              <Settings className="h-4 w-4 text-gray-400" />
-                              <p className="text-sm">{formatLimitation({ type: key, value: limitation })}</p>
-                            </div>
-                          ))}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Conditions Section */}
+                          <div>
+                            <h3 className="text-md font-medium mb-4">Conditions</h3>
+                            {reward.conditions && reward.conditions.length > 0 ? (
+                              <div className="space-y-3">
+                                {reward.conditions.map((condition, index) => (
+                                  <div key={index} className="flex items-center gap-2">
+                                    <Users className="h-4 w-4 text-gray-400" />
+                                    <p className="text-sm">
+                                      {condition.type === 'minimumSpend' && `Minimum spend of $${condition.value || condition.amount}`}
+                                      {condition.type === 'minimumLifetimeSpend' && `Total lifetime spend of $${condition.value}`}
+                                      {condition.type === 'minimumTransactions' && `Minimum ${condition.value} transactions`}
+                                      {condition.type === 'maximumTransactions' && `Maximum ${condition.value} transactions`}
+                                      {condition.type === 'minimumPointsBalance' && `Minimum ${condition.value} points balance`}
+                                      {condition.type === 'membershipLevel' && `${condition.value} membership level required`}
+                                      {condition.type === 'daysSinceJoined' && `Account age: ${condition.value} days`}
+                                      {condition.type === 'daysSinceLastVisit' && `${condition.value} days since last visit`}
+                                      {condition.type === 'newCustomer' && 'New customers only'}
+                                      {!['minimumSpend', 'minimumLifetimeSpend', 'minimumTransactions', 'maximumTransactions', 
+                                         'minimumPointsBalance', 'membershipLevel', 'daysSinceJoined', 'daysSinceLastVisit', 'newCustomer'].includes(condition.type) && 
+                                         `${condition.type}: ${JSON.stringify(condition.value || condition.amount)}`}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">No conditions set</p>
+                            )}
+                          </div>
+                          
+                          {/* Limitations Section */}
+                          <div>
+                            <h3 className="text-md font-medium mb-4">Limitations</h3>
+                            {reward.limitations && (Array.isArray(reward.limitations) ? reward.limitations.length > 0 : Object.keys(reward.limitations).length > 0) ? (
+                              <div className="space-y-3">
+                                {Array.isArray(reward.limitations) ? (
+                                  // Handle array format
+                                  reward.limitations.map((limitation, index) => (
+                                    <div key={index} className="flex items-center gap-2">
+                                      <Settings className="h-4 w-4 text-gray-400" />
+                                      <p className="text-sm">{formatLimitation(limitation)}</p>
+                                    </div>
+                                  ))
+                                ) : (
+                                  // Handle object format
+                                  Object.entries(reward.limitations).map(([key, value]) => (
+                                    <div key={key} className="flex items-center gap-2">
+                                      <Settings className="h-4 w-4 text-gray-400" />
+                                      <p className="text-sm">{formatLimitation({ type: key, value })}</p>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">No limitations set</p>
+                            )}
+                          </div>
                         </div>
                       </>
                     )}

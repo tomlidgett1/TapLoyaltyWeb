@@ -6,14 +6,14 @@ import { db } from "@/lib/firebase"
 import { doc, getDoc, collection, getDocs, query, limit, orderBy, updateDoc } from "firebase/firestore"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { 
   ArrowLeft, Calendar, Clock, Gift, Tag, Users, Zap, 
   ChevronRight, BarChart, Award, CheckCircle, AlertCircle,
-  Edit, Trash2, Copy, MoreVertical, Star, Settings
+  Edit, Trash2, Copy, MoreVertical, Star, Settings, Key
 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatDate } from '@/lib/date-utils'
@@ -25,6 +25,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
+import { cn } from "@/lib/utils"
 
 interface RewardDetails {
   id: string
@@ -203,6 +204,28 @@ export default function RewardDetailsPage() {
     }
   }
 
+  const handleToggleStatus = () => {
+    if (user?.uid && id && reward) {
+      const updatedStatus = reward.status === "active" ? "inactive" : "active"
+      const updatedReward = {
+        ...reward,
+        status: updatedStatus
+      }
+
+      const updateReward = async () => {
+        try {
+          const rewardRef = doc(db, 'merchants', user.uid, 'rewards', id as string)
+          await updateDoc(rewardRef, updatedReward)
+          setReward(updatedReward)
+        } catch (error) {
+          console.error("Error updating reward status:", error)
+        }
+      }
+
+      updateReward()
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center min-h-[60vh]">
@@ -237,295 +260,209 @@ export default function RewardDetailsPage() {
         defaultValues={prepareRewardForEdit()}
       />
       
-      <div className="p-6">
-        <div className="max-w-[1200px] mx-auto space-y-6">
-          {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.back()}
-                className="h-9 w-9 p-0 rounded-full"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <div>
-                <div className="flex items-center gap-3">
-                  <h1 className="text-2xl font-semibold">{reward.rewardName}</h1>
-                  <Badge className={getStatusColor(reward.status)}>
-                    {reward.status.charAt(0).toUpperCase() + reward.status.slice(1)}
-                  </Badge>
-                  {reward.programtype === 'coffee' && (
-                    <Badge className="bg-amber-50 text-amber-700">Coffee Program</Badge>
-                  )}
-                </div>
-                <p className="text-muted-foreground mt-1">
-                  {reward.description}
-                </p>
-              </div>
-            </div>
+      <div className="p-6 bg-gray-50 min-h-screen">
+        <div className="max-w-[1200px] mx-auto">
+          {/* Back button and actions */}
+          <div className="flex items-center justify-between mb-6">
+            <Button 
+              variant="ghost" 
+              className="gap-1 text-muted-foreground hover:text-foreground"
+              onClick={() => router.back()}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Back to Rewards</span>
+            </Button>
             
             <div className="flex items-center gap-2">
               <Button 
                 variant="outline" 
-                size="sm"
+                className="gap-1"
                 onClick={() => setEditDialogOpen(true)}
               >
-                <Edit className="h-4 w-4 mr-2" />
-                Edit
+                <Edit className="h-4 w-4" />
+                <span>Edit</span>
               </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-9 w-9 p-0">
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem>
-                    <Copy className="h-4 w-4 mr-2" />
-                    Duplicate
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-red-600">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              
+              <Button 
+                variant={reward.status === "active" ? "destructive" : "default"}
+                className="gap-1"
+                onClick={() => handleToggleStatus()}
+              >
+                {reward.status === "active" ? (
+                  <>
+                    <Clock className="h-4 w-4" />
+                    <span>Deactivate</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-4 w-4" />
+                    <span>Activate</span>
+                  </>
+                )}
+              </Button>
             </div>
           </div>
-
-          {/* Tabs */}
-          <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="bg-transparent border-b w-full justify-start h-10 p-0">
-              <TabsTrigger 
-                value="overview" 
-                className="h-10 px-4 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none"
-              >
-                Overview
-              </TabsTrigger>
-              <TabsTrigger 
-                value="redemptions" 
-                className="h-10 px-4 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none"
-              >
-                Redemptions
-              </TabsTrigger>
-              <TabsTrigger 
-                value="analytics" 
-                className="h-10 px-4 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none"
-              >
-                Analytics
-              </TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="overview" className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Main Details */}
-                <Card className="md:col-span-2">
-                  <CardContent className="p-6">
-                    <h2 className="text-lg font-medium mb-4">Reward Details</h2>
-                    
-                    <div className="grid grid-cols-2 gap-y-6 gap-x-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Category</p>
-                        <p className="font-medium mt-1">{reward.category || "Uncategorized"}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Type</p>
-                        <p className="font-medium mt-1">{reward.rewardType || "Standard"}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Points Cost</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Star className="h-4 w-4 text-purple-500" />
-                          <p className="font-medium">{reward.pointsCost?.toLocaleString() || '0'}</p>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Redemptions</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                          <p className="font-medium">{reward.redemptionCount || 0}</p>
-                        </div>
-                      </div>
-                      {reward.startDate && (
-                        <div>
-                          <p className="text-sm text-muted-foreground">Start Date</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Calendar className="h-4 w-4 text-blue-500" />
-                            <p className="font-medium">{formatDate(reward.startDate)}</p>
-                          </div>
-                        </div>
-                      )}
-                      {reward.endDate && (
-                        <div>
-                          <p className="text-sm text-muted-foreground">End Date</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Calendar className="h-4 w-4 text-blue-500" />
-                            <p className="font-medium">{formatDate(reward.endDate)}</p>
-                          </div>
-                        </div>
-                      )}
+          
+          {/* Main content */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left column - Main info */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Header card */}
+              <Card className="rounded-lg overflow-hidden border-none shadow-sm">
+                <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 border-b">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <Badge className={cn(
+                        "mb-3",
+                        reward.status === "active" ? "bg-green-500 hover:bg-green-600" : "bg-gray-500 hover:bg-gray-600",
+                        "text-white border-none"
+                      )}>
+                        {reward.status === "active" ? "Live" : "Inactive"}
+                      </Badge>
+                      <h1 className="text-2xl font-bold text-white mb-2">{reward.rewardName}</h1>
+                      <p className="text-blue-100 max-w-xl">{reward.description}</p>
                     </div>
                     
-                    {/* Conditions and Limitations */}
-                    {(reward.conditions?.length > 0 || (reward.limitations && (Array.isArray(reward.limitations) ? reward.limitations.length > 0 : Object.keys(reward.limitations).length > 0))) && (
-                      <>
-                        <Separator className="my-6" />
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          {/* Conditions Section */}
-                          <div>
-                            <h3 className="text-md font-medium mb-4">Conditions</h3>
-                            {reward.conditions && reward.conditions.length > 0 ? (
-                              <div className="space-y-3">
-                                {reward.conditions.map((condition, index) => (
-                                  <div key={index} className="flex items-center gap-2">
-                                    <Users className="h-4 w-4 text-gray-400" />
-                                    <p className="text-sm">
-                                      {condition.type === 'minimumSpend' && `Minimum spend of $${condition.value || condition.amount}`}
-                                      {condition.type === 'minimumLifetimeSpend' && `Total lifetime spend of $${condition.value}`}
-                                      {condition.type === 'minimumTransactions' && `Minimum ${condition.value} transactions`}
-                                      {condition.type === 'maximumTransactions' && `Maximum ${condition.value} transactions`}
-                                      {condition.type === 'minimumPointsBalance' && `Minimum ${condition.value} points balance`}
-                                      {condition.type === 'membershipLevel' && `${condition.value} membership level required`}
-                                      {condition.type === 'daysSinceJoined' && `Account age: ${condition.value} days`}
-                                      {condition.type === 'daysSinceLastVisit' && `${condition.value} days since last visit`}
-                                      {condition.type === 'newCustomer' && 'New customers only'}
-                                      {!['minimumSpend', 'minimumLifetimeSpend', 'minimumTransactions', 'maximumTransactions', 
-                                         'minimumPointsBalance', 'membershipLevel', 'daysSinceJoined', 'daysSinceLastVisit', 'newCustomer'].includes(condition.type) && 
-                                         `${condition.type}: ${JSON.stringify(condition.value || condition.amount)}`}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-muted-foreground">No conditions set</p>
-                            )}
+                    <div className="bg-white/20 backdrop-blur-sm rounded-full p-3">
+                      {reward.programtype ? (
+                        <Award className="h-8 w-8 text-white" />
+                      ) : (
+                        <Gift className="h-8 w-8 text-white" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                <CardContent className="p-6">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Points Cost</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Zap className="h-5 w-5 text-blue-600" />
+                        <p className="text-xl font-semibold">{reward.pointsCost || 0}</p>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <p className="text-sm text-muted-foreground">Type</p>
+                      <p className="text-lg font-medium mt-1">
+                        {reward.programtype ? "Program" : "Individual Reward"}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <p className="text-sm text-muted-foreground">Created</p>
+                      <p className="text-lg font-medium mt-1">{formatDate(reward.createdAt)}</p>
+                    </div>
+                    
+                    <div>
+                      <p className="text-sm text-muted-foreground">Redemptions</p>
+                      <p className="text-lg font-medium mt-1">{reward.redemptionCount || 0}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              {/* Conditions and Limitations */}
+              {(reward.conditions?.length > 0 || (reward.limitations && (Array.isArray(reward.limitations) ? reward.limitations.length > 0 : Object.keys(reward.limitations).length > 0))) && (
+                <Card className="rounded-lg overflow-hidden border-none shadow-sm">
+                  <CardContent className="p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Conditions Section */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
+                            <Users className="h-4 w-4 text-blue-600" />
                           </div>
-                          
-                          {/* Limitations Section */}
-                          <div>
-                            <h3 className="text-md font-medium mb-4">Limitations</h3>
-                            {reward.limitations && (Array.isArray(reward.limitations) ? reward.limitations.length > 0 : Object.keys(reward.limitations).length > 0) ? (
-                              <div className="space-y-3">
-                                {Array.isArray(reward.limitations) ? (
-                                  // Handle array format
-                                  reward.limitations.map((limitation, index) => (
-                                    <div key={index} className="flex items-center gap-2">
-                                      <Settings className="h-4 w-4 text-gray-400" />
-                                      <p className="text-sm">{formatLimitation(limitation)}</p>
-                                    </div>
-                                  ))
-                                ) : (
-                                  // Handle object format
-                                  Object.entries(reward.limitations).map(([key, value]) => (
-                                    <div key={key} className="flex items-center gap-2">
-                                      <Settings className="h-4 w-4 text-gray-400" />
-                                      <p className="text-sm">{formatLimitation({ type: key, value })}</p>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-muted-foreground">No limitations set</p>
-                            )}
-                          </div>
+                          <h3 className="text-lg font-medium">Conditions</h3>
                         </div>
-                      </>
-                    )}
+                        
+                        {reward.conditions && reward.conditions.length > 0 ? (
+                          <div className="space-y-3 bg-blue-50 rounded-lg p-4">
+                            {reward.conditions.map((condition, index) => (
+                              <div key={index} className="flex items-start gap-3 p-2 bg-white rounded-md shadow-sm">
+                                <div className="mt-0.5">
+                                  <Users className="h-4 w-4 text-gray-500" />
+                                </div>
+                                <p className="text-sm">
+                                  {condition.type === 'minimumSpend' && `Minimum spend of $${condition.value || condition.amount}`}
+                                  {condition.type === 'minimumLifetimeSpend' && `Total lifetime spend of $${condition.value}`}
+                                  {condition.type === 'minimumTransactions' && `Minimum ${condition.value} transactions`}
+                                  {condition.type === 'maximumTransactions' && `Maximum ${condition.value} transactions`}
+                                  {condition.type === 'minimumPointsBalance' && `Minimum ${condition.value} points balance`}
+                                  {condition.type === 'membershipLevel' && `${condition.value} membership level required`}
+                                  {condition.type === 'daysSinceJoined' && `Account age: ${condition.value} days`}
+                                  {condition.type === 'daysSinceLastVisit' && `${condition.value} days since last visit`}
+                                  {condition.type === 'newCustomer' && 'New customers only'}
+                                  {!['minimumSpend', 'minimumLifetimeSpend', 'minimumTransactions', 'maximumTransactions', 
+                                     'minimumPointsBalance', 'membershipLevel', 'daysSinceJoined', 'daysSinceLastVisit', 'newCustomer'].includes(condition.type) && 
+                                     `${condition.type}: ${JSON.stringify(condition.value || condition.amount)}`}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="bg-gray-50 rounded-lg p-4 text-center">
+                            <p className="text-sm text-muted-foreground">No conditions set</p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Limitations Section */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
+                            <Settings className="h-4 w-4 text-blue-600" />
+                          </div>
+                          <h3 className="text-lg font-medium">Limitations</h3>
+                        </div>
+                        
+                        {reward.limitations && (Array.isArray(reward.limitations) ? reward.limitations.length > 0 : Object.keys(reward.limitations).length > 0) ? (
+                          <div className="space-y-3 bg-blue-50 rounded-lg p-4">
+                            {Array.isArray(reward.limitations) ? (
+                              reward.limitations.map((limitation, index) => (
+                                <div key={index} className="flex items-start gap-3 p-2 bg-white rounded-md shadow-sm">
+                                  <div className="mt-0.5">
+                                    <Settings className="h-4 w-4 text-gray-500" />
+                                  </div>
+                                  <p className="text-sm">{formatLimitation(limitation)}</p>
+                                </div>
+                              ))
+                            ) : (
+                              Object.entries(reward.limitations).map(([key, value]) => (
+                                <div key={key} className="flex items-start gap-3 p-2 bg-white rounded-md shadow-sm">
+                                  <div className="mt-0.5">
+                                    <Settings className="h-4 w-4 text-gray-500" />
+                                  </div>
+                                  <p className="text-sm">{formatLimitation({ type: key, value })}</p>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        ) : (
+                          <div className="bg-gray-50 rounded-lg p-4 text-center">
+                            <p className="text-sm text-muted-foreground">No limitations set</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
-                
-                {/* Stats Card */}
-                <div className="space-y-6">
-                  <Card>
-                    <CardContent className="p-6">
-                      <h3 className="text-sm font-medium text-muted-foreground mb-4">Quick Stats</h3>
-                      
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="h-8 w-8 rounded-full bg-green-50 flex items-center justify-center">
-                              <CheckCircle className="h-4 w-4 text-green-500" />
-                            </div>
-                            <span className="text-sm">Redemption Rate</span>
-                          </div>
-                          <span className="font-medium">12.4%</span>
-                        </div>
-                        
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
-                              <Users className="h-4 w-4 text-blue-500" />
-                            </div>
-                            <span className="text-sm">Unique Customers</span>
-                          </div>
-                          <span className="font-medium">28</span>
-                        </div>
-                        
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="h-8 w-8 rounded-full bg-purple-50 flex items-center justify-center">
-                              <Zap className="h-4 w-4 text-purple-500" />
-                            </div>
-                            <span className="text-sm">Points Spent</span>
-                          </div>
-                          <span className="font-medium">{((reward.pointsCost || 0) * (reward.redemptionCount || 0)).toLocaleString()}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card>
-                    <CardContent className="p-6">
-                      <h3 className="text-sm font-medium text-muted-foreground mb-4">Activity</h3>
-                      
-                      <div className="space-y-4">
-                        <div className="flex items-start gap-3">
-                          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <Clock className="h-4 w-4 text-gray-500" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">Created</p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatDate(reward.createdAt)}
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-start gap-3">
-                          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <Clock className="h-4 w-4 text-gray-500" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">Last Updated</p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatDate(reward.updatedAt)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="redemptions" className="pt-6">
-              <Card>
+              )}
+              
+              {/* Recent Redemptions */}
+              <Card className="rounded-lg overflow-hidden border-none shadow-sm">
+                <CardHeader className="pb-0">
+                  <CardTitle>Recent Redemptions</CardTitle>
+                </CardHeader>
                 <CardContent className="p-6">
-                  <h2 className="text-lg font-medium mb-4">Recent Redemptions</h2>
-                  
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="bg-blue-50">
                       <TableRow>
                         <TableHead>Date</TableHead>
                         <TableHead>Customer</TableHead>
                         <TableHead>Points</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -538,16 +475,11 @@ export default function RewardDetailsPage() {
                             <TableCell>
                               <Badge className="bg-green-50 text-green-700">Completed</Badge>
                             </TableCell>
-                            <TableCell className="text-right">
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
                           </TableRow>
                         ))
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                             No redemptions yet
                           </TableCell>
                         </TableRow>
@@ -556,23 +488,138 @@ export default function RewardDetailsPage() {
                   </Table>
                 </CardContent>
               </Card>
-            </TabsContent>
+            </div>
             
-            <TabsContent value="analytics" className="pt-6">
-              <Card>
+            {/* Right column - Stats and details */}
+            <div className="space-y-6">
+              {/* Stats Card */}
+              <Card className="rounded-lg overflow-hidden border-none shadow-sm">
+                <CardHeader className="pb-0">
+                  <CardTitle className="text-lg">Performance</CardTitle>
+                </CardHeader>
                 <CardContent className="p-6">
-                  <h2 className="text-lg font-medium mb-4">Analytics</h2>
-                  
-                  <div className="flex items-center justify-center h-64 border border-dashed rounded-lg">
-                    <div className="text-center">
-                      <BarChart className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                      <p className="text-muted-foreground">Analytics coming soon</p>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
+                          <CheckCircle className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <span className="text-sm">Redemption Rate</span>
+                      </div>
+                      <span className="font-medium">12.4%</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
+                          <Users className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <span className="text-sm">Customer Engagement</span>
+                      </div>
+                      <span className="font-medium">High</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
+                          <BarChart className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <span className="text-sm">Popularity Rank</span>
+                      </div>
+                      <span className="font-medium">#3</span>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-            </TabsContent>
-          </Tabs>
+              
+              {/* Details Card */}
+              <Card className="rounded-lg overflow-hidden border-none shadow-sm">
+                <CardHeader className="pb-0">
+                  <CardTitle className="text-lg">Details</CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-3">
+                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Clock className="h-4 w-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">Created</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(reward.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start gap-3">
+                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Clock className="h-4 w-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">Last Updated</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(reward.updatedAt)}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {reward.pin && (
+                      <div className="flex items-start gap-3">
+                        <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <Key className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Redemption PIN</p>
+                          <p className="text-xs text-muted-foreground">
+                            {reward.pin}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {reward.startDate && reward.endDate && (
+                      <div className="flex items-start gap-3">
+                        <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <Calendar className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Active Period</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDate(reward.startDate)} - {formatDate(reward.endDate)}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+              
+              {/* Actions Card */}
+              <Card className="rounded-lg overflow-hidden border-none shadow-sm">
+                <CardHeader className="pb-0">
+                  <CardTitle className="text-lg">Actions</CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="space-y-3">
+                    <Button className="w-full justify-start" variant="outline">
+                      <BarChart className="h-4 w-4 mr-2" />
+                      View Analytics
+                    </Button>
+                    
+                    <Button className="w-full justify-start" variant="outline">
+                      <Users className="h-4 w-4 mr-2" />
+                      Manage Visibility
+                    </Button>
+                    
+                    <Button className="w-full justify-start text-red-600" variant="outline">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Reward
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
       </div>
     </>

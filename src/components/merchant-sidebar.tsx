@@ -54,7 +54,7 @@ const menuItems = [
   {
     title: "Reward Library",
     icon: Library,
-    url: "/rewards",
+    url: "/Library",
     badge: "New"
   },
   {

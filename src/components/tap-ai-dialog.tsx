@@ -329,45 +329,18 @@ function RewardCard({
         console.log(`Program detected with ${programData.rewards.length} rewards`);
         console.log("Full rewards array:", JSON.stringify(programData.rewards));
         
-        // Create a program record first
+        // Create a program ID to link all rewards
         const programId = `program-${Date.now()}`;
         console.log("Created program ID:", programId);
         
-        // Create a clean copy of the program data without the rewards array
-        const { rewards, ...programWithoutRewards } = programData;
-        
-        const programDataToSave = {
-          ...programWithoutRewards,
-          pin: pin.trim(),
-          createdAt: now,
-          status: status,
-          isActive: status === 'live',
-          id: programId,
-          merchantId: user.uid,
-          updatedAt: now,
-          category: 'program',
-          rewardCount: rewards.length
-        };
-        
-        // Save program record
-        console.log("Saving program record:", programDataToSave);
-        const merchantProgramRef = doc(db, 'merchants', user.uid, 'rewards', programId);
-        batch.set(merchantProgramRef, programDataToSave);
-        
-        const globalProgramRef = doc(db, 'rewards', programId);
-        batch.set(globalProgramRef, programDataToSave);
-        
-        const tapAiProgramRef = doc(db, 'merchants', user.uid, 'tapaiRewards', programId);
-        batch.set(tapAiProgramRef, programDataToSave);
-        
-        // Then create each individual reward in the program
-        console.log("Starting to process individual rewards...");
+        // Get program name from the programData
+        const programName = programData.programName || programData.rewardName || "Loyalty Program";
         
         // Create an array to store all the reward IDs we're creating
         const createdRewardIds = [];
         
         // Make sure we're iterating through the rewards array correctly
-        const rewardsArray = Array.isArray(rewards) ? rewards : [];
+        const rewardsArray = Array.isArray(programData.rewards) ? programData.rewards : [];
         console.log(`Processing ${rewardsArray.length} rewards`);
         
         // Process each reward
@@ -396,6 +369,7 @@ function RewardCard({
             merchantId: user.uid,
             updatedAt: now,
             programId: programId,
+            programName: programName, // Add the program name to each reward
             category: 'individual'
           };
           
@@ -1775,45 +1749,18 @@ export function TapAiDialog({
         console.log(`Program detected with ${programData.rewards.length} rewards`);
         console.log("Full rewards array:", JSON.stringify(programData.rewards));
         
-        // Create a program record first
+        // Create a program ID to link all rewards
         const programId = `program-${Date.now()}`;
         console.log("Created program ID:", programId);
         
-        // Create a clean copy of the program data without the rewards array
-        const { rewards, ...programWithoutRewards } = programData;
-        
-        const programDataToSave = {
-          ...programWithoutRewards,
-          pin: pin.trim(),
-          createdAt: now,
-          status: status,
-          isActive: status === 'live',
-          id: programId,
-          merchantId: user.uid,
-          updatedAt: now,
-          category: 'program',
-          rewardCount: rewards.length
-        };
-        
-        // Save program record
-        console.log("Saving program record:", programDataToSave);
-        const merchantProgramRef = doc(db, 'merchants', user.uid, 'rewards', programId);
-        batch.set(merchantProgramRef, programDataToSave);
-        
-        const globalProgramRef = doc(db, 'rewards', programId);
-        batch.set(globalProgramRef, programDataToSave);
-        
-        const tapAiProgramRef = doc(db, 'merchants', user.uid, 'tapaiRewards', programId);
-        batch.set(tapAiProgramRef, programDataToSave);
-        
-        // Then create each individual reward in the program
-        console.log("Starting to process individual rewards...");
+        // Get program name from the programData
+        const programName = programData.programName || programData.rewardName || "Loyalty Program";
         
         // Create an array to store all the reward IDs we're creating
         const createdRewardIds = [];
         
         // Make sure we're iterating through the rewards array correctly
-        const rewardsArray = Array.isArray(rewards) ? rewards : [];
+        const rewardsArray = Array.isArray(programData.rewards) ? programData.rewards : [];
         console.log(`Processing ${rewardsArray.length} rewards`);
         
         // Process each reward
@@ -1842,6 +1789,7 @@ export function TapAiDialog({
             merchantId: user.uid,
             updatedAt: now,
             programId: programId,
+            programName: programName, // Add the program name to each reward
             category: 'individual'
           };
           

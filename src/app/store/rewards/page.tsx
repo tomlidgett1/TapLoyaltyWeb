@@ -44,7 +44,8 @@ import {
   Mic,
   MicOff,
   X,
-  Sparkles
+  Sparkles,
+  HelpCircle
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -103,6 +104,8 @@ interface Reward {
   }
   isActive: boolean
   lastRedeemed?: Date | null
+  programName?: string
+  impressions?: number
 }
 
 // Add a nicer loading state to the rewards page
@@ -236,7 +239,8 @@ export default function RewardsPage() {
               createdAt,
               updatedAt,
               lastRedeemed,
-              isActive: !!data.isActive
+              isActive: !!data.isActive,
+              impressions: data.impressions || 0
             });
           } catch (err) {
             console.error("Error processing document:", err, "Document ID:", doc.id);
@@ -388,6 +392,21 @@ export default function RewardsPage() {
                   <TableHead className="text-center">Type</TableHead>
                   <TableHead className="text-center">Points</TableHead>
                   <TableHead className="text-center">Redemptions</TableHead>
+                  <TableHead className="text-center">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="flex items-center justify-center cursor-help gap-1">
+                            Impressions
+                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          <p className="text-xs">Number of times customers have viewed this reward</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableHead>
                   <TableHead className="text-center">Created</TableHead>
                   <TableHead className="text-center">Last Redeemed</TableHead>
                   <TableHead className="text-center">Status</TableHead>
@@ -446,7 +465,7 @@ export default function RewardsPage() {
                     <TableRow 
                       key={reward.id}
                       className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => router.push(`/rewards/${reward.id}`)}
+                      onClick={() => router.push(`/library/${reward.id}`)}
                     >
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
@@ -456,7 +475,14 @@ export default function RewardsPage() {
                               : getRewardTypeIcon(reward.type)}
                           </div>
                           <div className="min-w-0">
-                            <div className="truncate">{reward.rewardName}</div>
+                            <div className="truncate flex items-center gap-1">
+                              {reward.rewardName}
+                              {reward.conditions?.find(c => c.type === 'maximumTransactions')?.value === 0 && (
+                                <Badge variant="outline" className="ml-1 py-0 h-4 text-[10px] px-1.5 bg-teal-50 text-teal-700 border-teal-200">
+                                  New Customers
+                                </Badge>
+                              )}
+                            </div>
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -464,8 +490,15 @@ export default function RewardsPage() {
                                     {reward.description}
                                   </div>
                                 </TooltipTrigger>
-                                <TooltipContent className="max-w-xs">
-                                  <p>{reward.description}</p>
+                                <TooltipContent side="top">
+                                  <p className="text-xs">
+                                    {reward.programtype === "points" && "Customers redeem their points for this reward"}
+                                    {reward.programtype === "coffee" && "Part of a buy-X-get-one-free program"}
+                                    {reward.programtype === "voucher" && "A monetary voucher customers can redeem"}
+                                    {reward.programtype === "discount" && "A percentage discount on purchases"}
+                                    {!reward.programtype || reward.programtype === "individual" && "Standard individual reward"}
+                                    {reward.programName && <span className="block mt-1 font-medium">{reward.programName}</span>}
+                                  </p>
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
@@ -473,10 +506,56 @@ export default function RewardsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        {reward.programtype ? "Program" : reward.type || "Standard"}
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge 
+                                variant="outline" 
+                                className={cn(
+                                  "rounded-md",
+                                  reward.programtype ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-purple-50 text-purple-700 border-purple-200"
+                                )}
+                              >
+                                <div className="flex items-center justify-center gap-1">
+                                  {reward.programtype 
+                                    ? <Award className="h-4 w-4" />
+                                    : <Gift className="h-4 w-4" />}
+                                  <span>
+                                    {reward.programtype 
+                                      ? "Program" 
+                                      : "Individual Reward"}
+                                  </span>
+                                </div>
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              <p className="text-xs">
+                                {reward.programtype === "points" && "Customers redeem their points for this reward"}
+                                {reward.programtype === "coffee" && "Part of a buy-X-get-one-free program"}
+                                {reward.programtype === "voucher" && "A monetary voucher customers can redeem"}
+                                {reward.programtype === "discount" && "A percentage discount on purchases"}
+                                {!reward.programtype || reward.programtype === "individual" && "Standard individual reward"}
+                                {reward.programName && <span className="block mt-1 font-medium">{reward.programName}</span>}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableCell>
-                      <TableCell className="text-center">{reward.pointsCost}</TableCell>
-                      <TableCell className="text-center">{reward.redemptionCount}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                          {reward.pointsCost}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                          {reward.redemptionCount || 0}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                          {reward.impressions || 0}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-center">
                         {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
                       </TableCell>
@@ -510,11 +589,11 @@ export default function RewardsPage() {
                             align="end"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <DropdownMenuItem onClick={() => router.push(`/rewards/${reward.id}`)}>
+                            <DropdownMenuItem onClick={() => router.push(`/library/${reward.id}`)}>
                               <Eye className="h-4 w-4 mr-2" />
                               View
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => router.push(`/rewards/${reward.id}/edit`)}>
+                            <DropdownMenuItem onClick={() => router.push(`/library/${reward.id}/edit`)}>
                               <Edit className="h-4 w-4 mr-2" />
                               Edit
                             </DropdownMenuItem>
@@ -1165,54 +1244,25 @@ export default function RewardsPage() {
                           )}
                         </Button>
                       </TableHead>
+                      <TableHead className="text-center">Type</TableHead>
+                      <TableHead className="text-center">Points</TableHead>
+                      <TableHead className="text-center">Redemptions</TableHead>
                       <TableHead className="text-center">
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => handleSort("type")}
-                          className="flex items-center gap-1 px-0 font-medium mx-auto"
-                        >
-                          Type
-                          {sortField === "type" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="flex items-center justify-center cursor-help gap-1">
+                                Impressions
+                                <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              <p className="text-xs">Number of times customers have viewed this reward</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableHead>
-                      <TableHead className="text-center">
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => handleSort("pointsCost")}
-                          className="flex items-center gap-1 px-0 font-medium mx-auto"
-                        >
-                          Points
-                          {sortField === "pointsCost" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableHead>
-                      <TableHead className="text-center">
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => handleSort("redemptionCount")}
-                          className="flex items-center gap-1 px-0 font-medium mx-auto"
-                        >
-                          Redemptions
-                          {sortField === "redemptionCount" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableHead>
-                      <TableHead className="text-center">
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => handleSort("createdAt")}
-                          className="flex items-center gap-1 px-0 font-medium mx-auto"
-                        >
-                          Created
-                          {sortField === "createdAt" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableHead>
+                      <TableHead className="text-center">Created</TableHead>
                       <TableHead className="text-center">Last Redeemed</TableHead>
                       <TableHead className="text-center">Status</TableHead>
                       <TableHead className="w-[50px]"></TableHead>
@@ -1255,7 +1305,7 @@ export default function RewardsPage() {
                         <TableRow 
                           key={reward.id}
                           className="cursor-pointer hover:bg-gray-50"
-                          onClick={() => router.push(`/rewards/${reward.id}`)}
+                          onClick={() => router.push(`/library/${reward.id}`)}
                         >
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2">
@@ -1265,46 +1315,87 @@ export default function RewardsPage() {
                                   : getRewardTypeIcon(reward.type)}
                               </div>
                               <div className="min-w-0">
-                                <div className="truncate">{reward.rewardName}</div>
+                                <div className="truncate flex items-center gap-1">
+                                  {reward.rewardName}
+                                  {reward.conditions?.find(c => c.type === 'maximumTransactions')?.value === 0 && (
+                                    <Badge variant="outline" className="ml-1 py-0 h-4 text-[10px] px-1.5 bg-teal-50 text-teal-700 border-teal-200">
+                                      New Customers
+                                    </Badge>
+                                  )}
+                                </div>
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <div className="text-xs text-muted-foreground line-clamp-1 cursor-help">
                                         {reward.description}
-                              </div>
+                                      </div>
                                     </TooltipTrigger>
-                                    <TooltipContent className="max-w-xs">
-                                      <p>{reward.description}</p>
+                                    <TooltipContent side="top">
+                                      <p className="text-xs">
+                                        {reward.programtype === "points" && "Customers redeem their points for this reward"}
+                                        {reward.programtype === "coffee" && "Part of a buy-X-get-one-free program"}
+                                        {reward.programtype === "voucher" && "A monetary voucher customers can redeem"}
+                                        {reward.programtype === "discount" && "A percentage discount on purchases"}
+                                        {!reward.programtype || reward.programtype === "individual" && "Standard individual reward"}
+                                        {reward.programName && <span className="block mt-1 font-medium">{reward.programName}</span>}
+                                      </p>
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
-                            </div>
                               </div>
+                            </div>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline" className={cn(
-                              "rounded-md",
-                              reward.programtype ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-purple-50 text-purple-700 border-purple-200"
-                            )}>
-                              <div className="flex items-center justify-center gap-1">
-                                {reward.programtype 
-                                  ? <Award className="h-4 w-4" />
-                                  : <Gift className="h-4 w-4" />}
-                                <span>
-                                  {reward.programtype 
-                                    ? "Program" 
-                                    : "Individual Reward"}
-                                </span>
-                              </div>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge 
+                                    variant="outline" 
+                                    className={cn(
+                                      "rounded-md",
+                                      reward.programtype ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-purple-50 text-purple-700 border-purple-200"
+                                    )}
+                                  >
+                                    <div className="flex items-center justify-center gap-1">
+                                      {reward.programtype 
+                                        ? <Award className="h-4 w-4" />
+                                      : <Gift className="h-4 w-4" />}
+                                      <span>
+                                        {reward.programtype 
+                                          ? "Program" 
+                                          : "Individual Reward"}
+                                      </span>
+                                    </div>
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p className="text-xs">
+                                    {reward.programtype === "points" && "Customers redeem their points for this reward"}
+                                    {reward.programtype === "coffee" && "Part of a buy-X-get-one-free program"}
+                                    {reward.programtype === "voucher" && "A monetary voucher customers can redeem"}
+                                    {reward.programtype === "discount" && "A percentage discount on purchases"}
+                                    {!reward.programtype || reward.programtype === "individual" && "Standard individual reward"}
+                                    {reward.programName && <span className="block mt-1 font-medium">{reward.programName}</span>}
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                              {reward.pointsCost}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <Zap className="h-4 w-4 text-blue-500" />
-                              <span>{reward.pointsCost || 0}</span>
-                              </div>
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              {reward.redemptionCount || 0}
+                            </Badge>
                           </TableCell>
-                          <TableCell className="text-center">{reward.redemptionCount || 0}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                              {reward.impressions || 0}
+                            </Badge>
+                          </TableCell>
                           <TableCell className="text-center">
                             {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
                           </TableCell>
@@ -1324,51 +1415,51 @@ export default function RewardsPage() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
                                 <Button 
                                   variant="ghost" 
                                   className="h-8 w-8 p-0"
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
                               <DropdownMenuContent 
                                 align="end"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                  <DropdownMenuItem onClick={() => router.push(`/rewards/${reward.id}`)}>
-                                    <Eye className="h-4 w-4 mr-2" />
+                                <DropdownMenuItem onClick={() => router.push(`/library/${reward.id}`)}>
+                                  <Eye className="h-4 w-4 mr-2" />
                                   View
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => router.push(`/rewards/${reward.id}/edit`)}>
-                                    <Edit className="h-4 w-4 mr-2" />
-                                    Edit
-                                  </DropdownMenuItem>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => router.push(`/library/${reward.id}/edit`)}>
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => toggleRewardStatus(reward.id, reward.isActive)}>
                                   {reward.isActive ? (
-                                      <>
-                                        <Clock className="h-4 w-4 mr-2" />
-                                        Deactivate
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Zap className="h-4 w-4 mr-2" />
-                                        Activate
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem 
-                                    className="text-red-600"
-                                    onClick={() => deleteReward(reward.id)}
-                                  >
-                                    <Trash className="h-4 w-4 mr-2" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                                    <>
+                                      <Clock className="h-4 w-4 mr-2" />
+                                      Deactivate
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Zap className="h-4 w-4 mr-2" />
+                                      Activate
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  className="text-red-600"
+                                  onClick={() => deleteReward(reward.id)}
+                                >
+                                  <Trash className="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
                       ))
@@ -1394,194 +1485,269 @@ export default function RewardsPage() {
                             className="flex items-center gap-1 px-0 font-medium"
                           >
                             Reward Name
-                            {sortField === "rewardName" && (
-                              sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </TableHead>
-                        <TableHead className="text-center">Type</TableHead>
-                        <TableHead className="text-center">Points</TableHead>
-                        <TableHead className="text-center">Redemptions</TableHead>
-                        <TableHead className="text-center">Created</TableHead>
-                        <TableHead className="text-center">Last Redeemed</TableHead>
-                        <TableHead className="text-center">Status</TableHead>
-                        <TableHead className="w-[50px]"></TableHead>
+                          {sortField === "rewardName" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">Type</TableHead>
+                      <TableHead className="text-center">Points</TableHead>
+                      <TableHead className="text-center">Redemptions</TableHead>
+                      <TableHead className="text-center">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="flex items-center justify-center cursor-help gap-1">
+                                Impressions
+                                <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              <p className="text-xs">Number of times customers have viewed this reward</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableHead>
+                      <TableHead className="text-center">Created</TableHead>
+                      <TableHead className="text-center">Last Redeemed</TableHead>
+                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead className="w-[50px]"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="h-24 text-center">
+                          <div className="flex justify-center">
+                            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
+                          </div>
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                {loading ? (
-                        <TableRow>
-                          <TableCell colSpan={8} className="h-24 text-center">
-                            <div className="flex justify-center">
-                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
-                  </div>
-                          </TableCell>
-                        </TableRow>
-                      ) : getFilteredRewards().length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={8} className="h-24 text-center">
-                            <div className="flex flex-col items-center justify-center">
-                    <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                      {category === "individual" ? (
-                        <Gift className="h-6 w-6 text-muted-foreground" />
-                      ) : category === "customer-specific" ? (
-                        <Users className="h-6 w-6 text-muted-foreground" />
-                      ) : (
-                        <Award className="h-6 w-6 text-muted-foreground" />
-                      )}
-                    </div>
-                    <h3 className="mt-4 text-lg font-medium">
-                      No {category === "individual" ? "individual" : 
-                          category === "customer-specific" ? "customer-specific" : 
-                          "program"} rewards found
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {searchQuery ? "Try adjusting your search query" : `Create your first ${
-                        category === "individual" ? "individual" : 
-                        category === "customer-specific" ? "customer-specific" : 
-                        "program"} reward`}
-                    </p>
-                    {!searchQuery && (
-                      <Button 
-                        className="mt-4 h-9 gap-2 rounded-md"
-                        onClick={() => router.push('/create')}
-                      >
-                        <Plus className="h-4 w-4" />
-                        Create {category === "individual" ? "Individual Reward" : 
-                                category === "customer-specific" ? "Customer-Specific Reward" : 
-                                "Program"}
-                      </Button>
-                    )}
-                  </div>
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        getFilteredRewards().map((reward) => (
-                          <TableRow 
-                            key={reward.id}
-                            className="cursor-pointer hover:bg-gray-50"
-                            onClick={() => router.push(`/rewards/${reward.id}`)}
-                          >
-                            <TableCell className="font-medium">
-                              <div className="flex items-center gap-2">
-                                <div className="h-9 w-9 min-w-[36px] rounded-md bg-muted flex items-center justify-center">
-                              {reward.category === "program" 
-                                    ? <Award className="h-5 w-5 text-amber-600" />
-                                : getRewardTypeIcon(reward.type)}
+                    ) : getFilteredRewards().length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="h-24 text-center">
+                          <div className="flex flex-col items-center justify-center">
+                            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                              {category === "individual" ? (
+                                <Gift className="h-6 w-6 text-muted-foreground" />
+                              ) : category === "customer-specific" ? (
+                                <Users className="h-6 w-6 text-muted-foreground" />
+                              ) : (
+                                <Award className="h-6 w-6 text-muted-foreground" />
+                              )}
                             </div>
-                                <div className="min-w-0">
-                                  <div className="truncate">{reward.rewardName}</div>
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <div className="text-xs text-muted-foreground line-clamp-1 cursor-help">
-                          {reward.description}
-                                </div>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="max-w-xs">
-                                        <p>{reward.description}</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                </div>
-                            </div>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {reward.programtype ? "Program" : reward.type || "Standard"}
-                            </TableCell>
-                            <TableCell className="text-center">{reward.pointsCost}</TableCell>
-                            <TableCell className="text-center">{reward.redemptionCount}</TableCell>
-                            <TableCell className="text-center">
-                              {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {reward.lastRedeemed 
-                                ? formatDistanceToNow(reward.lastRedeemed, { addSuffix: true })
-                                : "Never"}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge 
-                                variant={reward.isActive ? "success" : "destructive"}
-                                className={cn(
-                                  reward.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"
-                                )}
+                            <h3 className="mt-4 text-lg font-medium">
+                              No {category === "individual" ? "individual" : 
+                                  category === "customer-specific" ? "customer-specific" : 
+                                  "program"} rewards found
+                            </h3>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {searchQuery ? "Try adjusting your search query" : `Create your first ${
+                                category === "individual" ? "individual" : 
+                                category === "customer-specific" ? "customer-specific" : 
+                                "program"} reward`}
+                            </p>
+                            {!searchQuery && (
+                              <Button 
+                                className="mt-4 h-9 gap-2 rounded-md"
+                                onClick={() => router.push('/create')}
                               >
-                                {reward.isActive ? "Live" : "Inactive"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                                  <Button 
-                                    variant="ghost" 
-                                    className="h-8 w-8 p-0"
-                                    onClick={(e) => e.stopPropagation()}
+                                <Plus className="h-4 w-4" />
+                                Create {category === "individual" ? "Individual Reward" : 
+                                        category === "customer-specific" ? "Customer-Specific Reward" : 
+                                        "Program"}
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      getFilteredRewards().map((reward) => (
+                        <TableRow 
+                          key={reward.id}
+                          className="cursor-pointer hover:bg-gray-50"
+                          onClick={() => router.push(`/library/${reward.id}`)}
+                        >
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <div className="h-9 w-9 min-w-[36px] rounded-md bg-muted flex items-center justify-center">
+                                {reward.category === "program" 
+                                      ? <Award className="h-5 w-5 text-amber-600" />
+                                    : getRewardTypeIcon(reward.type)}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="truncate flex items-center gap-1">
+                                  {reward.rewardName}
+                                  {reward.conditions?.find(c => c.type === 'maximumTransactions')?.value === 0 && (
+                                    <Badge variant="outline" className="ml-1 py-0 h-4 text-[10px] px-1.5 bg-teal-50 text-teal-700 border-teal-200">
+                                      New Customers
+                                    </Badge>
+                                  )}
+                                </div>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="text-xs text-muted-foreground line-clamp-1 cursor-help">
+                                        {reward.description}
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                      <p className="text-xs">
+                                        {reward.programtype === "points" && "Customers redeem their points for this reward"}
+                                        {reward.programtype === "coffee" && "Part of a buy-X-get-one-free program"}
+                                        {reward.programtype === "voucher" && "A monetary voucher customers can redeem"}
+                                        {reward.programtype === "discount" && "A percentage discount on purchases"}
+                                        {!reward.programtype || reward.programtype === "individual" && "Standard individual reward"}
+                                        {reward.programName && <span className="block mt-1 font-medium">{reward.programName}</span>}
+                                      </p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge 
+                                    variant="outline" 
+                                    className={cn(
+                                      "rounded-md",
+                                      reward.programtype ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-purple-50 text-purple-700 border-purple-200"
+                                    )}
                                   >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                                <DropdownMenuContent 
-                                  align="end"
+                                    <div className="flex items-center justify-center gap-1">
+                                      {reward.programtype 
+                                        ? <Award className="h-4 w-4" />
+                                      : <Gift className="h-4 w-4" />}
+                                      <span>
+                                        {reward.programtype 
+                                          ? "Program" 
+                                          : "Individual Reward"}
+                                      </span>
+                                    </div>
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p className="text-xs">
+                                    {reward.programtype === "points" && "Customers redeem their points for this reward"}
+                                    {reward.programtype === "coffee" && "Part of a buy-X-get-one-free program"}
+                                    {reward.programtype === "voucher" && "A monetary voucher customers can redeem"}
+                                    {reward.programtype === "discount" && "A percentage discount on purchases"}
+                                    {!reward.programtype || reward.programtype === "individual" && "Standard individual reward"}
+                                    {reward.programName && <span className="block mt-1 font-medium">{reward.programName}</span>}
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                              {reward.pointsCost}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              {reward.redemptionCount || 0}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                              {reward.impressions || 0}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {reward.lastRedeemed 
+                              ? formatDistanceToNow(reward.lastRedeemed, { addSuffix: true })
+                              : "Never"}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge 
+                              variant={reward.isActive ? "success" : "destructive"}
+                              className={cn(
+                                reward.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"
+                              )}
+                            >
+                              {reward.isActive ? "Live" : "Inactive"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  className="h-8 w-8 p-0"
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                  <DropdownMenuItem onClick={() => router.push(`/rewards/${reward.id}`)}>
-                                    <Eye className="h-4 w-4 mr-2" />
-                                    View
-                                  </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => router.push(`/rewards/${reward.id}/edit`)}>
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => toggleRewardStatus(reward.id, reward.isActive)}>
-                                    {reward.isActive ? (
-                                <>
-                                  <Clock className="h-4 w-4 mr-2" />
-                                  Deactivate
-                                </>
-                              ) : (
-                                <>
-                                  <Zap className="h-4 w-4 mr-2" />
-                                  Activate
-                                </>
-                              )}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                              className="text-red-600"
-                              onClick={() => deleteReward(reward.id)}
-                            >
-                              <Trash className="h-4 w-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                            </TableCell>
-                          </TableRow>
-                  ))
-                )}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          ))}
-        </Tabs>
-      </div>
-      
-      {/* Reward preview card */}
-      {previewReward && (
-        <RewardPreview 
-          reward={previewReward} 
-          onClose={() => setPreviewReward(null)} 
-        />
-      )}
-      
-      {/* Create Reward Dialog */}
-      <CreateRewardDialog
-        open={createRewardDialogOpen}
-        onOpenChange={setCreateRewardDialogOpen}
-        defaultValues={createRewardData}
-      />
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent 
+                                align="end"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <DropdownMenuItem onClick={() => router.push(`/library/${reward.id}`)}>
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => router.push(`/library/${reward.id}/edit`)}>
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => toggleRewardStatus(reward.id, reward.isActive)}>
+                                  {reward.isActive ? (
+                                    <>
+                                      <Clock className="h-4 w-4 mr-2" />
+                                      Deactivate
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Zap className="h-4 w-4 mr-2" />
+                                      Activate
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  className="text-red-600"
+                                  onClick={() => deleteReward(reward.id)}
+                                >
+                                  <Trash className="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        ))}
+      </Tabs>
     </div>
-  )
+    
+    {/* Reward preview card */}
+    {previewReward && (
+      <RewardPreview 
+        reward={previewReward} 
+        onClose={() => setPreviewReward(null)} 
+      />
+    )}
+    
+    {/* Create Reward Dialog */}
+    <CreateRewardDialog
+      open={createRewardDialogOpen}
+      onOpenChange={setCreateRewardDialogOpen}
+      defaultValues={createRewardData}
+    />
+  </div>
+)
 } 

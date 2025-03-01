@@ -20,7 +20,8 @@ import {
   Image,
   MessageSquare,
   ShoppingBag,
-  Clock
+  Clock,
+  Settings
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -105,6 +106,11 @@ const navItems = [
     title: "Integrations",
     href: "/integrations",
     icon: Layers
+  },
+  {
+    title: "Settings",
+    href: "/dashboard/settings",
+    icon: Settings
   }
 ]
 

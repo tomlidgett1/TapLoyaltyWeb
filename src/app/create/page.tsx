@@ -190,7 +190,7 @@ export default function CreatePage() {
       <CreateRewardDialog 
         open={createProgramOpen} 
         onOpenChange={setCreateProgramOpen}
-        defaultType="program"
+        defaultValues={{ type: "program" }}
       />
       
       <CreateRecurringRewardDialog 

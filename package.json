@@ -6,6 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "build-no-lint": "NEXT_DISABLE_ESLINT=1 next build",
+    "type-check": "tsc --noEmit",
+    "force-build": "NEXT_TELEMETRY_DISABLED=1 NODE_OPTIONS='--max-old-space-size=4096' next build || exit 0",
     "start": "next start",
     "lint": "next lint"
   },

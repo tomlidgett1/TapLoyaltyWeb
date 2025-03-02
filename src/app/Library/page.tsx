@@ -177,6 +177,7 @@ export default function RewardsLibraryPage() {
   const [isCreatingReward, setIsCreatingReward] = useState(false)
   const [showTips, setShowTips] = useState(true)
   const [rewardCategory, setRewardCategory] = useState("all-categories")
+  const [programCategory, setProgramCategory] = useState("all-programs")
   
   const { toast } = useToast()
   const { user } = useAuth()
@@ -875,7 +876,15 @@ export default function RewardsLibraryPage() {
           {/* Tabs */}
           <div className="flex items-center mb-6">
             {/* Main tabs on the left */}
-            <Tabs defaultValue="individual" className="w-auto" onValueChange={setActiveTab}>
+            <Tabs defaultValue="individual" className="w-auto" onValueChange={(value) => {
+              setActiveTab(value);
+              // Reset the category tabs when switching between main tabs
+              if (value === "program") {
+                setProgramCategory("all-programs");
+              } else {
+                setRewardCategory("all-categories");
+              }
+            }}>
               <TabsList className="w-auto">
                 <TabsTrigger value="individual">
                   <div className="flex items-center gap-2">
@@ -893,7 +902,7 @@ export default function RewardsLibraryPage() {
                   <div className="flex items-center gap-2">
                     <Bookmark className="h-4 w-4" />
                     <span>Saved</span>
-                </div>
+                  </div>
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -901,45 +910,79 @@ export default function RewardsLibraryPage() {
             {/* Vertical separator */}
             <div className="h-10 w-px bg-gray-200 mx-4"></div>
             
-            {/* Category tabs on the right */}
-            <Tabs defaultValue="all-categories" className="w-auto" onValueChange={setRewardCategory}>
-              <TabsList className="w-auto">
-                <TabsTrigger value="all-categories">
-                  <span>All Categories</span>
-                </TabsTrigger>
-                <TabsTrigger value="discount">
-                  <div className="flex items-center gap-2">
-                    <Percent className="h-4 w-4" />
-                    <span>Discounts</span>
-                  </div>
-                </TabsTrigger>
-                <TabsTrigger value="freebies">
-                  <div className="flex items-center gap-2">
-                    <Gift className="h-4 w-4" />
-                    <span>Freebies</span>
-                  </div>
-                </TabsTrigger>
-                <TabsTrigger value="points">
-                  <div className="flex items-center gap-2">
-                    <Star className="h-4 w-4" />
-                    <span>Points</span>
-                  </div>
-                </TabsTrigger>
-                <TabsTrigger value="tiered">
-                  <div className="flex items-center gap-2">
-                    <Layers className="h-4 w-4" />
-                    <span>Tiered</span>
-                  </div>
-                </TabsTrigger>
-                <TabsTrigger value="special">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    <span>Special Days</span>
-                  </div>
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-                </div>
+            {/* Category tabs on the right - show different options based on active tab */}
+            {activeTab === "program" ? (
+              <Tabs defaultValue="all-programs" className="w-auto" onValueChange={setProgramCategory}>
+                <TabsList className="w-auto">
+                  <TabsTrigger value="all-programs">
+                    <span>All Programs</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="coffee-club">
+                    <div className="flex items-center gap-2">
+                      <Coffee className="h-4 w-4" />
+                      <span>Coffee Club</span>
+                    </div>
+                  </TabsTrigger>
+                  <TabsTrigger value="tiered-loyalty">
+                    <div className="flex items-center gap-2">
+                      <Crown className="h-4 w-4" />
+                      <span>Tiered Loyalty</span>
+                    </div>
+                  </TabsTrigger>
+                  <TabsTrigger value="points-based">
+                    <div className="flex items-center gap-2">
+                      <Star className="h-4 w-4" />
+                      <span>Points Based</span>
+                    </div>
+                  </TabsTrigger>
+                  <TabsTrigger value="subscription">
+                    <div className="flex items-center gap-2">
+                      <Repeat className="h-4 w-4" />
+                      <span>Subscription</span>
+                    </div>
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            ) : (
+              <Tabs defaultValue="all-categories" className="w-auto" onValueChange={setRewardCategory}>
+                <TabsList className="w-auto">
+                  <TabsTrigger value="all-categories">
+                    <span>All Categories</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="discount">
+                    <div className="flex items-center gap-2">
+                      <Percent className="h-4 w-4" />
+                      <span>Discounts</span>
+                    </div>
+                  </TabsTrigger>
+                  <TabsTrigger value="freebies">
+                    <div className="flex items-center gap-2">
+                      <Gift className="h-4 w-4" />
+                      <span>Freebies</span>
+                    </div>
+                  </TabsTrigger>
+                  <TabsTrigger value="points">
+                    <div className="flex items-center gap-2">
+                      <Star className="h-4 w-4" />
+                      <span>Points</span>
+                    </div>
+                  </TabsTrigger>
+                  <TabsTrigger value="tiered">
+                    <div className="flex items-center gap-2">
+                      <Layers className="h-4 w-4" />
+                      <span>Tiered</span>
+                    </div>
+                  </TabsTrigger>
+                  <TabsTrigger value="special">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      <span>Special Days</span>
+                    </div>
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            )}
+          </div>
 
           {/* Tips alert - can be dismissed */}
           {showTips && (
@@ -1374,9 +1417,7 @@ export default function RewardsLibraryPage() {
                     ? "There are no program rewards available at the moment. Check back later or try a different filter."
                     : activeTab === "saved"
                       ? "You haven't saved any rewards yet. Click the bookmark icon on rewards to save them for later."
-                      : activeTab === "individual" && selectedIndustries.length > 0
-                        ? "No individual rewards match your selected filters. Try adjusting your industry or objective filters."
-                        : "No rewards match your search criteria. Try adjusting your filters or search terms."
+                      : "No rewards match your search criteria. Try adjusting your filters or search terms."
                 }
                 icon={
                   activeTab === "program" 
@@ -1485,6 +1526,130 @@ export default function RewardsLibraryPage() {
         </Card>
           </div>
         </div>
+
+        {/* Add a section for exploring program types */}
+        {activeTab === "program" && (
+          <div className="mb-8">
+            <h3 className="text-lg font-medium mb-4">Explore Program Types</h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <Card 
+                className="cursor-pointer hover:shadow-md transition-shadow overflow-hidden"
+                onClick={() => setProgramCategory("coffee-club")}
+              >
+                <div className="h-32 bg-gradient-to-r from-amber-500 to-amber-700 relative">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Coffee className="h-16 w-16 text-white opacity-20" />
+                  </div>
+                  <div className="absolute inset-0 p-4 flex flex-col justify-end">
+                    <h4 className="text-lg font-bold text-white">Coffee Club</h4>
+                    <p className="text-amber-100 text-sm">Reward frequent coffee purchases</p>
+                  </div>
+                </div>
+                <CardContent className="p-4">
+                  <p className="text-sm text-gray-600">
+                    Coffee club programs reward customers for frequent purchases with free drinks, 
+                    exclusive offers, and special perks.
+                  </p>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="mt-3 text-amber-600 w-full"
+                  >
+                    View Programs
+                    <ArrowRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </CardContent>
+              </Card>
+              
+              <Card 
+                className="cursor-pointer hover:shadow-md transition-shadow overflow-hidden"
+                onClick={() => setProgramCategory("tiered-loyalty")}
+              >
+                <div className="h-32 bg-gradient-to-r from-purple-500 to-purple-700 relative">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Crown className="h-16 w-16 text-white opacity-20" />
+                  </div>
+                  <div className="absolute inset-0 p-4 flex flex-col justify-end">
+                    <h4 className="text-lg font-bold text-white">Tiered Loyalty</h4>
+                    <p className="text-purple-100 text-sm">Multi-level membership programs</p>
+                  </div>
+                </div>
+                <CardContent className="p-4">
+                  <p className="text-sm text-gray-600">
+                    Tiered programs offer increasing benefits as customers progress through different 
+                    membership levels based on spend or visits.
+                  </p>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="mt-3 text-purple-600 w-full"
+                  >
+                    View Programs
+                    <ArrowRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </CardContent>
+              </Card>
+              
+              <Card 
+                className="cursor-pointer hover:shadow-md transition-shadow overflow-hidden"
+                onClick={() => setProgramCategory("points-based")}
+              >
+                <div className="h-32 bg-gradient-to-r from-blue-500 to-blue-700 relative">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Star className="h-16 w-16 text-white opacity-20" />
+                  </div>
+                  <div className="absolute inset-0 p-4 flex flex-col justify-end">
+                    <h4 className="text-lg font-bold text-white">Points Based</h4>
+                    <p className="text-blue-100 text-sm">Earn and redeem points for rewards</p>
+                  </div>
+                </div>
+                <CardContent className="p-4">
+                  <p className="text-sm text-gray-600">
+                    Points-based programs allow customers to earn points on purchases and redeem 
+                    them for various rewards of different values.
+                  </p>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="mt-3 text-blue-600 w-full"
+                  >
+                    View Programs
+                    <ArrowRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </CardContent>
+              </Card>
+              
+              <Card 
+                className="cursor-pointer hover:shadow-md transition-shadow overflow-hidden"
+                onClick={() => setProgramCategory("subscription")}
+              >
+                <div className="h-32 bg-gradient-to-r from-green-500 to-green-700 relative">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Repeat className="h-16 w-16 text-white opacity-20" />
+                  </div>
+                  <div className="absolute inset-0 p-4 flex flex-col justify-end">
+                    <h4 className="text-lg font-bold text-white">Subscription</h4>
+                    <p className="text-green-100 text-sm">Recurring membership benefits</p>
+                  </div>
+                </div>
+                <CardContent className="p-4">
+                  <p className="text-sm text-gray-600">
+                    Subscription programs offer premium benefits for a recurring fee, 
+                    creating predictable revenue and enhanced customer experiences.
+                  </p>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="mt-3 text-green-600 w-full"
+                  >
+                    View Programs
+                    <ArrowRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -20,7 +20,8 @@ import {
   DollarSign,
   Clock,
   Star,
-  ChevronRight
+  ChevronRight,
+  BarChart
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -28,7 +29,7 @@ import { format, formatDistanceToNow } from "date-fns"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, setDoc, getDoc } from "firebase/firestore"
+import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs } from "firebase/firestore"
 import { toast } from "@/components/ui/use-toast"
 
 export default function DashboardPage() {
@@ -37,15 +38,105 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const [timeframe, setTimeframe] = useState<"today" | "week" | "month" | "year">("month")
   const [loading, setLoading] = useState(true)
+  const [recentActivity, setRecentActivity] = useState<any[]>([])
 
   useEffect(() => {
-    // Simulate loading data
-    const timer = setTimeout(() => {
-      setLoading(false)
-    }, 1000)
+    // Fetch recent activity data
+    const fetchRecentActivity = async () => {
+      if (!user?.uid) return
+      
+      try {
+        setLoading(true)
+        
+        // Create a query to get the most recent activity - exactly as in store/activity
+        const activityQuery = query(
+          collection(db, 'merchants', user.uid, 'activity'),
+          orderBy('timestamp', 'desc'),
+          limit(10)
+        )
+        
+        // Get the activity documents
+        const activitySnapshot = await getDocs(activityQuery)
+        
+        // Map the documents to our activity format - match exactly with store/activity
+        const activityData = activitySnapshot.docs.map(doc => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            type: data.type || 'unknown',
+            customer: {
+              id: data.customerId || 'unknown',
+              name: data.customerName || 'Anonymous Customer',
+              email: data.customerEmail || '',
+              phone: data.customerPhone || ''
+            },
+            timestamp: data.timestamp?.toDate() || new Date(),
+            details: data.details || '',
+            amount: data.amount || 0,
+            points: data.points || 0,
+            rewardId: data.rewardId || null,
+            rewardName: data.rewardName || null,
+            transactionId: data.transactionId || null,
+            source: data.source || 'manual'
+          }
+        })
+        
+        console.log('Fetched activity data:', activityData)
+        
+        // Add fallback data
+        const fallbackActivity = [
+          {
+            id: "sample1",
+            type: "purchase",
+            customer: {
+              id: "sample-cust-1",
+              name: "Sarah Johnson",
+              email: "sarah@example.com"
+            },
+            timestamp: new Date(Date.now() - 1000 * 60 * 30),
+            details: "Purchased 3 items",
+            amount: 24.99,
+            points: 25,
+            source: "sample"
+          },
+          {
+            id: "sample2",
+            type: "redemption",
+            customer: {
+              id: "sample-cust-2",
+              name: "Michael Chen",
+              email: "michael@example.com"
+            },
+            timestamp: new Date(Date.now() - 1000 * 60 * 120),
+            details: "Redeemed Free Coffee reward",
+            points: 100,
+            rewardId: "sample-reward-1",
+            rewardName: "Free Coffee",
+            source: "sample"
+          }
+        ]
+        
+        // In the useEffect, if no data is returned, use the fallback
+        if (activityData.length === 0 && process.env.NODE_ENV === 'development') {
+          console.log('No activity data found, using fallback data')
+          setRecentActivity(fallbackActivity)
+        } else {
+          setRecentActivity(activityData)
+        }
+      } catch (error) {
+        console.error('Error fetching recent activity:', error)
+        toast({
+          title: "Error",
+          description: "Failed to load recent activity. Please refresh the page.",
+          variant: "destructive"
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
     
-    return () => clearTimeout(timer)
-  }, [])
+    fetchRecentActivity()
+  }, [user])
 
   // Format date for display
   const formatDate = (date: Date) => {
@@ -133,34 +224,37 @@ export default function DashboardPage() {
         </div>
         
         {/* Main Content Tabs */}
-        <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid grid-cols-3 h-10 rounded-md">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="customers">Customers</TabsTrigger>
-            <TabsTrigger value="rewards">Rewards</TabsTrigger>
-          </TabsList>
+        <div className="space-y-6">
+          <h1 className="text-2xl font-bold">Dashboard</h1>
           
-          {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-6">
-            {/* Recent Activity */}
-            <Card className="rounded-lg overflow-hidden">
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-center">
-                  <CardTitle>Recent Activity</CardTitle>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-8 gap-1 rounded-md"
-                    asChild
-                  >
-                    <Link href="/analytics">
-                      <span>View all</span>
-                      <ChevronRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
+          {/* Recent Activity */}
+          <Card className="rounded-lg overflow-hidden">
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-center">
+                <CardTitle>Recent Activity</CardTitle>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 gap-1 rounded-md"
+                  asChild
+                >
+                  <Link href="/store/activity">
+                    <span>View all</span>
+                    <ChevronRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loading ? (
+                <div className="p-8 flex justify-center items-center">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
                 </div>
-              </CardHeader>
-              <CardContent className="p-0">
+              ) : recentActivity.length === 0 ? (
+                <div className="p-8 text-center">
+                  <p className="text-muted-foreground">No recent activity found</p>
+                </div>
+              ) : (
                 <div className="divide-y">
                   {recentActivity.map((activity) => (
                     <div key={activity.id} className="p-4 hover:bg-muted/50 transition-colors">
@@ -169,11 +263,13 @@ export default function DashboardPage() {
                           "h-10 w-10 rounded-md flex items-center justify-center flex-shrink-0",
                           activity.type === "purchase" && "bg-green-100",
                           activity.type === "redemption" && "bg-purple-100",
-                          activity.type === "signup" && "bg-blue-100"
+                          activity.type === "signup" && "bg-blue-100",
+                          activity.type === "pointsAdjustment" && "bg-amber-100"
                         )}>
                           {activity.type === "purchase" && <ShoppingCart className="h-5 w-5 text-green-600" />}
                           {activity.type === "redemption" && <Gift className="h-5 w-5 text-purple-600" />}
                           {activity.type === "signup" && <Users className="h-5 w-5 text-blue-600" />}
+                          {activity.type === "pointsAdjustment" && <Zap className="h-5 w-5 text-amber-600" />}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex justify-between items-start">
@@ -194,7 +290,12 @@ export default function DashboardPage() {
                           </div>
                           {activity.points && (
                             <div className="mt-1">
-                              <Badge variant="outline" className="rounded-md bg-blue-50 text-blue-700 border-blue-200">
+                              <Badge variant="outline" className={cn(
+                                "rounded-md",
+                                activity.type === "redemption" 
+                                  ? "bg-red-50 text-red-700 border-red-200" 
+                                  : "bg-blue-50 text-blue-700 border-blue-200"
+                              )}>
                                 {activity.type === "redemption" ? "-" : "+"}{activity.points} points
                               </Badge>
                             </div>
@@ -204,222 +305,54 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
+              )}
+            </CardContent>
+          </Card>
+          
+          {/* Quick Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Program Growth */}
+            <Card className="rounded-lg">
+              <CardHeader>
+                <CardTitle>Program Growth</CardTitle>
+                <CardDescription>Last 30 days</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-sm font-medium">New Customers</p>
+                    <Badge variant="outline" className="rounded-md bg-green-50 text-green-700 border-green-200">
+                      <ArrowUp className="h-3 w-3 mr-1" />
+                      15%
+                    </Badge>
+                  </div>
+                  <Progress value={65} className="h-2 rounded-md" />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    42 new customers this month
+                  </p>
+                </div>
+                
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-sm font-medium">Repeat Purchase Rate</p>
+                    <Badge variant="outline" className="rounded-md bg-green-50 text-green-700 border-green-200">
+                      <ArrowUp className="h-3 w-3 mr-1" />
+                      8%
+                    </Badge>
+                  </div>
+                  <Progress value={72} className="h-2 rounded-md" />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    72% of customers made repeat purchases
+                  </p>
+                </div>
               </CardContent>
             </Card>
             
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Program Growth */}
-              <Card className="rounded-lg">
-                <CardHeader>
-                  <CardTitle>Program Growth</CardTitle>
-                  <CardDescription>Last 30 days</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <p className="text-sm font-medium">New Customers</p>
-                      <Badge variant="outline" className="rounded-md bg-green-50 text-green-700 border-green-200">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        15%
-                      </Badge>
-                    </div>
-                    <Progress value={65} className="h-2 rounded-md" />
-                    <p className="text-xs text-muted-foreground mt-2">
-                      42 new customers this month
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <p className="text-sm font-medium">Repeat Purchase Rate</p>
-                      <Badge variant="outline" className="rounded-md bg-green-50 text-green-700 border-green-200">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        8%
-                      </Badge>
-                    </div>
-                    <Progress value={72} className="h-2 rounded-md" />
-                    <p className="text-xs text-muted-foreground mt-2">
-                      72% of customers made repeat purchases
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              {/* Popular Rewards */}
-              <Card className="rounded-lg">
-                <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <CardTitle>Popular Rewards</CardTitle>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-8 gap-1 rounded-md"
-                      asChild
-                    >
-                      <Link href="/rewards">
-                        <span>View all</span>
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="divide-y">
-                    {popularRewards.map((reward) => (
-                      <Link 
-                        key={reward.id} 
-                        href={`/rewards/${reward.id}`}
-                        className="block p-4 hover:bg-muted/50 transition-colors"
-                      >
-                        <div className="flex gap-3">
-                          <div className={cn(
-                            "h-10 w-10 rounded-md flex items-center justify-center flex-shrink-0",
-                            reward.type === "item" && "bg-purple-100",
-                            reward.type === "discount" && "bg-green-100",
-                            reward.type === "program" && "bg-amber-100"
-                          )}>
-                            {reward.type === "item" && <Gift className="h-5 w-5 text-purple-600" />}
-                            {reward.type === "discount" && <DollarSign className="h-5 w-5 text-green-600" />}
-                            {reward.type === "program" && <Coffee className="h-5 w-5 text-amber-600" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <h3 className="font-medium text-sm">{reward.name}</h3>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {reward.pointsCost > 0 ? `${reward.pointsCost} points` : 'Punch card program'}
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="font-medium text-sm">{reward.redemptionCount}</p>
-                                <p className="text-xs text-muted-foreground">redemptions</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </CardContent>
-                <CardFooter className="border-t p-4">
-                  <Button 
-                    variant="outline" 
-                    className="w-full rounded-md h-9 gap-2"
-                    onClick={() => router.push('/create')}
-                  >
-                    <PlusCircle className="h-4 w-4" />
-                    Create new reward
-                  </Button>
-                </CardFooter>
-              </Card>
-            </div>
-          </TabsContent>
-          
-          {/* Customers Tab */}
-          <TabsContent value="customers" className="space-y-6">
+            {/* Popular Rewards */}
             <Card className="rounded-lg">
               <CardHeader>
                 <div className="flex justify-between items-center">
-                  <CardTitle>Customer Segments</CardTitle>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-8 gap-1 rounded-md"
-                    asChild
-                  >
-                    <Link href="/customers">
-                      <span>View all customers</span>
-                      <ChevronRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <CustomerSegmentCard 
-                    title="Active Customers"
-                    count={876}
-                    percentage={70}
-                    change={8.3}
-                    description="Visited in last 30 days"
-                    color="green"
-                  />
-                  
-                  <CustomerSegmentCard 
-                    title="At Risk"
-                    count={124}
-                    percentage={10}
-                    change={-5.2}
-                    description="No visit in 60-90 days"
-                    color="amber"
-                  />
-                  
-                  <CustomerSegmentCard 
-                    title="VIP Customers"
-                    count={93}
-                    percentage={7.5}
-                    change={12.8}
-                    description="Top 10% by spend"
-                    color="purple"
-                  />
-                </div>
-              </CardContent>
-              <CardFooter className="border-t p-4">
-                <Button 
-                  className="w-full rounded-md h-9 gap-2"
-                  onClick={() => router.push('/customers')}
-                >
-                  <Users className="h-4 w-4" />
-                  Manage Customers
-                </Button>
-              </CardFooter>
-            </Card>
-            
-            <Card className="rounded-lg">
-              <CardHeader>
-                <CardTitle>Recent Signups</CardTitle>
-                <CardDescription>New customers in the last 30 days</CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="divide-y">
-                  {recentSignups.map((customer) => (
-                    <Link 
-                      key={customer.id} 
-                      href={`/customers/${customer.id}`}
-                      className="block p-4 hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex gap-3">
-                        <div className="h-10 w-10 rounded-md bg-blue-100 flex items-center justify-center flex-shrink-0">
-                          <Users className="h-5 w-5 text-blue-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h3 className="font-medium text-sm">{customer.name}</h3>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {customer.email}
-                              </p>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              {formatDate(customer.signupDate)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          {/* Rewards Tab */}
-          <TabsContent value="rewards" className="space-y-6">
-            <Card className="rounded-lg">
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <CardTitle>Reward Performance</CardTitle>
+                  <CardTitle>Popular Rewards</CardTitle>
                   <Button 
                     variant="ghost" 
                     size="sm" 
@@ -427,70 +360,63 @@ export default function DashboardPage() {
                     asChild
                   >
                     <Link href="/rewards">
-                      <span>View all rewards</span>
+                      <span>View all</span>
                       <ChevronRight className="h-4 w-4" />
                     </Link>
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {rewardPerformance.map((reward) => (
-                    <div key={reward.id} className="p-4 border rounded-md">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2">
-                          <div className={cn(
-                            "h-8 w-8 rounded-md flex items-center justify-center flex-shrink-0",
-                            reward.type === "item" && "bg-purple-100",
-                            reward.type === "discount" && "bg-green-100",
-                            reward.type === "program" && "bg-amber-100"
-                          )}>
-                            {reward.type === "item" && <Gift className="h-4 w-4 text-purple-600" />}
-                            {reward.type === "discount" && <DollarSign className="h-4 w-4 text-green-600" />}
-                            {reward.type === "program" && <Coffee className="h-4 w-4 text-amber-600" />}
-                          </div>
-                          <h3 className="font-medium">{reward.name}</h3>
-                        </div>
-                        <Badge variant={reward.trend === "up" ? "outline" : "secondary"} className={cn(
-                          "rounded-md",
-                          reward.trend === "up" && "bg-green-50 text-green-700 border-green-200",
-                          reward.trend === "down" && "bg-red-50 text-red-700 border-red-200"
+              <CardContent className="p-0">
+                <div className="divide-y">
+                  {popularRewards.map((reward) => (
+                    <Link 
+                      key={reward.id} 
+                      href={`/rewards/${reward.id}`}
+                      className="block p-4 hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex gap-3">
+                        <div className={cn(
+                          "h-10 w-10 rounded-md flex items-center justify-center flex-shrink-0",
+                          reward.type === "item" && "bg-purple-100",
+                          reward.type === "discount" && "bg-green-100",
+                          reward.type === "program" && "bg-amber-100"
                         )}>
-                          {reward.trend === "up" ? <ArrowUp className="h-3 w-3 mr-1" /> : <ArrowDown className="h-3 w-3 mr-1" />}
-                          {reward.changePercentage}%
-                        </Badge>
+                          {reward.type === "item" && <Gift className="h-5 w-5 text-purple-600" />}
+                          {reward.type === "discount" && <DollarSign className="h-5 w-5 text-green-600" />}
+                          {reward.type === "program" && <Coffee className="h-5 w-5 text-amber-600" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h3 className="font-medium text-sm">{reward.name}</h3>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {reward.pointsCost > 0 ? `${reward.pointsCost} points` : 'Punch card program'}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-medium text-sm">{reward.redemptionCount}</p>
+                              <p className="text-xs text-muted-foreground">redemptions</p>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      
-                      <div className="grid grid-cols-3 gap-4 mt-4">
-                        <div className="text-center">
-                          <p className="text-xs text-muted-foreground">Redemptions</p>
-                          <p className="text-lg font-medium">{reward.redemptionCount}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-muted-foreground">Conversion</p>
-                          <p className="text-lg font-medium">{reward.conversionRate}%</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-muted-foreground">Points Cost</p>
-                          <p className="text-lg font-medium">{reward.pointsCost}</p>
-                        </div>
-                      </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </CardContent>
               <CardFooter className="border-t p-4">
                 <Button 
+                  variant="outline" 
                   className="w-full rounded-md h-9 gap-2"
                   onClick={() => router.push('/create')}
                 >
                   <PlusCircle className="h-4 w-4" />
-                  Create New Reward
+                  Create new reward
                 </Button>
               </CardFooter>
             </Card>
-          </TabsContent>
-        </Tabs>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -617,54 +543,6 @@ function CustomerSegmentCard({
 }
 
 // Sample data
-const recentActivity = [
-  {
-    id: "act1",
-    type: "redemption",
-    customer: {
-      name: "Sarah Johnson",
-      id: "cust123"
-    },
-    timestamp: new Date(Date.now() - 1000 * 60 * 30),
-    details: "Redeemed Free Coffee reward",
-    points: 100
-  },
-  {
-    id: "act2",
-    type: "purchase",
-    customer: {
-      name: "Michael Chen",
-      id: "cust456"
-    },
-    timestamp: new Date(Date.now() - 1000 * 60 * 120),
-    details: "Purchased 3 items",
-    amount: 32.50,
-    points: 33
-  },
-  {
-    id: "act3",
-    type: "signup",
-    customer: {
-      name: "Emma Wilson",
-      id: "cust789"
-    },
-    timestamp: new Date(Date.now() - 1000 * 60 * 180),
-    details: "Joined loyalty program"
-  },
-  {
-    id: "act4",
-    type: "purchase",
-    customer: {
-      name: "David Rodriguez",
-      id: "cust101"
-    },
-    timestamp: new Date(Date.now() - 1000 * 60 * 240),
-    details: "Purchased 2 items",
-    amount: 18.75,
-    points: 19
-  }
-]
-
 const popularRewards = [
   {
     id: "rew1",
@@ -752,7 +630,7 @@ const rewardPerformance = [
   }
 ]
 
-export function LightspeedCallbackPage() {
+function LightspeedCallbackPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [status, setStatus] = useState("Processing your Lightspeed connection...")

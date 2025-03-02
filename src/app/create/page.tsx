@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils"
 interface OptionType {
   title: string
   description: string
-  icon: React.ReactNode
+  icon: React.ElementType
   type: "reward" | "program" | "recurring"
 }
 

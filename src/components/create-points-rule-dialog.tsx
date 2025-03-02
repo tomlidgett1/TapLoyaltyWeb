@@ -45,7 +45,7 @@ export function CreatePointsRuleDialog({ open, onOpenChange }: CreatePointsRuleD
     
     // Parse the input time
     const [time, period] = time12h.split(' ')
-    let [hours, minutes] = time.split(':')
+    const [hours, minutes] = time.split(':')
     let hour = parseInt(hours)
     
     // Convert to 24-hour first

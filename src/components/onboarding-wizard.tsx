@@ -210,7 +210,7 @@ export function OnboardingWizard() {
     const uniqueId = `${rewardId}-${type}`;
     
     // Define the base reward details with the required JSON structure
-    let rewardDetails = {
+    const rewardDetails = {
       id: uniqueId,
       name: '',
       type: type,

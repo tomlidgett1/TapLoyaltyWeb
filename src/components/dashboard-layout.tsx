@@ -126,16 +126,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         {/* Top Header */}
         <header className="h-16 border-b border-gray-100 flex items-center justify-between px-6">
           <div className="flex items-center gap-4">
-            <div className="text-xl font-bold">
-              <span className="text-[#007AFF] font-extrabold">Tap</span>
-              {' '}
-              <span>Loyalty</span>
-            </div>
-            
             <Button 
               variant="outline" 
               size="sm" 
-              className="ml-4 gap-2 text-[#007AFF] border-[#007AFF] hover:bg-blue-50"
+              className="gap-2 text-[#007AFF] border-[#007AFF] hover:bg-blue-50"
               onClick={() => router.push('/onboarding')}
             >
               <Sparkles className="h-4 w-4" />

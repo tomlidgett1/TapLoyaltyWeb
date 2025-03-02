@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     }
     
     // Get the origin from the request headers
-    const headersList = headers()
+    const headersList = await headers()
     const origin = headersList.get('origin') || 'https://armstrong-registered-auto-holders.trycloudflare.com'
     
     // Updated Lightspeed OAuth parameters with new client credentials

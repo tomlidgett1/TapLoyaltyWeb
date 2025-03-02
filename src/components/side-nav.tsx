@@ -216,7 +216,7 @@ export function SideNav() {
 
   return (
     <div className="w-64 border-r h-screen flex-shrink-0 bg-white flex flex-col">
-      <div className="h-14 border-b flex items-center px-4">
+      <div className="h-16 border-b flex items-center px-4">
         <span className="text-xl font-bold">
           <span className="text-[#007AFF] font-extrabold">Tap</span>
           {' '}

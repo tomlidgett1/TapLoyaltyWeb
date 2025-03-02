@@ -782,7 +782,7 @@ export default function RewardsLibraryPage() {
                         {selectedIndustries.length + selectedObjectives.length}
                       </Badge>
                     )}
-                  </Button>
+              </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                   <div className="p-2">
@@ -803,8 +803,8 @@ export default function RewardsLibraryPage() {
                           {industry.charAt(0).toUpperCase() + industry.slice(1)}
                         </DropdownMenuCheckboxItem>
                       ))}
-                    </div>
-                  </div>
+            </div>
+          </div>
                   <DropdownMenuSeparator />
                   <div className="p-2">
                     <h4 className="font-medium text-sm mb-2">Objective</h4>
@@ -1018,8 +1018,8 @@ export default function RewardsLibraryPage() {
                 const isProgram = reward.type === "program";
                 
                 return (
-                  <div 
-                    key={reward.id} 
+              <div 
+                key={reward.id}
                     className={cn(
                       "border rounded-lg overflow-hidden",
                       isProgram ? "border-amber-200 bg-amber-50/30" : ""
@@ -1047,10 +1047,10 @@ export default function RewardsLibraryPage() {
                           ) : (
                             <Gift className="h-5 w-5 text-blue-600" />
                           )}
-                        </div>
-                        
+                </div>
+                
                         <div className="flex-1">
-                          <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
                             <h3 className="text-base font-medium">{reward.name}</h3>
                             <Badge 
                               variant={isProgram ? "secondary" : "default"} 
@@ -1100,7 +1100,7 @@ export default function RewardsLibraryPage() {
                             <div className="space-y-1">
                               <p className="text-xs text-gray-500">Reward Type</p>
                               <p className="text-sm font-medium">{isProgram ? "Program" : "Individual Reward"}</p>
-                            </div>
+                  </div>
                             <div className="space-y-1">
                               <p className="text-xs text-gray-500">Points Cost</p>
                               <p className="text-sm font-medium">{reward.points} points</p>
@@ -1110,9 +1110,9 @@ export default function RewardsLibraryPage() {
                               <Badge variant={reward.status === "active" ? "success" : "secondary"} className="text-xs">
                                 {reward.status.charAt(0).toUpperCase() + reward.status.slice(1)}
                               </Badge>
-                            </div>
-                          </div>
-                          
+                  </div>
+                </div>
+
                           {/* Program Rewards Section - Only for programs */}
                           {isProgram && reward.programRewards && reward.programRewards.length > 0 && (
                             <div className="space-y-3">
@@ -1136,16 +1136,16 @@ export default function RewardsLibraryPage() {
                                             <p className="text-xs text-gray-600">{programReward.description}</p>
                                           </div>
                                         </div>
-                                        <Button
-                                          variant="ghost"
+                    <Button 
+                      variant="ghost" 
                                           size="sm"
-                                          className="h-8 w-8 p-0"
+                      className="h-8 w-8 p-0"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             const detailsEl = document.getElementById(`program-reward-details-${reward.id}-${index}`);
                                             detailsEl?.classList.toggle('hidden');
                                           }}
-                                        >
+                    >
                                           <ChevronDown className="h-4 w-4" />
                     </Button>
                                       </div>
@@ -1177,9 +1177,9 @@ export default function RewardsLibraryPage() {
                                                     {condition.type === "minimumSpend" && 
                                                       `Requires minimum purchase of $${condition.amount}`}
                                                   </div>
-                                                </div>
-                                              ))}
-                                            </div>
+              </div>
+            ))}
+          </div>
                                           </div>
                                         )}
                                         
@@ -1448,7 +1448,7 @@ export default function RewardsLibraryPage() {
                 <h4 className="font-medium">Discounts</h4>
                 <p className="text-xs text-gray-500 mt-1">Percentage & amount off</p>
               </CardContent>
-            </Card>
+        </Card>
             
             <Card 
               className="cursor-pointer hover:shadow-md transition-shadow"
@@ -1459,7 +1459,7 @@ export default function RewardsLibraryPage() {
               <CardContent className="p-4 flex flex-col items-center text-center">
                 <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center mb-3">
                   <Gift className="h-6 w-6 text-blue-600" />
-                </div>
+      </div>
                 <h4 className="font-medium">Freebies</h4>
                 <p className="text-xs text-gray-500 mt-1">Free products & services</p>
               </CardContent>
@@ -1474,7 +1474,7 @@ export default function RewardsLibraryPage() {
               <CardContent className="p-4 flex flex-col items-center text-center">
                 <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center mb-3">
                   <Star className="h-6 w-6 text-purple-600" />
-                </div>
+    </div>
                 <h4 className="font-medium">Points</h4>
                 <p className="text-xs text-gray-500 mt-1">Point-based rewards</p>
               </CardContent>

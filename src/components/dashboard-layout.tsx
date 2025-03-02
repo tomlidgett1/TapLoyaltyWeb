@@ -2,7 +2,7 @@
 
 import { SideNav } from "@/components/side-nav"
 import { usePathname } from "next/navigation"
-import { Bell, Search, Command, FileText, Check, X, ChevronDown } from "lucide-react"
+import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useState, useEffect } from "react"
@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
+import { useRouter } from "next/navigation"
 
 interface Notification {
   id: string
@@ -31,6 +32,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [searchQuery, setSearchQuery] = useState("")
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
+  const router = useRouter()
   
   useEffect(() => {
     // Mock notifications data
@@ -122,8 +124,24 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <SideNav />
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Header */}
-        <header className="h-14 border-b flex items-center justify-between px-6 bg-white">
-          <h1 className="text-xl font-semibold">{getPageTitle()}</h1>
+        <header className="h-16 border-b border-gray-100 flex items-center justify-between px-6">
+          <div className="flex items-center gap-4">
+            <div className="text-xl font-bold">
+              <span className="text-[#007AFF] font-extrabold">Tap</span>
+              {' '}
+              <span>Loyalty</span>
+            </div>
+            
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="ml-4 gap-2 text-[#007AFF] border-[#007AFF] hover:bg-blue-50"
+              onClick={() => router.push('/onboarding')}
+            >
+              <Sparkles className="h-4 w-4" />
+              Onboarding Wizard
+            </Button>
+          </div>
           
           <div className="flex items-center gap-4">
             <div className="relative w-64">

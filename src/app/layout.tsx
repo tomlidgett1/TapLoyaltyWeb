@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from "@/contexts/auth-context"
 import { TapAi } from "@/components/tap-ai"
 import { FloatingMicrophone } from "@/components/floating-microphone"
+import { OnboardingCheck } from "@/components/onboarding-check"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,12 +29,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="font-sf-pro antialiased">
+      <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
         <AuthProvider>
           {children}
           <Toaster />
           <TapAi />
           <FloatingMicrophone />
+          <OnboardingCheck />
         </AuthProvider>
       </body>
     </html>

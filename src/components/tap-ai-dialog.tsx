@@ -985,45 +985,58 @@ function MessageContent({
   }
 
   const extractJsonFromContent = (content: string) => {
-    // Look for content between ```json and ``` tags
-    const jsonRegex = /```json\n([\s\S]*?)\n```/g;
-    const matches = [...content.matchAll(jsonRegex)];
-    
-    if (matches.length > 0) {
+    try {
+      // First, try to find JSON between ```json and ``` markers
+      const jsonRegex = /```json\n([\s\S]*?)\n```/;
+      const match = content.match(jsonRegex);
+      
+      if (match && match[1]) {
+        // Trim any whitespace and try to parse
+        const jsonString = match[1].trim();
+        return JSON.parse(jsonString);
+      }
+      
+      // If no match with ```json, try to find any JSON array or object in the content
+      const possibleJson = content.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
+      if (possibleJson && possibleJson[1]) {
+        // Find the start and end of what looks like valid JSON
+        const jsonCandidate = possibleJson[1].trim();
+        return JSON.parse(jsonCandidate);
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error parsing JSON:", error);
+      console.log("Content that failed to parse:", content);
+      
+      // Try a more lenient approach for malformed JSON
       try {
-        // Combine all JSON blocks into a single array
-        const allRewards = [];
+        // Sometimes the JSON might have extra text after it
+        // Try to find the last closing bracket/brace and parse up to that point
+        const lastClosingBracket = content.lastIndexOf(']');
+        const lastClosingBrace = content.lastIndexOf('}');
+        const lastClosing = Math.max(lastClosingBracket, lastClosingBrace);
         
-        for (const match of matches) {
-          if (match[1]) {
-            const parsed = JSON.parse(match[1].trim());
-            if (Array.isArray(parsed)) {
-              allRewards.push(...parsed);
-            } else {
-              allRewards.push(parsed);
-            }
+        if (lastClosing > 0) {
+          const firstOpeningBracket = content.indexOf('[');
+          const firstOpeningBrace = content.indexOf('{');
+          const firstOpening = Math.min(
+            firstOpeningBracket !== -1 ? firstOpeningBracket : Infinity,
+            firstOpeningBrace !== -1 ? firstOpeningBrace : Infinity
+          );
+          
+          if (firstOpening !== Infinity && firstOpening < lastClosing) {
+            const jsonSubstring = content.substring(firstOpening, lastClosing + 1);
+            return JSON.parse(jsonSubstring);
           }
         }
-        
-        return allRewards;
-      } catch (e) {
-        console.error("Failed to parse extracted JSON:", e);
-        return null;
+      } catch (secondError) {
+        console.error("Second attempt at parsing JSON failed:", secondError);
       }
+      
+      return null;
     }
-    
-    // If no ```json blocks found, try to parse the entire content as JSON
-    if (isJsonString(content)) {
-      try {
-        const parsed = JSON.parse(content);
-        return Array.isArray(parsed) ? parsed : [parsed];
-      } catch (e) {
-        return null;
-      }
-    }
-    
-    return null;
-  };
+  }
 
   const toggleRewardExpansion = (rewardId: string) => {
     setExpandedRewards(prev => {

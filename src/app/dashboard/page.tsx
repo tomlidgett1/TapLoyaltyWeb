@@ -630,7 +630,7 @@ const rewardPerformance = [
   }
 ]
 
-function LightspeedCallbackPage() {
+export function LightspeedCallbackPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [status, setStatus] = useState("Processing your Lightspeed connection...")

@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils"
 interface OptionType {
   title: string
   description: string
-  icon: React.ElementType
+  icon: React.ReactNode
   type: "reward" | "program" | "recurring"
 }
 
@@ -190,7 +190,7 @@ export default function CreatePage() {
       <CreateRewardDialog 
         open={createProgramOpen} 
         onOpenChange={setCreateProgramOpen}
-        defaultValues={{ type: "program" }}
+        defaultType="program"
       />
       
       <CreateRecurringRewardDialog 

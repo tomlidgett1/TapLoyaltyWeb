@@ -32,7 +32,6 @@ interface CreateRewardDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultValues?: any
-  defaultType?: string
 }
 
 interface FormData {

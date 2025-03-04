@@ -337,6 +337,11 @@ export const callOpenAI = onCall({
     // Get the API key from config
     const apiKey = functions.config().openai?.api_key;
     
+    logger.info("API key retrieval result:", {
+      hasApiKey: !!apiKey,
+      apiKeyLength: apiKey?.length || 0
+    });
+    
     if (!apiKey) {
       logger.error("OpenAI API key not found in config");
       throw new Error("API key not configured");

@@ -1,56 +1,24 @@
-import OpenAI from 'openai'
-
-const openai = new OpenAI({
-  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true
-})
+// This file now only contains the client-side function to call the API
 
 export async function getAIResponse(message: string) {
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
-      messages: [
-        {
-          role: "system",
-          content: `You are TapAI, a helpful assistant for a loyalty program platform called Tap Loyalty. 
-          You help merchants:
-          1. Create and optimize loyalty programs
-          2. Design engaging rewards
-          3. Set up points rules
-          4. Create marketing campaigns
-          5. Engage customers effectively
+    const response = await fetch('/api/ai', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message }),
+    });
 
-          When suggesting rewards, ALWAYS format them as a JSON array like this:
-          \`\`\`json
-          [
-            {
-              "name": "Reward Name",
-              "description": "Reward description",
-              "points_required": 100,
-              "expiry_days": 30,
-              "terms": ["Term 1", "Term 2"]
-            }
-          ]
-          \`\`\`
-
-          Keep responses concise and practical. Always include the JSON data when suggesting rewards.`
-        },
-        {
-          role: "user",
-          content: message
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 1000,
-      stream: false
-    })
-
-    return completion.choices[0].message.content
-  } catch (error: any) {
-    console.error('OpenAI API error:', error.message)
-    if (error.code === 'insufficient_quota') {
-      throw new Error('API quota exceeded. Please try again later.')
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to get AI response');
     }
-    throw new Error('Failed to get AI response. Please try again.')
+
+    const data = await response.json();
+    return data.content;
+  } catch (error: any) {
+    console.error('AI request error:', error.message);
+    throw new Error(error.message || 'Failed to get AI response. Please try again.');
   }
 } 

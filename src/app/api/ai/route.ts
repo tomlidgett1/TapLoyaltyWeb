@@ -1,13 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 
-// Initialize OpenAI on the server side only
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Initialize OpenAI only if API key is available
+let openai: OpenAI | null = null;
+
+try {
+  if (process.env.OPENAI_API_KEY) {
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+  }
+} catch (error) {
+  console.error('Failed to initialize OpenAI client:', error);
+}
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if OpenAI is initialized
+    if (!openai) {
+      return NextResponse.json({ 
+        content: "AI services are currently unavailable. Please try again later or contact support." 
+      });
+    }
+    
     const { message } = await request.json();
     
     const completion = await openai.chat.completions.create({

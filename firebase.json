@@ -5,6 +5,18 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
+    ],
+    "appAssociation": "AUTO",
+    "rewrites": [
+      // your existing rewrites...
+    ]
+  },
+  "apphosting": {
+    "env": [
+      {
+        "variable": "OPENAI_API_KEY",
+        "value": "your-openai-api-key"
+      }
     ]
   }
 }

@@ -2,6 +2,14 @@
 
 export async function getAIResponse(message: string) {
   try {
+    // Check if OpenAI is available before making the request
+    if (typeof window !== 'undefined' && 
+        (!process.env.NEXT_PUBLIC_OPENAI_AVAILABLE || 
+         process.env.NEXT_PUBLIC_OPENAI_AVAILABLE !== 'true' ||
+         !process.env.NEXT_PUBLIC_OPENAI_API_KEY)) {
+      return "AI features are currently unavailable.";
+    }
+    
     const response = await fetch('/api/ai', {
       method: 'POST',
       headers: {

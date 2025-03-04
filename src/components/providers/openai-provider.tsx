@@ -12,9 +12,11 @@ const OpenAIContext = createContext<OpenAIContextType>({ isAvailable: false });
 export const useOpenAI = () => useContext(OpenAIContext);
 
 export function OpenAIProvider({ children }: { children: ReactNode }) {
-  // We'll check if we're in the browser and if the API is available
+  // Check if we're in the browser and if the API is available
   const isAvailable = typeof window !== 'undefined' && 
-    (process.env.NEXT_PUBLIC_OPENAI_AVAILABLE === 'true');
+    process.env.NEXT_PUBLIC_OPENAI_AVAILABLE === 'true' &&
+    process.env.NEXT_PUBLIC_OPENAI_API_KEY &&
+    process.env.NEXT_PUBLIC_OPENAI_API_KEY.length > 0;
 
   return (
     <OpenAIContext.Provider value={{ isAvailable }}>

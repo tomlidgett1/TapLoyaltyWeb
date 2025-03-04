@@ -2,21 +2,35 @@
 
 import { Button } from "@/components/ui/button"
 import { TapAiDialog } from "@/components/tap-ai-dialog"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Sparkles } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { usePathname } from "next/navigation"
+import { initializeOpenAI } from "@/lib/assistant"
 
 export function TapAi() {
   const [open, setOpen] = useState(false)
+  const [aiAvailable, setAiAvailable] = useState(false)
   const { user, loading } = useAuth()
   const pathname = usePathname()
 
   // List of paths where TapAI should not appear
   const hiddenPaths = ['/login', '/signup']
 
-  // Don't render if loading, not authenticated, or on login/signup pages
-  if (loading || !user || hiddenPaths.includes(pathname)) return null
+  // Check if OpenAI is available
+  useEffect(() => {
+    if (user) {
+      initializeOpenAI()
+        .then(() => setAiAvailable(true))
+        .catch(error => {
+          console.error("Failed to initialize OpenAI:", error);
+          setAiAvailable(false);
+        });
+    }
+  }, [user]);
+
+  // Don't render if loading, not authenticated, on login/signup pages, or if OpenAI is not available
+  if (loading || !user || hiddenPaths.includes(pathname) || !aiAvailable) return null
 
   return (
     <div className="fixed bottom-8 right-8 z-50">

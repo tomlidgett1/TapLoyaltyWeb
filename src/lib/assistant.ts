@@ -11,11 +11,29 @@ async function getApiKey() {
   try {
     const functions = getFunctions(getApp());
     const getOpenAIKey = httpsCallable(functions, 'getOpenAIKey');
+    
+    console.log('Calling getOpenAIKey function...');
     const result = await getOpenAIKey();
+    console.log('Function call successful');
+    
     const data = result.data as { apiKey: string };
+    if (!data || !data.apiKey) {
+      console.error('API key not returned from function');
+      throw new Error('API key not available');
+    }
+    
     return data.apiKey;
   } catch (error) {
     console.error('Error getting API key:', error);
+    
+    // Fall back to environment variable if function fails
+    if (typeof window !== 'undefined' && 
+        process.env.NEXT_PUBLIC_OPENAI_API_KEY && 
+        process.env.NEXT_PUBLIC_OPENAI_AVAILABLE === 'true') {
+      console.log('Falling back to environment variable');
+      return process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+    }
+    
     throw error;
   }
 }

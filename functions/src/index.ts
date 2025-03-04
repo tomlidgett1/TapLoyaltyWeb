@@ -11,6 +11,7 @@ import {onRequest} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import {onCall} from "firebase-functions/v2/https";
 import * as functions from "firebase-functions";
+import * as cors from 'cors';
 
 // Start writing functions
 // https://firebase.google.com/docs/functions/typescript
@@ -20,11 +21,15 @@ import * as functions from "firebase-functions";
 //   response.send("Hello from Firebase!");
 // });
 
+// Add CORS middleware
+const corsHandler = cors({origin: true});
+
 // This function will make your OpenAI API key available to your app
 export const getOpenAIKey = onCall({
-  // Set your region and other options as needed
+  // Make sure this region matches your Firebase project region
   region: "us-central1",
-  maxInstances: 10
+  maxInstances: 10,
+  cors: true
 }, (request) => {
   // Log the request (optional)
   logger.info("OpenAI API key requested", {
@@ -53,4 +58,13 @@ export const getOpenAIKey = onCall({
     logger.error("Error retrieving API key", error);
     throw new Error("Failed to retrieve API key");
   }
+});
+
+// Add a simple HTTP function to test
+export const hello = onRequest({
+  region: "us-central1",
+  cors: true
+}, (request, response) => {
+  response.set('Access-Control-Allow-Origin', '*');
+  response.status(200).send({ message: "Hello from Firebase Functions!" });
 });

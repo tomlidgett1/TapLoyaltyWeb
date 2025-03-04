@@ -41,6 +41,8 @@ export async function initializeOpenAI() {
     console.log('initializeOpenAI: Trying to get API key from getApiKey function');
     const apiKey = await getApiKey();
     
+    console.log('initializeOpenAI: API key received, length:', apiKey?.length || 0);
+    
     if (apiKey && apiKey.length > 0) {
       console.log('initializeOpenAI: Using OpenAI API key from getApiKey function');
       openai = new OpenAI({
@@ -217,7 +219,7 @@ async function getApiKey() {
     try {
       console.log('getApiKey: Trying rewritten URL');
       const apiKey = await getApiKeyFromRewrite();
-      console.log('getApiKey: Successfully got API key from rewrite');
+      console.log('getApiKey: Successfully got API key from rewrite, length:', apiKey?.length || 0);
       return apiKey;
     } catch (error) {
       console.error('getApiKey: Rewritten URL failed, trying other methods:', error);
@@ -230,15 +232,23 @@ async function getApiKey() {
       const { httpsCallable } = await import('firebase/functions');
       const { getApp } = await import('firebase/app');
       
+      console.log('getApiKey: Getting Firebase functions instance');
       const functionsInstance = getFunctions(getApp());
+      console.log('getApiKey: Creating callable function reference');
       const getOpenAIKey = httpsCallable(functionsInstance, 'getOpenAIKey');
       
+      console.log('getApiKey: Calling getOpenAIKey function');
       const result = await getOpenAIKey();
+      console.log('getApiKey: Function call successful, result:', result);
+      
       const data = result.data as { apiKey: string };
+      console.log('getApiKey: Data received, has apiKey:', !!data?.apiKey);
       
       if (data && data.apiKey) {
-        console.log('getApiKey: Successfully retrieved API key via callable function');
+        console.log('getApiKey: Successfully retrieved API key via callable function, length:', data.apiKey.length);
         return data.apiKey;
+      } else {
+        console.error('getApiKey: No API key in callable function response');
       }
     } catch (error) {
       console.error('getApiKey: Callable function failed, trying HTTP version:', error);
@@ -246,24 +256,55 @@ async function getApiKey() {
     
     // Fall back to HTTP version if callable function fails
     console.log('getApiKey: Trying HTTP function');
+    
+    // Check if user is authenticated
+    const { getAuth } = await import('firebase/auth');
+    const auth = getAuth();
+    const user = auth.currentUser;
+    console.log('getApiKey: Current user:', user?.uid || 'No user');
+    
+    if (!user) {
+      console.error('getApiKey: No authenticated user for HTTP function');
+      throw new Error('Authentication required for HTTP function');
+    }
+    
+    console.log('getApiKey: Getting ID token');
+    const token = await user.getIdToken();
+    console.log('getApiKey: Got ID token, length:', token.length);
+    
+    console.log('getApiKey: Making HTTP request to getOpenAIKeyHttp');
     const response = await fetch('https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/getOpenAIKeyHttp', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${await (await import('firebase/auth')).getAuth().currentUser?.getIdToken()}`
+        'Authorization': `Bearer ${token}`
       }
     });
     
+    console.log('getApiKey: HTTP response status:', response.status);
+    
     if (!response.ok) {
-      throw new Error(`HTTP function failed with status: ${response.status}`);
+      const errorText = await response.text();
+      console.error('getApiKey: HTTP function failed', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText
+      });
+      throw new Error(`HTTP function failed with status: ${response.status}, body: ${errorText}`);
     }
     
+    console.log('getApiKey: Parsing response JSON');
     const data = await response.json();
+    console.log('getApiKey: Response data received, has apiKey:', !!data?.apiKey);
+    
     if (data && data.apiKey) {
-      console.log('getApiKey: Successfully retrieved API key via HTTP function');
+      console.log('getApiKey: Successfully retrieved API key via HTTP function, length:', data.apiKey.length);
       return data.apiKey;
+    } else {
+      console.error('getApiKey: No API key in HTTP function response', data);
     }
     
+    console.error('getApiKey: All methods failed to retrieve API key');
     throw new Error('API key not available from any source');
   } catch (error) {
     console.error('getApiKey: Final error:', error);
@@ -281,14 +322,19 @@ async function getApiKeyFromRewrite() {
     const auth = getAuth();
     const user = auth.currentUser;
     
+    console.log('getApiKeyFromRewrite: Current user:', user?.uid || 'No user');
+    
     if (!user) {
       console.error('getApiKeyFromRewrite: No authenticated user');
       throw new Error('Authentication required');
     }
     
+    console.log('getApiKeyFromRewrite: Getting ID token');
     const token = await user.getIdToken();
+    console.log('getApiKeyFromRewrite: Got ID token, length:', token.length);
     
     // Make the request with the token
+    console.log('getApiKeyFromRewrite: Making request to /api/openai-key');
     const response = await fetch('/api/openai-key', {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -296,15 +342,24 @@ async function getApiKeyFromRewrite() {
       }
     });
     
+    console.log('getApiKeyFromRewrite: Response status:', response.status);
+    
     if (!response.ok) {
-      console.error('getApiKeyFromRewrite: HTTP error', response.status);
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error('getApiKeyFromRewrite: HTTP error', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText
+      });
+      throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
     }
     
+    console.log('getApiKeyFromRewrite: Parsing response JSON');
     const data = await response.json();
+    console.log('getApiKeyFromRewrite: Response data received, has apiKey:', !!data?.apiKey);
     
     if (data && data.apiKey) {
-      console.log('getApiKeyFromRewrite: Successfully retrieved API key');
+      console.log('getApiKeyFromRewrite: Successfully retrieved API key, length:', data.apiKey.length);
       return data.apiKey;
     }
     

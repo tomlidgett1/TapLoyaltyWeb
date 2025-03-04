@@ -40,6 +40,7 @@ export const getOpenAIKey = onCall({
 }, (request) => {
   logger.info("OpenAI API key requested", {
     auth: request.auth ? "Authenticated" : "Unauthenticated",
+    uid: request.auth?.uid || 'none',
     requestData: request.data,
     requestTime: new Date().toISOString()
   });
@@ -53,8 +54,20 @@ export const getOpenAIKey = onCall({
   try {
     logger.info("Retrieving API key from config");
     
+    // Log all available config for debugging
+    logger.info("Available config:", {
+      hasOpenai: !!functions.config().openai,
+      openaiKeys: functions.config().openai ? Object.keys(functions.config().openai) : [],
+      allConfigKeys: Object.keys(functions.config())
+    });
+    
     // Get the API key from config - ONLY look in one place
     const apiKey = functions.config().openai?.api_key;
+    
+    logger.info("API key retrieval result:", {
+      hasApiKey: !!apiKey,
+      apiKeyLength: apiKey?.length || 0
+    });
     
     if (!apiKey) {
       logger.error("OpenAI API key not found in config");
@@ -78,14 +91,24 @@ export const getOpenAIKey = onCall({
 export const getOpenAIKeyHttp = onRequest({
   region: "us-central1"
 }, (request, response) => {
+  // Log request details
+  logger.info("getOpenAIKeyHttp request received", {
+    method: request.method,
+    headers: request.headers,
+    origin: request.headers.origin || 'unknown',
+    path: request.path,
+    ip: request.ip
+  });
+  
   // Set CORS headers
-  response.set('Access-Control-Allow-Origin', 'https://taployalty.com.au');
+  response.set('Access-Control-Allow-Origin', '*'); // Temporarily allow all origins for debugging
   response.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   response.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   response.set('Access-Control-Max-Age', '3600');
   
   // Handle preflight requests
   if (request.method === 'OPTIONS') {
+    logger.info("Handling OPTIONS preflight request");
     response.status(204).send('');
     return;
   }
@@ -93,29 +116,53 @@ export const getOpenAIKeyHttp = onRequest({
   // Check authentication
   const authHeader = request.headers.authorization;
   if (!authHeader) {
-    response.status(401).send({ error: 'Unauthorized' });
+    logger.error("No authorization header present");
+    response.status(401).send({ 
+      error: 'Unauthorized',
+      message: 'No authorization header provided'
+    });
     return;
   }
   
   // Verify Firebase token
   const token = authHeader.split('Bearer ')[1];
   if (!token) {
-    response.status(401).send({ error: 'Invalid authorization format' });
+    logger.error("Invalid authorization format");
+    response.status(401).send({ 
+      error: 'Invalid authorization format',
+      message: 'Authorization header must be in format: Bearer <token>'
+    });
     return;
   }
   
+  logger.info("Verifying token");
   admin.auth().verifyIdToken(token)
     .then((decodedToken) => {
       // Token is valid, proceed with getting the API key
       try {
         logger.info("HTTP API key request received from user:", decodedToken.uid);
         
+        // Log all available config for debugging
+        logger.info("Available config:", {
+          hasOpenai: !!functions.config().openai,
+          openaiKeys: functions.config().openai ? Object.keys(functions.config().openai) : [],
+          allConfigKeys: Object.keys(functions.config())
+        });
+        
         // Get the API key from config - ONLY look in one place
         const apiKey = functions.config().openai?.api_key;
         
+        logger.info("API key retrieval result:", {
+          hasApiKey: !!apiKey,
+          apiKeyLength: apiKey?.length || 0
+        });
+        
         if (!apiKey) {
           logger.error("OpenAI API key not found in config");
-          response.status(500).send({ error: 'API key not configured' });
+          response.status(500).send({ 
+            error: 'API key not configured',
+            message: 'The OpenAI API key is not configured on the server'
+          });
           return;
         }
 
@@ -130,13 +177,17 @@ export const getOpenAIKeyHttp = onRequest({
         logger.error("Error retrieving API key", error);
         response.status(500).send({ 
           error: 'Failed to retrieve API key',
-          message: error instanceof Error ? error.message : 'Unknown error'
+          message: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined
         });
       }
     })
     .catch((error) => {
       logger.error("Error verifying token:", error);
-      response.status(401).send({ error: 'Invalid token' });
+      response.status(401).send({ 
+        error: 'Invalid token',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
     });
 });
 
@@ -157,4 +208,42 @@ export const hello = onRequest({
   }
   
   response.status(200).send({ message: "Hello from Firebase Functions!" });
+});
+
+// Add a function to check the config
+export const checkConfig = onRequest({
+  region: "us-central1",
+  cors: true
+}, (request, response) => {
+  // Set CORS headers
+  response.set('Access-Control-Allow-Origin', '*');
+  response.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  response.set('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // Handle preflight requests
+  if (request.method === 'OPTIONS') {
+    response.status(204).send('');
+    return;
+  }
+  
+  try {
+    // Get all config keys (without exposing values)
+    const configKeys = Object.keys(functions.config());
+    const openaiKeys = functions.config().openai ? Object.keys(functions.config().openai) : [];
+    
+    response.status(200).send({
+      configKeys: configKeys,
+      hasOpenai: configKeys.includes('openai'),
+      openaiKeys: openaiKeys,
+      hasApiKey: openaiKeys.includes('api_key'),
+      apiKeyExists: !!functions.config().openai?.api_key,
+      apiKeyLength: functions.config().openai?.api_key?.length || 0
+    });
+  } catch (error) {
+    logger.error("Error checking config", error);
+    response.status(500).send({
+      error: 'Failed to check config',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });

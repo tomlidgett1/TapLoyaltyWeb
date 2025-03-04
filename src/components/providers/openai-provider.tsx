@@ -1,38 +1,60 @@
 'use client';
 
-import { createContext, useContext, ReactNode, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
-import { initializeOpenAI } from '@/lib/assistant';
+import { callOpenAI } from '@/lib/assistant';
 
-// Create a context for OpenAI availability
-type OpenAIContextType = {
-  isAvailable: boolean;
-};
+interface OpenAIContextType {
+  aiAvailable: boolean;
+}
 
-const OpenAIContext = createContext<OpenAIContextType>({ isAvailable: false });
+const OpenAIContext = createContext<OpenAIContextType>({
+  aiAvailable: false
+});
 
-export const useOpenAI = () => useContext(OpenAIContext);
-
-export function OpenAIProvider({ children }: { children: ReactNode }) {
-  const [isAvailable, setIsAvailable] = useState(false);
+export function OpenAIProvider({ children }: { children: React.ReactNode }) {
+  const [aiAvailable, setAiAvailable] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
-    // Check if we have environment variables
-    const envApiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
-    const envAvailable = process.env.NEXT_PUBLIC_OPENAI_AVAILABLE === 'true';
-    
-    if (envApiKey && envAvailable) {
-      console.log('OpenAI available via environment variables');
-      setIsAvailable(true);
-    } else {
-      console.log('OpenAI not available via environment variables');
-      setIsAvailable(false);
+    console.log('OpenAI Provider state:', { user: !!user, aiAvailable });
+
+    if (!user) {
+      setAiAvailable(false);
+      return;
     }
-  }, []);
+
+    // Check if OpenAI is available
+    const checkOpenAI = async () => {
+      try {
+        console.log('Checking OpenAI availability...');
+        
+        // Add a timeout to prevent hanging
+        const timeoutId = setTimeout(() => {
+          console.error("OpenAI check timed out");
+          setAiAvailable(false);
+        }, 10000); // 10 second timeout
+        
+        // Test the OpenAI API with a simple models.list call
+        await callOpenAI('models.list', {});
+        clearTimeout(timeoutId);
+        
+        console.log('OpenAI is available!');
+        setAiAvailable(true);
+      } catch (error) {
+        console.error("Failed to check OpenAI availability:", error);
+        setAiAvailable(false);
+      }
+    }
+
+    checkOpenAI();
+  }, [user]);
 
   return (
-    <OpenAIContext.Provider value={{ isAvailable }}>
+    <OpenAIContext.Provider value={{ aiAvailable }}>
       {children}
     </OpenAIContext.Provider>
   );
-} 
+}
+
+export const useOpenAI = () => useContext(OpenAIContext); 

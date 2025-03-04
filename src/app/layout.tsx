@@ -3,10 +3,12 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from "@/contexts/auth-context"
-import { TapAi } from "@/components/tap-ai"
 import { FloatingMicrophone } from "@/components/floating-microphone"
 import { OnboardingCheck } from "@/components/onboarding-check"
 import { OpenAIProvider } from '@/components/providers/openai-provider';
+import Link from 'next/link';
+import { TapAiDialogProvider } from "@/components/tap-ai-dialog-provider";
+import { TapAiButton } from "@/components/tap-ai-button";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,11 +35,23 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
         <OpenAIProvider>
           <AuthProvider>
-            {children}
-            <Toaster />
-            <TapAi />
-            <FloatingMicrophone />
-            <OnboardingCheck />
+            <TapAiDialogProvider>
+              {children}
+              <Toaster />
+              <TapAiButton />
+              <FloatingMicrophone />
+              <OnboardingCheck />
+              {process.env.NODE_ENV === 'development' && (
+                <div className="fixed bottom-4 right-4 z-50">
+                  <Link 
+                    href="/api-key-test" 
+                    className="bg-purple-600 text-white px-4 py-2 rounded-md shadow-md hover:bg-purple-700"
+                  >
+                    API Key Test
+                  </Link>
+                </div>
+              )}
+            </TapAiDialogProvider>
           </AuthProvider>
         </OpenAIProvider>
       </body>

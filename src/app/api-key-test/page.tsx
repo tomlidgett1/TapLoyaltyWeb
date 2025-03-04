@@ -75,22 +75,44 @@ export default function ApiKeyTestPage() {
       
       addLog('Getting Firebase functions instance')
       const functionsInstance = getFunctions(getApp())
+      addLog(`Functions region: ${functionsInstance.region}`)
+      
       addLog('Creating callable function reference')
       const getOpenAIKey = httpsCallable(functionsInstance, 'getOpenAIKey')
       
       addLog('Calling getOpenAIKey function')
-      const result = await getOpenAIKey()
-      addLog(`Function call result: ${JSON.stringify(result.data)}`)
-      
-      const data = result.data as { apiKey: string }
-      
-      if (data && data.apiKey) {
-        addLog(`SUCCESS: Got API key (length: ${data.apiKey.length})`)
-      } else {
-        addLog('ERROR: No API key in response')
+      try {
+        const result = await getOpenAIKey()
+        addLog(`Function call result: ${JSON.stringify(result.data)}`)
+        
+        const data = result.data as { apiKey: string }
+        
+        if (data && data.apiKey) {
+          addLog(`SUCCESS: Got API key (length: ${data.apiKey.length})`)
+        } else {
+          addLog('ERROR: No API key in response')
+        }
+      } catch (callError: any) {
+        // Extract detailed error information from Firebase callable error
+        addLog(`ERROR: Function call failed with code: ${callError.code}`)
+        addLog(`ERROR message: ${callError.message}`)
+        
+        if (callError.details) {
+          addLog(`ERROR details: ${JSON.stringify(callError.details)}`)
+        }
+        
+        // Try to get the Firebase Functions logs URL
+        const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'tap-loyalty-fb6d0'
+        const logsUrl = `https://console.firebase.google.com/project/${projectId}/functions/logs`
+        addLog(`Check Firebase Functions logs for more details: ${logsUrl}`)
       }
     } catch (error) {
-      addLog(`ERROR: ${error instanceof Error ? error.message : String(error)}`)
+      if (error instanceof Error) {
+        addLog(`ERROR: ${error.message}`)
+        addLog(`ERROR stack: ${error.stack}`)
+      } else {
+        addLog(`ERROR: ${String(error)}`)
+      }
     } finally {
       setIsLoading(false)
     }
@@ -177,6 +199,86 @@ export default function ApiKeyTestPage() {
     }
   }
   
+  const testDirectConfig = async () => {
+    setIsLoading(true)
+    addLog('Testing direct config access...')
+    
+    try {
+      // Make the request to check config
+      addLog('Making request to checkConfig')
+      const response = await fetch('https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/checkConfig')
+      
+      addLog(`Response status: ${response.status}`)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        addLog(`ERROR: HTTP error ${response.status}: ${errorText}`)
+        setIsLoading(false)
+        return
+      }
+      
+      const data = await response.json()
+      addLog(`Config data: ${JSON.stringify(data)}`)
+      
+      // Check if the OpenAI API key exists
+      if (data.apiKeyExists) {
+        addLog(`SUCCESS: OpenAI API key exists (length: ${data.apiKeyLength})`)
+      } else {
+        addLog('ERROR: OpenAI API key does not exist in Firebase config')
+        
+        // Provide instructions for setting the API key
+        addLog('To set the API key, run:')
+        addLog('firebase functions:config:set openai.api_key="YOUR_API_KEY"')
+        addLog('Then redeploy your functions:')
+        addLog('firebase deploy --only functions')
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        addLog(`ERROR: ${error.message}`)
+        addLog(`ERROR stack: ${error.stack}`)
+      } else {
+        addLog(`ERROR: ${String(error)}`)
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+  
+  const testEnvironment = async () => {
+    setIsLoading(true)
+    addLog('Testing Firebase environment...')
+    
+    try {
+      // Make the request to check environment
+      addLog('Making request to checkEnvironment')
+      const response = await fetch('https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/checkEnvironment')
+      
+      addLog(`Response status: ${response.status}`)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        addLog(`ERROR: HTTP error ${response.status}: ${errorText}`)
+        setIsLoading(false)
+        return
+      }
+      
+      const data = await response.json()
+      addLog(`Environment data:`)
+      Object.entries(data).forEach(([key, value]) => {
+        addLog(`  ${key}: ${value}`)
+      })
+    } catch (error) {
+      if (error instanceof Error) {
+        addLog(`ERROR: ${error.message}`)
+        addLog(`ERROR stack: ${error.stack}`)
+      } else {
+        addLog(`ERROR: ${String(error)}`)
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+  
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">API Key Test</h1>
@@ -216,6 +318,22 @@ export default function ApiKeyTestPage() {
               className="px-4 py-2 bg-yellow-500 text-white rounded disabled:bg-gray-400"
             >
               Test Config
+            </button>
+            
+            <button 
+              onClick={testDirectConfig}
+              disabled={isLoading}
+              className="px-4 py-2 bg-orange-500 text-white rounded disabled:bg-gray-400"
+            >
+              Test Direct Config
+            </button>
+            
+            <button 
+              onClick={testEnvironment}
+              disabled={isLoading}
+              className="px-4 py-2 bg-teal-500 text-white rounded disabled:bg-gray-400"
+            >
+              Test Environment
             </button>
           </div>
           

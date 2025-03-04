@@ -1,21 +1,33 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Sparkles } from "lucide-react"
+import { Bot } from "lucide-react"
+import { useTapAiDialog } from "@/components/tap-ai-dialog-provider"
+import { useAuth } from "@/contexts/auth-context"
+import { useOpenAI } from "@/components/providers/openai-provider"
 
-interface TapAiButtonProps {
-  onClick: () => void
-}
+export function TapAiButton() {
+  const { setOpen } = useTapAiDialog()
+  const { user } = useAuth()
+  const { aiAvailable } = useOpenAI()
 
-export function TapAiButton({ onClick }: TapAiButtonProps) {
+  console.log('TapAiButton state:', { 
+    user: !!user, 
+    aiAvailable 
+  })
+
+  // Always show the button in development mode
+  const showAnyway = process.env.NODE_ENV === 'development'
+  
+  if (!user || (!aiAvailable && !showAnyway)) return null
+
   return (
-    <Button 
-      onClick={onClick}
-      className="fixed bottom-6 right-6 bg-[#007AFF] hover:bg-[#0066CC] shadow-lg"
-      size="lg"
+    <Button
+      onClick={() => setOpen(true)}
+      className="fixed bottom-20 right-4 shadow-lg z-50 h-12 w-12 rounded-full p-0 bg-blue-600 hover:bg-blue-700"
+      style={{ zIndex: 9999 }}
     >
-      <Sparkles className="h-5 w-5 mr-2" />
-      TapAI
+      <Bot className="h-6 w-6" />
     </Button>
   )
 } 

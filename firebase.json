@@ -11,6 +11,10 @@
       {
         "source": "/api/openai-key",
         "function": "getOpenAIKeyHttp"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
       }
     ]
   },

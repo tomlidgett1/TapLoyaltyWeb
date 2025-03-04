@@ -418,6 +418,16 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      <div className="mt-4 p-4 bg-gray-100 rounded-md">
+        <h3 className="font-semibold">Developer Tools</h3>
+        <p className="text-sm text-gray-600 mb-2">Troubleshooting utilities for developers</p>
+        <Link 
+          href="/api-key-test" 
+          className="text-blue-500 hover:text-blue-700 text-sm"
+        >
+          API Key Test Page
+        </Link>
+      </div>
     </div>
   )
 }

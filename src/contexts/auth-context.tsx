@@ -47,6 +47,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe()
   }, [])
 
+  useEffect(() => {
+    console.log('Auth state changed:', { 
+      user: auth.currentUser?.uid || 'none',
+      isLoading: loading
+    });
+  }, [auth.currentUser, loading]);
+
   const signIn = async (email: string, password: string) => {
     try {
       await setPersistence(auth, browserLocalPersistence)

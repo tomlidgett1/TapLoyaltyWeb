@@ -2,73 +2,41 @@ import OpenAI from 'openai'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { getApp } from 'firebase/app'
 
-// Initialize OpenAI with a function to get the API key
-let openai: OpenAI | null = null;
-
-// Function to validate an OpenAI API key
-async function validateApiKey(apiKey: string): Promise<boolean> {
-  console.log('validateApiKey: Validating API key');
+// Function to call OpenAI API through Firebase Functions
+export async function callOpenAI(endpoint: string, params: any) {
+  console.log(`callOpenAI: Calling ${endpoint} with params:`, params);
   
   try {
-    // Create a temporary OpenAI client
-    const tempClient = new OpenAI({
-      apiKey,
-      dangerouslyAllowBrowser: true
+    // Get the Firebase Functions instance
+    const { getFunctions } = await import('firebase/functions');
+    const { httpsCallable } = await import('firebase/functions');
+    const { getApp } = await import('firebase/app');
+    
+    const functionsInstance = getFunctions(getApp());
+    const callOpenAIFunction = httpsCallable(functionsInstance, 'callOpenAI');
+    
+    console.log('callOpenAI: Calling Firebase function');
+    const result = await callOpenAIFunction({
+      endpoint,
+      params
     });
     
-    // Try to make a simple API call
-    await tempClient.models.list();
-    
-    console.log('validateApiKey: API key is valid');
-    return true;
+    console.log(`callOpenAI: Received response for ${endpoint}`);
+    return result.data;
   } catch (error) {
-    console.error('validateApiKey: API key validation failed:', error);
-    return false;
-  }
-}
-
-// Initialize OpenAI with environment variables
-export async function initializeOpenAI() {
-  console.log('initializeOpenAI: Starting initialization');
-  
-  if (openai) {
-    console.log('initializeOpenAI: OpenAI client already initialized');
-    return openai;
-  }
-  
-  try {
-    // Try to get API key from Firebase function
-    console.log('initializeOpenAI: Trying to get API key from getApiKey function');
-    const apiKey = await getApiKey();
-    
-    console.log('initializeOpenAI: API key received, length:', apiKey?.length || 0);
-    
-    if (apiKey && apiKey.length > 0) {
-      console.log('initializeOpenAI: Using OpenAI API key from getApiKey function');
-      openai = new OpenAI({
-        apiKey,
-        dangerouslyAllowBrowser: true
-      });
-      console.log('initializeOpenAI: OpenAI client initialized successfully');
-      return openai;
-    }
-    
-    // If we get here, we couldn't get an API key
-    console.error('initializeOpenAI: No API key available from any source');
-    throw new Error('OpenAI API key not available');
-  } catch (error) {
-    console.error('initializeOpenAI: Failed to initialize OpenAI client:', error);
+    console.error(`callOpenAI: Error calling ${endpoint}:`, error);
     throw error;
   }
 }
 
-const ASSISTANT_ID = 'asst_Aymz6DWL61Twlz2XubPu49ur'
-
 // Get the existing assistant
 export async function getOrCreateAssistant() {
   try {
-    const client = await initializeOpenAI();
-    return await client.beta.assistants.retrieve(ASSISTANT_ID);
+    console.log('getOrCreateAssistant: Retrieving assistant');
+    const result = await callOpenAI('beta.assistants.retrieve', {
+      assistant_id: 'asst_Aymz6DWL61Twlz2XubPu49ur'
+    });
+    return result;
   } catch (error) {
     console.error('Error getting assistant:', error);
     throw error;
@@ -78,8 +46,9 @@ export async function getOrCreateAssistant() {
 // Create a thread for a new conversation
 export async function createThread() {
   try {
-    const client = await initializeOpenAI();
-    return await client.beta.threads.create();
+    console.log('createThread: Creating new thread');
+    const result = await callOpenAI('beta.threads.create', {});
+    return result;
   } catch (error) {
     console.error('Error creating thread:', error);
     throw error;
@@ -88,37 +57,62 @@ export async function createThread() {
 
 // Add this function to create a new thread when needed
 async function shouldCreateNewThread(threadId: string): Promise<boolean> {
-  const client = await initializeOpenAI();
-  const messages = await client.beta.threads.messages.list(threadId);
+  console.log('shouldCreateNewThread: Checking if new thread is needed');
+  const messages = await callOpenAI('beta.threads.messages.list', {
+    thread_id: threadId
+  });
   return messages.data.length >= 10; // Create new thread after 10 messages
 }
 
 // Modify addMessage function
 export async function addMessage(threadId: string, content: string, metadata?: { merchantName?: string }) {
-  const client = await initializeOpenAI();
+  console.log('addMessage: Adding message to thread', threadId);
 
   // Check if we need a new thread
   if (await shouldCreateNewThread(threadId)) {
     // Create new thread
+    console.log('addMessage: Creating new thread');
     const newThread = await createThread();
     threadId = newThread.id;
+    console.log('addMessage: New thread created', threadId);
   }
 
-  console.log('Sending message:', {
-    content,
-    contentLength: content.length,
-    threadId,
-    metadata
+  // Add the message to the thread
+  console.log('addMessage: Creating message');
+  const message = await callOpenAI('beta.threads.messages.create', {
+    thread_id: threadId,
+    role: 'user',
+    content: content,
+    metadata: metadata || {}
   });
 
-  const message = {
-    role: "user",
-    content: content,
-    metadata: metadata
-  };
-  
-  const response = await client.beta.threads.messages.create(threadId, message);
-  return { response, threadId }; // Return new threadId if it changed
+  // Run the assistant on the thread
+  console.log('addMessage: Running assistant on thread');
+  const run = await callOpenAI('beta.threads.runs.create', {
+    thread_id: threadId,
+    assistant_id: 'asst_Aymz6DWL61Twlz2XubPu49ur'
+  });
+
+  return { threadId, message, run };
+}
+
+// Get messages from a thread
+export async function getMessages(threadId: string) {
+  console.log('getMessages: Getting messages from thread', threadId);
+  const messages = await callOpenAI('beta.threads.messages.list', {
+    thread_id: threadId
+  });
+  return messages.data;
+}
+
+// Check the status of a run
+export async function checkRunStatus(threadId: string, runId: string) {
+  console.log('checkRunStatus: Checking run status', { threadId, runId });
+  const run = await callOpenAI('beta.threads.runs.retrieve', {
+    thread_id: threadId,
+    run_id: runId
+  });
+  return run;
 }
 
 // Add delay between requests

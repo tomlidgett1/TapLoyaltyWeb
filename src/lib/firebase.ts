@@ -1,7 +1,7 @@
 import { initializeApp, getApp, getApps } from "firebase/app"
 import { getAuth } from "firebase/auth"
 import { getFirestore } from "firebase/firestore"
-import { getFunctions, connectFunctionsEmulator } from 'firebase/functions'
+import { getFunctions } from 'firebase/functions'
 import { getStorage } from "firebase/storage"
 
 const firebaseConfig = {
@@ -15,16 +15,18 @@ const firebaseConfig = {
 }
 
 // Initialize Firebase
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
+let app;
+if (!getApps().length) {
+  app = initializeApp(firebaseConfig);
+} else {
+  app = getApp();
+}
+
 const auth = getAuth(app)
 const db = getFirestore(app)
 const functions = getFunctions(app)
 const storage = getStorage(app)
 
-// Connect to emulator ONLY in development and when running locally
-if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-  console.log('Connecting to Firebase emulators in development mode')
-  connectFunctionsEmulator(functions, 'localhost', 5001)
-}
+// No emulator connection in production
 
 export { app, auth, db, functions, storage } 

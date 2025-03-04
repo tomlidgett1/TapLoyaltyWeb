@@ -22,7 +22,8 @@ import {
   ShoppingBag,
   Clock,
   Settings,
-  Sparkles
+  Sparkles,
+  Wand2
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -99,6 +100,11 @@ const navItems = [
     href: "#",
     icon: Sparkles,
     isAI: true
+  },
+  {
+    title: "Magic",
+    href: "/magic",
+    icon: Wand2
   },
   {
     title: "Rewards Library",

@@ -97,7 +97,7 @@ export function TapAi() {
     setMessages(prev => [
       { 
         role: "user", 
-        content: [{ type: 'text', text: { value: userMessage } }] 
+        content: [{ text: { value: userMessage } }] 
       },
       ...prev
     ])

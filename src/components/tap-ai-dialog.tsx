@@ -21,8 +21,7 @@ import {
   createThread, 
   addMessage, 
   runAssistant,
-  getMessages, 
-  checkRunStatus  // Add this import
+  getMessages  // Add this import
 } from "@/lib/assistant"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
@@ -1616,8 +1615,8 @@ export function TapAiDialog({
         // Clear input
         setInput('');
         
-        // Instead of calling sendMessageToAPI, use handleSendMessageWithFallback
-        await handleSendMessageWithFallback(input);
+        // Send to API and get response
+        await sendMessageToAPI(currentConversation, input);
         
         setLoading(false);
       } 
@@ -1626,7 +1625,6 @@ export function TapAiDialog({
         console.log('Using thread-based approach with threadId:', threadId);
         // Use our fallback-enabled function
         await handleSendMessageWithFallback(input);
-        setInput(''); // Clear input after sending
       }
       // If we have neither, create a new thread
       else {
@@ -1639,7 +1637,6 @@ export function TapAiDialog({
           
           // Send the message
           await handleSendMessageWithFallback(input);
-          setInput(''); // Clear input after sending
         } catch (error) {
           console.error("Error creating thread:", error);
           
@@ -1668,7 +1665,6 @@ export function TapAiDialog({
           };
           
           setMessages(prev => [...prev, userMessage, fallbackMessage]);
-          setInput(''); // Clear input after sending
         }
       }
     } catch (error) {
@@ -2185,62 +2181,22 @@ export function TapAiDialog({
         return [...prev, userMessage];
       });
       
-      try {
-        // Add message to thread and run assistant
-        const { run } = await addMessage(threadId, content);
-        
-        // Poll for completion
-        let runStatus;
-        try {
-          runStatus = await checkRunStatus(threadId, run.id);
-          
-          while (runStatus && (runStatus.status === "queued" || runStatus.status === "in_progress")) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            runStatus = await checkRunStatus(threadId, run.id);
-          }
-        } catch (pollError) {
-          console.error("Error polling run status:", pollError);
-          // Add a fallback message if polling fails
-          const fallbackMessage = {
-            id: `fallback-${Date.now()}`,
-            role: 'assistant',
-            content: [{ 
-              type: 'text', 
-              text: { 
-                value: "I'm sorry, I'm having trouble processing your request. Please try again in a moment." 
-            } 
-          }],
-          created_at: Date.now()
-        };
-        
-        setMessages(prev => [...prev, fallbackMessage]);
-        return;
-      }
+      console.log('Sending message to API');
+      // Send the message to the API
+      const { run, assistantMessage } = await addMessage(threadId, content);
+      console.log('Message sent, run created:', run);
+      console.log('Assistant message:', assistantMessage);
       
-      if (runStatus && runStatus.status === "completed") {
-        // Get updated messages
-        const updatedMessages = await getMessages(threadId);
-        setMessages(updatedMessages);
+      // Add the assistant's response to the UI
+      if (assistantMessage) {
+        setMessages(prev => [...prev, assistantMessage]);
       } else {
-        console.error("Run failed or returned unexpected status:", runStatus);
-        
-        // Add a fallback message if the run fails
-        const fallbackMessage = {
-          id: `fallback-${Date.now()}`,
-          role: 'assistant',
-          content: [{ 
-            type: 'text', 
-            text: { 
-              value: "I'm sorry, I couldn't process your request. Please try again." 
-            } 
-          }],
-          created_at: Date.now()
-        };
-        
-        setMessages(prev => [...prev, fallbackMessage]);
+        // If no assistant message, load messages from storage
+        await loadMessages();
       }
-    } catch (apiError) {
-      console.error("API error:", apiError);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      setError("Failed to send message. Please try again.");
       
       // Add a fallback message if the API call fails
       const fallbackMessage = {
@@ -2256,28 +2212,10 @@ export function TapAiDialog({
       };
       
       setMessages(prev => [...prev, fallbackMessage]);
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error) {
-    console.error("Error sending message:", error);
-    
-    // Add a fallback message for any other errors
-    const fallbackMessage = {
-      id: `fallback-${Date.now()}`,
-      role: 'assistant',
-      content: [{ 
-        type: 'text', 
-        text: { 
-          value: "An unexpected error occurred. Please try again later." 
-        } 
-      }],
-      created_at: Date.now()
-    };
-    
-    setMessages(prev => [...prev, fallbackMessage]);
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   // Add this function to your component
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

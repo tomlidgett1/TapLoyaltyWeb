@@ -325,102 +325,117 @@ export const checkEnvironment = onRequest({
   }
 });
 
-// This function will proxy calls to the OpenAI API
+// Function to call OpenAI API with dynamic CORS
 export const callOpenAI = onCall({
   region: "us-central1",
   cors: {
-    origin: ['https://taployalty.com.au', 'https://www.taployalty.com.au', 'https://taptap--tap-loyalty-fb6d0.us-central1.hosted.app', 'http://localhost:3000', 'http://localhost:3001'],
+    origin: (origin) => {
+      // List of allowed origins
+      const allowedOrigins = [
+        'https://taployalty.com.au', 
+        'https://www.taployalty.com.au',
+        'https://taptap--tap-loyalty-fb6d0.us-central1.hosted.app', 
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:3001'
+      ];
+      
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return true;
+      
+      // In development, allow all origins
+      if (process.env.NODE_ENV === 'development') return true;
+      
+      // Check if the origin is in the allowed list
+      return allowedOrigins.includes(origin);
+    },
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     maxAge: 3600
   }
 }, async (request) => {
   try {
+    logger.info("OpenAI API call requested", {
+      auth: request.auth ? "Authenticated" : "Unauthenticated",
+      uid: request.auth?.uid || 'none',
+      endpoint: request.data.endpoint,
+      requestTime: new Date().toISOString()
+    });
+
     // Check if user is authenticated
     if (!request.auth) {
-      logger.error("Unauthenticated request to OpenAI API");
+      logger.error("Unauthenticated request for OpenAI API call");
       throw new Error("Unauthenticated. You must be logged in to use this feature.");
     }
 
     // Get the API key from config
     const apiKey = functions.config().openai?.api_key;
     
+    logger.info("API key retrieval result:", {
+      hasApiKey: !!apiKey,
+      apiKeyLength: apiKey?.length || 0
+    });
+    
     if (!apiKey) {
       logger.error("OpenAI API key not found in config");
       throw new Error("API key not configured");
     }
 
-    // Initialize OpenAI client with the correct API key
-    const openai = new OpenAI.OpenAI({ apiKey });
+    // Initialize OpenAI client
+    const openai = new OpenAI.OpenAI({
+      apiKey: apiKey
+    });
 
     // Get the endpoint and params from the request
     const { endpoint, params } = request.data;
     
     if (!endpoint) {
+      logger.error("No endpoint specified");
       throw new Error("No endpoint specified");
     }
 
-    logger.info(`Calling OpenAI API endpoint: ${endpoint}`, { params });
-
-    // Parse the endpoint to determine which API to call
-    const [namespace, resource, method, subresource] = endpoint.split('.');
-
-    // Only allow beta.assistants.* endpoints
-    if (namespace !== 'beta') {
-      throw new Error("Only beta namespace is supported");
-    }
-
-    let result;
-
-    // Handle different API endpoints
-    try {
-      switch (`${resource}.${method}${subresource ? `.${subresource}` : ''}`) {
-        case 'assistants.retrieve':
-          result = await openai.beta.assistants.retrieve(params.assistant_id);
-          break;
-        case 'threads.create':
-          result = await openai.beta.threads.create();
-          break;
-        case 'threads.messages.create':
-          result = await openai.beta.threads.messages.create(
-            params.thread_id,
-            {
-              role: params.role,
-              content: params.content
-            }
-          );
-          break;
-        case 'threads.runs.create':
-          result = await openai.beta.threads.runs.create(
-            params.thread_id,
-            {
-              assistant_id: params.assistant_id
-            }
-          );
-          break;
-        case 'threads.runs.retrieve':
-          result = await openai.beta.threads.runs.retrieve(
-            params.thread_id,
-            params.run_id
-          );
-          break;
-        case 'threads.messages.list':
-          result = await openai.beta.threads.messages.list(
-            params.thread_id
-          );
-          break;
-        default:
-          throw new Error(`Unsupported endpoint: ${endpoint}`);
+    logger.info(`Calling OpenAI API endpoint: ${endpoint}`);
+    
+    // Call the OpenAI API using the endpoint path
+    const path = endpoint.split('.');
+    let method: any = openai;
+    
+    // Navigate through the OpenAI object to find the right method
+    for (const segment of path) {
+      if (!method[segment]) {
+        logger.error(`Invalid endpoint segment: ${segment}`);
+        throw new Error(`Invalid endpoint segment: ${segment}`);
       }
-      
-      logger.info(`OpenAI API call successful: ${endpoint}`, { resultType: typeof result });
-      return result;
-    } catch (apiError) {
-      logger.error(`Error in OpenAI API call to ${endpoint}:`, apiError);
-      throw new Error(`OpenAI API error in ${endpoint}: ${apiError.message}`);
+      method = method[segment];
     }
-  } catch (error: any) {
-    logger.error(`Error calling OpenAI API: ${error.message}`, error);
-    throw new Error(`OpenAI API error: ${error.message}`);
+    
+    // Call the method with the provided parameters
+    if (typeof method !== 'function') {
+      logger.error(`Endpoint ${endpoint} is not a function`);
+      throw new Error(`Endpoint ${endpoint} is not a function`);
+    }
+    
+    logger.info(`Calling OpenAI API with params:`, params);
+    const result = await method(params);
+    logger.info(`OpenAI API call successful`);
+    
+    return result;
+  } catch (error) {
+    logger.error("Error calling OpenAI API", error);
+    
+    if (error instanceof Error) {
+      throw new functions.https.HttpsError(
+        'internal',
+        `Failed to call OpenAI API: ${error.message}`,
+        { stack: error.stack }
+      );
+    } else {
+      throw new functions.https.HttpsError(
+        'internal',
+        'Failed to call OpenAI API: Unknown error',
+        { error }
+      );
+    }
   }
 });

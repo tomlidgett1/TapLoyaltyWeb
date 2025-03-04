@@ -20,6 +20,12 @@ export function TapAi() {
   // Check if OpenAI is available
   useEffect(() => {
     if (user) {
+      // For local development, always set aiAvailable to true
+      if (process.env.NODE_ENV === 'development') {
+        setAiAvailable(true);
+        return;
+      }
+      
       initializeOpenAI()
         .then(() => setAiAvailable(true))
         .catch(error => {

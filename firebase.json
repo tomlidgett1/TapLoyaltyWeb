@@ -7,17 +7,22 @@
       "**/node_modules/**"
     ],
     "appAssociation": "AUTO",
-    "rewrites": []
+    "rewrites": [
+      {
+        "source": "/api/openai-key",
+        "function": "getOpenAIKeyHttp"
+      }
+    ]
   },
   "apphosting": {
     "env": [
       {
         "variable": "OPENAI_API_KEY",
-        "value": "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"
+        "value": "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"
       },
       {
         "variable": "NEXT_PUBLIC_OPENAI_API_KEY",
-        "value": "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"
+        "value": "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"
       },
       {
         "variable": "NEXT_PUBLIC_OPENAI_AVAILABLE",

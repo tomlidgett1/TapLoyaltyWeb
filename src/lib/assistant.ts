@@ -5,26 +5,93 @@ import { getApp } from 'firebase/app'
 // Initialize OpenAI with a function to get the API key
 let openai: OpenAI | null = null;
 
+// Function to validate an OpenAI API key
+async function validateApiKey(apiKey: string): Promise<boolean> {
+  console.log('validateApiKey: Validating API key');
+  
+  try {
+    // Create a temporary OpenAI client
+    const tempClient = new OpenAI({
+      apiKey,
+      dangerouslyAllowBrowser: true
+    });
+    
+    // Try to make a simple API call
+    await tempClient.models.list();
+    
+    console.log('validateApiKey: API key is valid');
+    return true;
+  } catch (error) {
+    console.error('validateApiKey: API key validation failed:', error);
+    return false;
+  }
+}
+
 // Initialize OpenAI with environment variables
 export async function initializeOpenAI() {
-  if (openai) return openai;
+  console.log('initializeOpenAI: Starting initialization');
+  
+  if (openai) {
+    console.log('initializeOpenAI: OpenAI client already initialized');
+    return openai;
+  }
   
   try {
     // Try to use environment variables directly
-    const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+    const envApiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+    const envAvailable = process.env.NEXT_PUBLIC_OPENAI_AVAILABLE === 'true';
+    
+    console.log('initializeOpenAI: Environment variables check:', { 
+      hasApiKey: !!envApiKey, 
+      apiKeyLength: envApiKey?.length || 0,
+      isAvailable: envAvailable 
+    });
+    
+    if (envApiKey && envApiKey.length > 0 && envAvailable) {
+      console.log('initializeOpenAI: Validating environment API key');
+      if (await validateApiKey(envApiKey)) {
+        console.log('initializeOpenAI: Using OpenAI API key from environment variables');
+        openai = new OpenAI({
+          apiKey: envApiKey,
+          dangerouslyAllowBrowser: true
+        });
+        console.log('initializeOpenAI: OpenAI client initialized successfully');
+        return openai;
+      } else {
+        console.error('initializeOpenAI: Environment API key is invalid');
+      }
+    }
+    
+    // Try to get API key from Firebase function
+    console.log('initializeOpenAI: Trying to get API key from getApiKey function');
+    const apiKey = await getApiKey();
     
     if (apiKey && apiKey.length > 0) {
-      console.log('Using OpenAI API key from environment variables');
+      console.log('initializeOpenAI: Using OpenAI API key from getApiKey function');
       openai = new OpenAI({
         apiKey,
+        dangerouslyAllowBrowser: true
+      });
+      console.log('initializeOpenAI: OpenAI client initialized successfully');
+      return openai;
+    }
+    
+    // If we get here, we couldn't get an API key
+    console.error('initializeOpenAI: No API key available from any source');
+    throw new Error('OpenAI API key not available');
+  } catch (error) {
+    console.error('initializeOpenAI: Failed to initialize OpenAI client:', error);
+    
+    // For development only - hardcoded fallback
+    if (process.env.NODE_ENV === 'development') {
+      console.log('initializeOpenAI: Using hardcoded API key for development');
+      openai = new OpenAI({
+        apiKey: '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',
         dangerouslyAllowBrowser: true
       });
       return openai;
     }
     
-    throw new Error('OpenAI API key not available');
-  } catch (error) {
-    console.error('Failed to initialize OpenAI client:', error);
     throw error;
   }
 }
@@ -176,3 +243,109 @@ export async function runAssistant(assistantId: string, threadId: string) {
 //   ]
 // }
 // ``` 
+
+// Function to get the API key from Firebase Functions
+async function getApiKey() {
+  console.log('getApiKey: Starting to fetch API key');
+  
+  try {
+    console.log('getApiKey: Checking environment variables first');
+    // Try environment variables first
+    if (typeof window !== 'undefined' && 
+        process.env.NEXT_PUBLIC_OPENAI_API_KEY && 
+        process.env.NEXT_PUBLIC_OPENAI_AVAILABLE === 'true') {
+      console.log('getApiKey: Found API key in environment variables');
+      return process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+    }
+    
+    // Try the rewritten URL first (avoids CORS issues)
+    try {
+      console.log('getApiKey: Trying rewritten URL');
+      const apiKey = await getApiKeyFromRewrite();
+      return apiKey;
+    } catch (error) {
+      console.error('getApiKey: Rewritten URL failed, trying other methods:', error);
+    }
+    
+    // Try callable function first
+    try {
+      console.log('getApiKey: Trying callable function');
+      const { getFunctions } = await import('firebase/functions');
+      const { httpsCallable } = await import('firebase/functions');
+      const { getApp } = await import('firebase/app');
+      
+      const functionsInstance = getFunctions(getApp());
+      const getOpenAIKey = httpsCallable(functionsInstance, 'getOpenAIKey');
+      
+      const result = await getOpenAIKey();
+      const data = result.data as { apiKey: string };
+      
+      if (data && data.apiKey) {
+        console.log('getApiKey: Successfully retrieved API key via callable function');
+        return data.apiKey;
+      }
+    } catch (error) {
+      console.error('getApiKey: Callable function failed, trying HTTP version:', error);
+    }
+    
+    // Fall back to HTTP version if callable function fails
+    console.log('getApiKey: Trying HTTP function');
+    const response = await fetch('https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/getOpenAIKeyHttp', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP function failed with status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    if (data && data.apiKey) {
+      console.log('getApiKey: Successfully retrieved API key via HTTP function');
+      return data.apiKey;
+    }
+    
+    throw new Error('API key not available from any source');
+  } catch (error) {
+    console.error('getApiKey: Final error:', error);
+    
+    // Fall back to environment variable if all else fails
+    if (typeof window !== 'undefined' && 
+        process.env.NEXT_PUBLIC_OPENAI_API_KEY && 
+        process.env.NEXT_PUBLIC_OPENAI_AVAILABLE === 'true') {
+      console.log('getApiKey: Falling back to environment variable');
+      return process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+    }
+    
+    throw error;
+  }
+}
+
+// Function to get the API key directly from the rewritten URL
+async function getApiKeyFromRewrite() {
+  console.log('getApiKeyFromRewrite: Starting to fetch API key from rewrite');
+  
+  try {
+    const response = await fetch('/api/openai-key');
+    
+    if (!response.ok) {
+      console.error('getApiKeyFromRewrite: HTTP error', response.status);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data && data.apiKey) {
+      console.log('getApiKeyFromRewrite: Successfully retrieved API key');
+      return data.apiKey;
+    }
+    
+    console.error('getApiKeyFromRewrite: No API key in response', data);
+    throw new Error('API key not available in response');
+  } catch (error) {
+    console.error('getApiKeyFromRewrite: Error fetching API key:', error);
+    throw error;
+  }
+} 

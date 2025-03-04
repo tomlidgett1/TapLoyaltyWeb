@@ -21,7 +21,8 @@ import {
   createThread, 
   addMessage, 
   runAssistant,
-  getMessages  // Add this import
+  getMessages, 
+  checkRunStatus  // Add this import
 } from "@/lib/assistant"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
@@ -1615,8 +1616,8 @@ export function TapAiDialog({
         // Clear input
         setInput('');
         
-        // Send to API and get response
-        await sendMessageToAPI(currentConversation, input);
+        // Instead of calling sendMessageToAPI, use handleSendMessageWithFallback
+        await handleSendMessageWithFallback(input);
         
         setLoading(false);
       } 
@@ -1625,6 +1626,7 @@ export function TapAiDialog({
         console.log('Using thread-based approach with threadId:', threadId);
         // Use our fallback-enabled function
         await handleSendMessageWithFallback(input);
+        setInput(''); // Clear input after sending
       }
       // If we have neither, create a new thread
       else {
@@ -1637,6 +1639,7 @@ export function TapAiDialog({
           
           // Send the message
           await handleSendMessageWithFallback(input);
+          setInput(''); // Clear input after sending
         } catch (error) {
           console.error("Error creating thread:", error);
           
@@ -1665,6 +1668,7 @@ export function TapAiDialog({
           };
           
           setMessages(prev => [...prev, userMessage, fallbackMessage]);
+          setInput(''); // Clear input after sending
         }
       }
     } catch (error) {
@@ -2181,22 +2185,62 @@ export function TapAiDialog({
         return [...prev, userMessage];
       });
       
-      console.log('Sending message to API');
-      // Send the message to the API
-      const { run, assistantMessage } = await addMessage(threadId, content);
-      console.log('Message sent, run created:', run);
-      console.log('Assistant message:', assistantMessage);
-      
-      // Add the assistant's response to the UI
-      if (assistantMessage) {
-        setMessages(prev => [...prev, assistantMessage]);
-      } else {
-        // If no assistant message, load messages from storage
-        await loadMessages();
+      try {
+        // Add message to thread and run assistant
+        const { run } = await addMessage(threadId, content);
+        
+        // Poll for completion
+        let runStatus;
+        try {
+          runStatus = await checkRunStatus(threadId, run.id);
+          
+          while (runStatus && (runStatus.status === "queued" || runStatus.status === "in_progress")) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            runStatus = await checkRunStatus(threadId, run.id);
+          }
+        } catch (pollError) {
+          console.error("Error polling run status:", pollError);
+          // Add a fallback message if polling fails
+          const fallbackMessage = {
+            id: `fallback-${Date.now()}`,
+            role: 'assistant',
+            content: [{ 
+              type: 'text', 
+              text: { 
+                value: "I'm sorry, I'm having trouble processing your request. Please try again in a moment." 
+            } 
+          }],
+          created_at: Date.now()
+        };
+        
+        setMessages(prev => [...prev, fallbackMessage]);
+        return;
       }
-    } catch (error) {
-      console.error("Error sending message:", error);
-      setError("Failed to send message. Please try again.");
+      
+      if (runStatus && runStatus.status === "completed") {
+        // Get updated messages
+        const updatedMessages = await getMessages(threadId);
+        setMessages(updatedMessages);
+      } else {
+        console.error("Run failed or returned unexpected status:", runStatus);
+        
+        // Add a fallback message if the run fails
+        const fallbackMessage = {
+          id: `fallback-${Date.now()}`,
+          role: 'assistant',
+          content: [{ 
+            type: 'text', 
+            text: { 
+              value: "I'm sorry, I couldn't process your request. Please try again." 
+            } 
+          }],
+          created_at: Date.now()
+        };
+        
+        setMessages(prev => [...prev, fallbackMessage]);
+      }
+    } catch (apiError) {
+      console.error("API error:", apiError);
       
       // Add a fallback message if the API call fails
       const fallbackMessage = {
@@ -2212,10 +2256,28 @@ export function TapAiDialog({
       };
       
       setMessages(prev => [...prev, fallbackMessage]);
-    } finally {
-      setIsLoading(false);
     }
-  };
+  } catch (error) {
+    console.error("Error sending message:", error);
+    
+    // Add a fallback message for any other errors
+    const fallbackMessage = {
+      id: `fallback-${Date.now()}`,
+      role: 'assistant',
+      content: [{ 
+        type: 'text', 
+        text: { 
+          value: "An unexpected error occurred. Please try again later." 
+        } 
+      }],
+      created_at: Date.now()
+    };
+    
+    setMessages(prev => [...prev, fallbackMessage]);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Add this function to your component
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -2387,119 +2449,6 @@ export function TapAiDialog({
       }
     }
   }, [])
-
-  // Add this function to your component
-  const sendMessageToAPI = async (conversationId: string, message: string) => {
-    if (!user?.uid) return;
-    
-    try {
-      setLoading(true);
-      
-      // Create a new message object for the assistant's response
-      const assistantMessageId = `msg_${Date.now()}_assistant`;
-      const assistantMessage = {
-        id: assistantMessageId,
-        role: 'assistant',
-        content: '',
-        timestamp: new Date().toISOString()
-      };
-      
-      // Add a temporary loading message
-      setConversations(prev => 
-        prev.map(conv => 
-          conv.id === conversationId 
-            ? { 
-                ...conv, 
-                messages: [...conv.messages, { ...assistantMessage, content: 'Thinking...' }],
-                updatedAt: new Date().toISOString()
-              } 
-            : conv
-        )
-      );
-      
-      // Get the conversation to update
-      const conversation = conversations.find(c => c.id === conversationId);
-      if (!conversation) {
-        throw new Error('Conversation not found');
-      }
-      
-      // Call the API
-      const response = await fetch('/api/ai', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          message,
-          conversationHistory: conversation.messages
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      // Update the conversation with the real response
-      setConversations(prev => 
-        prev.map(conv => 
-          conv.id === conversationId 
-            ? { 
-                ...conv, 
-                messages: [...conv.messages.slice(0, -1), { ...assistantMessage, content: data.content }],
-                updatedAt: new Date().toISOString()
-              } 
-            : conv
-        )
-      );
-      
-      // Save to Firestore
-      if (user?.uid) {
-        const updatedConversation = {
-          ...conversation,
-          messages: [...conversation.messages, 
-            { role: 'user', content: message },
-            { ...assistantMessage, content: data.content }
-          ],
-          updatedAt: new Date().toISOString()
-        };
-        
-        await setDoc(
-          doc(db, 'merchants', user.uid, 'chats', conversationId),
-          updatedConversation
-        );
-      }
-    } catch (error) {
-      console.error('Error sending message to API:', error);
-      
-      // Remove the loading message and show an error
-      setConversations(prev => 
-        prev.map(conv => 
-          conv.id === conversationId 
-            ? { 
-                ...conv, 
-                messages: [...conv.messages.slice(0, -1), {
-                  id: `error_${Date.now()}`,
-                  role: 'assistant',
-                  content: 'Sorry, I encountered an error. Please try again.',
-                  timestamp: new Date().toISOString()
-                }],
-                updatedAt: new Date().toISOString()
-              } 
-            : conv
-        )
-      );
-      
-      toast({
-        title: "Error",
-        description: "Failed to get a response. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (authLoading) {
     return (

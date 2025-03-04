@@ -2,81 +2,60 @@
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/auth-context';
-import { callOpenAI } from '@/lib/assistant';
 
 interface OpenAIContextType {
   aiAvailable: boolean;
+  isOpen: boolean;
+  setIsOpen: (isOpen: boolean) => void;
   checkAvailability: () => Promise<boolean>;
 }
 
 const OpenAIContext = createContext<OpenAIContextType>({
   aiAvailable: false,
-  checkAvailability: async () => false
+  isOpen: false,
+  setIsOpen: () => {},
+  checkAvailability: async () => false,
 });
 
 export function OpenAIProvider({ children }: { children: React.ReactNode }) {
-  const [aiAvailable, setAiAvailable] = useState(false);
-  const [checkInProgress, setCheckInProgress] = useState(false);
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
+  const [aiAvailable, setAIAvailable] = useState<boolean>(false);
+  const [isOpen, setIsOpen] = useState<boolean>(false);
 
-  // Create a reusable function to check OpenAI availability
-  const checkAvailability = useCallback(async (): Promise<boolean> => {
-    if (!user) return false;
-    if (checkInProgress) return aiAvailable;
-
-    setCheckInProgress(true);
-    console.log('Manually checking OpenAI availability...');
-    
+  const checkAvailability = useCallback(async () => {
     try {
-      // Add a timeout to prevent hanging
-      const timeoutPromise = new Promise<boolean>((_, reject) => {
-        setTimeout(() => reject(new Error("OpenAI check timed out")), 10000);
-      });
+      if (!user) {
+        console.log('OpenAIProvider: No user, AI not available');
+        setAIAvailable(false);
+        return false;
+      }
+
+      // Check if OpenAI is available by trying to get the API key
+      // We'll use the getOpenAIClient function indirectly by checking if an assistant exists
+      const { checkAssistantExists } = await import('@/lib/assistant');
+      const exists = await checkAssistantExists('asst_Aymz6DWL61Twlz2XubPu49ur');
       
-      // Test the OpenAI API with a simple models.list call
-      const apiCallPromise = callOpenAI('models.list', {}).then(() => true);
-      
-      // Race the API call against the timeout
-      const isAvailable = await Promise.race([apiCallPromise, timeoutPromise]);
-      
-      console.log('OpenAI availability check result:', isAvailable);
-      setAiAvailable(isAvailable);
-      setCheckInProgress(false);
-      return isAvailable;
+      console.log('OpenAIProvider: AI availability check result:', exists);
+      setAIAvailable(exists);
+      return exists;
     } catch (error) {
-      console.error("Failed to check OpenAI availability:", error);
-      setAiAvailable(false);
-      setCheckInProgress(false);
+      console.error('OpenAIProvider: Error checking AI availability:', error);
+      setAIAvailable(false);
       return false;
     }
-  }, [user, checkInProgress, aiAvailable]);
+  }, [user]);
 
-  // Check availability when auth state changes
   useEffect(() => {
-    console.log('OpenAI Provider auth state:', { 
-      user: user?.uid || 'none', 
-      loading, 
-      aiAvailable,
-      checkInProgress
-    });
-
-    // Don't run the check if auth is still loading or if we're already checking
-    if (loading || checkInProgress) return;
-    
-    // If user is logged in and we haven't checked yet, check availability
-    if (user && !aiAvailable) {
-      checkAvailability();
-    } else if (!user) {
-      // Reset state when user logs out
-      setAiAvailable(false);
-    }
-  }, [user, loading, aiAvailable, checkInProgress, checkAvailability]);
+    checkAvailability();
+  }, [checkAvailability]);
 
   return (
-    <OpenAIContext.Provider value={{ aiAvailable, checkAvailability }}>
+    <OpenAIContext.Provider value={{ aiAvailable, isOpen, setIsOpen, checkAvailability }}>
       {children}
     </OpenAIContext.Provider>
   );
 }
 
-export const useOpenAI = () => useContext(OpenAIContext); 
+export function useOpenAI() {
+  return useContext(OpenAIContext);
+} 

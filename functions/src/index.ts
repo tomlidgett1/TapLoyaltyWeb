@@ -33,7 +33,7 @@ admin.initializeApp();
 export const getOpenAIKey = onCall({
   region: "us-central1",
   cors: {
-    origin: ['https://taployalty.com.au', 'https://taptap--tap-loyalty-fb6d0.us-central1.hosted.app', 'http://localhost:3000'],
+    origin: ['https://taployalty.com.au', 'https://www.taployalty.com.au', 'https://taptap--tap-loyalty-fb6d0.us-central1.hosted.app', 'http://localhost:3000', 'http://localhost:3001'],
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     maxAge: 3600
@@ -115,8 +115,23 @@ export const getOpenAIKeyHttp = onRequest({
     ip: request.ip
   });
   
-  // Set CORS headers
-  response.set('Access-Control-Allow-Origin', '*'); // Temporarily allow all origins for debugging
+  // Set CORS headers - use a more specific approach
+  const allowedOrigins = [
+    'https://taployalty.com.au',
+    'https://www.taployalty.com.au',
+    'https://taptap--tap-loyalty-fb6d0.us-central1.hosted.app',
+    'http://localhost:3000',
+    'http://localhost:3001'
+  ];
+  
+  const origin = request.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    response.set('Access-Control-Allow-Origin', origin);
+  } else {
+    // For development, you might want to allow all origins
+    response.set('Access-Control-Allow-Origin', '*');
+  }
+  
   response.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   response.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   response.set('Access-Control-Max-Age', '3600');
@@ -310,11 +325,31 @@ export const checkEnvironment = onRequest({
   }
 });
 
-// Function to call OpenAI API
+// Function to call OpenAI API with dynamic CORS
 export const callOpenAI = onCall({
   region: "us-central1",
   cors: {
-    origin: ['https://taployalty.com.au', 'https://taptap--tap-loyalty-fb6d0.us-central1.hosted.app', 'http://localhost:3000'],
+    origin: (origin) => {
+      // List of allowed origins
+      const allowedOrigins = [
+        'https://taployalty.com.au', 
+        'https://www.taployalty.com.au',
+        'https://taptap--tap-loyalty-fb6d0.us-central1.hosted.app', 
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:3001'
+      ];
+      
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return true;
+      
+      // In development, allow all origins
+      if (process.env.NODE_ENV === 'development') return true;
+      
+      // Check if the origin is in the allowed list
+      return allowedOrigins.includes(origin);
+    },
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     maxAge: 3600

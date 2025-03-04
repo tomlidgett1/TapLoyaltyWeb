@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Sparkles, Send, Plus, Settings, MessageSquare, ChevronDown, ChevronUp, HelpCircle, CheckCircle, Edit, MoreHorizontal, Pencil, Trash2, Gift, Repeat, Sparkles as SparklesIcon, DollarSign, Calendar, Clock, Users, Award, History, Timer, Wallet, BadgeCheck, CalendarRange, UserCheck, Ban, Mic, MicOff, Eye, Coffee, PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import { Sparkles, Send, Plus, Settings, MessageSquare, ChevronDown, ChevronUp, HelpCircle, CheckCircle, Edit, MoreHorizontal, Pencil, Trash2, Gift, Repeat, Sparkles as SparklesIcon, DollarSign, Calendar, Clock, Users, Award, History, Timer, Wallet, BadgeCheck, CalendarRange, UserCheck, Ban, Mic, MicOff, Eye, Coffee, PanelLeftClose, PanelLeftOpen, Loader2 } from "lucide-react"
 import { getAIResponse } from "@/lib/openai"
 import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
@@ -20,7 +20,8 @@ import {
   getOrCreateAssistant, 
   createThread, 
   addMessage, 
-  runAssistant 
+  runAssistant,
+  getMessages  // Add this import
 } from "@/lib/assistant"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
@@ -1349,6 +1350,11 @@ export function TapAiDialog({
   // Add a ref to store the full program data with rewards
   const fullProgramDataRef = useRef<any>(null);
   const [sidebarVisible, setSidebarVisible] = useState(true)
+  // Add or ensure these state variables are defined
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
 
   const currentMessages = conversations.find(c => c.id === currentConversation)?.messages || []
 
@@ -1364,15 +1370,17 @@ export function TapAiDialog({
     if (open && !assistant) {
       const initializeAssistant = async () => {
         try {
-          const assistantData = await getOrCreateAssistant()
-          setAssistant(assistantData)
+          console.log('Initializing assistant with ID: asst_Aymz6DWL61Twlz2XubPu49ur');
+          
+          // Get the specific assistant
+          const assistantData = await getOrCreateAssistant();
+          setAssistant(assistantData);
+          
+          // Initialize the conversation
+          await initializeConversation();
         } catch (error) {
-          console.error('Error initializing assistant:', error)
-          toast({
-            title: "Error",
-            description: "Failed to initialize AI assistant. Please try again.",
-            variant: "destructive"
-          })
+          console.error("Error initializing assistant:", error);
+          setError("Failed to initialize assistant. Please try again.");
         }
       }
 
@@ -1504,74 +1512,73 @@ export function TapAiDialog({
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!input.trim() || loading || !assistant || !currentConversation || !user?.uid) return
-
-    const userMessage = input.trim()
-    setInput('')
-    setSelectedQuickAction(null)
+    e.preventDefault();
     
-    const conversation = conversations.find(c => c.id === currentConversation)
-    if (!conversation) return
-
-    const updatedMessages = [
-      ...conversation.messages,
-      { role: 'user', content: userMessage }
-    ]
-
-    setConversations(prev => prev.map(conv => 
-      conv.id === currentConversation 
-        ? {
-            ...conv,
-            messages: updatedMessages,
-            updatedAt: new Date().toISOString()
-          }
-        : conv
-    ))
+    if (!input.trim() || loading || isLoading) return;
     
     try {
-    setLoading(true)
-      const { response, threadId } = await addMessage(conversation.threadId, userMessage)
+      console.log('handleSubmit called with input:', input);
       
-      if (threadId !== conversation.threadId) {
-        conversation.threadId = threadId
+      // If we have a current conversation, use the existing handleSendMessage
+      if (currentConversation) {
+        setLoading(true);
+        
+        // Add message to UI
+        const newMessage = {
+          id: Date.now().toString(),
+          role: 'user',
+          content: input,
+          timestamp: new Date().toISOString()
+        };
+        
+        // Update the UI with the new message
+        setConversations(prev => 
+          prev.map(conv => 
+            conv.id === currentConversation 
+              ? { 
+                  ...conv, 
+                  messages: [...conv.messages, newMessage],
+                  updatedAt: new Date().toISOString()
+                } 
+              : conv
+          )
+        );
+        
+        // Clear input
+        setInput('');
+        
+        // Send to API and get response
+        await sendMessageToAPI(currentConversation, input);
+        
+        setLoading(false);
+      } 
+      // If we're using the new thread-based approach
+      else if (threadId) {
+        console.log('Using thread-based approach with threadId:', threadId);
+        // Use our new handleSendMessage function
+        await handleSendMessage(input);
       }
-
-      const aiResponse = await runAssistant(assistant.id, threadId)
-      
-      const finalMessages = [
-        ...updatedMessages,
-        { role: 'assistant', content: aiResponse }
-      ]
-
-      const updatedConversation = {
-        ...conversation,
-        messages: finalMessages,
-        updatedAt: new Date().toISOString()
+      // If we have neither, create a new thread
+      else {
+        console.log('No threadId, creating new thread');
+        // Create a new thread
+        const thread = await createThread();
+        console.log('Thread created:', thread);
+        setThreadId(thread.id);
+        
+        // Send the message
+        await handleSendMessage(input);
       }
-
-      await setDoc(
-        doc(db, 'merchants', user.uid, 'chats', currentConversation),
-        updatedConversation,
-        { merge: true }
-      )
-      
-      setConversations(prev => prev.map(conv =>
-        conv.id === currentConversation
-          ? updatedConversation
-          : conv
-      ))
     } catch (error) {
+      console.error("Error sending message:", error);
       toast({
         title: "Error",
-        description: "Failed to get AI response",
+        description: "Failed to send message. Please try again.",
         variant: "destructive"
-      })
-      console.error('AI chat error:', error)
-    } finally {
-      setLoading(false)
+      });
+      setLoading(false);
     }
-  }
+  };
 
   const handleRenameConversation = async (convId: string, newTitle: string) => {
     if (!user?.uid) return
@@ -1978,6 +1985,222 @@ export function TapAiDialog({
     }
   };
 
+  const initializeConversation = async () => {
+    console.log('initializeConversation called');
+    
+    if (!user) {
+      console.log('No user, cannot initialize conversation');
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      console.log('Current threadId:', threadId);
+      
+      // Check if we have an existing thread
+      if (!threadId) {
+        console.log('No threadId, creating new thread');
+        // Create a new thread
+        const thread = await createThread();
+        console.log('Thread created:', thread);
+        setThreadId(thread.id);
+        
+        // If there's an initial prompt, send it
+        if (initialPrompt) {
+          console.log('Sending initial prompt:', initialPrompt);
+          await handleSendMessage(initialPrompt);
+        }
+      } else {
+        console.log('ThreadId exists, loading messages');
+        // Load existing messages
+        await loadMessages();
+      }
+    } catch (error) {
+      console.error("Error initializing conversation:", error);
+      setError("Failed to initialize conversation. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadMessages = async () => {
+    if (!threadId) {
+      console.log('loadMessages: No threadId, cannot load messages');
+      return;
+    }
+    
+    console.log('loadMessages: Loading messages for threadId', threadId);
+    setIsLoading(true);
+    
+    try {
+      // Try to get messages from the imported function
+      const messagesData = await getMessages(threadId);
+      console.log('loadMessages: Loaded messages', messagesData.length);
+      setMessages(messagesData);
+    } catch (error) {
+      console.error("Error loading messages:", error);
+      setError("Failed to load messages. Please try again.");
+      
+      // Fallback to localStorage if the imported function fails
+      try {
+        const storageKey = `thread_${threadId}_messages`;
+        const storedMessages = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        console.log('loadMessages: Fallback to localStorage, found messages:', storedMessages.length);
+        setMessages(storedMessages);
+      } catch (e) {
+        console.error('loadMessages: Fallback to localStorage failed', e);
+        setMessages([]);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSendMessage = async (content: string) => {
+    console.log('handleSendMessage called with:', content);
+    console.log('Current threadId:', threadId);
+    
+    if (!threadId || !content.trim()) {
+      console.log('Cannot send message: threadId or content missing');
+      return;
+    }
+    
+    setIsLoading(true);
+    setInput("");
+    
+    try {
+      console.log('Adding user message to UI');
+      // Add the user message to the UI immediately
+      const userMessage = {
+        id: `temp-${Date.now()}`,
+        role: 'user',
+        content: [{ type: 'text', text: { value: content } }],
+        created_at: Date.now()
+      };
+      
+      setMessages(prev => {
+        console.log('Previous messages:', prev);
+        return [...prev, userMessage];
+      });
+      
+      console.log('Sending message to API');
+      // Send the message to the API
+      const { run, assistantMessage } = await addMessage(threadId, content);
+      console.log('Message sent, run created:', run);
+      console.log('Assistant message:', assistantMessage);
+      
+      // Add the assistant's response to the UI
+      if (assistantMessage) {
+        setMessages(prev => [...prev, assistantMessage]);
+      } else {
+        // If no assistant message, load messages from storage
+        await loadMessages();
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      setError("Failed to send message. Please try again.");
+      
+      // Add a fallback message if the API call fails
+      const fallbackMessage = {
+        id: `fallback-${Date.now()}`,
+        role: 'assistant',
+        content: [{ 
+          type: 'text', 
+          text: { 
+            value: "I'm sorry, I'm having trouble connecting to the server. Please try again in a moment." 
+          } 
+        }],
+        created_at: Date.now()
+      };
+      
+      setMessages(prev => [...prev, fallbackMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Add this function to your component
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Handle Enter key press (without Shift) to submit the form
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e as unknown as React.FormEvent);
+    }
+    
+    // Handle Escape key to close mention popover
+    if (e.key === 'Escape' && mentionOpen) {
+      e.preventDefault();
+      setMentionOpen(false);
+    }
+    
+    // Handle arrow keys for mention navigation (if you have mention functionality)
+    if (mentionOpen && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      // Add your mention navigation logic here if needed
+    }
+  };
+
+  // Add this function to your component
+  const getMessages = async (threadId: string) => {
+    console.log('getMessages: Getting messages from thread', threadId);
+    
+    try {
+      // Try to get messages from localStorage
+      const storageKey = `thread_${threadId}_messages`;
+      const storedMessages = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      
+      if (storedMessages.length > 0) {
+        console.log('getMessages: Retrieved messages from localStorage', storedMessages.length);
+        return storedMessages;
+      }
+      
+      // If no messages in localStorage, return an empty array
+      console.log('getMessages: No messages found for thread');
+      return [];
+    } catch (error) {
+      console.error('Error getting messages:', error);
+      return [];
+    }
+  };
+
+  // Add this near your debug button
+  const debugLocalStorage = () => {
+    try {
+      if (!threadId) {
+        console.log('No threadId to check localStorage');
+        return;
+      }
+      
+      const storageKey = `thread_${threadId}_messages`;
+      const storedMessages = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      console.log('Messages in localStorage:', storedMessages);
+      
+      // Check all localStorage keys
+      const allKeys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        allKeys.push(localStorage.key(i));
+      }
+      console.log('All localStorage keys:', allKeys);
+      
+      // Check if there are any thread-related keys
+      const threadKeys = allKeys.filter(key => key?.startsWith('thread_'));
+      console.log('Thread-related localStorage keys:', threadKeys);
+      
+      // Log the content of each thread key
+      threadKeys.forEach(key => {
+        try {
+          const content = JSON.parse(localStorage.getItem(key) || '[]');
+          console.log(`Content of ${key}:`, content);
+        } catch (e) {
+          console.error(`Error parsing content of ${key}:`, e);
+        }
+      });
+    } catch (e) {
+      console.error('Error debugging localStorage:', e);
+    }
+  };
+
   if (authLoading) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -2118,213 +2341,105 @@ export function TapAiDialog({
               </div>
             </DialogHeader>
 
-            <ScrollArea className="flex-1 px-4 py-6">
-              <div className="space-y-3 max-w-4xl mx-auto">
-                {currentMessages.map((message, i) => (
-                  <div key={i} className={cn(
-                    "py-2 px-4 flex flex-col",
-                    message.role === 'assistant' 
-                      ? "items-start"
-                      : "items-end"
-                  )}>
-                    <MessageContent 
-                      content={message.content} 
-                      user={user} 
-                      onEdit={handleEditReward}
-                      onUseTemplate={(reward) => {
-                        console.log("onUseTemplate called with:", JSON.stringify(reward));
-                        
-                        // Create a deep copy to ensure we don't lose any data
-                        let rewardCopy;
-                        
-                        if (reward && reward.isProgram && Array.isArray(reward.rewards)) {
-                          console.log(`Program detected with ${reward.rewards.length} rewards`);
-                          console.log("Original rewards array:", JSON.stringify(reward.rewards));
-                          
-                          // Create a deep copy of the rewards array
-                          const rewardsDeepCopy = reward.rewards.map(r => ({...r}));
-                          
-                          console.log("Deep copied rewards array:", JSON.stringify(rewardsDeepCopy));
-                          console.log("Deep copied rewards array length:", rewardsDeepCopy.length);
-                          
-                          // Create a new program object with the deep copied rewards
-                          rewardCopy = {
-                            ...reward,
-                            rewards: rewardsDeepCopy,
-                            isProgram: true
-                          };
-                          
-                          console.log("Final program object to save:", JSON.stringify(rewardCopy));
-                          
-                          // Store in ref instead of state for programs
-                          if (fullProgramDataRef) {
-                            fullProgramDataRef.current = rewardCopy;
-                          }
-                        } else {
-                          // For single rewards
-                          rewardCopy = {...reward};
-                          console.log("Single reward to save:", JSON.stringify(rewardCopy));
-                        }
-                        
-                        // Set the reward to be saved
-                        setSavingReward(rewardCopy);
-                        setPinDialogOpen(true);
-                      }}
-                      className={cn(
-                        "max-w-[80%] p-4 rounded-2xl",
-                        message.role === 'user' 
-                          ? "bg-[#007AFF] text-white"
-                          : "bg-gray-50 text-gray-700"
-                      )}
-                      fullProgramDataRef={fullProgramDataRef}  // Pass the ref here
-                    />
+            {/* Messages area */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Display messages from the current conversation */}
+              {currentConversation && currentMessages.map((message, index) => (
+                <div 
+                  key={message.id || index} 
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div 
+                    className={`max-w-[80%] p-3 rounded-lg ${
+                      message.role === 'user' 
+                        ? 'bg-blue-500 text-white' 
+                        : 'bg-gray-200 text-gray-900'
+                    }`}
+                  >
+                    {message.content}
                   </div>
-                ))}
-                {loading && (
-                  <div className="flex justify-start">
-                    <div className="relative h-6 w-12">
-                      <div className="absolute left-0 h-2 w-2 bg-[#007AFF] rounded-full animate-typing1" />
-                      <div className="absolute left-4 h-2 w-2 bg-[#007AFF] rounded-full animate-typing2" />
-                      <div className="absolute left-8 h-2 w-2 bg-[#007AFF] rounded-full animate-typing3" />
-                    </div>
+                </div>
+              ))}
+              
+              {/* Display messages from the thread-based approach */}
+              {!currentConversation && messages.map((message, index) => (
+                <div 
+                  key={message.id || index} 
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div 
+                    className={`max-w-[80%] p-3 rounded-lg ${
+                      message.role === 'user' 
+                        ? 'bg-blue-500 text-white' 
+                        : 'bg-gray-200 text-gray-900'
+                    }`}
+                  >
+                    {Array.isArray(message.content) 
+                      ? message.content.map((content, i) => (
+                          <div key={i} className="whitespace-pre-wrap">
+                            {content.type === 'text' ? content.text.value : '[Unsupported content]'}
+                          </div>
+                        ))
+                      : typeof message.content === 'string'
+                        ? message.content
+                        : '[Unsupported content format]'}
                   </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-            </ScrollArea>
+                </div>
+              ))}
+              
+              {/* Loading indicator */}
+              {(loading || isLoading) && (
+                <div className="flex justify-center">
+                  <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+              
+              <div ref={messagesEndRef} />
+            </div>
 
             <div className="px-4 py-6 border-t border-gray-100 max-w-4xl mx-auto w-full">
-              <form onSubmit={handleSubmit}>
-                <div className="flex-1 relative">
-                  <div className="relative h-32 bg-[#F3F3F3] rounded-2xl">
-                    <textarea
-                      ref={inputRef as any}
-                  placeholder="Message TapAI..."
+              <form onSubmit={handleSubmit} className="flex items-center gap-2 p-4 border-t border-gray-200">
+                <Input
+                  ref={inputRef}
                   value={input}
-                      onChange={handleInputChange}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault()
-                          handleSubmit(e as any)
-                        }
-                      }}
-                      className="w-full h-full pl-4 pr-24 pt-4 pb-16 bg-transparent border border-gray-200 rounded-2xl resize-none focus:outline-none focus:ring-1 focus:ring-gray-200 focus:border-gray-200 text-gray-900 placeholder:text-gray-500 transition-all"
-                    />
-                    
-                    {isRecording && (
-                      <div className="absolute top-4 right-4 flex items-center gap-2 text-sm text-[#007AFF]">
-                        <div className="w-2 h-2 rounded-full bg-[#007AFF] animate-pulse" />
-                        <span className="text-xs font-medium">Listening...</span>
-                      </div>
-                    )}
-
-                    {mentionOpen && (
-                      <div className="absolute bottom-20 left-4 w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-2">
-                        {customers.length === 0 ? (
-                          <div className="px-4 py-2 text-sm text-gray-500">
-                            No customers found
-                          </div>
-                        ) : (
-                          customers
-                            .filter(customer => 
-                              customer.fullName.toLowerCase().includes(mentionQuery.toLowerCase())
-                            )
-                            .map(customer => (
-                              <div
-                                key={customer.id}
-                                className="px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm text-gray-700 flex items-center gap-2"
-                                onClick={() => handleCustomerSelect(customer)}
-                              >
-                                <div className="w-6 h-6 rounded-full bg-[#007AFF]/10 flex items-center justify-center text-[#007AFF] text-xs font-medium">
-                                  {customer.fullName.charAt(0)}
-                                </div>
-                                <span>{customer.fullName}</span>
-                              </div>
-                            ))
-                        )}
-                      </div>
-                    )}
-
-                    <div className="absolute left-4 bottom-4 flex items-center gap-2">
-                <Button 
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className={cn(
-                          "h-8 px-3 bg-white hover:bg-gray-50 border border-gray-200 transition-colors duration-200 rounded-xl flex items-center gap-2 shadow-sm",
-                          selectedQuickAction === 'individual' 
-                            ? "text-[#007AFF] border-[#007AFF] bg-blue-50" 
-                            : "text-gray-600 hover:text-[#007AFF]"
-                        )}
-                        onClick={() => {
-                          setInput("Create an individual reward")
-                          setSelectedQuickAction('individual')
-                        }}
-                      >
-                        <Gift className="h-4 w-4" />
-                        <span className="text-sm">Individual</span>
-                </Button>
+                  onChange={handleInputChange}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Type a message..."
+                  className="flex-1"
+                  disabled={loading || isLoading}
+                />
+                {process.env.NODE_ENV === 'development' && (
                   <Button
-                        type="button"
-                        variant="ghost"
+                    type="button"
+                    variant="outline"
                     size="sm"
-                        className={cn(
-                          "h-8 px-3 bg-white hover:bg-gray-50 border border-gray-200 transition-colors duration-200 rounded-xl flex items-center gap-2 shadow-sm",
-                          selectedQuickAction === 'recurring' 
-                            ? "text-[#007AFF] border-[#007AFF] bg-blue-50" 
-                            : "text-gray-600 hover:text-[#007AFF]"
-                        )}
-                        onClick={() => {
-                          setInput("Create a recurring reward")
-                          setSelectedQuickAction('recurring')
-                        }}
-                      >
-                        <Repeat className="h-4 w-4" />
-                        <span className="text-sm">Recurring</span>
+                    onClick={() => {
+                      console.log('Debug state:', {
+                        threadId,
+                        currentConversation,
+                        messages,
+                        conversations,
+                        isLoading,
+                        loading,
+                        input
+                      });
+                      debugLocalStorage();
+                    }}
+                  >
+                    Debug
                   </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className={cn(
-                          "h-8 px-3 bg-white hover:bg-gray-50 border border-gray-200 transition-colors duration-200 rounded-xl flex items-center gap-2 shadow-sm",
-                          selectedQuickAction === 'any' 
-                            ? "text-[#007AFF] border-[#007AFF] bg-blue-50" 
-                            : "text-gray-600 hover:text-[#007AFF]"
-                        )}
-                        onClick={() => {
-                          setInput("Create any type of reward")
-                          setSelectedQuickAction('any')
-                        }}
-                      >
-                        <SparklesIcon className="h-4 w-4" />
-                        <span className="text-sm">Any</span>
-                      </Button>
-              </div>
-
-                    <div className="absolute right-2 bottom-4 flex items-center gap-2">
-                      <Button 
-                        type="button"
-                        onClick={handleSpeechToText}
-                        className={cn(
-                          "rounded-xl h-8 w-8 p-0 flex items-center justify-center transition-all duration-200",
-                          isRecording 
-                            ? "bg-[#007AFF] hover:bg-[#0066CC] text-white"
-                            : "bg-[#F3F3F3] hover:bg-gray-200 text-gray-700"
-                        )}
-                      >
-                        <Mic className="h-4 w-4" />
-                      </Button>
+                )}
                 <Button 
                   type="submit" 
-                  disabled={loading}
-                        className="bg-[#F3F3F3] hover:bg-gray-200 rounded-xl h-8 w-8 p-0 flex items-center justify-center transition-all duration-200 disabled:opacity-50"
+                  size="icon" 
+                  disabled={!input.trim() || loading || isLoading}
                 >
-                        <Send className="h-4 w-4 text-gray-700" />
+                  {loading || isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
                 </Button>
-            </div>
-          </div>
-        </div>
               </form>
             </div>
           </div>

@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "build",
+    "public": "public",
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -9,12 +9,31 @@
     "appAssociation": "AUTO",
     "rewrites": [
       {
-        "source": "/api/openai-key",
-        "function": "getOpenAIKeyHttp"
+        "source": "/api/**",
+        "function": "api"
       },
       {
         "source": "**",
         "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "https://taployalty.com.au, https://www.taployalty.com.au"
+          },
+          {
+            "key": "Access-Control-Allow-Methods",
+            "value": "GET, POST, PUT, DELETE, OPTIONS"
+          },
+          {
+            "key": "Access-Control-Allow-Headers",
+            "value": "Content-Type, Authorization"
+          }
+        ]
       }
     ]
   },
@@ -34,6 +53,9 @@
       ".git",
       "firebase-debug.log",
       "firebase-debug.*.log"
+    ],
+    "predeploy": [
+      "npm --prefix \"$RESOURCE_DIR\" run build"
     ]
   }
 }

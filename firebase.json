@@ -17,14 +17,6 @@
   "apphosting": {
     "env": [
       {
-        "variable": "OPENAI_API_KEY",
-        "value": "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"
-      },
-      {
-        "variable": "NEXT_PUBLIC_OPENAI_API_KEY",
-        "value": "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"
-      },
-      {
         "variable": "NEXT_PUBLIC_OPENAI_AVAILABLE",
         "value": "true"
       }

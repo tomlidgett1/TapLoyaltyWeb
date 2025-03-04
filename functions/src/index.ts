@@ -44,23 +44,17 @@ export const getOpenAIKey = onCall({
     requestTime: new Date().toISOString()
   });
 
+  // Check if user is authenticated
+  if (!request.auth) {
+    logger.error("Unauthenticated request for API key");
+    throw new Error("Unauthenticated. You must be logged in to use this feature.");
+  }
+
   try {
     logger.info("Retrieving API key from config");
     
-    // Log all available config
-    logger.info("Available config keys:", Object.keys(functions.config()));
-    
-    // Get the API key from config
-    const apiKey = functions.config().openai?.api_key || 
-                  functions.config().openai?.apikey || 
-                  functions.config().next?.public_openai_api_key;
-    
-    logger.info("API key retrieval result:", {
-      hasOpenaiApiKey: !!functions.config().openai?.api_key,
-      hasOpenaiApikey: !!functions.config().openai?.apikey,
-      hasNextPublicKey: !!functions.config().next?.public_openai_api_key,
-      finalKeyAvailable: !!apiKey
-    });
+    // Get the API key from config - ONLY look in one place
+    const apiKey = functions.config().openai?.api_key;
     
     if (!apiKey) {
       logger.error("OpenAI API key not found in config");
@@ -72,10 +66,7 @@ export const getOpenAIKey = onCall({
     // Return the API key
     return {
       apiKey: apiKey,
-      timestamp: new Date().toISOString(),
-      source: apiKey === functions.config().openai?.api_key ? 'openai.api_key' :
-              apiKey === functions.config().openai?.apikey ? 'openai.apikey' : 
-              'next.public_openai_api_key'
+      timestamp: new Date().toISOString()
     };
   } catch (error) {
     logger.error("Error retrieving API key", error);
@@ -99,41 +90,54 @@ export const getOpenAIKeyHttp = onRequest({
     return;
   }
   
-  // Check authentication (optional)
-  // const authHeader = request.headers.authorization;
-  // if (!authHeader) {
-  //   response.status(401).send({ error: 'Unauthorized' });
-  //   return;
-  // }
-  
-  try {
-    logger.info("HTTP API key request received");
-    
-    // Get the API key from config
-    const apiKey = functions.config().openai?.api_key || 
-                  functions.config().openai?.apikey || 
-                  functions.config().next?.public_openai_api_key;
-    
-    if (!apiKey) {
-      logger.error("OpenAI API key not found in config");
-      response.status(500).send({ error: 'API key not configured' });
-      return;
-    }
-
-    logger.info("API key retrieved successfully");
-    
-    // Return the API key
-    response.status(200).send({
-      apiKey: apiKey,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error("Error retrieving API key", error);
-    response.status(500).send({ 
-      error: 'Failed to retrieve API key',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
+  // Check authentication
+  const authHeader = request.headers.authorization;
+  if (!authHeader) {
+    response.status(401).send({ error: 'Unauthorized' });
+    return;
   }
+  
+  // Verify Firebase token
+  const token = authHeader.split('Bearer ')[1];
+  if (!token) {
+    response.status(401).send({ error: 'Invalid authorization format' });
+    return;
+  }
+  
+  admin.auth().verifyIdToken(token)
+    .then((decodedToken) => {
+      // Token is valid, proceed with getting the API key
+      try {
+        logger.info("HTTP API key request received from user:", decodedToken.uid);
+        
+        // Get the API key from config - ONLY look in one place
+        const apiKey = functions.config().openai?.api_key;
+        
+        if (!apiKey) {
+          logger.error("OpenAI API key not found in config");
+          response.status(500).send({ error: 'API key not configured' });
+          return;
+        }
+
+        logger.info("API key retrieved successfully");
+        
+        // Return the API key
+        response.status(200).send({
+          apiKey: apiKey,
+          timestamp: new Date().toISOString()
+        });
+      } catch (error) {
+        logger.error("Error retrieving API key", error);
+        response.status(500).send({ 
+          error: 'Failed to retrieve API key',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    })
+    .catch((error) => {
+      logger.error("Error verifying token:", error);
+      response.status(401).send({ error: 'Invalid token' });
+    });
 });
 
 // Add a simple HTTP function to test

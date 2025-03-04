@@ -8,7 +8,6 @@ import { OnboardingCheck } from "@/components/onboarding-check"
 import { OpenAIProvider } from '@/components/providers/openai-provider';
 import Link from 'next/link';
 import { TapAiDialogProvider } from "@/components/tap-ai-dialog-provider";
-import { TapAiButton } from "@/components/tap-ai-button";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -38,7 +37,6 @@ export default function RootLayout({
             <TapAiDialogProvider>
               {children}
               <Toaster />
-              <TapAiButton />
               <FloatingMicrophone />
               <OnboardingCheck />
               {process.env.NODE_ENV === 'development' && (

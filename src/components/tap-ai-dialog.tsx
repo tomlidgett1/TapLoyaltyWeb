@@ -1381,6 +1381,29 @@ export function TapAiDialog({
         } catch (error) {
           console.error("Error initializing assistant:", error);
           setError("Failed to initialize assistant. Please try again.");
+          
+          // Still set a mock assistant to allow the UI to function
+          setAssistant({
+            id: 'asst_Aymz6DWL61Twlz2XubPu49ur',
+            object: 'assistant',
+            created_at: Date.now(),
+            name: 'TapAI Assistant',
+            description: 'A helpful assistant for TapLoyalty',
+            model: 'gpt-4',
+            instructions: 'You are a helpful assistant for TapLoyalty, a loyalty program platform for small businesses.',
+            tools: [],
+            metadata: {}
+          });
+          
+          // Create a thread anyway
+          try {
+            const thread = await createThread();
+            setThreadId(thread.id);
+          } catch (e) {
+            console.error("Error creating thread:", e);
+            // Generate a mock thread ID
+            setThreadId('thread_' + Math.random().toString(36).substring(2, 15));
+          }
         }
       }
 
@@ -1511,6 +1534,36 @@ export function TapAiDialog({
     inputRef.current.focus()
   }
 
+  const handleSendMessageWithFallback = async (content: string) => {
+    try {
+      await handleSendMessage(content);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      
+      // Add a fallback message if the API call fails
+      const userMessage = {
+        id: `temp-${Date.now()}`,
+        role: 'user',
+        content: [{ type: 'text', text: { value: content } }],
+        created_at: Date.now()
+      };
+      
+      const fallbackMessage = {
+        id: `fallback-${Date.now()}`,
+        role: 'assistant',
+        content: [{ 
+          type: 'text', 
+          text: { 
+            value: "I'm sorry, I'm having trouble connecting to the server. Please try again in a moment." 
+          } 
+        }],
+        created_at: Date.now() + 1000
+      };
+      
+      setMessages(prev => [...prev, userMessage, fallbackMessage]);
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -1555,19 +1608,49 @@ export function TapAiDialog({
       // If we're using the new thread-based approach
       else if (threadId) {
         console.log('Using thread-based approach with threadId:', threadId);
-        // Use our new handleSendMessage function
-        await handleSendMessage(input);
+        // Use our fallback-enabled function
+        await handleSendMessageWithFallback(input);
       }
       // If we have neither, create a new thread
       else {
         console.log('No threadId, creating new thread');
         // Create a new thread
-        const thread = await createThread();
-        console.log('Thread created:', thread);
-        setThreadId(thread.id);
-        
-        // Send the message
-        await handleSendMessage(input);
+        try {
+          const thread = await createThread();
+          console.log('Thread created:', thread);
+          setThreadId(thread.id);
+          
+          // Send the message
+          await handleSendMessageWithFallback(input);
+        } catch (error) {
+          console.error("Error creating thread:", error);
+          
+          // Generate a mock thread ID and use fallback
+          const mockThreadId = 'thread_' + Math.random().toString(36).substring(2, 15);
+          setThreadId(mockThreadId);
+          
+          // Add the messages to the UI anyway
+          const userMessage = {
+            id: `temp-${Date.now()}`,
+            role: 'user',
+            content: [{ type: 'text', text: { value: input } }],
+            created_at: Date.now()
+          };
+          
+          const fallbackMessage = {
+            id: `fallback-${Date.now()}`,
+            role: 'assistant',
+            content: [{ 
+              type: 'text', 
+              text: { 
+                value: "I'm sorry, I'm having trouble connecting to the server. Please try again in a moment." 
+              } 
+            }],
+            created_at: Date.now() + 1000
+          };
+          
+          setMessages(prev => [...prev, userMessage, fallbackMessage]);
+        }
       }
     } catch (error) {
       console.error("Error sending message:", error);
@@ -1576,7 +1659,6 @@ export function TapAiDialog({
         description: "Failed to send message. Please try again.",
         variant: "destructive"
       });
-      setLoading(false);
     }
   };
 

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Sparkles } from "lucide-react"
 import { TapAiDialog } from "@/components/tap-ai-dialog"
 
-export function TapAiButton({ 
+export function TapAiButtonStandalone({ 
   initialPrompt = "",
   variant = "default",
   size = "default",

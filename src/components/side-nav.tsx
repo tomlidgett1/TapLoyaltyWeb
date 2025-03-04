@@ -21,7 +21,8 @@ import {
   MessageSquare,
   ShoppingBag,
   Clock,
-  Settings
+  Settings,
+  Sparkles
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -38,6 +39,7 @@ import { doc, getDoc } from "firebase/firestore"
 import { signOut } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { TapAiButton } from "@/components/tap-ai-button"
 
 const navItems = [
   {
@@ -91,6 +93,12 @@ const navItems = [
     title: "Customers",
     href: "/customers",
     icon: Users
+  },
+  {
+    title: "TapAI",
+    href: "#",
+    icon: Sparkles,
+    isAI: true
   },
   {
     title: "Rewards Library",
@@ -226,13 +234,13 @@ export function SideNav() {
       
       <nav className="p-2 flex-1 overflow-y-auto">
         <ul className="space-y-1">
-          {navItems.map((item) => {
+          {navItems.filter(item => !item.isAI).map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
             const hasSubItems = item.subItems && item.subItems.length > 0
             const isOpen = openItems[item.title] || false
             
             return (
-              <li key={item.href}>
+              <li key={item.title}>
                 {hasSubItems ? (
                   <Collapsible open={isOpen} onOpenChange={() => toggleItem(item.title)}>
                     <CollapsibleTrigger className="w-full">
@@ -315,6 +323,14 @@ export function SideNav() {
           })}
         </ul>
       </nav>
+      
+      {/* TapAI button above profile section */}
+      <div className="px-2 pb-2">
+        <TapAiButton 
+          variant="default" 
+          className="w-full justify-start text-sm font-medium bg-[#007AFF] hover:bg-[#0066CC] text-white shadow-sm"
+        />
+      </div>
       
       {/* Profile section at bottom */}
       <div className="border-t p-4">

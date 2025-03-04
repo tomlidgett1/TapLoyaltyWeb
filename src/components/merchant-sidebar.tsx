@@ -35,6 +35,7 @@ import Link from "next/link"
 import { useMerchant } from '@/hooks/use-merchant'
 import { useAuth } from '@/contexts/auth-context'
 import Image from 'next/image'
+import { TapAiButton } from "@/components/tap-ai-button"
 
 const menuItems = [
   {
@@ -51,6 +52,11 @@ const menuItems = [
     title: "Create",
     icon: PlusCircle,
     url: "/create",
+  },
+  {
+    title: "TapAI",
+    icon: Sparkles,
+    isAI: true
   },
   {
     title: "Reward Library",
@@ -122,7 +128,7 @@ export function MerchantSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
+              {menuItems.filter(item => !item.isAI).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <Link 
                     href={item.url}
@@ -134,12 +140,25 @@ export function MerchantSidebar() {
                   >
                     <item.icon className="h-5 w-5" />
                     <span className="text-sm font-medium">{item.title}</span>
+                    {item.badge && (
+                      <Badge variant="outline" className="ml-auto">
+                        {item.badge}
+                      </Badge>
+                    )}
                   </Link>
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        
+        {/* TapAI button above the support section */}
+        <div className="px-4 pt-4">
+          <TapAiButton 
+            variant="default" 
+            className="w-full justify-start gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white shadow-sm"
+          />
+        </div>
         
         <div className="mt-auto">
           <div className="p-4 space-y-4">

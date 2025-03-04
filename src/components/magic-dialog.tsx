@@ -49,24 +49,25 @@ export function MagicDialog({
     try {
       setIsLoading(true)
       
-      // Call our secure API route instead of OpenAI directly
-      const response = await fetch('/api/openai', {
+      // Call our Firebase function via the API route
+      const response = await fetch('/api/magic', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          action: 'createThread'
+          action: 'createThread',
+          payload: {}
         }),
       });
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create thread');
+        throw new Error(errorData.details || 'Failed to create thread');
       }
       
       const data = await response.json();
-      setThreadId(data.id);
+      setThreadId(data.threadId);
       
       // Add welcome message
       setMessages([
@@ -107,80 +108,35 @@ export function MagicDialog({
     setIsLoading(true);
 
     try {
-      // Add message to thread
-      const messageResponse = await fetch('/api/openai', {
+      // Call our Firebase function via the API route
+      const response = await fetch('/api/magic', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          action: 'addMessage',
-          threadId,
-          content: input
+          action: 'sendMessage',
+          payload: {
+            threadId,
+            assistantId: ASSISTANT_ID,
+            message: input
+          }
         }),
       });
       
-      if (!messageResponse.ok) {
-        const errorData = await messageResponse.json();
-        throw new Error(errorData.error || 'Failed to add message');
-      }
-
-      // Run the assistant
-      const runResponse = await fetch('/api/openai', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'runAssistant',
-          threadId,
-          assistantId: ASSISTANT_ID
-        }),
-      });
-      
-      if (!runResponse.ok) {
-        const errorData = await runResponse.json();
-        throw new Error(errorData.error || 'Failed to run assistant');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || 'Failed to process message');
       }
       
-      const runData = await runResponse.json();
-      const runId = runData.id;
-
-      // Poll for run completion
-      await pollRunStatus(threadId, runId);
-
-      // Get messages after run completes
-      const messagesResponse = await fetch('/api/openai', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'getMessages',
-          threadId
-        }),
-      });
+      const data = await response.json();
       
-      if (!messagesResponse.ok) {
-        const errorData = await messagesResponse.json();
-        throw new Error(errorData.error || 'Failed to get messages');
-      }
-      
-      const messagesData = await messagesResponse.json();
-      
-      // Get the latest assistant message
-      const latestAssistantMessage = messagesData.data
-        .filter((msg: any) => msg.role === 'assistant')
-        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-
-      if (latestAssistantMessage) {
-        const content = latestAssistantMessage.content[0].text.value;
-        
+      if (data.assistantResponse) {
         const assistantMessage: Message = {
-          id: latestAssistantMessage.id,
+          id: `assistant-${Date.now()}`,
           role: 'assistant',
-          content: content,
-          createdAt: new Date(latestAssistantMessage.created_at * 1000)
+          content: data.assistantResponse,
+          createdAt: new Date()
         };
         
         setMessages(prev => [...prev, assistantMessage]);
@@ -196,43 +152,6 @@ export function MagicDialog({
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const pollRunStatus = async (threadId: string, runId: string) => {
-    const maxAttempts = 30;
-    const delayMs = 1000;
-    
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const response = await fetch('/api/openai', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'getRunStatus',
-          threadId,
-          runId
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to get run status');
-      }
-      
-      const data = await response.json();
-      
-      if (data.status === 'completed') {
-        return;
-      } else if (data.status === 'failed' || data.status === 'cancelled' || data.status === 'expired') {
-        throw new Error(`Run ended with status: ${data.status}`);
-      }
-      
-      // Wait before polling again
-      await new Promise(resolve => setTimeout(resolve, delayMs));
-    }
-    
-    throw new Error('Run timed out');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

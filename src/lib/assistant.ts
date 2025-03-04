@@ -1,15 +1,27 @@
 import OpenAI from 'openai'
 
-const openai = new OpenAI({
-  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true
-})
+// Initialize OpenAI only if API key is available
+let openai: OpenAI | null = null;
+
+try {
+  if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_OPENAI_AVAILABLE === 'true') {
+    openai = new OpenAI({
+      apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
+      dangerouslyAllowBrowser: true
+    });
+  }
+} catch (error) {
+  console.error('Failed to initialize OpenAI client:', error);
+}
 
 const ASSISTANT_ID = 'asst_Aymz6DWL61Twlz2XubPu49ur'
 
 // Get the existing assistant
 export async function getOrCreateAssistant() {
   try {
+    if (!openai) {
+      throw new Error('OpenAI client is not available');
+    }
     return await openai.beta.assistants.retrieve(ASSISTANT_ID)
   } catch (error) {
     console.error('Error getting assistant:', error)
@@ -20,6 +32,9 @@ export async function getOrCreateAssistant() {
 // Create a thread for a new conversation
 export async function createThread() {
   try {
+    if (!openai) {
+      throw new Error('OpenAI client is not available');
+    }
     return await openai.beta.threads.create()
   } catch (error) {
     console.error('Error creating thread:', error)
@@ -29,12 +44,19 @@ export async function createThread() {
 
 // Add this function to create a new thread when needed
 async function shouldCreateNewThread(threadId: string): Promise<boolean> {
+  if (!openai) {
+    return false;
+  }
   const messages = await openai.beta.threads.messages.list(threadId)
   return messages.data.length >= 10 // Create new thread after 10 messages
 }
 
 // Modify addMessage function
 export async function addMessage(threadId: string, content: string, metadata?: { merchantName?: string }) {
+  if (!openai) {
+    throw new Error('OpenAI client is not available');
+  }
+
   // Check if we need a new thread
   if (await shouldCreateNewThread(threadId)) {
     // Create new thread
@@ -65,6 +87,10 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 // Run the assistant on a thread
 export async function runAssistant(assistantId: string, threadId: string) {
   try {
+    if (!openai) {
+      throw new Error('OpenAI client is not available');
+    }
+
     // Add delay before making request
     await delay(2000) // 2 second delay
 

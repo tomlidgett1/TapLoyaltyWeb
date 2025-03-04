@@ -6,6 +6,7 @@ import { AuthProvider } from "@/contexts/auth-context"
 import { TapAi } from "@/components/tap-ai"
 import { FloatingMicrophone } from "@/components/floating-microphone"
 import { OnboardingCheck } from "@/components/onboarding-check"
+import { OpenAIProvider } from '@/components/providers/openai-provider';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,13 +31,15 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
-        <AuthProvider>
-          {children}
-          <Toaster />
-          <TapAi />
-          <FloatingMicrophone />
-          <OnboardingCheck />
-        </AuthProvider>
+        <OpenAIProvider>
+          <AuthProvider>
+            {children}
+            <Toaster />
+            <TapAi />
+            <FloatingMicrophone />
+            <OnboardingCheck />
+          </AuthProvider>
+        </OpenAIProvider>
       </body>
     </html>
   );

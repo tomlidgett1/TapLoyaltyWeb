@@ -15,7 +15,15 @@
     "env": [
       {
         "variable": "OPENAI_API_KEY",
-        "value": "your-openai-api-key"
+        "value": "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"
+      },
+      {
+        "variable": "NEXT_PUBLIC_OPENAI_API_KEY",
+        "value": "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"
+      },
+      {
+        "variable": "NEXT_PUBLIC_OPENAI_AVAILABLE",
+        "value": "true"
       }
     ]
   }

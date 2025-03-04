@@ -7,9 +7,6 @@ import { Input } from "@/components/ui/input"
 import { Sparkles, Send, Wand2, Loader2 } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
-// Using the provided API key
-const API_KEY = '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';
-
 // Assistant ID from your requirements
 const ASSISTANT_ID = 'asst_Aymz6DWL61Twlz2XubPu49ur'
 
@@ -52,19 +49,20 @@ export function MagicDialog({
     try {
       setIsLoading(true)
       
-      // Direct API call without using the route handler
-      const response = await fetch('https://api.openai.com/v1/threads', {
+      // Call our secure API route instead of OpenAI directly
+      const response = await fetch('/api/openai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`,
-          'OpenAI-Beta': 'assistants=v2'
-        }
+        },
+        body: JSON.stringify({
+          action: 'createThread'
+        }),
       });
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'Failed to create thread');
+        throw new Error(errorData.error || 'Failed to create thread');
       }
       
       const data = await response.json();
@@ -85,7 +83,7 @@ export function MagicDialog({
         {
           id: 'error',
           role: 'assistant',
-          content: `Error: ${error.message || 'Failed to connect to the assistant. Please check your API key and try again.'}`,
+          content: `Error: ${error.message || 'Failed to connect to the assistant. Please try again.'}`,
           createdAt: new Date()
         }
       ]);
@@ -110,40 +108,39 @@ export function MagicDialog({
 
     try {
       // Add message to thread
-      const messageResponse = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+      const messageResponse = await fetch('/api/openai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`,
-          'OpenAI-Beta': 'assistants=v2'
         },
-        body: JSON.stringify({ 
-          role: 'user',
-          content: input 
+        body: JSON.stringify({
+          action: 'addMessage',
+          threadId,
+          content: input
         }),
       });
       
       if (!messageResponse.ok) {
         const errorData = await messageResponse.json();
-        throw new Error(errorData.error?.message || 'Failed to add message');
+        throw new Error(errorData.error || 'Failed to add message');
       }
 
       // Run the assistant
-      const runResponse = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
+      const runResponse = await fetch('/api/openai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`,
-          'OpenAI-Beta': 'assistants=v2'
         },
-        body: JSON.stringify({ 
-          assistant_id: ASSISTANT_ID 
+        body: JSON.stringify({
+          action: 'runAssistant',
+          threadId,
+          assistantId: ASSISTANT_ID
         }),
       });
       
       if (!runResponse.ok) {
         const errorData = await runResponse.json();
-        throw new Error(errorData.error?.message || 'Failed to run assistant');
+        throw new Error(errorData.error || 'Failed to run assistant');
       }
       
       const runData = await runResponse.json();
@@ -153,17 +150,20 @@ export function MagicDialog({
       await pollRunStatus(threadId, runId);
 
       // Get messages after run completes
-      const messagesResponse = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
-        method: 'GET',
+      const messagesResponse = await fetch('/api/openai', {
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${API_KEY}`,
-          'OpenAI-Beta': 'assistants=v2'
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          action: 'getMessages',
+          threadId
+        }),
       });
       
       if (!messagesResponse.ok) {
         const errorData = await messagesResponse.json();
-        throw new Error(errorData.error?.message || 'Failed to get messages');
+        throw new Error(errorData.error || 'Failed to get messages');
       }
       
       const messagesData = await messagesResponse.json();
@@ -203,17 +203,21 @@ export function MagicDialog({
     const delayMs = 1000;
     
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const response = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${runId}`, {
-        method: 'GET',
+      const response = await fetch('/api/openai', {
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${API_KEY}`,
-          'OpenAI-Beta': 'assistants=v2'
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          action: 'getRunStatus',
+          threadId,
+          runId
+        }),
       });
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'Failed to get run status');
+        throw new Error(errorData.error || 'Failed to get run status');
       }
       
       const data = await response.json();

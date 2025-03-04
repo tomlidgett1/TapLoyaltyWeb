@@ -50,6 +50,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { format } from "date-fns"
 import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
 
 interface Conversation {
   id: string
@@ -86,6 +87,19 @@ interface RewardData {
     type: string
     value: number | string[] | { startTime?: string; endTime?: string; startDate?: string; endDate?: string }
   }>
+}
+
+// Add this near your other interfaces
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  start: () => void
+  stop: () => void
+  abort: () => void
+  onresult: (event: any) => void
+  onerror: (event: any) => void
+  onend: () => void
 }
 
 const isJsonString = (str: string) => {
@@ -1355,6 +1369,7 @@ export function TapAiDialog({
   const [error, setError] = useState<string | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
+  const [recognitionInstance, setRecognitionInstance] = useState<SpeechRecognition | null>(null)
 
   const currentMessages = conversations.find(c => c.id === currentConversation)?.messages || []
 
@@ -2283,6 +2298,209 @@ export function TapAiDialog({
     }
   };
 
+  const toggleRecording = () => {
+    if (isRecording) {
+      // Stop recording
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop()
+          console.log("Speech recognition stopped")
+        } catch (error) {
+          console.error("Error stopping speech recognition:", error)
+        }
+      }
+      setIsRecording(false)
+    } else {
+      // Start recording
+      if (!recognitionRef.current) {
+        // Initialize speech recognition if not already done
+        // @ts-ignore
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+        if (!SpeechRecognition) {
+          console.error("Speech recognition not supported in this browser")
+          toast({
+            title: "Not Supported",
+            description: "Speech recognition is not supported in your browser.",
+            variant: "destructive"
+          })
+          return
+        }
+        
+        const recognition = new SpeechRecognition()
+        recognition.continuous = false
+        recognition.interimResults = true
+        
+        recognition.onresult = (event: any) => {
+          const transcript = Array.from(event.results)
+            .map((result: any) => result[0])
+            .map((result: any) => result.transcript)
+            .join('')
+          
+          console.log("Transcript:", transcript)
+          setInput(transcript)
+        }
+        
+        recognition.onend = () => {
+          console.log("Speech recognition ended")
+          setIsRecording(false)
+        }
+        
+        recognition.onerror = (event: any) => {
+          console.error("Speech recognition error:", event.error)
+          setIsRecording(false)
+          toast({
+            title: "Error",
+            description: `Speech recognition error: ${event.error}`,
+            variant: "destructive"
+          })
+        }
+        
+        recognitionRef.current = recognition
+      }
+      
+      // Start the recognition
+      try {
+        recognitionRef.current.start()
+        console.log("Speech recognition started")
+        setIsRecording(true)
+      } catch (error) {
+        console.error("Error starting speech recognition:", error)
+        toast({
+          title: "Error",
+          description: "Failed to start speech recognition. Please try again.",
+          variant: "destructive"
+        })
+      }
+    }
+  }
+
+  // Add this useEffect
+  useEffect(() => {
+    return () => {
+      // Clean up speech recognition on unmount
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop()
+        } catch (e) {
+          console.error("Error stopping speech recognition on unmount:", e)
+        }
+      }
+    }
+  }, [])
+
+  // Add this function to your component
+  const sendMessageToAPI = async (conversationId: string, message: string) => {
+    if (!user?.uid) return;
+    
+    try {
+      setLoading(true);
+      
+      // Create a new message object for the assistant's response
+      const assistantMessageId = `msg_${Date.now()}_assistant`;
+      const assistantMessage = {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date().toISOString()
+      };
+      
+      // Add a temporary loading message
+      setConversations(prev => 
+        prev.map(conv => 
+          conv.id === conversationId 
+            ? { 
+                ...conv, 
+                messages: [...conv.messages, { ...assistantMessage, content: 'Thinking...' }],
+                updatedAt: new Date().toISOString()
+              } 
+            : conv
+        )
+      );
+      
+      // Get the conversation to update
+      const conversation = conversations.find(c => c.id === conversationId);
+      if (!conversation) {
+        throw new Error('Conversation not found');
+      }
+      
+      // Call the API
+      const response = await fetch('/api/ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          message,
+          conversationHistory: conversation.messages
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Update the conversation with the real response
+      setConversations(prev => 
+        prev.map(conv => 
+          conv.id === conversationId 
+            ? { 
+                ...conv, 
+                messages: [...conv.messages.slice(0, -1), { ...assistantMessage, content: data.content }],
+                updatedAt: new Date().toISOString()
+              } 
+            : conv
+        )
+      );
+      
+      // Save to Firestore
+      if (user?.uid) {
+        const updatedConversation = {
+          ...conversation,
+          messages: [...conversation.messages, 
+            { role: 'user', content: message },
+            { ...assistantMessage, content: data.content }
+          ],
+          updatedAt: new Date().toISOString()
+        };
+        
+        await setDoc(
+          doc(db, 'merchants', user.uid, 'chats', conversationId),
+          updatedConversation
+        );
+      }
+    } catch (error) {
+      console.error('Error sending message to API:', error);
+      
+      // Remove the loading message and show an error
+      setConversations(prev => 
+        prev.map(conv => 
+          conv.id === conversationId 
+            ? { 
+                ...conv, 
+                messages: [...conv.messages.slice(0, -1), {
+                  id: `error_${Date.now()}`,
+                  role: 'assistant',
+                  content: 'Sorry, I encountered an error. Please try again.',
+                  timestamp: new Date().toISOString()
+                }],
+                updatedAt: new Date().toISOString()
+              } 
+            : conv
+        )
+      );
+      
+      toast({
+        title: "Error",
+        description: "Failed to get a response. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -2479,49 +2697,49 @@ export function TapAiDialog({
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="px-4 py-6 border-t border-gray-100 max-w-4xl mx-auto w-full">
-              <form onSubmit={handleSubmit} className="flex items-center gap-2 p-4 border-t border-gray-200">
-                <Input
+            <div className="px-4 py-2 border-t border-gray-100 max-w-4xl mx-auto w-full">
+              <form onSubmit={handleSubmit} className="relative">
+                <Textarea
                   ref={inputRef}
                   value={input}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
                   placeholder="Type a message..."
-                  className="flex-1"
+                  className="flex-1 min-h-[80px] resize-none focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-gray-300 pr-20"
                   disabled={loading || isLoading}
                 />
-                {process.env.NODE_ENV === 'development' && (
+                <div className="absolute bottom-3 right-3 flex items-center gap-2">
                   <Button
                     type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      console.log('Debug state:', {
-                        threadId,
-                        currentConversation,
-                        messages,
-                        conversations,
-                        isLoading,
-                        loading,
-                        input
-                      });
-                      debugLocalStorage();
-                    }}
+                    size="icon"
+                    variant="ghost"
+                    onClick={toggleRecording}
+                    className={cn(
+                      "h-8 w-8 rounded-full transition-all duration-200",
+                      isRecording 
+                        ? "bg-blue-100 text-blue-500" 
+                        : "hover:bg-gray-100"
+                    )}
+                    disabled={loading || isLoading}
                   >
-                    Debug
+                    <Mic className={cn(
+                      "h-4 w-4",
+                      isRecording && "animate-[pulse_2s_ease-in-out_infinite]"
+                    )} />
                   </Button>
-                )}
-                <Button 
-                  type="submit" 
-                  size="icon" 
-                  disabled={!input.trim() || loading || isLoading}
-                >
-                  {loading || isLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                </Button>
+                  <Button 
+                    type="submit" 
+                    size="icon"
+                    className="h-8 w-8"
+                    disabled={!input.trim() || loading || isLoading}
+                  >
+                    {loading || isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
               </form>
             </div>
           </div>

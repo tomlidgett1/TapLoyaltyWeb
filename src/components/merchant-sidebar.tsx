@@ -1,7 +1,7 @@
 "use client"
 
 import { Home, Users, CreditCard, Settings, BarChart2, Gift, User, HelpCircle, Info, PlusCircle, 
-  BadgeCheck, Bell, ChevronsUpDown, LogOut, Sparkles, MessageCircle, LifeBuoy, Search, Store, Blocks, Library, Link as LinkIcon, Wand2 } from "lucide-react"
+  BadgeCheck, Bell, ChevronsUpDown, LogOut, Sparkles, MessageCircle, LifeBuoy, Search, Store, Blocks, Library, Link as LinkIcon } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -36,7 +36,6 @@ import { useMerchant } from '@/hooks/use-merchant'
 import { useAuth } from '@/contexts/auth-context'
 import Image from 'next/image'
 import { TapAiButton } from "@/components/tap-ai-button"
-import { MagicButton } from "@/components/magic-button"
 
 const menuItems = [
   {
@@ -58,11 +57,6 @@ const menuItems = [
     title: "TapAI",
     icon: Sparkles,
     isAI: true
-  },
-  {
-    title: "Magic",
-    icon: Wand2,
-    url: "/magic",
   },
   {
     title: "Reward Library",

@@ -139,8 +139,9 @@ export default function IntegrationsPage() {
       // Add redirect_uri to the authorization URL
       const redirectUri = `${window.location.origin}/dashboard`
       
-      // Use the Lightspeed API authorization endpoint with required scopes
-      const authUrl = `https://cloud.lightspeedapp.com/auth/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientId)}&scope=employee:register+employee:inventory&state=${encodeURIComponent(state)}&redirect_uri=${encodeURIComponent(redirectUri)}`
+      // Use the Lightspeed API authorization endpoint with employee:all scope
+      // This grants full read and write access to the account based on the authorizing user's permissions
+      const authUrl = `https://cloud.lightspeedapp.com/auth/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientId)}&scope=employee:all&state=${encodeURIComponent(state)}&redirect_uri=${encodeURIComponent(redirectUri)}`
       
       console.log("Redirecting to Lightspeed API authorization URL:", authUrl)
       

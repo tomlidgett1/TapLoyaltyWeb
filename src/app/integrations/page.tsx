@@ -25,6 +25,9 @@ export default function IntegrationsPage() {
     shopify: { connected: false, data: null }
   })
   
+  // Add a new state for the API connection
+  const [connectingApi, setConnectingApi] = useState<string | null>(null)
+  
   useEffect(() => {
     // Check if we have existing integrations
     const checkIntegrations = async () => {
@@ -57,7 +60,7 @@ export default function IntegrationsPage() {
     
     try {
       // Updated Lightspeed OAuth parameters with new client ID
-      const clientId = "29779b997b21d643fab9e936cf815463813172b51c7da085b7b378864761953d"
+      const clientId = "808201776257e0984572c066974f81ee4f2aa156e4a6b67a957bec3761f5cdb2"
       
       // Store the state in localStorage to verify when the user returns
       const state = Math.random().toString(36).substring(2, 15)
@@ -69,14 +72,8 @@ export default function IntegrationsPage() {
       // Add redirect_uri to the authorization URL
       const redirectUri = `${window.location.origin}/dashboard`
       
-      // Use the OIDC endpoint with redirect_uri included
-      const authUrl = `https://api.lightspeed.app/oidc/authorize?`
-        + `client_id=${clientId}`
-        + `&state=${state}`
-        + `&response_type=code`
-        + `&scope=openid`
-        + `&product=retail`
-        + `&redirect_uri=${encodeURIComponent(redirectUri)}`
+      // Make sure there are no spaces or encoding issues in the URL parameters
+      const authUrl = `https://api.lightspeed.app/oidc/authorize?client_id=${encodeURIComponent(clientId)}&state=${encodeURIComponent(state)}&response_type=code&scope=openid&product=retail&redirect_uri=${encodeURIComponent(redirectUri)}`
       
       console.log("Redirecting to authorization URL:", authUrl)
       
@@ -122,6 +119,45 @@ export default function IntegrationsPage() {
     }
   }
 
+  // New function for Lightspeed API connection
+  const connectLightspeedApi = async () => {
+    if (!user) return
+    
+    setConnectingApi("lightspeed")
+    
+    try {
+      // Lightspeed API OAuth parameters
+      const clientId = "808201776257e0984572c066974f81ee4f2aa156e4a6b67a957bec3761f5cdb2"
+      
+      // Store the state in localStorage to verify when the user returns
+      const state = Math.random().toString(36).substring(2, 15)
+      localStorage.setItem('lightspeed_api_state', state)
+      
+      // Store the merchant ID in localStorage to associate with the integration
+      localStorage.setItem('merchant_api_id', user.uid)
+      
+      // Add redirect_uri to the authorization URL
+      const redirectUri = `${window.location.origin}/dashboard`
+      
+      // Use the Lightspeed API authorization endpoint with required scopes
+      const authUrl = `https://cloud.lightspeedapp.com/auth/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientId)}&scope=employee:register+employee:inventory&state=${encodeURIComponent(state)}&redirect_uri=${encodeURIComponent(redirectUri)}`
+      
+      console.log("Redirecting to Lightspeed API authorization URL:", authUrl)
+      
+      // Redirect to Lightspeed authorization page
+      window.location.href = authUrl
+    } catch (error) {
+      console.error("Error connecting to Lightspeed API:", error)
+      toast({
+        title: "API Connection Failed",
+        description: "Failed to connect to Lightspeed API. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setConnectingApi(null)
+    }
+  }
+
   return (
     <div className="p-4">
       <div className="mb-6">
@@ -164,6 +200,41 @@ export default function IntegrationsPage() {
             >
               {connecting === "lightspeed" ? "Connecting..." : 
                integrations.lightspeed.connected ? "Disconnect" : "Connect"}
+            </Button>
+          </CardFooter>
+        </Card>
+        
+        {/* New Lightspeed API Integration Card */}
+        <Card className="rounded-lg overflow-hidden">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-10 w-10 rounded-md bg-[#FF6B00] flex items-center justify-center">
+                  <LightspeedIcon className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Lightspeed Retail API</CardTitle>
+                  <CardDescription>Connect via Lightspeed API</CardDescription>
+                </div>
+              </div>
+              <Badge variant="outline">
+                Not Connected
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="pb-2">
+            <p className="text-sm text-muted-foreground">
+              Connect directly to the Lightspeed Retail API for advanced inventory and employee management.
+            </p>
+          </CardContent>
+          <CardFooter>
+            <Button 
+              variant="default"
+              className="w-full rounded-md"
+              onClick={connectLightspeedApi}
+              disabled={connectingApi === "lightspeed"}
+            >
+              {connectingApi === "lightspeed" ? "Connecting..." : "Connect to API"}
             </Button>
           </CardFooter>
         </Card>

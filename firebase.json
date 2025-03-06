@@ -17,17 +17,21 @@
         "function": "api"
       },
       {
+        "source": "/api/ai-assistant",
+        "function": "aiAssistant"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
     ],
     "headers": [
       {
-        "source": "**",
+        "source": "/api/**",
         "headers": [
           {
             "key": "Access-Control-Allow-Origin",
-            "value": "https://taployalty.com.au, https://www.taployalty.com.au"
+            "value": "*"
           },
           {
             "key": "Access-Control-Allow-Methods",

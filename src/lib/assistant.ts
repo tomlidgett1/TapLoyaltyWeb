@@ -554,4 +554,51 @@ export async function checkAssistantExists(assistantId: string) {
     console.error('checkAssistantExists: Assistant does not exist or error:', error);
     return false;
   }
+}
+
+/**
+ * Sends a message to the OpenAI Assistant and returns the response
+ */
+export async function talkToAssistant(message: string, threadId?: string | null) {
+  console.log('talkToAssistant: Starting with message:', message, 'threadId:', threadId);
+  
+  try {
+    // Determine if we're in development mode
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    console.log('talkToAssistant: isDevelopment =', isDevelopment);
+    
+    // Choose the appropriate endpoint
+    const endpoint = isDevelopment
+      ? '/api/ai-assistant-proxy' // Local proxy
+      : 'https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/aiAssistant'; // Production
+    
+    console.log('talkToAssistant: Using endpoint:', endpoint);
+    
+    // Call the API with the thread ID if we have one
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        message,
+        threadId: threadId || undefined
+      }),
+    });
+    
+    console.log('talkToAssistant: Response status:', response.status);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get AI response: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('talkToAssistant: Response data:', data);
+    
+    return {
+      content: data.content,
+      threadId: data.threadId
+    };
+  } catch (error) {
+    console.error('Error talking to assistant:', error);
+    throw error;
+  }
 } 

@@ -21,7 +21,8 @@ import {
   createThread, 
   addMessage, 
   runAssistant,
-  getMessages  // Add this import
+  getMessages,
+  talkToAssistant
 } from "@/lib/assistant"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
@@ -1384,49 +1385,11 @@ export function TapAiDialog({
   }, [currentMessages, loading])
 
   useEffect(() => {
-    if (open && !assistant) {
-      const initializeAssistant = async () => {
-        try {
-          console.log('Initializing assistant with ID: asst_Aymz6DWL61Twlz2XubPu49ur');
-          
-          // Get the specific assistant
-          const assistantData = await getOrCreateAssistant();
-          setAssistant(assistantData);
-          
-          // Initialize the conversation
-          await initializeConversation();
-        } catch (error) {
-          console.error("Error initializing assistant:", error);
-          setError("Failed to initialize assistant. Please try again.");
-          
-          // Still set a mock assistant to allow the UI to function
-          setAssistant({
-            id: 'asst_Aymz6DWL61Twlz2XubPu49ur',
-            object: 'assistant',
-            created_at: Date.now(),
-            name: 'TapAI Assistant',
-            description: 'A helpful assistant for TapLoyalty',
-            model: 'gpt-4',
-            instructions: 'You are a helpful assistant for TapLoyalty, a loyalty program platform for small businesses.',
-            tools: [],
-            metadata: {}
-          });
-          
-          // Create a thread anyway
-          try {
-            const thread = await createThread();
-            setThreadId(thread.id);
-          } catch (e) {
-            console.error("Error creating thread:", e);
-            // Generate a mock thread ID
-            setThreadId('thread_' + Math.random().toString(36).substring(2, 15));
-          }
-        }
-      }
-
-      initializeAssistant()
+    if (open) {
+      // Initialize the conversation when the dialog opens
+      initializeConversation();
     }
-  }, [open, assistant, toast])
+  }, [open]);
 
   useEffect(() => {
     const loadSavedConversations = async () => {
@@ -1581,14 +1544,15 @@ export function TapAiDialog({
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    console.log('handleSubmit called with input:', input);
     
-    const message = input.trim();
-    setInput('');
-    
-    await sendMessageToAPI(message);
+    if (input.trim() && !isLoading) {
+      const message = input.trim();
+      setInput('');
+      sendMessageToAPI(message);
+    }
   };
 
   const handleRenameConversation = async (convId: string, newTitle: string) => {
@@ -1999,39 +1963,35 @@ export function TapAiDialog({
   const initializeConversation = async () => {
     console.log('initializeConversation called');
     
-    if (!user) {
-      console.log('No user, cannot initialize conversation');
-      return;
-    }
-    
-    setIsLoading(true);
-    
     try {
-      console.log('Current threadId:', threadId);
-      
-      // Check if we have an existing thread
-      if (!threadId) {
-        console.log('No threadId, creating new thread');
-        // Create a new thread
-        const thread = await createThread();
-        console.log('Thread created:', thread);
-        setThreadId(thread.id);
-        
-        // If there's an initial prompt, send it
-        if (initialPrompt) {
-          console.log('Sending initial prompt:', initialPrompt);
-          await handleSendMessage(initialPrompt);
-        }
-      } else {
-        console.log('ThreadId exists, loading messages');
-        // Load existing messages
-        await loadMessages();
+      // If we already have a threadId, use it
+      if (threadId) {
+        console.log('Current threadId:', threadId);
+        return;
       }
+      
+      console.log('No threadId, creating new thread');
+      
+      // Create a simple first message to initialize the thread
+      const initialMessage = "Hello, I'm ready to help with your loyalty program.";
+      
+      // Use talkToAssistant to create a thread and get initial response
+      const response = await talkToAssistant(initialMessage);
+      
+      console.log('Initial conversation created with threadId:', response.threadId);
+      
+      // Set the threadId for future messages
+      if (response.threadId) {
+        setThreadId(response.threadId);
+      }
+      
+      // Add the initial messages to the UI
+      setLocalMessages([
+        { role: 'assistant', content: response.content }
+      ]);
     } catch (error) {
-      console.error("Error initializing conversation:", error);
-      setError("Failed to initialize conversation. Please try again.");
-    } finally {
-      setIsLoading(false);
+      console.error('Error initializing conversation:', error);
+      setError('Failed to initialize conversation. Please try again.');
     }
   };
 
@@ -2132,23 +2092,10 @@ export function TapAiDialog({
   };
 
   // Add this function to your component
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    // Handle Enter key press (without Shift) to submit the form
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e as unknown as React.FormEvent);
-    }
-    
-    // Handle Escape key to close mention popover
-    if (e.key === 'Escape' && mentionOpen) {
-      e.preventDefault();
-      setMentionOpen(false);
-    }
-    
-    // Handle arrow keys for mention navigation (if you have mention functionality)
-    if (mentionOpen && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-      e.preventDefault();
-      // Add your mention navigation logic here if needed
     }
   };
 
@@ -2311,22 +2258,18 @@ export function TapAiDialog({
     setLocalMessages(prev => [...prev, { role: 'user', content: message }]);
     
     try {
-      // Call the OpenAI API
-      const response = await fetch('/api/ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message }),
-      });
+      // Use the talkToAssistant function
+      const response = await talkToAssistant(message, threadId);
       
-      if (!response.ok) {
-        throw new Error('Failed to get AI response');
+      console.log('API response:', response);
+      
+      // Save the threadId for future messages
+      if (response.threadId) {
+        setThreadId(response.threadId);
       }
       
-      const data = await response.json();
-      console.log('API response:', data);
-      
       // Add AI response to local state
-      setLocalMessages(prev => [...prev, { role: 'assistant', content: data.content }]);
+      setLocalMessages(prev => [...prev, { role: 'assistant', content: response.content }]);
     } catch (error) {
       console.error('Error:', error);
       
@@ -2339,6 +2282,16 @@ export function TapAiDialog({
       setIsLoading(false);
       setInput('');
     }
+  };
+
+  // Update any other event handlers that might be sending messages
+  // For example, if there's a quick action button:
+
+  const handleQuickAction = (action: string) => {
+    if (isLoading) return;
+    
+    console.log('handleQuickAction called with:', action);
+    sendMessageToAPI(action);
   };
 
   if (authLoading) {

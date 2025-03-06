@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from "@/contexts/auth-context"
-import { FloatingMicrophone } from "@/components/floating-microphone"
 import { OnboardingCheck } from "@/components/onboarding-check"
 import { OpenAIProvider } from '@/components/providers/openai-provider';
 import Link from 'next/link';
@@ -37,7 +36,6 @@ export default function RootLayout({
             <TapAiDialogProvider>
               {children}
               <Toaster />
-              <FloatingMicrophone />
               <OnboardingCheck />
               {process.env.NODE_ENV === 'development' && (
                 <div className="fixed bottom-4 right-4 z-50">

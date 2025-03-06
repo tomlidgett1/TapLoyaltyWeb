@@ -1151,6 +1151,8 @@ export function TapAiDialog({
   const [recognitionInstance, setRecognitionInstance] = useState<SpeechRecognition | null>(null)
   // First, let's define a simpler state for messages
   const [localMessages, setLocalMessages] = useState<Array<{role: string, content: string}>>([]);
+  // First, add a new state variable near the other state declarations
+  const [adviceButtonActive, setAdviceButtonActive] = useState(false);
 
   const currentMessages = conversations.find(c => c.id === currentConversation)?.messages || []
 
@@ -2498,17 +2500,33 @@ export function TapAiDialog({
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="px-4 py-2 border-t border-gray-100 max-w-4xl mx-auto w-full">
+            <div className="px-4 py-2 border-gray-100 max-w-3xl mx-auto w-full">
               <form onSubmit={handleSubmit} className="relative">
                 <Textarea
                   ref={inputRef}
                   value={input}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
-                  placeholder="Type a message..."
-                  className="flex-1 min-h-[80px] resize-none focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-gray-300 pr-20"
+                  placeholder="Message TapAi"
+                  className="flex-1 min-h-[120px] resize-none focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-gray-300 pr-20 rounded-xl shadow-md border border-gray-200"
                   disabled={loading || isLoading}
                 />
+                <div className="absolute bottom-3 left-3">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={`h-8 rounded-lg text-xs transition-colors ${
+                      adviceButtonActive 
+                        ? "bg-blue-200 text-blue-700 hover:bg-blue-200" 
+                        : "bg-gray-100 hover:bg-blue-100"
+                    }`}
+                    onClick={() => setAdviceButtonActive(!adviceButtonActive)}
+                    disabled={loading || isLoading}
+                  >
+                    Advice
+                  </Button>
+                </div>
                 <div className="absolute bottom-3 right-3 flex items-center gap-2">
                   <Button
                     type="button"

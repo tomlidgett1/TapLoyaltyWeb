@@ -81,6 +81,13 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 // Types
 type RewardCategory = "all" | "individual" | "customer-specific" | "programs"
@@ -233,6 +240,7 @@ export default function RewardsPage() {
     end: undefined
   })
   const [showCustomDateRange, setShowCustomDateRange] = useState(false)
+  const [rewardToDelete, setRewardToDelete] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchRewards = async () => {
@@ -775,17 +783,35 @@ export default function RewardsPage() {
     }
   };
 
-  const deleteReward = async (id: string) => {
-    if (!user?.uid || !confirm("Are you sure you want to delete this reward? This action cannot be undone.")) return
+  const deleteReward = (id: string) => {
+    // Instead of immediately confirming, set the reward to delete
+    setRewardToDelete(id)
+  }
+
+  const confirmDelete = async () => {
+    if (!rewardToDelete) return
     
     try {
-      const rewardRef = doc(db, 'merchants', user.uid, 'rewards', id)
+      const rewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardToDelete)
       await deleteDoc(rewardRef)
       
       // Update local state
-      setRewards(prev => prev.filter(reward => reward.id !== id))
+      setRewards(prev => prev.filter(reward => reward.id !== rewardToDelete))
+      
+      toast({
+        title: "Success",
+        description: "Reward deleted successfully",
+      })
     } catch (error) {
       console.error("Error deleting reward:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete reward. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      // Clear the reward to delete
+      setRewardToDelete(null)
     }
   }
 
@@ -2240,6 +2266,26 @@ export default function RewardsPage() {
       onOpenChange={setCreateRewardDialogOpen}
       defaultValues={createRewardData}
     />
+    
+    {/* Delete Confirmation Dialog */}
+    <Dialog open={!!rewardToDelete} onOpenChange={() => setRewardToDelete(null)}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-xl">Delete Reward</DialogTitle>
+          <DialogDescription className="text-red-500">
+            Are you sure you want to delete this reward? This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex justify-end space-x-2 mt-5">
+          <Button variant="outline" onClick={() => setRewardToDelete(null)}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={confirmDelete}>
+            Delete
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   </div>
 )
 } 

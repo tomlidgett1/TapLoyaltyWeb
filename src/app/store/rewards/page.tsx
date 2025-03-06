@@ -45,7 +45,8 @@ import {
   MicOff,
   X,
   Sparkles,
-  HelpCircle
+  HelpCircle,
+  Package
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -72,10 +73,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Slider } from "@/components/ui/slider"
 
 // Types
 type RewardCategory = "all" | "individual" | "customer-specific" | "programs"
-type SortField = "rewardName" | "type" | "pointsCost" | "redemptionCount" | "createdAt"
+type SortField = "rewardName" | "type" | "pointsCost" | "redemptionCount" | "createdAt" | "lastRedeemed" | "isActive"
 type SortDirection = "asc" | "desc"
 
 interface Reward {
@@ -205,6 +214,25 @@ export default function RewardsPage() {
   const [createRewardDialogOpen, setCreateRewardDialogOpen] = useState(false)
   const [createRewardData, setCreateRewardData] = useState<any>(null)
   const [previewReward, setPreviewReward] = useState<any>(null)
+  const [showFilters, setShowFilters] = useState(false)
+  const [statusFilters, setStatusFilters] = useState({
+    active: true,
+    inactive: true
+  })
+  const [typeFilters, setTypeFilters] = useState({
+    coffee: true,
+    discount: true,
+    gift: true,
+    ticket: true,
+    other: true
+  })
+  const [pointsCostRange, setPointsCostRange] = useState([0, 500])
+  const [dateFilter, setDateFilter] = useState("all")
+  const [customDateRange, setCustomDateRange] = useState<{start: Date | undefined, end: Date | undefined}>({
+    start: undefined,
+    end: undefined
+  })
+  const [showCustomDateRange, setShowCustomDateRange] = useState(false)
 
   useEffect(() => {
     const fetchRewards = async () => {
@@ -267,54 +295,63 @@ export default function RewardsPage() {
 
   // First, let's modify the getFilteredRewards function
   const getFilteredRewards = () => {
-    return rewards
-      .filter(reward => {
-    // Filter by search query
-        if (searchQuery) {
-          const query = searchQuery.toLowerCase();
-          return (
-            reward.rewardName.toLowerCase().includes(query) ||
-            reward.description.toLowerCase().includes(query)
-          );
-        }
-        return true;
-      })
-      .filter(reward => {
-        // Filter by category tab
-        if (rewardCategory === "all") {
-          return true;
-        } else if (rewardCategory === "programs") {
-          return reward.category === "program" || !!reward.programtype;
-        } else if (rewardCategory === "individual") {
-          return reward.category === "individual" || (!reward.programtype && !reward.category);
-        } else if (rewardCategory === "customer-specific") {
-          return reward.category === "customer-specific";
-        }
-        return true;
-      })
-      .sort((a, b) => {
-        // Sort by selected field
-        if (sortField === "rewardName") {
-          return sortDirection === "asc"
-            ? (a.rewardName || "").localeCompare(b.rewardName || "")
-            : (b.rewardName || "").localeCompare(a.rewardName || "");
-        } else if (sortField === "pointsCost") {
-          return sortDirection === "asc"
-            ? (a.pointsCost || 0) - (b.pointsCost || 0)
-            : (b.pointsCost || 0) - (a.pointsCost || 0);
-        } else if (sortField === "redemptionCount") {
-          return sortDirection === "asc"
-            ? (a.redemptionCount || 0) - (b.redemptionCount || 0)
-            : (b.redemptionCount || 0) - (a.redemptionCount || 0);
-        } else if (sortField === "createdAt") {
+    let filtered = rewards.filter(reward => {
+      // Apply category filter
+      if (rewardCategory !== "all" && reward.category !== rewardCategory) {
+        return false
+      }
+      
+      // Apply search filter
+      if (searchQuery && !reward.rewardName.toLowerCase().includes(searchQuery.toLowerCase())) {
+        return false
+      }
+      
+      return true
+    })
+    
+    // Apply additional filters
+    filtered = applyFilters(filtered)
+    
+    // Apply sorting
+    return filtered.sort((a, b) => {
+      // Sort by selected field
+      let comparison = 0;
+      
+      switch (sortField) {
+        case "rewardName":
+          comparison = (a.rewardName || "").localeCompare(b.rewardName || "");
+          break;
+        case "type":
+          comparison = (a.type || "").localeCompare(b.type || "");
+          break;
+        case "pointsCost":
+          comparison = (a.pointsCost || 0) - (b.pointsCost || 0);
+          break;
+        case "redemptionCount":
+          comparison = (a.redemptionCount || 0) - (b.redemptionCount || 0);
+          break;
+        case "impressions":
+          comparison = (a.impressions || 0) - (b.impressions || 0);
+          break;
+        case "createdAt":
           const aTime = a.createdAt ? a.createdAt.getTime() : 0;
           const bTime = b.createdAt ? b.createdAt.getTime() : 0;
-          return sortDirection === "asc"
-            ? aTime - bTime
-            : bTime - aTime;
-        }
-        return 0;
-      });
+          comparison = aTime - bTime;
+          break;
+        case "lastRedeemed":
+          const aRedeemed = a.lastRedeemed ? a.lastRedeemed.getTime() : 0;
+          const bRedeemed = b.lastRedeemed ? b.lastRedeemed.getTime() : 0;
+          comparison = aRedeemed - bRedeemed;
+          break;
+        case "isActive":
+          comparison = (a.isActive ? 1 : 0) - (b.isActive ? 1 : 0);
+          break;
+        default:
+          comparison = 0;
+      }
+      
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
   };
 
   // Then update the filteredRewards calculation in each tab
@@ -389,27 +426,91 @@ export default function RewardsPage() {
                       )}
                     </Button>
                   </TableHead>
-                  <TableHead className="text-center">Type</TableHead>
-                  <TableHead className="text-center">Points</TableHead>
-                  <TableHead className="text-center">Redemptions</TableHead>
                   <TableHead className="text-center">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="flex items-center justify-center cursor-help gap-1">
-                            Impressions
-                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="top">
-                          <p className="text-xs">Number of times customers have viewed this reward</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => handleSort("type")}
+                      className="flex items-center gap-1 px-0 font-medium mx-auto"
+                    >
+                      Type
+                      {sortField === "type" && (
+                        sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </Button>
                   </TableHead>
-                  <TableHead className="text-center">Created</TableHead>
-                  <TableHead className="text-center">Last Redeemed</TableHead>
-                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-center">
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => handleSort("pointsCost")}
+                      className="flex items-center gap-1 px-0 font-medium mx-auto"
+                    >
+                      Points
+                      {sortField === "pointsCost" && (
+                        sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-center">
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => handleSort("redemptionCount")}
+                      className="flex items-center gap-1 px-0 font-medium mx-auto"
+                    >
+                      Redemptions
+                      {sortField === "redemptionCount" && (
+                        sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-center">
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => handleSort("impressions")}
+                      className="flex items-center gap-1 px-0 font-medium mx-auto"
+                    >
+                      Impressions
+                      {sortField === "impressions" && (
+                        sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                      <HelpCircle className="h-3 w-3 text-muted-foreground ml-1" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-center">
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => handleSort("createdAt")}
+                      className="flex items-center gap-1 px-0 font-medium mx-auto"
+                    >
+                      Created
+                      {sortField === "createdAt" && (
+                        sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-center">
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => handleSort("lastRedeemed")}
+                      className="flex items-center gap-1 px-0 font-medium mx-auto"
+                    >
+                      Last Redeemed
+                      {sortField === "lastRedeemed" && (
+                        sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-center">
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => handleSort("isActive")}
+                      className="flex items-center gap-1 px-0 font-medium mx-auto"
+                    >
+                      Status
+                      {sortField === "isActive" && (
+                        sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -1170,7 +1271,7 @@ export default function RewardsPage() {
                 Dismiss
               </Button>
               <Button 
-                className="h-9 rounded-md flex-1 bg-[#007AFF] hover:bg-[#0066CC]"
+                className="h-9 rounded-md flex-1 bg-[#0066ff] hover:bg-[#0052cc] text-white"
                 onClick={() => {
                   onClose();
                   setCreateRewardDialogOpen(true);
@@ -1185,6 +1286,87 @@ export default function RewardsPage() {
     );
   };
 
+  const handleStatusFilterChange = (status: string, checked: boolean) => {
+    setStatusFilters(prev => ({
+      ...prev,
+      [status.toLowerCase()]: checked
+    }))
+  }
+
+  const handleTypeFilterChange = (type: string, checked: boolean) => {
+    setTypeFilters(prev => ({
+      ...prev,
+      [type.toLowerCase()]: checked
+    }))
+  }
+
+  const applyFilters = (data: Reward[]) => {
+    return data.filter(reward => {
+      // Apply status filter
+      const isActive = reward.isActive
+      if ((isActive && !statusFilters.active) || (!isActive && !statusFilters.inactive)) {
+        return false
+      }
+
+      // Apply type filter
+      const type = reward.type?.toLowerCase() || 'other'
+      if (!typeFilters[type] && !typeFilters.other) {
+        return false
+      }
+
+      // Apply points cost filter
+      if (reward.pointsCost < pointsCostRange[0] || reward.pointsCost > pointsCostRange[1]) {
+        return false
+      }
+
+      // Apply date filter
+      if (dateFilter !== "all") {
+        const dateObj = reward.createdAt
+        
+        if (!dateObj) return false
+        
+        if (dateFilter === "custom") {
+          // Handle custom date range
+          if (customDateRange.start && !customDateRange.end) {
+            return dateObj >= customDateRange.start
+          } else if (!customDateRange.start && customDateRange.end) {
+            const endOfDay = new Date(customDateRange.end)
+            endOfDay.setHours(23, 59, 59, 999)
+            return dateObj <= endOfDay
+          } else if (customDateRange.start && customDateRange.end) {
+            const endOfDay = new Date(customDateRange.end)
+            endOfDay.setHours(23, 59, 59, 999)
+            return dateObj >= customDateRange.start && dateObj <= endOfDay
+          }
+          return true
+        } else {
+          const now = new Date()
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+          const yesterday = new Date(today)
+          yesterday.setDate(yesterday.getDate() - 1)
+          const thisWeekStart = new Date(today)
+          thisWeekStart.setDate(today.getDate() - today.getDay())
+          const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+          
+          switch (dateFilter) {
+            case "today":
+              return dateObj >= today
+            case "yesterday":
+              return dateObj >= yesterday && dateObj < today
+            case "thisWeek":
+              return dateObj >= thisWeekStart
+            case "thisMonth":
+              return dateObj >= thisMonthStart
+            default:
+              return true
+          }
+        }
+      }
+
+      return true
+    })
+  }
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <div>
@@ -1196,33 +1378,215 @@ export default function RewardsPage() {
             </p>
           </div>
           
-          <Button 
-            className="h-9 gap-2 rounded-md"
-            onClick={() => router.push('/create')}
-          >
-            <Plus className="h-4 w-4" />
-            Create Reward
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              className="h-9 gap-2 rounded-md"
+              onClick={() => {
+                // Open help guide or documentation
+                window.open('/help/rewards', '_blank');
+              }}
+            >
+              <HelpCircle className="h-4 w-4" />
+              Help Guide
+            </Button>
+            
+            <Button 
+              variant="default" 
+              className="h-9 gap-2 rounded-md bg-[#0066ff] hover:bg-[#0052cc] text-white"
+              onClick={() => router.push('/create')}
+            >
+              <Plus className="h-4 w-4" />
+              Create Reward
+            </Button>
+          </div>
         </div>
         
         <Tabs defaultValue="all" onValueChange={(value) => setRewardCategory(value as RewardCategory)}>
           <div className="flex items-center justify-between mb-4">
             <TabsList className="h-9 rounded-md">
-              <TabsTrigger value="all">All Rewards</TabsTrigger>
-              <TabsTrigger value="individual">Individual</TabsTrigger>
-              <TabsTrigger value="customer-specific">Customer-Specific</TabsTrigger>
-              <TabsTrigger value="programs">Programs</TabsTrigger>
+              <TabsTrigger value="all" className="flex items-center gap-2">
+                <Package className="h-4 w-4" />
+                All Rewards
+              </TabsTrigger>
+              <TabsTrigger value="individual" className="flex items-center gap-2">
+                <Gift className="h-4 w-4" />
+                Individual
+              </TabsTrigger>
+              <TabsTrigger value="customer-specific" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Customer-Specific
+              </TabsTrigger>
+              <TabsTrigger value="programs" className="flex items-center gap-2">
+                <Award className="h-4 w-4" />
+                Programs
+              </TabsTrigger>
             </TabsList>
             
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input 
-                type="search" 
-                placeholder="Search rewards..." 
-                className="w-[250px] pl-9 h-9 rounded-md"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  type="search" 
+                  placeholder="Search rewards..." 
+                  className="w-[250px] pl-9 h-9 rounded-md"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              
+              <Popover open={showFilters} onOpenChange={setShowFilters}>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    className="h-9 gap-2 rounded-md"
+                    onClick={() => setShowFilters(true)}
+                  >
+                    <Filter className="h-4 w-4" />
+                    Filter
+                    {(Object.values(statusFilters).some(v => !v) || 
+                      Object.values(typeFilters).some(v => !v) || 
+                      dateFilter !== "all") && (
+                      <Badge className="ml-1 bg-primary h-5 w-5 p-0 flex items-center justify-center">
+                        <span className="text-xs">!</span>
+                      </Badge>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-96 p-4" align="end">
+                  <div className="space-y-4">
+                    <h4 className="font-medium">Filter Rewards</h4>
+                    
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="status-active" 
+                            checked={statusFilters.active}
+                            onCheckedChange={(checked) => 
+                              handleStatusFilterChange('active', checked as boolean)}
+                          />
+                          <Label htmlFor="status-active" className="cursor-pointer">Active</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="status-inactive" 
+                            checked={statusFilters.inactive}
+                            onCheckedChange={(checked) => 
+                              handleStatusFilterChange('inactive', checked as boolean)}
+                          />
+                          <Label htmlFor="status-inactive" className="cursor-pointer">Inactive</Label>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label>Type</Label>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="type-coffee" 
+                            checked={typeFilters.coffee}
+                            onCheckedChange={(checked) => 
+                              handleTypeFilterChange('coffee', checked as boolean)}
+                          />
+                          <Label htmlFor="type-coffee" className="cursor-pointer">Coffee</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="type-discount" 
+                            checked={typeFilters.discount}
+                            onCheckedChange={(checked) => 
+                              handleTypeFilterChange('discount', checked as boolean)}
+                          />
+                          <Label htmlFor="type-discount" className="cursor-pointer">Discount</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="type-gift" 
+                            checked={typeFilters.gift}
+                            onCheckedChange={(checked) => 
+                              handleTypeFilterChange('gift', checked as boolean)}
+                          />
+                          <Label htmlFor="type-gift" className="cursor-pointer">Gift</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="type-ticket" 
+                            checked={typeFilters.ticket}
+                            onCheckedChange={(checked) => 
+                              handleTypeFilterChange('ticket', checked as boolean)}
+                          />
+                          <Label htmlFor="type-ticket" className="cursor-pointer">Ticket</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="type-other" 
+                            checked={typeFilters.other}
+                            onCheckedChange={(checked) => 
+                              handleTypeFilterChange('other', checked as boolean)}
+                          />
+                          <Label htmlFor="type-other" className="cursor-pointer">Other</Label>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <Label>Points Cost Range</Label>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="min-points" className="text-xs">Min</Label>
+                          <Input
+                            id="min-points"
+                            type="number"
+                            min={0}
+                            max={500}
+                            value={pointsCostRange[0]}
+                            onChange={(e) => setPointsCostRange([Number(e.target.value), pointsCostRange[1]])}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="max-points" className="text-xs">Max</Label>
+                          <Input
+                            id="max-points"
+                            type="number"
+                            min={0}
+                            max={500}
+                            value={pointsCostRange[1]}
+                            onChange={(e) => setPointsCostRange([pointsCostRange[0], Number(e.target.value)])}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between pt-2">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => {
+                          setStatusFilters({ active: true, inactive: true })
+                          setTypeFilters({ 
+                            coffee: true, 
+                            discount: true, 
+                            gift: true, 
+                            ticket: true, 
+                            other: true 
+                          })
+                          setPointsCostRange([0, 500])
+                          setDateFilter("all")
+                          setCustomDateRange({ start: undefined, end: undefined })
+                          setShowCustomDateRange(false)
+                        }}
+                      >
+                        Reset Filters
+                      </Button>
+                      <Button onClick={() => setShowFilters(false)}>Apply Filters</Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
           
@@ -1244,27 +1608,91 @@ export default function RewardsPage() {
                           )}
                         </Button>
                       </TableHead>
-                      <TableHead className="text-center">Type</TableHead>
-                      <TableHead className="text-center">Points</TableHead>
-                      <TableHead className="text-center">Redemptions</TableHead>
                       <TableHead className="text-center">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="flex items-center justify-center cursor-help gap-1">
-                                Impressions
-                                <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              <p className="text-xs">Number of times customers have viewed this reward</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("type")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Type
+                          {sortField === "type" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
                       </TableHead>
-                      <TableHead className="text-center">Created</TableHead>
-                      <TableHead className="text-center">Last Redeemed</TableHead>
-                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("pointsCost")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Points
+                          {sortField === "pointsCost" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("redemptionCount")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Redemptions
+                          {sortField === "redemptionCount" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("impressions")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Impressions
+                          {sortField === "impressions" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                          <HelpCircle className="h-3 w-3 text-muted-foreground ml-1" />
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("createdAt")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Created
+                          {sortField === "createdAt" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("lastRedeemed")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Last Redeemed
+                          {sortField === "lastRedeemed" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("isActive")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Status
+                          {sortField === "isActive" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
                       <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1490,27 +1918,91 @@ export default function RewardsPage() {
                           )}
                         </Button>
                       </TableHead>
-                      <TableHead className="text-center">Type</TableHead>
-                      <TableHead className="text-center">Points</TableHead>
-                      <TableHead className="text-center">Redemptions</TableHead>
                       <TableHead className="text-center">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="flex items-center justify-center cursor-help gap-1">
-                                Impressions
-                                <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              <p className="text-xs">Number of times customers have viewed this reward</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("type")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Type
+                          {sortField === "type" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
                       </TableHead>
-                      <TableHead className="text-center">Created</TableHead>
-                      <TableHead className="text-center">Last Redeemed</TableHead>
-                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("pointsCost")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Points
+                          {sortField === "pointsCost" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("redemptionCount")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Redemptions
+                          {sortField === "redemptionCount" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("impressions")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Impressions
+                          {sortField === "impressions" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                          <HelpCircle className="h-3 w-3 text-muted-foreground ml-1" />
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("createdAt")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Created
+                          {sortField === "createdAt" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("lastRedeemed")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Last Redeemed
+                          {sortField === "lastRedeemed" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("isActive")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Status
+                          {sortField === "isActive" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
                       <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                   </TableHeader>

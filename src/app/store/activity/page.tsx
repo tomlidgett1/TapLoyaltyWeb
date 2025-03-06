@@ -34,7 +34,8 @@ import {
   Eye,
   ChevronDown,
   ChevronUp,
-  Zap
+  Zap,
+  CalendarIcon
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
@@ -42,6 +43,22 @@ import { collection, query, getDocs, orderBy, limit, Timestamp, where, doc, getD
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Slider } from "@/components/ui/slider"
+import { Calendar as UiCalendar } from "@/components/ui/calendar"
 
 // Define transaction type with Firestore timestamp
 interface Transaction {
@@ -90,7 +107,7 @@ interface CombinedActivity {
 }
 
 type ActivityCategory = "all" | "transactions" | "redemptions"
-type SortField = "createdAt" | "amount" | "status" | "type"
+type SortField = "createdAt" | "amount" | "status" | "type" | "customerId" | "day"
 type SortDirection = "asc" | "desc"
 
 export default function ActivityPage() {
@@ -104,6 +121,23 @@ export default function ActivityPage() {
   const [sortField, setSortField] = useState<SortField>("createdAt")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
   const [customers, setCustomers] = useState<Record<string, Customer>>({})
+  const [showFilters, setShowFilters] = useState(false)
+  const [dateFilter, setDateFilter] = useState("all")
+  const [statusFilters, setStatusFilters] = useState({
+    completed: true,
+    pending: true,
+    failed: true
+  })
+  const [typeFilters, setTypeFilters] = useState({
+    purchase: true,
+    reward: true
+  })
+  const [amountRange, setAmountRange] = useState([0, 1000])
+  const [customDateRange, setCustomDateRange] = useState<{start: Date | undefined, end: Date | undefined}>({
+    start: undefined,
+    end: undefined
+  })
+  const [showCustomDateRange, setShowCustomDateRange] = useState(false)
 
   useEffect(() => {
     const fetchActivity = async () => {
@@ -188,55 +222,145 @@ export default function ActivityPage() {
     fetchActivity()
   }, [user])
 
-  // Filter transactions based on search query and category
-  const filteredTransactions = transactions.filter(transaction => {
-    // Filter by search query
-    const matchesSearch = !searchQuery ? true : (
-      (transaction.customerId && transaction.customerId.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (transaction.merchantName && transaction.merchantName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (transaction.type && transaction.type.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (transaction.status && transaction.status.toLowerCase().includes(searchQuery.toLowerCase()))
-    )
-    
-    // Filter by category
-    const matchesCategory = 
-      activityCategory === "all" || 
-      (activityCategory === "transactions" && transaction.type.toLowerCase() === "purchase") ||
-      (activityCategory === "redemptions" && transaction.type.toLowerCase() === "reward")
-    
-    return matchesSearch && matchesCategory
-  }).sort((a, b) => {
-    // Sort by selected field
-    let comparison = 0
-    
-    switch (sortField) {
-      case "createdAt":
-        const dateA = a.createdAt && typeof a.createdAt === 'object' && 'seconds' in a.createdAt 
-          ? a.createdAt.seconds * 1000 
-          : typeof a.createdAt === 'string' ? new Date(a.createdAt).getTime() : 0
+  // Add a function to apply filters
+  const applyFilters = (data: Transaction[] | Redemption[] | CombinedActivity[]) => {
+    return data.filter(item => {
+      // Apply status filter
+      const status = item.status.toLowerCase()
+      if (!statusFilters[status]) return false
+
+      // Apply type filter for transactions
+      if ('type' in item) {
+        const type = item.type.toLowerCase()
+        if (!typeFilters[type]) return false
+      }
+
+      // Apply date filter
+      const date = 'date' in item ? item.date : 
+                  'createdAt' in item ? item.createdAt : 
+                  'redemptionDate' in item ? item.redemptionDate : null
+      
+      if (date) {
+        const dateObj = typeof date === 'object' && 'seconds' in date ? 
+          new Date(date.seconds * 1000) : 
+          typeof date === 'string' ? new Date(date) : null
         
-        const dateB = b.createdAt && typeof b.createdAt === 'object' && 'seconds' in b.createdAt 
-          ? b.createdAt.seconds * 1000 
-          : typeof b.createdAt === 'string' ? new Date(b.createdAt).getTime() : 0
+        if (!dateObj) return false
         
-        comparison = dateA - dateB
-        break
-      case "amount":
-        comparison = a.amount - b.amount
-        break
-      case "status":
-        comparison = a.status.localeCompare(b.status)
-        break
-      case "type":
-        comparison = a.type.localeCompare(b.type)
-        break
-      default:
-        comparison = 0
-    }
+        if (dateFilter === "custom") {
+          // Handle custom date range
+          if (customDateRange.start && !customDateRange.end) {
+            // If only start date is set, filter for items on or after start date
+            return dateObj >= customDateRange.start
+          } else if (!customDateRange.start && customDateRange.end) {
+            // If only end date is set, filter for items on or before end date
+            const endOfDay = new Date(customDateRange.end)
+            endOfDay.setHours(23, 59, 59, 999)
+            return dateObj <= endOfDay
+          } else if (customDateRange.start && customDateRange.end) {
+            // If both dates are set, filter for items between start and end dates
+            const endOfDay = new Date(customDateRange.end)
+            endOfDay.setHours(23, 59, 59, 999)
+            return dateObj >= customDateRange.start && dateObj <= endOfDay
+          }
+          return true
+        } else if (dateFilter !== "all") {
+          const now = new Date()
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+          const yesterday = new Date(today)
+          yesterday.setDate(yesterday.getDate() - 1)
+          const thisWeekStart = new Date(today)
+          thisWeekStart.setDate(today.getDate() - today.getDay())
+          const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+          
+          switch (dateFilter) {
+            case "today":
+              return dateObj >= today
+            case "yesterday":
+              return dateObj >= yesterday && dateObj < today
+            case "thisWeek":
+              return dateObj >= thisWeekStart
+            case "thisMonth":
+              return dateObj >= thisMonthStart
+            default:
+              return true
+          }
+        }
+      }
+
+      // Apply amount filter
+      const amount = 'amount' in item ? Number(item.amount) : 
+                    'pointsUsed' in item ? item.pointsUsed : 0
+      
+      if (typeof amount === 'number' && (amount < amountRange[0] || amount > amountRange[1])) {
+        return false
+      }
+
+      return true
+    })
+  }
+
+  // Now define filteredTransactions AFTER applyFilters is defined
+  const filteredTransactions = useMemo(() => {
+    let filtered = transactions.filter(transaction => {
+      const matchesSearch = !searchQuery ? true : (
+        (transaction.customerId && transaction.customerId.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (transaction.merchantName && transaction.merchantName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (transaction.type && transaction.type.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (transaction.status && transaction.status.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+      
+      const matchesCategory = 
+        activityCategory === "all" || 
+        (activityCategory === "transactions" && transaction.type.toLowerCase() === "purchase") ||
+        (activityCategory === "redemptions" && transaction.type.toLowerCase() === "reward");
+      
+      return matchesSearch && matchesCategory;
+    });
     
-    // Apply sort direction
-    return sortDirection === "asc" ? comparison : -comparison
-  })
+    // Apply additional filters
+    filtered = applyFilters(filtered) as Transaction[];
+    
+    // Sort logic
+    return filtered.sort((a, b) => {
+      // Sort by selected field
+      let comparison = 0;
+      
+      switch (sortField) {
+        case "customerId":
+          comparison = a.customerId.localeCompare(b.customerId);
+          break;
+        case "createdAt":
+          const dateA = a.createdAt && typeof a.createdAt === 'object' && 'seconds' in a.createdAt 
+            ? a.createdAt.seconds * 1000 
+            : typeof a.createdAt === 'string' ? new Date(a.createdAt).getTime() : 0;
+          
+          const dateB = b.createdAt && typeof b.createdAt === 'object' && 'seconds' in b.createdAt 
+            ? b.createdAt.seconds * 1000 
+            : typeof b.createdAt === 'string' ? new Date(b.createdAt).getTime() : 0;
+          
+          comparison = dateA - dateB;
+          break;
+        case "amount":
+          comparison = a.amount - b.amount;
+          break;
+        case "status":
+          comparison = a.status.localeCompare(b.status);
+          break;
+        case "type":
+          comparison = a.type.localeCompare(b.type);
+          break;
+        case "day":
+          comparison = a.day ? a.day.localeCompare(b.day || "") : 0;
+          break;
+        default:
+          comparison = 0;
+      }
+      
+      // Apply sort direction
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+  }, [transactions, searchQuery, activityCategory, sortField, sortDirection, statusFilters, typeFilters, dateFilter, amountRange, customDateRange, showCustomDateRange]);
 
   // Add a function to filter redemptions based on search and other criteria
   const filteredRedemptions = useMemo(() => {
@@ -402,6 +526,101 @@ export default function ActivityPage() {
     return combined
   }, [filteredTransactions, filteredRedemptions, activityCategory, sortDirection])
 
+  // Completely revamped PDF export function
+  const handleExportPDF = async () => {
+    try {
+      // First, dynamically import the necessary modules
+      const jspdfModule = await import('jspdf');
+      const autoTableModule = await import('jspdf-autotable');
+      
+      // Create a new document
+      const doc = new jspdfModule.default();
+      
+      // Manually add the plugin to the document
+      const autoTable = autoTableModule.default;
+      
+      // Add title
+      doc.setFontSize(18);
+      doc.text('Activity Report', 14, 22);
+      
+      // Add date generated
+      doc.setFontSize(11);
+      doc.text(`Generated: ${format(new Date(), 'MMM d, yyyy h:mm a')}`, 14, 30);
+      
+      // Determine which data to export based on current tab
+      let dataToExport = [];
+      let title = '';
+      
+      if (activityCategory === 'all') {
+        title = 'All Activity';
+        dataToExport = combinedActivity.map(item => [
+          formatDate(item.date),
+          customers[item.customerId]?.fullName || 'Unknown Customer',
+          item.displayName,
+          typeof item.amount === 'number' ? `$${item.amount}` : item.amount,
+          item.status,
+          item.day || '-'
+        ]);
+      } else if (activityCategory === 'transactions') {
+        title = 'Transactions';
+        dataToExport = filteredTransactions.map(item => [
+          formatDate(item.createdAt),
+          customers[item.customerId]?.fullName || 'Unknown Customer',
+          item.type,
+          `$${item.amount}`,
+          item.status,
+          item.day || '-'
+        ]);
+      } else {
+        title = 'Redemptions';
+        dataToExport = filteredRedemptions.map(item => [
+          formatDate(item.redemptionDate),
+          customers[item.customerId]?.fullName || 'Unknown Customer',
+          item.rewardName,
+          item.pointsUsed === 0 ? 'Free' : `${item.pointsUsed} points`,
+          item.status,
+          '-'
+        ]);
+      }
+      
+      // Add subtitle with current view
+      doc.setFontSize(14);
+      doc.text(title, 14, 40);
+      
+      // Generate table using the imported autoTable function
+      autoTable(doc, {
+        startY: 45,
+        head: [['Date', 'Customer', 'Type', 'Amount', 'Status', 'Day']],
+        body: dataToExport,
+        theme: 'grid',
+        styles: { fontSize: 10, cellPadding: 3 },
+        headStyles: { fillColor: [66, 66, 66] }
+      });
+      
+      // Save the PDF
+      doc.save(`activity-report-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('There was an error generating the PDF. Please try again.');
+    }
+  };
+
+  // Add a function to handle status filter changes
+  const handleStatusFilterChange = (status: string, checked: boolean) => {
+    setStatusFilters(prev => ({
+      ...prev,
+      [status.toLowerCase()]: checked
+    }))
+  }
+
+  // Add a function to handle type filter changes
+  const handleTypeFilterChange = (type: string, checked: boolean) => {
+    setTypeFilters(prev => ({
+      ...prev,
+      [type.toLowerCase()]: checked
+    }))
+  }
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <div>
@@ -414,7 +633,11 @@ export default function ActivityPage() {
           </div>
           
           <div className="flex items-center gap-2">
-            <Button variant="outline" className="h-9 gap-2 rounded-md">
+            <Button 
+              variant="outline" 
+              className="h-9 gap-2 rounded-md"
+              onClick={handleExportPDF}
+            >
               <Download className="h-4 w-4" />
               Export
             </Button>
@@ -426,10 +649,19 @@ export default function ActivityPage() {
         
         <Tabs defaultValue="all" onValueChange={(value) => setActivityCategory(value as ActivityCategory)}>
           <div className="flex items-center justify-between gap-4 mb-4">
-            <TabsList className="w-auto grid grid-cols-3 h-10 rounded-md">
-              <TabsTrigger value="all" className="rounded-sm px-4">All Activity</TabsTrigger>
-              <TabsTrigger value="transactions" className="rounded-sm px-4">Transactions</TabsTrigger>
-              <TabsTrigger value="redemptions" className="rounded-sm px-4">Redemptions</TabsTrigger>
+            <TabsList className="h-9 rounded-md">
+              <TabsTrigger value="all" className="flex items-center gap-2">
+                <Zap className="h-4 w-4" />
+                All Activity
+              </TabsTrigger>
+              <TabsTrigger value="transactions" className="flex items-center gap-2">
+                <ShoppingCart className="h-4 w-4" />
+                Transactions
+              </TabsTrigger>
+              <TabsTrigger value="redemptions" className="flex items-center gap-2">
+                <Gift className="h-4 w-4" />
+                Redemptions
+              </TabsTrigger>
             </TabsList>
             
             <div className="flex items-center gap-2 flex-1 justify-end">
@@ -444,10 +676,218 @@ export default function ActivityPage() {
                 />
               </div>
               
-              <Button variant="outline" className="h-10 gap-2 rounded-md">
-                <Filter className="h-4 w-4" />
-                Filter
-              </Button>
+              <Popover open={showFilters} onOpenChange={setShowFilters}>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    className="h-10 gap-2 rounded-md"
+                    onClick={() => setShowFilters(true)}
+                  >
+                    <Filter className="h-4 w-4" />
+                    Filter
+                    {(Object.values(statusFilters).some(v => !v) || 
+                      Object.values(typeFilters).some(v => !v) || 
+                      dateFilter !== "all") && (
+                      <Badge className="ml-1 bg-primary h-5 w-5 p-0 flex items-center justify-center">
+                        <span className="text-xs">!</span>
+                      </Badge>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-96 p-4" align="end">
+                  <div className="space-y-4">
+                    <h4 className="font-medium">Filter Activity</h4>
+                    
+                    <div className="space-y-2">
+                      <Label>Date Range</Label>
+                      <Select 
+                        value={dateFilter} 
+                        onValueChange={(value) => {
+                          setDateFilter(value)
+                          setShowCustomDateRange(value === "custom")
+                        }}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select date range" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Time</SelectItem>
+                          <SelectItem value="today">Today</SelectItem>
+                          <SelectItem value="yesterday">Yesterday</SelectItem>
+                          <SelectItem value="thisWeek">This Week</SelectItem>
+                          <SelectItem value="thisMonth">This Month</SelectItem>
+                          <SelectItem value="custom">Custom Range</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      
+                      {showCustomDateRange && (
+                        <div className="grid grid-cols-2 gap-4 mt-2">
+                          <div className="grid gap-1">
+                            <Label htmlFor="from">From</Label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  id="from"
+                                  variant={"outline"}
+                                  className={cn(
+                                    "w-full justify-start text-left font-normal px-4",
+                                    !customDateRange.start && "text-muted-foreground"
+                                  )}
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {customDateRange.start ? format(customDateRange.start, "PP") : "Pick date"}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <UiCalendar
+                                  mode="single"
+                                  selected={customDateRange.start}
+                                  onSelect={(date) => 
+                                    setCustomDateRange(prev => ({ ...prev, start: date || undefined }))}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                          <div className="grid gap-1">
+                            <Label htmlFor="to">To</Label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  id="to"
+                                  variant={"outline"}
+                                  className={cn(
+                                    "w-full justify-start text-left font-normal px-4",
+                                    !customDateRange.end && "text-muted-foreground"
+                                  )}
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {customDateRange.end ? format(customDateRange.end, "PP") : "Pick date"}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <UiCalendar
+                                  mode="single"
+                                  selected={customDateRange.end}
+                                  onSelect={(date) => 
+                                    setCustomDateRange(prev => ({ ...prev, end: date || undefined }))}
+                                  initialFocus
+                                  disabled={(date) => 
+                                    customDateRange.start ? date < customDateRange.start : false}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="status-completed" 
+                            checked={statusFilters.completed}
+                            onCheckedChange={(checked) => 
+                              handleStatusFilterChange('completed', checked as boolean)}
+                          />
+                          <Label htmlFor="status-completed" className="cursor-pointer">Completed</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="status-pending" 
+                            checked={statusFilters.pending}
+                            onCheckedChange={(checked) => 
+                              handleStatusFilterChange('pending', checked as boolean)}
+                          />
+                          <Label htmlFor="status-pending" className="cursor-pointer">Pending</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="status-failed" 
+                            checked={statusFilters.failed}
+                            onCheckedChange={(checked) => 
+                              handleStatusFilterChange('failed', checked as boolean)}
+                          />
+                          <Label htmlFor="status-failed" className="cursor-pointer">Failed</Label>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label>Type</Label>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="type-purchase" 
+                            checked={typeFilters.purchase}
+                            onCheckedChange={(checked) => 
+                              handleTypeFilterChange('purchase', checked as boolean)}
+                          />
+                          <Label htmlFor="type-purchase" className="cursor-pointer">Purchase</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="type-reward" 
+                            checked={typeFilters.reward}
+                            onCheckedChange={(checked) => 
+                              handleTypeFilterChange('reward', checked as boolean)}
+                          />
+                          <Label htmlFor="type-reward" className="cursor-pointer">Reward</Label>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <Label>Amount Range</Label>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="min-amount" className="text-xs">Min ($)</Label>
+                          <Input
+                            id="min-amount"
+                            type="number"
+                            min={0}
+                            max={1000}
+                            value={amountRange[0]}
+                            onChange={(e) => setAmountRange([Number(e.target.value), amountRange[1]])}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="max-amount" className="text-xs">Max ($)</Label>
+                          <Input
+                            id="max-amount"
+                            type="number"
+                            min={0}
+                            max={1000}
+                            value={amountRange[1]}
+                            onChange={(e) => setAmountRange([amountRange[0], Number(e.target.value)])}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between pt-2">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => {
+                          setStatusFilters({ completed: true, pending: true, failed: true })
+                          setTypeFilters({ purchase: true, reward: true })
+                          setDateFilter("all")
+                          setAmountRange([0, 1000])
+                          setCustomDateRange({ start: undefined, end: undefined })
+                          setShowCustomDateRange(false)
+                        }}
+                      >
+                        Reset Filters
+                      </Button>
+                      <Button onClick={() => setShowFilters(false)}>Apply Filters</Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
           
@@ -463,21 +903,97 @@ export default function ActivityPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>
-                        <SortButton field="createdAt">Date</SortButton>
+                      <TableHead className="w-[250px]">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => {
+                            setSortField("customerId");
+                            setSortDirection(sortField === "customerId" && sortDirection === "asc" ? "desc" : "asc");
+                          }}
+                          className="flex items-center gap-1 px-0 font-medium"
+                        >
+                          Customer
+                          {sortField === "customerId" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
                       </TableHead>
-                      <TableHead>Customer</TableHead>
                       <TableHead>
-                        <SortButton field="type">Type</SortButton>
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => {
+                            setSortField("type");
+                            setSortDirection(sortField === "type" && sortDirection === "asc" ? "desc" : "asc");
+                          }}
+                          className="flex items-center gap-1 px-0 font-medium"
+                        >
+                          Type
+                          {sortField === "type" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
                       </TableHead>
                       <TableHead>
-                        <SortButton field="amount">Amount</SortButton>
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => {
+                            setSortField("amount");
+                            setSortDirection(sortField === "amount" && sortDirection === "asc" ? "desc" : "asc");
+                          }}
+                          className="flex items-center gap-1 px-0 font-medium"
+                        >
+                          Amount
+                          {sortField === "amount" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
                       </TableHead>
                       <TableHead>
-                        <SortButton field="status">Status</SortButton>
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => {
+                            setSortField("status");
+                            setSortDirection(sortField === "status" && sortDirection === "asc" ? "desc" : "asc");
+                          }}
+                          className="flex items-center gap-1 px-0 font-medium"
+                        >
+                          Status
+                          {sortField === "status" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
                       </TableHead>
-                      <TableHead>Day</TableHead>
-                      <TableHead></TableHead>
+                      <TableHead>
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => {
+                            setSortField("day");
+                            setSortDirection(sortField === "day" && sortDirection === "asc" ? "desc" : "asc");
+                          }}
+                          className="flex items-center gap-1 px-0 font-medium"
+                        >
+                          Day
+                          {sortField === "day" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => {
+                            setSortField("createdAt");
+                            setSortDirection(sortField === "createdAt" && sortDirection === "asc" ? "desc" : "asc");
+                          }}
+                          className="flex items-center gap-1 px-0 font-medium"
+                        >
+                          Date & Time
+                          {sortField === "createdAt" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -577,6 +1093,9 @@ export default function ActivityPage() {
                             )}
                           </TableCell>
                           <TableCell>
+                            {formatDate(activity.date)}
+                          </TableCell>
+                          <TableCell>
                             <div className="flex justify-end">
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -618,21 +1137,97 @@ export default function ActivityPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>
-                            <SortButton field="createdAt">Date</SortButton>
+                          <TableHead className="w-[250px]">
+                            <Button 
+                              variant="ghost" 
+                              onClick={() => {
+                                setSortField("customerId");
+                                setSortDirection(sortField === "customerId" && sortDirection === "asc" ? "desc" : "asc");
+                              }}
+                              className="flex items-center gap-1 px-0 font-medium"
+                            >
+                              Customer
+                              {sortField === "customerId" && (
+                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
                           </TableHead>
-                          <TableHead>Customer</TableHead>
                           <TableHead>
-                            <SortButton field="type">Type</SortButton>
+                            <Button 
+                              variant="ghost" 
+                              onClick={() => {
+                                setSortField("type");
+                                setSortDirection(sortField === "type" && sortDirection === "asc" ? "desc" : "asc");
+                              }}
+                              className="flex items-center gap-1 px-0 font-medium"
+                            >
+                              Type
+                              {sortField === "type" && (
+                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
                           </TableHead>
                           <TableHead>
-                            <SortButton field="amount">Amount</SortButton>
+                            <Button 
+                              variant="ghost" 
+                              onClick={() => {
+                                setSortField("amount");
+                                setSortDirection(sortField === "amount" && sortDirection === "asc" ? "desc" : "asc");
+                              }}
+                              className="flex items-center gap-1 px-0 font-medium"
+                            >
+                              Amount
+                              {sortField === "amount" && (
+                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
                           </TableHead>
                           <TableHead>
-                            <SortButton field="status">Status</SortButton>
+                            <Button 
+                              variant="ghost" 
+                              onClick={() => {
+                                setSortField("status");
+                                setSortDirection(sortField === "status" && sortDirection === "asc" ? "desc" : "asc");
+                              }}
+                              className="flex items-center gap-1 px-0 font-medium"
+                            >
+                              Status
+                              {sortField === "status" && (
+                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
                           </TableHead>
-                          <TableHead>Day</TableHead>
-                          <TableHead></TableHead>
+                          <TableHead>
+                            <Button 
+                              variant="ghost" 
+                              onClick={() => {
+                                setSortField("day");
+                                setSortDirection(sortField === "day" && sortDirection === "asc" ? "desc" : "asc");
+                              }}
+                              className="flex items-center gap-1 px-0 font-medium"
+                            >
+                              Day
+                              {sortField === "day" && (
+                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TableHead>
+                          <TableHead>
+                            <Button 
+                              variant="ghost" 
+                              onClick={() => {
+                                setSortField("createdAt");
+                                setSortDirection(sortField === "createdAt" && sortDirection === "asc" ? "desc" : "asc");
+                              }}
+                              className="flex items-center gap-1 px-0 font-medium"
+                            >
+                              Date & Time
+                              {sortField === "createdAt" && (
+                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TableHead>
+                          <TableHead className="w-[50px]"></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -704,6 +1299,9 @@ export default function ActivityPage() {
                               <span className="capitalize">{transaction.day}</span>
                               </TableCell>
                               <TableCell>
+                                {formatDate(transaction.createdAt)}
+                              </TableCell>
+                              <TableCell>
                                 <div className="flex justify-end">
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
@@ -741,21 +1339,97 @@ export default function ActivityPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>
-                            <SortButton field="createdAt">Date</SortButton>
+                          <TableHead className="w-[250px]">
+                            <Button 
+                              variant="ghost" 
+                              onClick={() => {
+                                setSortField("customerId");
+                                setSortDirection(sortField === "customerId" && sortDirection === "asc" ? "desc" : "asc");
+                              }}
+                              className="flex items-center gap-1 px-0 font-medium"
+                            >
+                              Customer
+                              {sortField === "customerId" && (
+                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
                           </TableHead>
-                          <TableHead>Customer</TableHead>
                           <TableHead>
-                            <SortButton field="type">Type</SortButton>
+                            <Button 
+                              variant="ghost" 
+                              onClick={() => {
+                                setSortField("type");
+                                setSortDirection(sortField === "type" && sortDirection === "asc" ? "desc" : "asc");
+                              }}
+                              className="flex items-center gap-1 px-0 font-medium"
+                            >
+                              Type
+                              {sortField === "type" && (
+                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
                           </TableHead>
                           <TableHead>
-                            <SortButton field="amount">Amount</SortButton>
+                            <Button 
+                              variant="ghost" 
+                              onClick={() => {
+                                setSortField("amount");
+                                setSortDirection(sortField === "amount" && sortDirection === "asc" ? "desc" : "asc");
+                              }}
+                              className="flex items-center gap-1 px-0 font-medium"
+                            >
+                              Amount
+                              {sortField === "amount" && (
+                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
                           </TableHead>
                           <TableHead>
-                            <SortButton field="status">Status</SortButton>
+                            <Button 
+                              variant="ghost" 
+                              onClick={() => {
+                                setSortField("status");
+                                setSortDirection(sortField === "status" && sortDirection === "asc" ? "desc" : "asc");
+                              }}
+                              className="flex items-center gap-1 px-0 font-medium"
+                            >
+                              Status
+                              {sortField === "status" && (
+                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
                           </TableHead>
-                          <TableHead>Day</TableHead>
-                          <TableHead></TableHead>
+                          <TableHead>
+                            <Button 
+                              variant="ghost" 
+                              onClick={() => {
+                                setSortField("day");
+                                setSortDirection(sortField === "day" && sortDirection === "asc" ? "desc" : "asc");
+                              }}
+                              className="flex items-center gap-1 px-0 font-medium"
+                            >
+                              Day
+                              {sortField === "day" && (
+                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TableHead>
+                          <TableHead>
+                            <Button 
+                              variant="ghost" 
+                              onClick={() => {
+                                setSortField("createdAt");
+                                setSortDirection(sortField === "createdAt" && sortDirection === "asc" ? "desc" : "asc");
+                              }}
+                              className="flex items-center gap-1 px-0 font-medium"
+                            >
+                              Date & Time
+                              {sortField === "createdAt" && (
+                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TableHead>
+                          <TableHead className="w-[50px]"></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -823,6 +1497,9 @@ export default function ActivityPage() {
                               </TableCell>
                               <TableCell>
                                 <span>-</span>
+                              </TableCell>
+                              <TableCell>
+                                {formatDate(redemption.redemptionDate)}
                               </TableCell>
                               <TableCell>
                                 <div className="flex justify-end">

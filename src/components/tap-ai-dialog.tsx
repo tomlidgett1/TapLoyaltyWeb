@@ -70,7 +70,7 @@ interface Message {
 interface RewardData {
   rewardName: string
   description: string
-  programtype: 'voucher' | 'points' | 'discount'
+  programtype: 'voucher' | 'points' | 'discount' | 'general'
   isActive: boolean
   pointsCost: number
   rewardVisibility: string
@@ -186,6 +186,22 @@ const RewardCard = ({ reward }: { reward: any }) => {
         return `When purchasing from ${condition.value} category`;
       case 'timeOfDay':
         return `During ${condition.value} hours`;
+      case 'minimumSpend':
+        return `Minimum spend of $${condition.amount || condition.value}`;
+      case 'minimumLifetimeSpend':
+        return `Total lifetime spend of $${condition.value}`;
+      case 'minimumTransactions':
+        return `Minimum ${condition.value} transactions`;
+      case 'maximumTransactions':
+        return `Maximum ${condition.value} transactions`;
+      case 'minimumPointsBalance':
+        return `Minimum ${condition.value} points balance`;
+      case 'membershipLevel':
+        return `${condition.value} membership level required`;
+      case 'daysSinceJoined':
+        return `Account age: ${condition.value} days`;
+      case 'daysSinceLastVisit':
+        return `${condition.value} days since last visit`;
       default:
         return `${condition.type}: ${condition.value || condition.amount || 'enabled'}`;
     }
@@ -205,11 +221,34 @@ const RewardCard = ({ reward }: { reward: any }) => {
       case 'timeOfDay':
         const times = limitation.value as any;
         return `Available from ${times.startTime || '00:00'} to ${times.endTime || '23:59'}`;
-      case 'dateRange':
+      case 'activePeriod':
         const dates = limitation.value as any;
-        return `Available from ${dates.startDate || 'now'} to ${dates.endDate || 'forever'}`;
+        const startDate = dates.startDate ? new Date(dates.startDate).toLocaleDateString() : 'now';
+        const endDate = dates.endDate ? new Date(dates.endDate).toLocaleDateString() : 'forever';
+        return `Valid from ${startDate} to ${endDate}`;
       default:
-        return `${limitation.type}: ${JSON.stringify(limitation.value)}`;
+        // Handle complex objects better
+        if (typeof limitation.value === 'object' && limitation.value !== null) {
+          try {
+            // Try to format the object in a more readable way
+            const formattedParts = [];
+            for (const [key, value] of Object.entries(limitation.value)) {
+              if (key.includes('Date') && typeof value === 'string') {
+                // Format dates
+                formattedParts.push(`${key}: ${new Date(value).toLocaleDateString()}`);
+              } else if (key.includes('Time') && typeof value === 'string') {
+                // Format times
+                formattedParts.push(`${key}: ${value}`);
+              } else {
+                formattedParts.push(`${key}: ${value}`);
+              }
+            }
+            return `${limitation.type}: ${formattedParts.join(', ')}`;
+          } catch (e) {
+            return `${limitation.type}: ${JSON.stringify(limitation.value)}`;
+          }
+        }
+        return `${limitation.type}: ${limitation.value}`;
     }
   };
 
@@ -224,6 +263,8 @@ const RewardCard = ({ reward }: { reward: any }) => {
         return <Gift className="h-5 w-5" />;
       case 'discount':
         return <DollarSign className="h-5 w-5" />;
+      case 'general':
+        return <Sparkles className="h-5 w-5" />;
       default:
         return <Gift className="h-5 w-5" />;
     }
@@ -2074,8 +2115,8 @@ export function TapAiDialog({
   // Add these functions to handle conversation management with Firestore
 
   // Create a new conversation
-  const createNewConversation = async () => {
-    console.log('Creating new conversation');
+  const createNewConversation = async (skipInitialMessage = false) => {
+    console.log('Creating new conversation, skipInitialMessage:', skipInitialMessage);
     setIsLoading(true);
     
     try {
@@ -2083,40 +2124,63 @@ export function TapAiDialog({
       setLocalMessages([]);
       setThreadId(null);
       
-      // Create a new thread via the assistant API
-      const initialMessage = "Hello, I'm ready to help with your loyalty program.";
-      const response = await talkToAssistant(initialMessage);
-      
-      if (!response.threadId) {
-        throw new Error('Failed to create thread');
+      if (skipInitialMessage) {
+        // Just create a new empty conversation without sending a message
+        const newConversationId = `conv_${Date.now()}`;
+        const newConversation = {
+          id: newConversationId,
+          threadId: null, // We'll get a threadId when the first message is sent
+          title: 'New Conversation',
+          messages: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          userId: user?.uid
+        };
+        
+        // Save to Firestore
+        await setDoc(doc(db, 'conversations', newConversationId), newConversation);
+        
+        // Update local state
+        setCurrentConversation(newConversationId);
+        setConversations(prev => [newConversation, ...prev]);
+        
+        console.log('New empty conversation created:', newConversationId);
+      } else {
+        // Create a new thread via the assistant API with initial message
+        const initialMessage = "Hello, I'm ready to help with your loyalty program.";
+        const response = await talkToAssistant(initialMessage);
+        
+        if (!response.threadId) {
+          throw new Error('Failed to create thread');
+        }
+        
+        // Create a new conversation document in Firestore
+        const newConversationId = `conv_${Date.now()}`;
+        const newConversation = {
+          id: newConversationId,
+          threadId: response.threadId,
+          title: 'New Conversation',
+          messages: [
+            { role: 'assistant', content: response.content }
+          ],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          userId: user?.uid
+        };
+        
+        // Save to Firestore
+        await setDoc(doc(db, 'conversations', newConversationId), newConversation);
+        
+        // Update local state
+        setThreadId(response.threadId);
+        setCurrentConversation(newConversationId);
+        setLocalMessages([{ role: 'assistant', content: response.content }]);
+        
+        // Update conversations list
+        setConversations(prev => [newConversation, ...prev]);
+        
+        console.log('New conversation created with initial message:', newConversationId);
       }
-      
-      // Create a new conversation document in Firestore
-      const newConversationId = `conv_${Date.now()}`;
-      const newConversation = {
-        id: newConversationId,
-        threadId: response.threadId,
-        title: 'New Conversation',
-        messages: [
-          { role: 'assistant', content: response.content }
-        ],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        userId: user?.uid
-      };
-      
-      // Save to Firestore
-      await setDoc(doc(db, 'conversations', newConversationId), newConversation);
-      
-      // Update local state
-      setThreadId(response.threadId);
-      setCurrentConversation(newConversationId);
-      setLocalMessages([{ role: 'assistant', content: response.content }]);
-      
-      // Update conversations list
-      setConversations(prev => [newConversation, ...prev]);
-      
-      console.log('New conversation created:', newConversationId);
     } catch (error) {
       console.error('Error creating new conversation:', error);
       setError('Failed to create new conversation');

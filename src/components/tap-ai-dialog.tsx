@@ -27,7 +27,7 @@ import {
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, setDoc, getDoc, collection, getDocs, query, orderBy, deleteDoc, writeBatch, Timestamp } from "firebase/firestore"
+import { doc, setDoc, getDoc, collection, getDocs, query, orderBy, deleteDoc, writeBatch, Timestamp, where, updateDoc } from "firebase/firestore"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
 import { useCustomers } from '@/hooks/use-customers'
 import { Command, CommandGroup, CommandItem } from '@/components/ui/command'
@@ -113,519 +113,247 @@ const isJsonString = (str: string) => {
   }
 };
 
-function RewardCard({ 
-  reward, 
-  setSavingReward, 
-  setPinDialogOpen 
-}: { 
-  reward: RewardData; 
-  setSavingReward: (reward: any) => void;
-  setPinDialogOpen: (open: boolean) => void;
-}) {
-  const [isExpanded, setIsExpanded] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [isUsed, setIsUsed] = useState(false)
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const router = useRouter()
-  const { user } = useAuth()
-  const { toast } = useToast()
-
-  const formatCondition = (condition: { type: string; amount?: number; value?: number | string }) => {
-    switch (condition.type) {
-      case 'minimumSpend':
-        return `Minimum spend of $${condition.amount}`
-      case 'minimumLifetimeSpend':
-        return `Total lifetime spend of $${condition.value}`
-      case 'minimumTransactions':
-        return `Minimum ${condition.value} transactions`
-      case 'maximumTransactions':
-        return `Maximum ${condition.value} transactions`
-      case 'minimumPointsBalance':
-        return `Minimum ${condition.value} points balance`
-      case 'membershipLevel':
-        return `${condition.value} membership level required`
-      case 'daysSinceJoined':
-        return `Account age: ${condition.value} days`
-      case 'daysSinceLastVisit':
-        return `${condition.value} days since last visit`
-      default:
-        return condition.type
-    }
-  }
-
-  const formatLimitation = (limitation: { 
-    type: string; 
-    value: number | string[] | { startTime?: string; endTime?: string; startDate?: string; endDate?: string } 
-  }) => {
-    switch (limitation.type) {
-      case 'customerLimit':
-        return `${limitation.value} per customer`
-      case 'totalRedemptionLimit':
-        return `${limitation.value} total available`
-      case 'daysOfWeek':
-        return `Available on ${(limitation.value as string[]).join(', ')}`
-      case 'timeOfDay':
-        const timeValue = limitation.value as { startTime: string; endTime: string }
-        return `Available ${timeValue.startTime} - ${timeValue.endTime}`
-      case 'activePeriod':
-        const dateValue = limitation.value as { startDate: string; endDate: string }
-        return `Valid ${new Date(dateValue.startDate).toLocaleDateString()} - ${new Date(dateValue.endDate).toLocaleDateString()}`
-      default:
-        return `${limitation.type}: ${limitation.value}`
-    }
-  }
-
-  const formatDelayedVisibility = (visibility: { type: string; value: number }) => {
-    switch (visibility.type) {
-      case 'totalLifetimeSpend':
-        return `Visible after $${visibility.value} total spend`
-      case 'minimumTransactions':
-        return `Visible after ${visibility.value} transactions`
-      case 'daysSinceJoined':
-        return `Visible after ${visibility.value} days of membership`
-      default:
-        return `Visible after ${visibility.type}: ${visibility.value}`
-    }
-  }
-
-  const createRewardData = {
-    rewardName: reward.rewardName,
-    description: reward.description,
-    type: reward.programtype,
-    rewardVisibility: reward.rewardVisibility,
-    pin: "",
-    pointsCost: reward.pointsCost,
-    isActive: reward.isActive,
-    delayedVisibility: !!reward.delayedVisibility,
-    isTargeted: false,
-    discountAmount: 0,
-    itemName: "",
-    voucherAmount: reward.voucherAmount,
-    conditions: {
-      newCustomer: false,
-      minimumTransactions: 0,
-      maximumTransactions: 0,
-      daysSinceJoined: 0,
-      daysSinceLastVisit: 0,
-      minimumLifetimeSpend: reward.conditions.find(c => c.type === 'minimumSpend')?.amount || 0,
-      minimumPointsBalance: 0,
-      membershipLevel: ""
-    },
-    limitations: {
-      totalRedemptionLimit: reward.limitations.find(l => l.type === 'totalRedemptionLimit')?.value || 0,
-      perCustomerLimit: reward.limitations.find(l => l.type === 'customerLimit')?.value || 0,
-      dayRestrictions: [],
-      startTime: "",
-      endTime: "",
-      startDate: null,
-      endDate: null
-    }
-  }
-
-  const handleEdit = (e: React.MouseEvent) => {
-    e.stopPropagation()
+// Updated function to detect and parse JSON in messages
+const parseMessageContent = (content: string) => {
+  // Try different JSON formats
+  
+  // Format 1: ```json\n{...}\n```
+  const jsonRegex1 = /```json\n([\s\S]*?)\n```/;
+  // Format 2: ```\n{...}\n```
+  const jsonRegex2 = /```\n([\s\S]*?)\n```/;
+  // Format 3: ```{...}```
+  const jsonRegex3 = /```([\s\S]*?)```/;
+  // Format 4: Plain JSON with curly braces
+  const jsonRegex4 = /(\{[\s\S]*?\})/;
+  
+  // Try each regex pattern in order
+  for (const regex of [jsonRegex1, jsonRegex2, jsonRegex3, jsonRegex4]) {
+    const match = content.match(regex);
     
-    // Map the reward data to the format expected by CreateRewardDialog
-    const editFormData = {
-      rewardName: reward.rewardName,
-      description: reward.description,
-      type: reward.programtype, 
-      rewardVisibility: reward.rewardVisibility || 'global',
-      pin: "",
-      pointsCost: reward.pointsCost,
-      isActive: reward.isActive,
-      delayedVisibility: !!reward.delayedVisibility,
-      isTargeted: false,
-      discountAmount: 0,
-      itemName: "",
-      voucherAmount: reward.voucherAmount,
-      
-      // Map conditions
-      conditions: {
-        newCustomer: false,
-        minimumTransactions: reward.conditions?.find(c => c.type === 'minimumTransactions')?.value?.toString() || "",
-        maximumTransactions: reward.conditions?.find(c => c.type === 'maximumTransactions')?.value?.toString() || "",
-        daysSinceJoined: reward.conditions?.find(c => c.type === 'daysSinceJoined')?.value?.toString() || "",
-        daysSinceLastVisit: reward.conditions?.find(c => c.type === 'daysSinceLastVisit')?.value?.toString() || "",
-        minimumLifetimeSpend: reward.conditions?.find(c => c.type === 'minimumLifetimeSpend')?.value?.toString() || "",
-        minimumPointsBalance: reward.conditions?.find(c => c.type === 'minimumPointsBalance')?.value?.toString() || "",
-        membershipLevel: reward.conditions?.find(c => c.type === 'membershipLevel')?.value?.toString() || "",
+    if (match && match[1]) {
+      try {
+        // Try to parse the potential JSON
+        const jsonText = match[1].trim();
+        const jsonData = JSON.parse(jsonText);
         
-        // Add flags for condition sections
-        useTransactionRequirements: !!(
-          reward.conditions?.find(c => c.type === 'minimumTransactions')?.value ||
-          reward.conditions?.find(c => c.type === 'maximumTransactions')?.value
-        ),
-        useTimeRequirements: !!(
-          reward.conditions?.find(c => c.type === 'daysSinceJoined')?.value ||
-          reward.conditions?.find(c => c.type === 'daysSinceLastVisit')?.value
-        ),
-        useSpendingRequirements: !!(
-          reward.conditions?.find(c => c.type === 'minimumLifetimeSpend')?.value ||
-          reward.conditions?.find(c => c.type === 'minimumPointsBalance')?.value
-        )
-      },
-      
-      // Map limitations
-      limitations: {
-        totalRedemptionLimit: reward.limitations?.find(l => l.type === 'totalRedemptionLimit')?.value?.toString() || "",
-        perCustomerLimit: reward.limitations?.find(l => l.type === 'customerLimit')?.value?.toString() || "",
-        
-        // Handle day restrictions
-        dayRestrictions: reward.limitations?.find(l => l.type === 'daysOfWeek')?.value as string[] || [],
-        
-        // Handle time of day
-        startTime: reward.limitations?.find(l => l.type === 'timeOfDay')?.value?.startTime || "",
-        endTime: reward.limitations?.find(l => l.type === 'timeOfDay')?.value?.endTime || "",
-        
-        // Handle active period
-        startDate: reward.limitations?.find(l => l.type === 'activePeriod')?.value?.startDate || null,
-        endDate: reward.limitations?.find(l => l.type === 'activePeriod')?.value?.endDate || null,
-        
-        // Add flags for limitation sections
-        useTimeRestrictions: !!reward.limitations?.find(l => l.type === 'timeOfDay'),
-        useDayRestrictions: !!reward.limitations?.find(l => l.type === 'daysOfWeek'),
-      },
-      
-      // Handle delayed visibility settings
-      delayedVisibilityType: reward.delayedVisibility?.type === 'totalLifetimeSpend' ? 'spend' : 
-                            reward.delayedVisibility?.type === 'minimumTransactions' ? 'transactions' : '',
-      delayedVisibilitySpend: reward.delayedVisibility?.type === 'totalLifetimeSpend' ? reward.delayedVisibility.value.toString() : '',
-      delayedVisibilityTransactions: reward.delayedVisibility?.type === 'minimumTransactions' ? reward.delayedVisibility.value.toString() : '',
-      
-      // Handle active period flag
-      hasActivePeriod: !!reward.limitations?.find(l => l.type === 'activePeriod'),
-      activePeriod: {
-        startDate: reward.limitations?.find(l => l.type === 'activePeriod')?.value?.startDate || '',
-        endDate: reward.limitations?.find(l => l.type === 'activePeriod')?.value?.endDate || ''
-      }
-    }
-    
-    setCreateRewardData(editFormData)
-    setEditDialogOpen(true)
-  }
-
-  const handleUseTemplate = async (e: React.MouseEvent, reward: any) => {
-    e.stopPropagation()
-    
-    if (!user?.uid) {
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in to save rewards",
-        variant: "destructive"
-      })
-      router.push('/login')
-      return
-    }
-
-    setSaving(true)
-    setSavingReward(reward)
-    setPinDialogOpen(true)
-  }
-
-  const handleSaveWithPin = async (status: 'draft' | 'live') => {
-    if (!pin.trim() || !user?.uid) {
-      console.log("Missing required data:", { 
-        pin: !!pin.trim(), 
-        userId: !!user?.uid 
-      });
-      return;
-    }
-
-    try {
-      setSaving(true);
-      const now = Timestamp.now();
-      const batch = writeBatch(db);
-      
-      // Check if we have program data in the ref
-      const programData = fullProgramDataRef.current;
-      console.log("Using data from ref:", programData);
-      
-      if (programData && programData.isProgram && Array.isArray(programData.rewards)) {
-        console.log(`Program detected with ${programData.rewards.length} rewards`);
-        console.log("Full rewards array:", JSON.stringify(programData.rewards));
-        
-        // Create a program ID to link all rewards
-        const programId = `program-${Date.now()}`;
-        console.log("Created program ID:", programId);
-        
-        // Get program name from the programData
-        const programName = programData.programName || programData.rewardName || "Loyalty Program";
-        
-        // Create an array to store all the reward IDs we're creating
-        const createdRewardIds = [];
-        
-        // Make sure we're iterating through the rewards array correctly
-        const rewardsArray = Array.isArray(programData.rewards) ? programData.rewards : [];
-        console.log(`Processing ${rewardsArray.length} rewards`);
-        
-        // Process each reward
-        for (let i = 0; i < rewardsArray.length; i++) {
-          const reward = rewardsArray[i];
-          console.log(`Processing reward ${i+1}/${rewardsArray.length}:`, {
-            name: reward.rewardName,
-            description: reward.description,
-            pointsCost: reward.pointsCost
-          });
+        // If it's valid JSON with required reward fields
+        if (jsonData && typeof jsonData === 'object' && jsonData.rewardName) {
+          // Split the message into parts
+          const parts = content.split(match[0]);
           
-          // Generate a truly unique ID for each reward
-          const uniqueTimestamp = Date.now() + i; // Add index to ensure uniqueness
-          const randomSuffix = Math.floor(Math.random() * 10000);
-          const rewardId = `${programId}-reward-${uniqueTimestamp}-${randomSuffix}`;
-          
-          console.log(`Created unique ID for reward ${i+1}:`, rewardId);
-          
-          const rewardData = {
-            ...reward,
-            pin: pin.trim(),
-            createdAt: now,
-            status: status,
-            isActive: status === 'live',
-            id: rewardId,
-            merchantId: user.uid,
-            updatedAt: now,
-            programId: programId,
-            programName: programName, // Add the program name to each reward
-            category: 'individual'
+          return {
+            hasJson: true,
+            beforeJson: parts[0]?.trim() || '',
+            jsonData,
+            afterJson: parts[1]?.trim() || ''
           };
-          
-          // Save individual reward
-          console.log(`Saving reward ${i+1} to Firestore:`, rewardData);
-          
-          const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
-          batch.set(merchantRewardRef, rewardData);
-          
-          const globalRewardRef = doc(db, 'rewards', rewardId);
-          batch.set(globalRewardRef, rewardData);
-          
-          const tapAiRewardRef = doc(db, 'merchants', user.uid, 'tapaiRewards', rewardId);
-          batch.set(tapAiRewardRef, rewardData);
-          
-          createdRewardIds.push(rewardId);
-          console.log(`Reward ${i+1} added to batch`);
         }
-        
-        console.log(`All ${rewardsArray.length} rewards processed. Created IDs:`, createdRewardIds);
-      } else if (savingReward) {
-        // Handle single reward (existing code)
-        console.log("Processing single reward");
-        const rewardId = Date.now().toString();
-        const rewardData = {
-          ...savingReward,
-          pin: pin.trim(),
-          createdAt: now,
-          status: status,
-          isActive: status === 'live',
-          id: rewardId,
-          merchantId: user.uid,
-          updatedAt: now,
-          category: 'individual'
-        };
-        
-        const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
-        batch.set(merchantRewardRef, rewardData);
-        
-        const globalRewardRef = doc(db, 'rewards', rewardId);
-        batch.set(globalRewardRef, rewardData);
-        
-        const tapAiRewardRef = doc(db, 'merchants', user.uid, 'tapaiRewards', rewardId);
-        batch.set(tapAiRewardRef, rewardData);
-      } else {
-        console.error("No reward data found");
-        return;
+      } catch (error) {
+        console.log(`Failed to parse JSON with regex ${regex}:`, error);
+        // Continue to the next pattern
       }
-      
-      // Commit all writes
-      console.log("Committing batch to Firestore...");
-      await batch.commit();
-      console.log("Batch committed successfully");
+    }
+  }
+  
+  // If no JSON or parsing failed, return the original content
+  return {
+    hasJson: false,
+    content
+  };
+};
 
-      toast({
-        title: "Success",
-        description: savingReward ? `Reward ${status === 'draft' ? 'saved as draft' : 'published live'}` : `Program with ${programData?.rewards?.length || 0} rewards ${status === 'draft' ? 'saved as draft' : 'published live'}`,
-      });
-      setPinDialogOpen(false);
-      setPin('');
-      setSavingRewardOriginal(null);
-      // Reset the ref after successful save
-      fullProgramDataRef.current = null;
-    } catch (error) {
-      console.error('Error saving reward:', error);
-      console.error('Error details:', JSON.stringify(error, null, 2));
-      toast({
-        title: "Error",
-        description: `Failed to save reward: ${(error as Error).message}`,
-        variant: "destructive"
-      });
-    } finally {
-      setSaving(false);
+// Now, let's create a component to render the reward card
+const RewardCard = ({ reward }: { reward: any }) => {
+  const { toast } = useToast();
+  
+  // Helper function to format condition text
+  const formatCondition = (condition: any) => {
+    switch (condition.type) {
+      case 'visitCount':
+        return `After ${condition.value} visits`;
+      case 'spendAmount':
+        return `After spending $${condition.amount || condition.value}`;
+      case 'pointsBalance':
+        return `When customer has ${condition.value} points`;
+      case 'birthday':
+        return 'On customer birthday';
+      case 'firstVisit':
+        return 'On first visit';
+      case 'specificProduct':
+        return `When purchasing ${condition.value}`;
+      case 'specificCategory':
+        return `When purchasing from ${condition.value} category`;
+      case 'timeOfDay':
+        return `During ${condition.value} hours`;
+      default:
+        return `${condition.type}: ${condition.value || condition.amount || 'enabled'}`;
     }
   };
-
+  
+  // Helper function to format limitation text
+  const formatLimitation = (limitation: any) => {
+    switch (limitation.type) {
+      case 'customerLimit':
+        return `Limited to ${limitation.value} per customer`;
+      case 'totalRedemptionLimit':
+        return `Limited to ${limitation.value} total redemptions`;
+      case 'expiryDate':
+        return `Expires on ${new Date(limitation.value).toLocaleDateString()}`;
+      case 'daysOfWeek':
+        return `Available on ${Array.isArray(limitation.value) ? limitation.value.join(', ') : limitation.value}`;
+      case 'timeOfDay':
+        const times = limitation.value as any;
+        return `Available from ${times.startTime || '00:00'} to ${times.endTime || '23:59'}`;
+      case 'dateRange':
+        const dates = limitation.value as any;
+        return `Available from ${dates.startDate || 'now'} to ${dates.endDate || 'forever'}`;
+      default:
+        return `${limitation.type}: ${JSON.stringify(limitation.value)}`;
+    }
+  };
+  
   return (
-    <>
-      <div className={cn(
-        "border rounded-lg overflow-hidden bg-white shadow-sm transition-shadow w-full",
-        isUsed ? "opacity-75" : "hover:shadow-md"
-      )}>
-        <div 
-          className={cn(
-            "p-4 flex items-start justify-between cursor-pointer hover:bg-gray-50"
-          )}
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <div className="flex-1">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-medium text-gray-900">{reward.rewardName}</h3>
-            <div className="flex items-center gap-3">
-                {isUsed ? (
-                  <span className="text-sm font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                    Used
-                  </span>
-                ) : (
-                  <>
-              <span className="text-sm font-medium text-[#007AFF]">
-                      {reward.pointsCost > 0 ? `${reward.pointsCost.toLocaleString()} points` : 'Free'}
-              </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 hover:bg-gray-100"
-                      onClick={handleEdit}
-                    >
-                      <Edit className="h-4 w-4 text-gray-500" />
-                    </Button>
-              {isExpanded ? (
-                <ChevronUp className="h-4 w-4 text-gray-500" />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-gray-500" />
-                    )}
-                  </>
-              )}
-            </div>
+    <div className="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
+      {/* Header with program type indicator */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-400 p-1">
+        <div className="flex justify-between items-center px-3 py-1">
+          <div className="flex items-center">
+            {reward.programtype === 'coffee' && <Coffee className="h-4 w-4 text-white mr-2" />}
+            {reward.programtype === 'points' && <Award className="h-4 w-4 text-white mr-2" />}
+            {reward.programtype === 'voucher' && <Gift className="h-4 w-4 text-white mr-2" />}
+            {reward.programtype === 'discount' && <DollarSign className="h-4 w-4 text-white mr-2" />}
+            <span className="text-xs font-medium text-white uppercase tracking-wider">
+              {reward.programtype || 'Reward'} Program
+            </span>
           </div>
-            <p className="text-sm text-gray-600">{reward.description}</p>
+          <Badge variant={reward.isActive ? "success" : "secondary"} className="text-xs">
+            {reward.isActive ? "Active" : "Inactive"}
+          </Badge>
         </div>
       </div>
-
-      {isExpanded && (
-          <div className="p-4 border-t bg-gray-50 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+      
+      {/* Main content */}
+      <div className="p-4">
+        <h3 className="text-lg font-bold text-gray-900 mb-2">{reward.rewardName}</h3>
+        <p className="text-gray-600 text-sm mb-4">{reward.description}</p>
+        
+        {/* Reward details */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="bg-blue-50 rounded-md p-2 flex items-center">
+            <DollarSign className="h-4 w-4 text-blue-500 mr-2" />
             <div>
-                <p className="text-sm font-medium text-gray-500">Program Type</p>
-                <p className="text-sm text-gray-900 capitalize">{reward.programtype}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">Points Cost</p>
-              <p className="text-sm font-semibold text-[#007AFF]">
-                  {reward.pointsCost > 0 ? reward.pointsCost.toLocaleString() : 'Free'}
-              </p>
+              <div className="text-xs text-gray-500">Points Cost</div>
+              <div className="font-medium">{reward.pointsCost}</div>
             </div>
-            </div>
-
-            {reward.delayedVisibility && (
-            <div>
-                <p className="text-sm font-medium text-gray-500 mb-2">Visibility Rule</p>
-                <p className="text-sm text-gray-600">
-                  {formatDelayedVisibility(reward.delayedVisibility)}
-              </p>
-            </div>
-            )}
-
-            {reward.conditions?.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
-                  <div className="h-px flex-1 bg-gray-100"></div>
-                  Conditions
-                  <div className="h-px flex-1 bg-gray-100"></div>
           </div>
-                <div className="grid grid-cols-1 gap-2">
-                  {reward.conditions.map((condition, i) => (
-                    <div 
-                      key={i}
-                      className="flex items-center gap-3 px-3 py-2 bg-blue-50/50 rounded-lg border border-blue-100/50"
-                    >
-                      {condition.type === 'minimumSpend' && <DollarSign className="h-4 w-4 text-[#007AFF]" />}
-                      {condition.type === 'minimumLifetimeSpend' && <History className="h-4 w-4 text-[#007AFF]" />}
-                      {condition.type === 'minimumTransactions' && <Repeat className="h-4 w-4 text-[#007AFF]" />}
-                      {condition.type === 'maximumTransactions' && <Ban className="h-4 w-4 text-[#007AFF]" />}
-                      {condition.type === 'minimumPointsBalance' && <Award className="h-4 w-4 text-[#007AFF]" />}
-                      {condition.type === 'membershipLevel' && <BadgeCheck className="h-4 w-4 text-[#007AFF]" />}
-                      {condition.type === 'daysSinceJoined' && <UserCheck className="h-4 w-4 text-[#007AFF]" />}
-                      {condition.type === 'daysSinceLastVisit' && <Timer className="h-4 w-4 text-[#007AFF]" />}
-                      <span className="text-sm text-gray-700">{formatCondition(condition)}</span>
-                    </div>
-                  ))}
-                </div>
+          
+          <div className="bg-purple-50 rounded-md p-2 flex items-center">
+            <Eye className="h-4 w-4 text-purple-500 mr-2" />
+            <div>
+              <div className="text-xs text-gray-500">Visibility</div>
+              <div className="font-medium">{reward.rewardVisibility}</div>
+            </div>
+          </div>
+          
+          {reward.voucherAmount && (
+            <div className="bg-green-50 rounded-md p-2 flex items-center">
+              <Gift className="h-4 w-4 text-green-500 mr-2" />
+              <div>
+                <div className="text-xs text-gray-500">Voucher Amount</div>
+                <div className="font-medium">${reward.voucherAmount}</div>
               </div>
-            )}
-
-            {reward.limitations?.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
-                  <div className="h-px flex-1 bg-gray-100"></div>
-                  Limitations
-                  <div className="h-px flex-1 bg-gray-100"></div>
-                </div>
-                <div className="grid grid-cols-1 gap-2">
-                  {reward.limitations.map((limitation, i) => (
-                    <div 
-                      key={i}
-                      className="flex items-center gap-3 px-3 py-2 bg-orange-50/50 rounded-lg border border-orange-100/50"
-                    >
-                      {limitation.type === 'customerLimit' && <Users className="h-4 w-4 text-orange-500" />}
-                      {limitation.type === 'totalRedemptionLimit' && <Award className="h-4 w-4 text-orange-500" />}
-                      {limitation.type === 'daysOfWeek' && <Calendar className="h-4 w-4 text-orange-500" />}
-                      {limitation.type === 'timeOfDay' && <Clock className="h-4 w-4 text-orange-500" />}
-                      {limitation.type === 'activePeriod' && <CalendarRange className="h-4 w-4 text-orange-500" />}
-                      <span className="text-sm text-gray-700">{formatLimitation(limitation)}</span>
-                    </div>
-                  ))}
-                </div>
             </div>
           )}
-
-            {!isUsed && (
-          <div className="flex gap-2">
-          <Button
-              onClick={(e) => handleUseTemplate(e, reward)}
-              disabled={saving || isUsed}
-              className="flex-1 bg-[#007AFF] hover:bg-[#0066CC] text-white"
-          >
-            {saving ? (
-              <div className="flex items-center gap-2">
-                <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Saving...
+          
+          {reward.delayedVisibility && (
+            <div className="bg-amber-50 rounded-md p-2 flex items-center">
+              <Clock className="h-4 w-4 text-amber-500 mr-2" />
+              <div>
+                <div className="text-xs text-gray-500">Delayed Visibility</div>
+                <div className="font-medium">{reward.delayedVisibility.value} {reward.delayedVisibility.type}</div>
               </div>
-            ) : (
-              <>
-                <Plus className="h-4 w-4 mr-2" />
-                  Use Template
-              </>
-            )}
+            </div>
+          )}
+        </div>
+        
+        {/* Conditions */}
+        {reward.conditions && reward.conditions.length > 0 && (
+          <div className="mb-4">
+            <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+              <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
+              Conditions
+            </h4>
+            <div className="bg-gray-50 rounded-md p-3">
+              <ul className="space-y-2">
+                {reward.conditions.map((condition: any, index: number) => (
+                  <li key={index} className="flex items-start text-sm">
+                    <div className="h-5 w-5 flex items-center justify-center mr-2">
+                      <div className="h-1.5 w-1.5 rounded-full bg-green-500"></div>
+                    </div>
+                    <span className="text-gray-700">{formatCondition(condition)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+        
+        {/* Limitations */}
+        {reward.limitations && reward.limitations.length > 0 && (
+          <div className="mb-4">
+            <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+              <Ban className="h-4 w-4 text-red-500 mr-1" />
+              Limitations
+            </h4>
+            <div className="bg-gray-50 rounded-md p-3">
+              <ul className="space-y-2">
+                {reward.limitations.map((limitation: any, index: number) => (
+                  <li key={index} className="flex items-start text-sm">
+                    <div className="h-5 w-5 flex items-center justify-center mr-2">
+                      <div className="h-1.5 w-1.5 rounded-full bg-red-500"></div>
+                    </div>
+                    <span className="text-gray-700">{formatLimitation(limitation)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+        
+        {/* Action buttons */}
+        <div className="flex justify-end gap-2 mt-4">
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="text-xs"
+            onClick={() => {
+              navigator.clipboard.writeText(JSON.stringify(reward, null, 2));
+              toast({
+                title: "Copied to clipboard",
+                description: "Reward JSON copied to clipboard",
+                duration: 3000
+              });
+            }}
+          >
+            <Pencil className="h-3 w-3 mr-1" />
+            Copy JSON
           </Button>
-            <Button
-              variant="outline"
-              onClick={handleEdit}
-              className="flex-1 border-gray-200 hover:bg-gray-50"
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Customize
+          <Button 
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 text-xs"
+            onClick={() => {
+              setCreateRewardData(reward);
+              setEditDialogOpen(true);
+            }}
+          >
+            <Gift className="h-3 w-3 mr-1" />
+            Use This Reward
           </Button>
         </div>
-      )}
+      </div>
     </div>
-      )}
-    </div>
-
-      <CreateRewardDialog 
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        defaultValues={createRewardData}
-      />
-    </>
-  )
-}
+  );
+};
 
 function ProgramCard({ 
   program, 
@@ -1484,6 +1212,18 @@ export function TapAiDialog({
     }
   }, [initialPrompt, open])
 
+  useEffect(() => {
+    if (open && user) {
+      loadConversations();
+    }
+  }, [open, user]);
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [localMessages]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value
     setInput(value)
@@ -2255,7 +1995,8 @@ export function TapAiDialog({
     setIsLoading(true);
     
     // Add user message to local state immediately
-    setLocalMessages(prev => [...prev, { role: 'user', content: message }]);
+    const updatedMessages = [...localMessages, { role: 'user', content: message }];
+    setLocalMessages(updatedMessages);
     
     try {
       // Use the talkToAssistant function
@@ -2268,16 +2009,31 @@ export function TapAiDialog({
         setThreadId(response.threadId);
       }
       
-      // Add AI response to local state
-      setLocalMessages(prev => [...prev, { role: 'assistant', content: response.content }]);
+      // Add AI response to local messages
+      const finalMessages = [...updatedMessages, { role: 'assistant', content: response.content }];
+      setLocalMessages(finalMessages);
+      
+      // If we have a current conversation, update it in Firestore
+      if (currentConversation) {
+        await updateConversationInFirestore(currentConversation, finalMessages, response.threadId);
+      } else {
+        // Create a new conversation if we don't have one
+        await createNewConversationWithMessages(finalMessages, response.threadId);
+      }
     } catch (error) {
       console.error('Error:', error);
       
       // Add error message to local state
-      setLocalMessages(prev => [...prev, { 
-        role: 'assistant', 
+      const errorMessages = [...updatedMessages, { 
+        role: 'assistant',
         content: 'Sorry, there was an error processing your request. Please try again.' 
-      }]);
+      }];
+      setLocalMessages(errorMessages);
+      
+      // Still update Firestore with the error message
+      if (currentConversation) {
+        await updateConversationInFirestore(currentConversation, errorMessages, threadId);
+      }
     } finally {
       setIsLoading(false);
       setInput('');
@@ -2292,6 +2048,207 @@ export function TapAiDialog({
     
     console.log('handleQuickAction called with:', action);
     sendMessageToAPI(action);
+  };
+
+  // Add these functions to handle conversation management with Firestore
+
+  // Create a new conversation
+  const createNewConversation = async () => {
+    console.log('Creating new conversation');
+    setIsLoading(true);
+    
+    try {
+      // Reset the local state
+      setLocalMessages([]);
+      setThreadId(null);
+      
+      // Create a new thread via the assistant API
+      const initialMessage = "Hello, I'm ready to help with your loyalty program.";
+      const response = await talkToAssistant(initialMessage);
+      
+      if (!response.threadId) {
+        throw new Error('Failed to create thread');
+      }
+      
+      // Create a new conversation document in Firestore
+      const newConversationId = `conv_${Date.now()}`;
+      const newConversation = {
+        id: newConversationId,
+        threadId: response.threadId,
+        title: 'New Conversation',
+        messages: [
+          { role: 'assistant', content: response.content }
+        ],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        userId: user?.uid
+      };
+      
+      // Save to Firestore
+      await setDoc(doc(db, 'conversations', newConversationId), newConversation);
+      
+      // Update local state
+      setThreadId(response.threadId);
+      setCurrentConversation(newConversationId);
+      setLocalMessages([{ role: 'assistant', content: response.content }]);
+      
+      // Update conversations list
+      setConversations(prev => [newConversation, ...prev]);
+      
+      console.log('New conversation created:', newConversationId);
+    } catch (error) {
+      console.error('Error creating new conversation:', error);
+      setError('Failed to create new conversation');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load conversations from Firestore
+  const loadConversations = async () => {
+    console.log('Loading conversations from Firestore');
+    
+    if (!user) {
+      console.log('No user, cannot load conversations');
+      return;
+    }
+    
+    try {
+      const conversationsRef = collection(db, 'conversations');
+      const q = query(
+        conversationsRef, 
+        where('userId', '==', user.uid),
+        orderBy('updatedAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const loadedConversations: Conversation[] = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data() as Conversation;
+        loadedConversations.push(data);
+      });
+      
+      console.log('Loaded conversations:', loadedConversations.length);
+      setConversations(loadedConversations);
+      
+      // If there are conversations, select the most recent one
+      if (loadedConversations.length > 0) {
+        setCurrentConversation(loadedConversations[0].id);
+        setThreadId(loadedConversations[0].threadId);
+        setLocalMessages(loadedConversations[0].messages);
+      }
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+    }
+  };
+
+  // Load a specific conversation
+  const loadConversation = async (conversationId: string) => {
+    console.log('Loading conversation:', conversationId);
+    setIsLoading(true);
+    
+    try {
+      const conversationDoc = await getDoc(doc(db, 'conversations', conversationId));
+      
+      if (conversationDoc.exists()) {
+        const conversationData = conversationDoc.data() as Conversation;
+        setCurrentConversation(conversationId);
+        setThreadId(conversationData.threadId);
+        setLocalMessages(conversationData.messages);
+      } else {
+        console.error('Conversation not found:', conversationId);
+        setError('Conversation not found');
+      }
+    } catch (error) {
+      console.error('Error loading conversation:', error);
+      setError('Failed to load conversation');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Helper function to update a conversation in Firestore
+  const updateConversationInFirestore = async (
+    conversationId: string, 
+    messages: any[], 
+    threadId: string | null
+  ) => {
+    try {
+      // Get the first few words of the first user message for the title
+      let title = 'New Conversation';
+      const userMessage = messages.find(m => m.role === 'user');
+      if (userMessage) {
+        const words = userMessage.content.split(' ').slice(0, 5).join(' ');
+        title = words + (words.length < userMessage.content.length ? '...' : '');
+      }
+      
+      // Update the conversation in Firestore
+      await setDoc(doc(db, 'conversations', conversationId), {
+        id: conversationId,
+        threadId: threadId,
+        title: title,
+        messages: messages,
+        updatedAt: new Date().toISOString(),
+        userId: user?.uid
+      }, { merge: true });
+      
+      // Update the conversations list
+      setConversations(prev => 
+        prev.map(conv => 
+          conv.id === conversationId 
+            ? { 
+                ...conv, 
+                messages, 
+                title, 
+                updatedAt: new Date().toISOString() 
+              } 
+            : conv
+        )
+      );
+    } catch (error) {
+      console.error('Error updating conversation in Firestore:', error);
+    }
+  };
+
+  // Helper function to create a new conversation with messages
+  const createNewConversationWithMessages = async (messages: any[], threadId: string | null) => {
+    try {
+      // Get the first few words of the first user message for the title
+      let title = 'New Conversation';
+      const userMessage = messages.find(m => m.role === 'user');
+      if (userMessage) {
+        const words = userMessage.content.split(' ').slice(0, 5).join(' ');
+        title = words + (words.length < userMessage.content.length ? '...' : '');
+      }
+      
+      // Create a new conversation ID
+      const newConversationId = `conv_${Date.now()}`;
+      
+      // Create the conversation document
+      const newConversation = {
+        id: newConversationId,
+        threadId: threadId,
+        title: title,
+        messages: messages,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        userId: user?.uid
+      };
+      
+      // Save to Firestore
+      await setDoc(doc(db, 'conversations', newConversationId), newConversation);
+      
+      // Update local state
+      setCurrentConversation(newConversationId);
+      
+      // Update conversations list
+      setConversations(prev => [newConversation, ...prev]);
+      
+      console.log('New conversation created with messages:', newConversationId);
+    } catch (error) {
+      console.error('Error creating new conversation with messages:', error);
+    }
   };
 
   if (authLoading) {
@@ -2310,91 +2267,41 @@ export function TapAiDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[1400px] h-[90vh] flex flex-col p-0 border-0 rounded-xl overflow-hidden">
         <div className="flex h-full">
-          {/* Conversations sidebar with conditional rendering based on visibility */}
+          {/* Conversations sidebar */}
           {sidebarVisible && (
-            <div className="w-72 bg-gray-100 text-gray-900 p-4 flex flex-col gap-4 border-r border-gray-200">
-              <Button 
-                onClick={handleNewChat}
-                variant="outline" 
-                className="w-full justify-start gap-2 bg-white hover:bg-gray-50"
-              >
-                <Plus className="h-4 w-4" />
-                New chat
-              </Button>
+            <div className="w-64 border-r border-gray-200 h-full flex flex-col">
+              <div className="p-3 border-b border-gray-200">
+                <Button 
+                  onClick={createNewConversation} 
+                  className="w-full justify-start gap-2"
+                  disabled={isLoading}
+                >
+                  <Plus className="h-4 w-4" />
+                  New Chat
+                </Button>
+              </div>
               
               <ScrollArea className="flex-1">
-                <div className="space-y-2">
-                  {conversations.map(conversation => (
-                    <div
+                <div className="p-2 space-y-1">
+                  {conversations.map((conversation) => (
+                    <Button
                       key={conversation.id}
-                      className={cn(
-                        "flex items-center justify-between px-3 py-2 rounded-md cursor-pointer transition-colors",
-                        currentConversation === conversation.id 
-                          ? "bg-gray-200" 
-                          : "hover:bg-gray-100"
-                      )}
-                      onClick={() => setCurrentConversation(conversation.id)}
+                      variant={currentConversation === conversation.id ? "secondary" : "ghost"}
+                      className="w-full justify-start text-left truncate h-auto py-2"
+                      onClick={() => loadConversation(conversation.id)}
                     >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <MessageSquare className="h-4 w-4 text-gray-500 flex-shrink-0" />
-                        <span className="text-sm font-medium truncate">
-                          {conversation.title || "New conversation"}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">
-                          {formatConversationDate(conversation.updatedAt)}
-                        </span>
-                        
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              className="h-8 w-8 p-0 rounded-md"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-40 rounded-md">
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setSelectedConversation(conversation.id)
-                                setNewTitle(conversation.title)
-                                setRenameDialogOpen(true)
-                              }}
-                            >
-                              <Pencil className="h-4 w-4 mr-2" />
-                              Rename
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setSelectedConversation(conversation.id)
-                                setDeleteDialogOpen(true)
-                              }}
-                              className="text-red-600 focus:text-red-600"
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
+                      <MessageSquare className="h-4 w-4 mr-2 flex-shrink-0" />
+                      <span className="truncate">{conversation.title}</span>
+                    </Button>
                   ))}
+                  
+                  {conversations.length === 0 && (
+                    <div className="text-center text-gray-500 p-4">
+                      No conversations yet
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
-
-              <Button 
-                variant="ghost" 
-                className="w-full justify-start gap-2 hover:bg-gray-50"
-              >
-                <Settings className="h-4 w-4" />
-                Settings
-              </Button>
             </div>
           )}
           
@@ -2442,22 +2349,46 @@ export function TapAiDialog({
               </div>
               
               {/* Display local messages */}
-              {localMessages.map((message, index) => (
-                <div 
-                  key={index} 
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
+              {localMessages.map((message, index) => {
+                const parsedContent = parseMessageContent(message.content);
+                
+                return (
                   <div 
-                    className={`max-w-[80%] p-3 rounded-lg ${
-                      message.role === 'user' 
-                        ? 'bg-blue-500 text-white' 
-                        : 'bg-gray-200 text-gray-900'
-                    }`}
+                    key={index} 
+                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
-                    <div className="whitespace-pre-wrap">{message.content}</div>
+                    <div 
+                      className={`max-w-[80%] ${
+                        message.role === 'user' 
+                          ? 'bg-blue-500 text-white p-3 rounded-lg' 
+                          : parsedContent.hasJson 
+                            ? 'bg-transparent' 
+                            : 'bg-gray-200 text-gray-900 p-3 rounded-lg'
+                      }`}
+                    >
+                      {parsedContent.hasJson ? (
+                        <div>
+                          {parsedContent.beforeJson && (
+                            <div className="bg-gray-200 text-gray-900 p-3 rounded-lg mb-2 whitespace-pre-wrap">
+                              {parsedContent.beforeJson}
+                            </div>
+                          )}
+                          
+                          <RewardCard reward={parsedContent.jsonData} />
+                          
+                          {parsedContent.afterJson && (
+                            <div className="bg-gray-200 text-gray-900 p-3 rounded-lg mt-2 whitespace-pre-wrap">
+                              {parsedContent.afterJson}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="whitespace-pre-wrap">{message.content}</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               
               {/* Show a message if there are no messages */}
               {localMessages.length === 0 && !isLoading && (

@@ -160,6 +160,9 @@ module.exports = {
         'float-medium': 'float-medium 3s ease-in-out infinite',
         'float-fast': 'float-fast 2.5s ease-in-out infinite',
       },
+      fontFamily: {
+        sans: ['SF Pro', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+      },
     },
   },
   plugins: [

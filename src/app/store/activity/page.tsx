@@ -271,6 +271,10 @@ export default function ActivityPage() {
           yesterday.setDate(yesterday.getDate() - 1)
           const thisWeekStart = new Date(today)
           thisWeekStart.setDate(today.getDate() - today.getDay())
+          const lastWeekStart = new Date(thisWeekStart)
+          lastWeekStart.setDate(lastWeekStart.getDate() - 7)
+          const lastWeekEnd = new Date(thisWeekStart)
+          lastWeekEnd.setDate(lastWeekEnd.getDate() - 1)
           const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
           
           switch (dateFilter) {
@@ -280,6 +284,8 @@ export default function ActivityPage() {
               return dateObj >= yesterday && dateObj < today
             case "thisWeek":
               return dateObj >= thisWeekStart
+            case "lastWeek":
+              return dateObj >= lastWeekStart && dateObj < thisWeekStart
             case "thisMonth":
               return dateObj >= thisMonthStart
             default:
@@ -497,7 +503,6 @@ export default function ActivityPage() {
       displayName: transaction.type,
       amount: transaction.amount,
       status: transaction.status,
-      day: transaction.day,
       originalData: transaction
     }))
     
@@ -558,8 +563,7 @@ export default function ActivityPage() {
           customers[item.customerId]?.fullName || 'Unknown Customer',
           item.displayName,
           typeof item.amount === 'number' ? `$${item.amount}` : item.amount,
-          item.status,
-          item.day || '-'
+          item.status
         ]);
       } else if (activityCategory === 'transactions') {
         title = 'Transactions';
@@ -568,8 +572,7 @@ export default function ActivityPage() {
           customers[item.customerId]?.fullName || 'Unknown Customer',
           item.type,
           `$${item.amount}`,
-          item.status,
-          item.day || '-'
+          item.status
         ]);
       } else {
         title = 'Redemptions';
@@ -578,8 +581,7 @@ export default function ActivityPage() {
           customers[item.customerId]?.fullName || 'Unknown Customer',
           item.rewardName,
           item.pointsUsed === 0 ? 'Free' : `${item.pointsUsed} points`,
-          item.status,
-          '-'
+          item.status
         ]);
       }
       
@@ -590,7 +592,7 @@ export default function ActivityPage() {
       // Generate table using the imported autoTable function
       autoTable(doc, {
         startY: 45,
-        head: [['Date', 'Customer', 'Type', 'Amount', 'Status', 'Day']],
+        head: [['Date', 'Customer', 'Type', 'Amount', 'Status']],
         body: dataToExport,
         theme: 'grid',
         styles: { fontSize: 10, cellPadding: 3 },
@@ -647,787 +649,352 @@ export default function ActivityPage() {
           </div>
         </div>
         
-        <Tabs defaultValue="all" onValueChange={(value) => setActivityCategory(value as ActivityCategory)}>
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <TabsList className="h-9 rounded-md">
-              <TabsTrigger value="all" className="flex items-center gap-2">
-                <Zap className="h-4 w-4" />
-                All Activity
-              </TabsTrigger>
-              <TabsTrigger value="transactions" className="flex items-center gap-2">
-                <ShoppingCart className="h-4 w-4" />
-                Transactions
-              </TabsTrigger>
-              <TabsTrigger value="redemptions" className="flex items-center gap-2">
-                <Gift className="h-4 w-4" />
-                Redemptions
-              </TabsTrigger>
-            </TabsList>
-            
-            <div className="flex items-center gap-2 flex-1 justify-end">
-              <div className="relative max-w-md w-full">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Search activity..."
-                  className="pl-8 h-10 rounded-md"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Tabs defaultValue="all" className="w-full" onValueChange={(value) => setActivityCategory(value as ActivityCategory)}>
+              <div className="flex items-center justify-between mb-4">
+                <TabsList>
+                  <TabsTrigger value="all" className="flex items-center gap-2">
+                    <Zap className="h-4 w-4" />
+                    All Activity
+                  </TabsTrigger>
+                  <TabsTrigger value="transactions" className="flex items-center gap-2">
+                    <ShoppingCart className="h-4 w-4" />
+                    Transactions
+                  </TabsTrigger>
+                  <TabsTrigger value="redemptions" className="flex items-center gap-2">
+                    <Gift className="h-4 w-4" />
+                    Redemptions
+                  </TabsTrigger>
+                </TabsList>
+                
+                <div className="flex items-center gap-2">
+                  <div className="relative w-[250px]">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="search"
+                      placeholder="Search activity..."
+                      className="pl-8"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+                  
+                  <Popover open={showFilters} onOpenChange={setShowFilters}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="gap-1">
+                        <Filter className="h-4 w-4" />
+                        Filters
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-96 p-4" align="end">
+                      <div className="space-y-4">
+                        <h4 className="font-medium">Filter Activity</h4>
+                        
+                        <div className="space-y-2">
+                          <Label>Date Range</Label>
+                          <Select 
+                            value={dateFilter} 
+                            onValueChange={(value) => {
+                              setDateFilter(value)
+                              setShowCustomDateRange(value === "custom")
+                            }}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select date range" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Time</SelectItem>
+                              <SelectItem value="today">Today</SelectItem>
+                              <SelectItem value="yesterday">Yesterday</SelectItem>
+                              <SelectItem value="thisWeek">This Week</SelectItem>
+                              <SelectItem value="thisMonth">This Month</SelectItem>
+                              <SelectItem value="custom">Custom Range</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          
+                          {showCustomDateRange && (
+                            <div className="grid grid-cols-2 gap-4 mt-2">
+                              <div className="grid gap-1">
+                                <Label htmlFor="from">From</Label>
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      id="from"
+                                      variant={"outline"}
+                                      className={cn(
+                                        "w-full justify-start text-left font-normal px-4",
+                                        !customDateRange.start && "text-muted-foreground"
+                                      )}
+                                    >
+                                      <CalendarIcon className="mr-2 h-4 w-4" />
+                                      {customDateRange.start ? format(customDateRange.start, "PP") : "Pick date"}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0" align="start">
+                                    <UiCalendar
+                                      mode="single"
+                                      selected={customDateRange.start}
+                                      onSelect={(date) => 
+                                        setCustomDateRange(prev => ({ ...prev, start: date || undefined }))}
+                                      initialFocus
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+                              <div className="grid gap-1">
+                                <Label htmlFor="to">To</Label>
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      id="to"
+                                      variant={"outline"}
+                                      className={cn(
+                                        "w-full justify-start text-left font-normal px-4",
+                                        !customDateRange.end && "text-muted-foreground"
+                                      )}
+                                    >
+                                      <CalendarIcon className="mr-2 h-4 w-4" />
+                                      {customDateRange.end ? format(customDateRange.end, "PP") : "Pick date"}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0" align="start">
+                                    <UiCalendar
+                                      mode="single"
+                                      selected={customDateRange.end}
+                                      onSelect={(date) => 
+                                        setCustomDateRange(prev => ({ ...prev, end: date || undefined }))}
+                                      initialFocus
+                                      disabled={(date) => 
+                                        customDateRange.start ? date < customDateRange.start : false}
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>Status</Label>
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center space-x-2">
+                              <Checkbox 
+                                id="status-completed" 
+                                checked={statusFilters.completed}
+                                onCheckedChange={(checked) => 
+                                  handleStatusFilterChange('completed', checked as boolean)}
+                              />
+                              <Label htmlFor="status-completed" className="cursor-pointer">Completed</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox 
+                                id="status-pending" 
+                                checked={statusFilters.pending}
+                                onCheckedChange={(checked) => 
+                                  handleStatusFilterChange('pending', checked as boolean)}
+                              />
+                              <Label htmlFor="status-pending" className="cursor-pointer">Pending</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox 
+                                id="status-failed" 
+                                checked={statusFilters.failed}
+                                onCheckedChange={(checked) => 
+                                  handleStatusFilterChange('failed', checked as boolean)}
+                              />
+                              <Label htmlFor="status-failed" className="cursor-pointer">Failed</Label>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>Type</Label>
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center space-x-2">
+                              <Checkbox 
+                                id="type-purchase" 
+                                checked={typeFilters.purchase}
+                                onCheckedChange={(checked) => 
+                                  handleTypeFilterChange('purchase', checked as boolean)}
+                              />
+                              <Label htmlFor="type-purchase" className="cursor-pointer">Purchase</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox 
+                                id="type-reward" 
+                                checked={typeFilters.reward}
+                                onCheckedChange={(checked) => 
+                                  handleTypeFilterChange('reward', checked as boolean)}
+                              />
+                              <Label htmlFor="type-reward" className="cursor-pointer">Reward</Label>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <Label>Amount Range</Label>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label htmlFor="min-amount" className="text-xs">Min ($)</Label>
+                              <Input
+                                id="min-amount"
+                                type="number"
+                                min={0}
+                                max={1000}
+                                value={amountRange[0]}
+                                onChange={(e) => setAmountRange([Number(e.target.value), amountRange[1]])}
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="max-amount" className="text-xs">Max ($)</Label>
+                              <Input
+                                id="max-amount"
+                                type="number"
+                                min={0}
+                                max={1000}
+                                value={amountRange[1]}
+                                onChange={(e) => setAmountRange([amountRange[0], Number(e.target.value)])}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex justify-between pt-2">
+                          <Button 
+                            variant="outline" 
+                            onClick={() => {
+                              setStatusFilters({ completed: true, pending: true, failed: true })
+                              setTypeFilters({ purchase: true, reward: true })
+                              setDateFilter("all")
+                              setAmountRange([0, 1000])
+                              setCustomDateRange({ start: undefined, end: undefined })
+                              setShowCustomDateRange(false)
+                            }}
+                          >
+                            Reset Filters
+                          </Button>
+                          <Button onClick={() => setShowFilters(false)}>Apply Filters</Button>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
               
-              <Popover open={showFilters} onOpenChange={setShowFilters}>
-                <PopoverTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    className="h-10 gap-2 rounded-md"
-                    onClick={() => setShowFilters(true)}
-                  >
-                    <Filter className="h-4 w-4" />
-                    Filter
-                    {(Object.values(statusFilters).some(v => !v) || 
-                      Object.values(typeFilters).some(v => !v) || 
-                      dateFilter !== "all") && (
-                      <Badge className="ml-1 bg-primary h-5 w-5 p-0 flex items-center justify-center">
-                        <span className="text-xs">!</span>
-                      </Badge>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-96 p-4" align="end">
-                  <div className="space-y-4">
-                    <h4 className="font-medium">Filter Activity</h4>
-                    
-                    <div className="space-y-2">
-                      <Label>Date Range</Label>
-                      <Select 
-                        value={dateFilter} 
-                        onValueChange={(value) => {
-                          setDateFilter(value)
-                          setShowCustomDateRange(value === "custom")
-                        }}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select date range" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Time</SelectItem>
-                          <SelectItem value="today">Today</SelectItem>
-                          <SelectItem value="yesterday">Yesterday</SelectItem>
-                          <SelectItem value="thisWeek">This Week</SelectItem>
-                          <SelectItem value="thisMonth">This Month</SelectItem>
-                          <SelectItem value="custom">Custom Range</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      
-                      {showCustomDateRange && (
-                        <div className="grid grid-cols-2 gap-4 mt-2">
-                          <div className="grid gap-1">
-                            <Label htmlFor="from">From</Label>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  id="from"
-                                  variant={"outline"}
-                                  className={cn(
-                                    "w-full justify-start text-left font-normal px-4",
-                                    !customDateRange.start && "text-muted-foreground"
-                                  )}
-                                >
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {customDateRange.start ? format(customDateRange.start, "PP") : "Pick date"}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <UiCalendar
-                                  mode="single"
-                                  selected={customDateRange.start}
-                                  onSelect={(date) => 
-                                    setCustomDateRange(prev => ({ ...prev, start: date || undefined }))}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                          <div className="grid gap-1">
-                            <Label htmlFor="to">To</Label>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  id="to"
-                                  variant={"outline"}
-                                  className={cn(
-                                    "w-full justify-start text-left font-normal px-4",
-                                    !customDateRange.end && "text-muted-foreground"
-                                  )}
-                                >
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {customDateRange.end ? format(customDateRange.end, "PP") : "Pick date"}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <UiCalendar
-                                  mode="single"
-                                  selected={customDateRange.end}
-                                  onSelect={(date) => 
-                                    setCustomDateRange(prev => ({ ...prev, end: date || undefined }))}
-                                  initialFocus
-                                  disabled={(date) => 
-                                    customDateRange.start ? date < customDateRange.start : false}
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label>Status</Label>
-                      <div className="flex flex-col gap-2">
-                        <div className="flex items-center space-x-2">
-                          <Checkbox 
-                            id="status-completed" 
-                            checked={statusFilters.completed}
-                            onCheckedChange={(checked) => 
-                              handleStatusFilterChange('completed', checked as boolean)}
-                          />
-                          <Label htmlFor="status-completed" className="cursor-pointer">Completed</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Checkbox 
-                            id="status-pending" 
-                            checked={statusFilters.pending}
-                            onCheckedChange={(checked) => 
-                              handleStatusFilterChange('pending', checked as boolean)}
-                          />
-                          <Label htmlFor="status-pending" className="cursor-pointer">Pending</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Checkbox 
-                            id="status-failed" 
-                            checked={statusFilters.failed}
-                            onCheckedChange={(checked) => 
-                              handleStatusFilterChange('failed', checked as boolean)}
-                          />
-                          <Label htmlFor="status-failed" className="cursor-pointer">Failed</Label>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label>Type</Label>
-                      <div className="flex flex-col gap-2">
-                        <div className="flex items-center space-x-2">
-                          <Checkbox 
-                            id="type-purchase" 
-                            checked={typeFilters.purchase}
-                            onCheckedChange={(checked) => 
-                              handleTypeFilterChange('purchase', checked as boolean)}
-                          />
-                          <Label htmlFor="type-purchase" className="cursor-pointer">Purchase</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Checkbox 
-                            id="type-reward" 
-                            checked={typeFilters.reward}
-                            onCheckedChange={(checked) => 
-                              handleTypeFilterChange('reward', checked as boolean)}
-                          />
-                          <Label htmlFor="type-reward" className="cursor-pointer">Reward</Label>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <Label>Amount Range</Label>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="min-amount" className="text-xs">Min ($)</Label>
-                          <Input
-                            id="min-amount"
-                            type="number"
-                            min={0}
-                            max={1000}
-                            value={amountRange[0]}
-                            onChange={(e) => setAmountRange([Number(e.target.value), amountRange[1]])}
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="max-amount" className="text-xs">Max ($)</Label>
-                          <Input
-                            id="max-amount"
-                            type="number"
-                            min={0}
-                            max={1000}
-                            value={amountRange[1]}
-                            onChange={(e) => setAmountRange([amountRange[0], Number(e.target.value)])}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex justify-between pt-2">
-                      <Button 
-                        variant="outline" 
-                        onClick={() => {
-                          setStatusFilters({ completed: true, pending: true, failed: true })
-                          setTypeFilters({ purchase: true, reward: true })
-                          setDateFilter("all")
-                          setAmountRange([0, 1000])
-                          setCustomDateRange({ start: undefined, end: undefined })
-                          setShowCustomDateRange(false)
-                        }}
-                      >
-                        Reset Filters
-                      </Button>
-                      <Button onClick={() => setShowFilters(false)}>Apply Filters</Button>
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
-          
-          <TabsContent value="all" className="space-y-4">
-            <Card>
-              <CardHeader className="py-4">
-                <CardTitle>All Activity</CardTitle>
-                <CardDescription>
-                  View all transactions and redemptions
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[250px]">
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => {
-                            setSortField("customerId");
-                            setSortDirection(sortField === "customerId" && sortDirection === "asc" ? "desc" : "asc");
-                          }}
-                          className="flex items-center gap-1 px-0 font-medium"
-                        >
-                          Customer
-                          {sortField === "customerId" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableHead>
-                      <TableHead>
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => {
-                            setSortField("type");
-                            setSortDirection(sortField === "type" && sortDirection === "asc" ? "desc" : "asc");
-                          }}
-                          className="flex items-center gap-1 px-0 font-medium"
-                        >
-                          Type
-                          {sortField === "type" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableHead>
-                      <TableHead>
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => {
-                            setSortField("amount");
-                            setSortDirection(sortField === "amount" && sortDirection === "asc" ? "desc" : "asc");
-                          }}
-                          className="flex items-center gap-1 px-0 font-medium"
-                        >
-                          Amount
-                          {sortField === "amount" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableHead>
-                      <TableHead>
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => {
-                            setSortField("status");
-                            setSortDirection(sortField === "status" && sortDirection === "asc" ? "desc" : "asc");
-                          }}
-                          className="flex items-center gap-1 px-0 font-medium"
-                        >
-                          Status
-                          {sortField === "status" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableHead>
-                      <TableHead>
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => {
-                            setSortField("day");
-                            setSortDirection(sortField === "day" && sortDirection === "asc" ? "desc" : "asc");
-                          }}
-                          className="flex items-center gap-1 px-0 font-medium"
-                        >
-                          Day
-                          {sortField === "day" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableHead>
-                      <TableHead>
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => {
-                            setSortField("createdAt");
-                            setSortDirection(sortField === "createdAt" && sortDirection === "asc" ? "desc" : "asc");
-                          }}
-                          className="flex items-center gap-1 px-0 font-medium"
-                        >
-                          Date & Time
-                          {sortField === "createdAt" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableHead>
-                      <TableHead className="w-[50px]"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {loading ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="h-24 text-center">
-                          <div className="flex justify-center">
-                            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : combinedActivity.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="h-24 text-center">
-                          <div className="flex flex-col items-center justify-center">
-                            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                              <Zap className="h-6 w-6 text-muted-foreground" />
-                            </div>
-                            <h3 className="mt-4 text-lg font-medium">
-                              No activity found
-                            </h3>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {searchQuery ? "Try adjusting your search query" : 
-                               "No activity records available"}
-                            </p>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      combinedActivity.map((activity) => (
-                        <TableRow key={`${activity.type}-${activity.id}`} className="hover:bg-muted/50">
-                          <TableCell>
-                            {formatDate(activity.date)}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                                <Users className="h-4 w-4 text-muted-foreground" />
-                              </div>
-                              <span>{customers[activity.customerId]?.fullName || 'Unknown Customer'}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {activity.type === "transaction" ? (
-                              <Badge variant="outline" className={cn(
-                                "rounded-md",
-                                activity.displayName.toLowerCase() === "purchase" && "bg-green-50 text-green-700 border-green-200",
-                                activity.displayName.toLowerCase() === "reward" && "bg-purple-50 text-purple-700 border-purple-200"
-                              )}>
-                                <div className="flex items-center gap-1">
-                                  {getTransactionIcon(activity.displayName)}
-                                  <span className="capitalize">{activity.displayName}</span>
-                                </div>
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 rounded-md">
-                                <div className="flex items-center gap-1">
-                                  <Gift className="h-4 w-4" />
-                                  <span>{activity.displayName}</span>
-                                </div>
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              {activity.type === "transaction" ? (
-                                <>
-                                  {(activity.originalData as Transaction).type.toLowerCase() === "purchase" ? (
-                                    <ArrowUp className="h-4 w-4 text-green-500" />
-                                  ) : (
-                                    <ArrowDown className="h-4 w-4 text-red-500" />
-                                  )}
-                                  <span>${activity.amount}</span>
-                                </>
-                              ) : (
-                                <>
-                                  <ArrowDown className="h-4 w-4 text-red-500" />
-                                  <span>
-                                    {activity.amount === "Free" ? (
-                                      <span className="text-green-600 font-medium">Free</span>
-                                    ) : (
-                                      `${activity.amount} points`
-                                    )}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {getStatusBadge(activity.status)}
-                          </TableCell>
-                          <TableCell>
-                            {activity.type === "transaction" ? (
-                              <span className="capitalize">{activity.day}</span>
-                            ) : (
-                              <span>-</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {formatDate(activity.date)}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex justify-end">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" className="h-8 w-8 p-0 rounded-md">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="rounded-md">
-                                  <DropdownMenuItem onClick={() => 
-                                    router.push(activity.type === "transaction" 
-                                      ? `/transactions/${activity.id}` 
-                                      : `/redemptions/${(activity.originalData as Redemption).redemptionId}`)
-                                  }>
-                                    <Eye className="h-4 w-4 mr-2" />
-                                    View Details
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="transactions" className="space-y-4">
-            <Card>
-              <CardHeader className="py-4">
-                    <CardTitle>Transactions</CardTitle>
-                <CardDescription>
-                      View all customer transactions
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[250px]">
-                            <Button 
-                              variant="ghost" 
-                              onClick={() => {
-                                setSortField("customerId");
-                                setSortDirection(sortField === "customerId" && sortDirection === "asc" ? "desc" : "asc");
-                              }}
-                              className="flex items-center gap-1 px-0 font-medium"
-                            >
-                              Customer
-                              {sortField === "customerId" && (
-                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </TableHead>
-                          <TableHead>
-                            <Button 
-                              variant="ghost" 
-                              onClick={() => {
-                                setSortField("type");
-                                setSortDirection(sortField === "type" && sortDirection === "asc" ? "desc" : "asc");
-                              }}
-                              className="flex items-center gap-1 px-0 font-medium"
-                            >
-                              Type
-                              {sortField === "type" && (
-                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </TableHead>
-                          <TableHead>
-                            <Button 
-                              variant="ghost" 
-                              onClick={() => {
-                                setSortField("amount");
-                                setSortDirection(sortField === "amount" && sortDirection === "asc" ? "desc" : "asc");
-                              }}
-                              className="flex items-center gap-1 px-0 font-medium"
-                            >
-                              Amount
-                              {sortField === "amount" && (
-                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </TableHead>
-                          <TableHead>
-                            <Button 
-                              variant="ghost" 
-                              onClick={() => {
-                                setSortField("status");
-                                setSortDirection(sortField === "status" && sortDirection === "asc" ? "desc" : "asc");
-                              }}
-                              className="flex items-center gap-1 px-0 font-medium"
-                            >
-                              Status
-                              {sortField === "status" && (
-                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </TableHead>
-                          <TableHead>
-                            <Button 
-                              variant="ghost" 
-                              onClick={() => {
-                                setSortField("day");
-                                setSortDirection(sortField === "day" && sortDirection === "asc" ? "desc" : "asc");
-                              }}
-                              className="flex items-center gap-1 px-0 font-medium"
-                            >
-                              Day
-                              {sortField === "day" && (
-                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </TableHead>
-                          <TableHead>
-                            <Button 
-                              variant="ghost" 
-                              onClick={() => {
-                                setSortField("createdAt");
-                                setSortDirection(sortField === "createdAt" && sortDirection === "asc" ? "desc" : "asc");
-                              }}
-                              className="flex items-center gap-1 px-0 font-medium"
-                            >
-                              Date & Time
-                              {sortField === "createdAt" && (
-                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </TableHead>
-                          <TableHead className="w-[50px]"></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                      {loading ? (
-                          <TableRow>
-                            <TableCell colSpan={7} className="h-24 text-center">
-                              <div className="flex justify-center">
-                                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                      ) : filteredTransactions.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={7} className="h-24 text-center">
-                              <div className="flex flex-col items-center justify-center">
-                                <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                                  <ShoppingCart className="h-6 w-6 text-muted-foreground" />
-                                </div>
-                                <h3 className="mt-4 text-lg font-medium">
-                            No transactions found
-                                </h3>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  {searchQuery ? "Try adjusting your search query" : 
-                                   "No transaction records available"}
-                                </p>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                      ) : (
-                        filteredTransactions.map((transaction) => (
-                            <TableRow key={transaction.id} className="hover:bg-muted/50">
-                              <TableCell>
-                              {formatDate(transaction.createdAt)}
-                              </TableCell>
-                              <TableCell>
-                              <div className="flex items-center gap-2">
-                                  <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                                <Users className="h-4 w-4 text-muted-foreground" />
-                                  </div>
-                                  <span>{customers[transaction.customerId]?.fullName || 'Unknown Customer'}</span>
-                              </div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className={cn(
-                                  "rounded-md",
-                                  transaction.type.toLowerCase() === "purchase" && "bg-green-50 text-green-700 border-green-200",
-                                  transaction.type.toLowerCase() === "reward" && "bg-purple-50 text-purple-700 border-purple-200"
-                                )}>
-                                  <div className="flex items-center gap-1">
-                                {getTransactionIcon(transaction.type)}
-                                <span className="capitalize">{transaction.type}</span>
-                              </div>
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                              <div className="flex items-center gap-1">
-                                  {transaction.type.toLowerCase() === "purchase" ? (
-                                  <ArrowUp className="h-4 w-4 text-green-500" />
-                                ) : (
-                                  <ArrowDown className="h-4 w-4 text-red-500" />
-                                )}
-                                <span>${transaction.amount}</span>
-                              </div>
-                              </TableCell>
-                              <TableCell>
-                              {getStatusBadge(transaction.status)}
-                              </TableCell>
-                              <TableCell>
-                              <span className="capitalize">{transaction.day}</span>
-                              </TableCell>
-                              <TableCell>
-                                {formatDate(transaction.createdAt)}
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex justify-end">
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button variant="ghost" className="h-8 w-8 p-0 rounded-md">
-                                        <MoreHorizontal className="h-4 w-4" />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="rounded-md">
-                                      <DropdownMenuItem onClick={() => router.push(`/transactions/${transaction.id}`)}>
-                                        <Eye className="h-4 w-4 mr-2" />
-                                        View Details
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-              <TabsContent value="redemptions" className="space-y-4">
-            <Card>
+              <div className="flex flex-wrap items-center gap-2 mb-4 border-b pb-4">
+                <Button 
+                  variant={dateFilter === "today" ? "default" : "outline"} 
+                  size="sm"
+                  onClick={() => setDateFilter("today")}
+                  className={cn(
+                    "rounded-full",
+                    dateFilter === "today" && "bg-blue-600 hover:bg-blue-700"
+                  )}
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Today
+                </Button>
+                <Button 
+                  variant={dateFilter === "yesterday" ? "default" : "outline"} 
+                  size="sm"
+                  onClick={() => setDateFilter("yesterday")}
+                  className={cn(
+                    "rounded-full",
+                    dateFilter === "yesterday" && "bg-blue-600 hover:bg-blue-700"
+                  )}
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Yesterday
+                </Button>
+                <Button 
+                  variant={dateFilter === "thisWeek" ? "default" : "outline"} 
+                  size="sm"
+                  onClick={() => setDateFilter("thisWeek")}
+                  className={cn(
+                    "rounded-full",
+                    dateFilter === "thisWeek" && "bg-blue-600 hover:bg-blue-700"
+                  )}
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  This Week
+                </Button>
+                <Button 
+                  variant={dateFilter === "lastWeek" ? "default" : "outline"} 
+                  size="sm"
+                  onClick={() => setDateFilter("lastWeek")}
+                  className={cn(
+                    "rounded-full",
+                    dateFilter === "lastWeek" && "bg-blue-600 hover:bg-blue-700"
+                  )}
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Last Week
+                </Button>
+                <Button 
+                  variant={dateFilter === "thisMonth" ? "default" : "outline"} 
+                  size="sm"
+                  onClick={() => setDateFilter("thisMonth")}
+                  className={cn(
+                    "rounded-full",
+                    dateFilter === "thisMonth" && "bg-blue-600 hover:bg-blue-700"
+                  )}
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  This Month
+                </Button>
+                <Button 
+                  variant={dateFilter === "all" ? "default" : "outline"} 
+                  size="sm"
+                  onClick={() => setDateFilter("all")}
+                  className={cn(
+                    "rounded-full",
+                    dateFilter === "all" && "bg-blue-600 hover:bg-blue-700"
+                  )}
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  All Time
+                </Button>
+              </div>
+              
+              <TabsContent value="all" className="space-y-4">
+                <Card>
                   <CardHeader className="py-4">
-                    <CardTitle>Redemptions</CardTitle>
-                <CardDescription>
-                      View all rewards redeemed by your customers
-                </CardDescription>
-              </CardHeader>
+                    <CardTitle>All Activity</CardTitle>
+                    <CardDescription>
+                      View all transactions and redemptions
+                    </CardDescription>
+                  </CardHeader>
                   <CardContent className="p-0">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-[250px]">
-                            <Button 
-                              variant="ghost" 
-                              onClick={() => {
-                                setSortField("customerId");
-                                setSortDirection(sortField === "customerId" && sortDirection === "asc" ? "desc" : "asc");
-                              }}
-                              className="flex items-center gap-1 px-0 font-medium"
-                            >
-                              Customer
-                              {sortField === "customerId" && (
-                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </TableHead>
                           <TableHead>
-                            <Button 
-                              variant="ghost" 
-                              onClick={() => {
-                                setSortField("type");
-                                setSortDirection(sortField === "type" && sortDirection === "asc" ? "desc" : "asc");
-                              }}
-                              className="flex items-center gap-1 px-0 font-medium"
-                            >
-                              Type
-                              {sortField === "type" && (
-                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </TableHead>
-                          <TableHead>
-                            <Button 
-                              variant="ghost" 
-                              onClick={() => {
-                                setSortField("amount");
-                                setSortDirection(sortField === "amount" && sortDirection === "asc" ? "desc" : "asc");
-                              }}
-                              className="flex items-center gap-1 px-0 font-medium"
-                            >
-                              Amount
-                              {sortField === "amount" && (
-                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </TableHead>
-                          <TableHead>
-                            <Button 
-                              variant="ghost" 
-                              onClick={() => {
-                                setSortField("status");
-                                setSortDirection(sortField === "status" && sortDirection === "asc" ? "desc" : "asc");
-                              }}
-                              className="flex items-center gap-1 px-0 font-medium"
-                            >
-                              Status
-                              {sortField === "status" && (
-                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </TableHead>
-                          <TableHead>
-                            <Button 
-                              variant="ghost" 
-                              onClick={() => {
-                                setSortField("day");
-                                setSortDirection(sortField === "day" && sortDirection === "asc" ? "desc" : "asc");
-                              }}
-                              className="flex items-center gap-1 px-0 font-medium"
-                            >
-                              Day
-                              {sortField === "day" && (
-                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </TableHead>
-                          <TableHead>
-                            <Button 
-                              variant="ghost" 
-                              onClick={() => {
-                                setSortField("createdAt");
-                                setSortDirection(sortField === "createdAt" && sortDirection === "asc" ? "desc" : "asc");
-                              }}
-                              className="flex items-center gap-1 px-0 font-medium"
-                            >
+                            <SortButton field="createdAt">
                               Date & Time
-                              {sortField === "createdAt" && (
-                                sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </Button>
+                            </SortButton>
+                          </TableHead>
+                          <TableHead className="w-[250px]">
+                            <SortButton field="customerId">
+                              Customer
+                            </SortButton>
+                          </TableHead>
+                          <TableHead>
+                            <SortButton field="type">
+                              Type
+                            </SortButton>
+                          </TableHead>
+                          <TableHead>
+                            <SortButton field="amount">
+                              Amount
+                            </SortButton>
+                          </TableHead>
+                          <TableHead>
+                            <SortButton field="status">
+                              Status
+                            </SortButton>
                           </TableHead>
                           <TableHead className="w-[50px]"></TableHead>
                         </TableRow>
@@ -1441,65 +1008,81 @@ export default function ActivityPage() {
                               </div>
                             </TableCell>
                           </TableRow>
-                        ) : filteredRedemptions.length === 0 ? (
+                        ) : combinedActivity.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={7} className="h-24 text-center">
                               <div className="flex flex-col items-center justify-center">
                                 <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                                  <Gift className="h-6 w-6 text-muted-foreground" />
+                                  <Zap className="h-6 w-6 text-muted-foreground" />
                                 </div>
                                 <h3 className="mt-4 text-lg font-medium">
-                                  No redemptions found
+                                  No activity found
                                 </h3>
                                 <p className="text-sm text-muted-foreground mt-1">
                                   {searchQuery ? "Try adjusting your search query" : 
-                                   "No redemption records available"}
+                                   "No activity records available"}
                                 </p>
                               </div>
                             </TableCell>
                           </TableRow>
                         ) : (
-                          filteredRedemptions.map((redemption) => (
-                            <TableRow key={redemption.id} className="hover:bg-muted/50">
+                          combinedActivity.map((activity) => (
+                            <TableRow key={`${activity.type}-${activity.id}`} className="hover:bg-muted/50">
                               <TableCell>
-                                {formatDate(redemption.redemptionDate)}
+                                {formatDate(activity.date)}
                               </TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
                                   <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
                                     <Users className="h-4 w-4 text-muted-foreground" />
                                   </div>
-                                  <span>{customers[redemption.customerId]?.fullName || 'Unknown Customer'}</span>
+                                  <span>{customers[activity.customerId]?.fullName || 'Unknown Customer'}</span>
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 rounded-md">
-                                  <div className="flex items-center gap-1">
-                                    <Gift className="h-4 w-4" />
-                                    <span>{redemption.rewardName}</span>
+                                {activity.type === "transaction" ? (
+                                  <Badge variant="outline" className={cn(
+                                    "rounded-md",
+                                    activity.displayName.toLowerCase() === "purchase" && "bg-green-50 text-green-700 border-green-200",
+                                    activity.displayName.toLowerCase() === "reward" && "bg-purple-50 text-purple-700 border-purple-200"
+                                  )}>
+                                    <div className="flex items-center gap-1">
+                                      {getTransactionIcon(activity.displayName)}
+                                      <span className="capitalize">{activity.displayName}</span>
+                                    </div>
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 rounded-md">
+                                    <div className="flex items-center gap-1">
+                                      <Gift className="h-4 w-4" />
+                                      <span>{activity.displayName}</span>
+                                    </div>
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {activity.type === "transaction" ? (
+                                  <div className="inline-block px-3 py-1 rounded-md border border-slate-200 shadow-sm bg-white">
+                                    <span className={cn(
+                                      activity.displayName.toLowerCase() === "purchase" 
+                                        ? "text-emerald-600 font-medium" 
+                                        : "text-rose-600 font-medium"
+                                    )}>
+                                      ${activity.amount}
+                                    </span>
                                   </div>
-                                </Badge>
+                                ) : (
+                                  <div className="inline-block px-3 py-1 rounded-md border border-slate-200 shadow-sm bg-white">
+                                    <span className={activity.amount === "Free" 
+                                      ? "text-emerald-600 font-medium" 
+                                      : "text-indigo-600 font-medium"}>
+                                      {activity.amount === "Free" ? "Free" : `${activity.amount} points`}
+                                    </span>
+                                  </div>
+                                )}
                               </TableCell>
                               <TableCell>
-                                <div className="flex items-center gap-1">
-                                  <ArrowDown className="h-4 w-4 text-red-500" />
-                                  <span>
-                                    {redemption.pointsUsed === 0 ? (
-                                      <span className="text-green-600 font-medium">Free</span>
-                                    ) : (
-                                      `${redemption.pointsUsed} points`
-                                    )}
-                                  </span>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                {getStatusBadge(redemption.status)}
-                              </TableCell>
-                              <TableCell>
-                                <span>-</span>
-                              </TableCell>
-                              <TableCell>
-                                {formatDate(redemption.redemptionDate)}
+                                {getStatusBadge(activity.status)}
                               </TableCell>
                               <TableCell>
                                 <div className="flex justify-end">
@@ -1510,7 +1093,11 @@ export default function ActivityPage() {
                                       </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="rounded-md">
-                                      <DropdownMenuItem onClick={() => router.push(`/redemptions/${redemption.redemptionId}`)}>
+                                      <DropdownMenuItem onClick={() => 
+                                        router.push(activity.type === "transaction" 
+                                          ? `/transactions/${activity.id}` 
+                                          : `/redemptions/${(activity.originalData as Redemption).redemptionId}`)
+                                      }>
                                         <Eye className="h-4 w-4 mr-2" />
                                         View Details
                                       </DropdownMenuItem>
@@ -1523,10 +1110,370 @@ export default function ActivityPage() {
                         )}
                       </TableBody>
                     </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="transactions" className="space-y-4">
+                <Card>
+                  <CardHeader className="py-4">
+                        <CardTitle>Transactions</CardTitle>
+                    <CardDescription>
+                          View all customer transactions
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>
+                                <Button 
+                                  variant="ghost" 
+                                  onClick={() => {
+                                    setSortField("createdAt");
+                                    setSortDirection(sortField === "createdAt" && sortDirection === "asc" ? "desc" : "asc");
+                                  }}
+                                  className="flex items-center gap-1 px-0 font-medium"
+                                >
+                                  Date & Time
+                                  {sortField === "createdAt" && (
+                                    sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </TableHead>
+                              <TableHead className="w-[250px]">
+                                <Button 
+                                  variant="ghost" 
+                                  onClick={() => {
+                                    setSortField("customerId");
+                                    setSortDirection(sortField === "customerId" && sortDirection === "asc" ? "desc" : "asc");
+                                  }}
+                                  className="flex items-center gap-1 px-0 font-medium"
+                                >
+                                  Customer
+                                  {sortField === "customerId" && (
+                                    sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </TableHead>
+                              <TableHead>
+                                <Button 
+                                  variant="ghost" 
+                                  onClick={() => {
+                                    setSortField("type");
+                                    setSortDirection(sortField === "type" && sortDirection === "asc" ? "desc" : "asc");
+                                  }}
+                                  className="flex items-center gap-1 px-0 font-medium"
+                                >
+                                  Type
+                                  {sortField === "type" && (
+                                    sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </TableHead>
+                              <TableHead>
+                                <Button 
+                                  variant="ghost" 
+                                  onClick={() => {
+                                    setSortField("amount");
+                                    setSortDirection(sortField === "amount" && sortDirection === "asc" ? "desc" : "asc");
+                                  }}
+                                  className="flex items-center gap-1 px-0 font-medium"
+                                >
+                                  Amount
+                                  {sortField === "amount" && (
+                                    sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </TableHead>
+                              <TableHead>
+                                <Button 
+                                  variant="ghost" 
+                                  onClick={() => {
+                                    setSortField("status");
+                                    setSortDirection(sortField === "status" && sortDirection === "asc" ? "desc" : "asc");
+                                  }}
+                                  className="flex items-center gap-1 px-0 font-medium"
+                                >
+                                  Status
+                                  {sortField === "status" && (
+                                    sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </TableHead>
+                              <TableHead className="w-[50px]"></TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                          {loading ? (
+                              <TableRow>
+                                <TableCell colSpan={7} className="h-24 text-center">
+                                  <div className="flex justify-center">
+                                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                          ) : filteredTransactions.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={7} className="h-24 text-center">
+                                  <div className="flex flex-col items-center justify-center">
+                                    <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                                      <ShoppingCart className="h-6 w-6 text-muted-foreground" />
+                                    </div>
+                                    <h3 className="mt-4 text-lg font-medium">
+                                No transactions found
+                                    </h3>
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                      {searchQuery ? "Try adjusting your search query" : 
+                                       "No transaction records available"}
+                                    </p>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                          ) : (
+                            filteredTransactions.map((transaction) => (
+                                <TableRow key={transaction.id} className="hover:bg-muted/50">
+                                  <TableCell>
+                                  {formatDate(transaction.createdAt)}
+                                  </TableCell>
+                                  <TableCell>
+                                  <div className="flex items-center gap-2">
+                                      <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                                    <Users className="h-4 w-4 text-muted-foreground" />
+                                      </div>
+                                      <span>{customers[transaction.customerId]?.fullName || 'Unknown Customer'}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline" className={cn(
+                                      "rounded-md",
+                                      transaction.type.toLowerCase() === "purchase" && "bg-green-50 text-green-700 border-green-200",
+                                      transaction.type.toLowerCase() === "reward" && "bg-purple-50 text-purple-700 border-purple-200"
+                                    )}>
+                                      <div className="flex items-center gap-1">
+                                    {getTransactionIcon(transaction.type)}
+                                    <span className="capitalize">{transaction.type}</span>
+                                  </div>
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                  <div className="inline-block px-3 py-1 rounded-md border border-slate-200 shadow-sm bg-white">
+                                      <span className={cn(
+                                        transaction.type.toLowerCase() === "purchase" 
+                                          ? "text-emerald-600 font-medium" 
+                                          : "text-rose-600 font-medium"
+                                      )}>
+                                        ${transaction.amount}
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                  {getStatusBadge(transaction.status)}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex justify-end">
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" className="h-8 w-8 p-0 rounded-md">
+                                            <MoreHorizontal className="h-4 w-4" />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="rounded-md">
+                                          <DropdownMenuItem onClick={() => router.push(`/transactions/${transaction.id}`)}>
+                                            <Eye className="h-4 w-4 mr-2" />
+                                            View Details
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            )}
+                          </TableBody>
+                        </Table>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+                  <TabsContent value="redemptions" className="space-y-4">
+                <Card>
+                      <CardHeader className="py-4">
+                        <CardTitle>Redemptions</CardTitle>
+                    <CardDescription>
+                          View all rewards redeemed by your customers
+                    </CardDescription>
+                  </CardHeader>
+                      <CardContent className="p-0">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>
+                                <Button 
+                                  variant="ghost" 
+                                  onClick={() => {
+                                    setSortField("createdAt");
+                                    setSortDirection(sortField === "createdAt" && sortDirection === "asc" ? "desc" : "asc");
+                                  }}
+                                  className="flex items-center gap-1 px-0 font-medium"
+                                >
+                                  Date & Time
+                                  {sortField === "createdAt" && (
+                                    sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </TableHead>
+                              <TableHead className="w-[250px]">
+                                <Button 
+                                  variant="ghost" 
+                                  onClick={() => {
+                                    setSortField("customerId");
+                                    setSortDirection(sortField === "customerId" && sortDirection === "asc" ? "desc" : "asc");
+                                  }}
+                                  className="flex items-center gap-1 px-0 font-medium"
+                                >
+                                  Customer
+                                  {sortField === "customerId" && (
+                                    sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </TableHead>
+                              <TableHead>
+                                <Button 
+                                  variant="ghost" 
+                                  onClick={() => {
+                                    setSortField("type");
+                                    setSortDirection(sortField === "type" && sortDirection === "asc" ? "desc" : "asc");
+                                  }}
+                                  className="flex items-center gap-1 px-0 font-medium"
+                                >
+                                  Type
+                                  {sortField === "type" && (
+                                    sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </TableHead>
+                              <TableHead>
+                                <Button 
+                                  variant="ghost" 
+                                  onClick={() => {
+                                    setSortField("amount");
+                                    setSortDirection(sortField === "amount" && sortDirection === "asc" ? "desc" : "asc");
+                                  }}
+                                  className="flex items-center gap-1 px-0 font-medium"
+                                >
+                                  Amount
+                                  {sortField === "amount" && (
+                                    sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </TableHead>
+                              <TableHead>
+                                <Button 
+                                  variant="ghost" 
+                                  onClick={() => {
+                                    setSortField("status");
+                                    setSortDirection(sortField === "status" && sortDirection === "asc" ? "desc" : "asc");
+                                  }}
+                                  className="flex items-center gap-1 px-0 font-medium"
+                                >
+                                  Status
+                                  {sortField === "status" && (
+                                    sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </TableHead>
+                              <TableHead className="w-[50px]"></TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {loading ? (
+                              <TableRow>
+                                <TableCell colSpan={7} className="h-24 text-center">
+                                  <div className="flex justify-center">
+                                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ) : filteredRedemptions.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={7} className="h-24 text-center">
+                                  <div className="flex flex-col items-center justify-center">
+                                    <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                                      <Gift className="h-6 w-6 text-muted-foreground" />
+                                    </div>
+                                    <h3 className="mt-4 text-lg font-medium">
+                                      No redemptions found
+                                    </h3>
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                      {searchQuery ? "Try adjusting your search query" : 
+                                       "No redemption records available"}
+                                    </p>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              filteredRedemptions.map((redemption) => (
+                                <TableRow key={redemption.id} className="hover:bg-muted/50">
+                                  <TableCell>
+                                    {formatDate(redemption.redemptionDate)}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                                        <Users className="h-4 w-4 text-muted-foreground" />
+                                      </div>
+                                      <span>{customers[redemption.customerId]?.fullName || 'Unknown Customer'}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 rounded-md">
+                                      <div className="flex items-center gap-1">
+                                        <Gift className="h-4 w-4" />
+                                        <span>{redemption.rewardName}</span>
+                                      </div>
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="inline-block px-3 py-1 rounded-md border border-slate-200 shadow-sm bg-white">
+                                      <span className={redemption.pointsUsed === 0 
+                                        ? "text-emerald-600 font-medium" 
+                                        : "text-indigo-600 font-medium"}>
+                                        {redemption.pointsUsed === 0 ? "Free" : `${redemption.pointsUsed} points`}
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    {getStatusBadge(redemption.status)}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex justify-end">
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" className="h-8 w-8 p-0 rounded-md">
+                                            <MoreHorizontal className="h-4 w-4" />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="rounded-md">
+                                          <DropdownMenuItem onClick={() => router.push(`/redemptions/${redemption.redemptionId}`)}>
+                                            <Eye className="h-4 w-4 mr-2" />
+                                            View Details
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            )}
+                          </TableBody>
+                        </Table>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </div>
       </div>
     </div>
   )

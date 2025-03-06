@@ -113,49 +113,70 @@ const isJsonString = (str: string) => {
   }
 };
 
-// Updated function to detect and parse JSON in messages
-const parseMessageContent = (content: string) => {
-  // Try different JSON formats
+// Add this debugging function at the top of your component
+const debugJsonParsing = (content: string) => {
+  console.log("Content to parse:", content);
   
-  // Format 1: ```json\n{...}\n```
-  const jsonRegex1 = /```json\n([\s\S]*?)\n```/;
-  // Format 2: ```\n{...}\n```
-  const jsonRegex2 = /```\n([\s\S]*?)\n```/;
-  // Format 3: ```{...}```
-  const jsonRegex3 = /```([\s\S]*?)```/;
-  // Format 4: Plain JSON with curly braces
-  const jsonRegex4 = /(\{[\s\S]*?\})/;
+  // Try to extract JSON objects with a simple regex
+  const jsonRegex = /\{[\s\S]*?\}/g;
+  const matches = content.match(jsonRegex);
   
-  // Try each regex pattern in order
-  for (const regex of [jsonRegex1, jsonRegex2, jsonRegex3, jsonRegex4]) {
-    const match = content.match(regex);
-    
-    if (match && match[1]) {
+  console.log("JSON matches found:", matches?.length || 0);
+  
+  if (matches) {
+    matches.forEach((match, index) => {
+      console.log(`Match ${index}:`, match);
       try {
-        // Try to parse the potential JSON
-        const jsonText = match[1].trim();
-        const jsonData = JSON.parse(jsonText);
-        
-        // If it's valid JSON with required reward fields
-        if (jsonData && typeof jsonData === 'object' && jsonData.rewardName) {
-          // Split the message into parts
-          const parts = content.split(match[0]);
-          
-          return {
-            hasJson: true,
-            beforeJson: parts[0]?.trim() || '',
-            jsonData,
-            afterJson: parts[1]?.trim() || ''
-          };
-        }
-      } catch (error) {
-        console.log(`Failed to parse JSON with regex ${regex}:`, error);
-        // Continue to the next pattern
+        const parsed = JSON.parse(match);
+        console.log(`Parsed object ${index}:`, parsed);
+        console.log(`Has rewardName:`, !!parsed.rewardName);
+      } catch (e) {
+        console.log(`Failed to parse match ${index}:`, e);
       }
+    });
+  }
+};
+
+// Replace the existing parseMessageContent function with this simpler version
+const parseMessageContent = (content: string) => {
+  // First log the content for debugging
+  console.log("Parsing content:", content.substring(0, 100) + "...");
+  
+  // Simple regex to find JSON objects
+  const jsonRegex = /\{[\s\S]*?\}/g;
+  const matches = Array.from(content.matchAll(jsonRegex));
+  
+  const jsonObjects = [];
+  
+  for (const match of matches) {
+    try {
+      const parsed = JSON.parse(match[0]);
+      if (parsed && typeof parsed === 'object' && parsed.rewardName) {
+        jsonObjects.push(parsed);
+        console.log("Found valid reward object:", parsed.rewardName);
+      }
+    } catch (e) {
+      // Ignore parsing errors
     }
   }
   
-  // If no JSON or parsing failed, return the original content
+  if (jsonObjects.length > 0) {
+    // Get text before and after all JSON objects
+    let cleanedContent = content;
+    for (const match of matches) {
+      cleanedContent = cleanedContent.replace(match[0], '');
+    }
+    cleanedContent = cleanedContent.trim();
+    
+    return {
+      hasJson: true,
+      beforeJson: cleanedContent,
+      jsonData: jsonObjects[0], // For backward compatibility
+      jsonObjects: jsonObjects,
+      multipleJson: jsonObjects.length > 1
+    };
+  }
+  
   return {
     hasJson: false,
     content
@@ -781,57 +802,57 @@ function MessageContent({
 
   const extractJsonFromContent = (content: string) => {
     try {
-      // First, try to find JSON between ```json and ``` markers
-      const jsonRegex = /```json\n([\s\S]*?)\n```/;
-      const match = content.match(jsonRegex);
+      // First, check for JSON array notation
+      const jsonArrayRegex = /\[\s*\{[\s\S]*\}\s*\]/;
+      const arrayMatch = content.match(jsonArrayRegex);
       
-      if (match && match[1]) {
-        // Trim any whitespace and try to parse
-        const jsonString = match[1].trim();
-        return JSON.parse(jsonString);
+      if (arrayMatch) {
+        return JSON.parse(arrayMatch[0]);
       }
       
-      // If no match with ```json, try to find any JSON array or object in the content
-      const possibleJson = content.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
+      // Try finding multiple JSON objects in the content
+      const jsonObjectRegex = /\{[\s\S]*?\}/g;
+      const allMatches = content.matchAll(jsonObjectRegex);
+      const jsonObjects = [];
+      
+      for (const match of allMatches) {
+        try {
+          const obj = JSON.parse(match[0]);
+          if (obj && typeof obj === 'object' && obj.rewardName) {
+            jsonObjects.push(obj);
+          }
+        } catch (e) {
+          console.error("Failed to parse individual JSON object:", e);
+        }
+      }
+      
+      if (jsonObjects.length > 0) {
+        // Remove the JSON objects from the content for clean display
+        const cleanedContent = content.replace(jsonObjectRegex, '').trim()
+          .replace(/\n{3,}/g, '\n\n'); // Clean up excessive newlines
+        
+        return {
+          jsonObjects,
+          cleanedContent
+        };
+      }
+      
+      // Fall back to the original logic for single JSON object extraction
+      const possibleJson = content.match(/(\{[\s\S]*\})/);
       if (possibleJson && possibleJson[1]) {
-        // Find the start and end of what looks like valid JSON
-        const jsonCandidate = possibleJson[1].trim();
-        return JSON.parse(jsonCandidate);
+        try {
+          return JSON.parse(possibleJson[1]);
+        } catch (error) {
+          console.error("Error parsing single JSON:", error);
+        }
       }
       
       return null;
     } catch (error) {
-      console.error("Error parsing JSON:", error);
-      console.log("Content that failed to parse:", content);
-      
-      // Try a more lenient approach for malformed JSON
-      try {
-        // Sometimes the JSON might have extra text after it
-        // Try to find the last closing bracket/brace and parse up to that point
-        const lastClosingBracket = content.lastIndexOf(']');
-        const lastClosingBrace = content.lastIndexOf('}');
-        const lastClosing = Math.max(lastClosingBracket, lastClosingBrace);
-        
-        if (lastClosing > 0) {
-          const firstOpeningBracket = content.indexOf('[');
-          const firstOpeningBrace = content.indexOf('{');
-          const firstOpening = Math.min(
-            firstOpeningBracket !== -1 ? firstOpeningBracket : Infinity,
-            firstOpeningBrace !== -1 ? firstOpeningBrace : Infinity
-          );
-          
-          if (firstOpening !== Infinity && firstOpening < lastClosing) {
-            const jsonSubstring = content.substring(firstOpening, lastClosing + 1);
-            return JSON.parse(jsonSubstring);
-          }
-        }
-      } catch (secondError) {
-        console.error("Second attempt at parsing JSON failed:", secondError);
-      }
-      
+      console.error("Error extracting JSON:", error);
       return null;
     }
-  }
+  };
 
   const toggleRewardExpansion = (rewardId: string) => {
     setExpandedRewards(prev => {
@@ -1027,78 +1048,56 @@ function MessageContent({
         const extractedJson = extractJsonFromContent(content);
         
         if (extractedJson) {
-          const rewards = Array.isArray(extractedJson) ? extractedJson : [extractedJson];
-          
-          // Remove all JSON blocks from the content before displaying
-          const cleanedContent = content
-            .replace(/```json\n[\s\S]*?\n```/g, '')
-            // Remove excessive newlines (more than 2 consecutive)
-            .replace(/\n{3,}/g, '\n\n')
-            // Trim whitespace
-            .trim();
-          
-          // Check if this is a program (multiple rewards with same programtype)
-          const isProgram = rewards.length > 1 && 
-            rewards.every(r => r.programtype) && 
-            rewards[0].programtype === rewards[1].programtype;
-          
-          // If it's a program, find or create a program object
-          let programObject = rewards.find(r => r.isProgram);
-          
-          if (isProgram && !programObject) {
-            const programType = rewards[0].programtype || 'points';
-            const formattedType = programType.charAt(0).toUpperCase() + programType.slice(1);
+          // Handle the case where extraction returned an object with jsonObjects array
+          if (extractedJson.jsonObjects && Array.isArray(extractedJson.jsonObjects)) {
+            // Use the already cleaned content from the extractor
+            const cleanedContent = extractedJson.cleanedContent || '';
             
-            programObject = {
-              programName: `${formattedType} Program`,
-              description: `A collection of ${rewards.length} rewards for your ${programType} program`,
-              programtype: programType
-            };
-          }
-          
-          return (
-            <div>
-              {cleanedContent && (
-                <p className="whitespace-pre-wrap leading-relaxed mb-4">
-                  {cleanedContent}
-                </p>
-              )}
-              
-              <div className="space-y-4">
-                {isProgram ? (
-                  <ProgramCard
-                    program={programObject}
-                    rewards={rewards}
-                    setSavingReward={onUseTemplate}
-                    setPinDialogOpen={(open) => {
-                      // Just use onUseTemplate to handle the reward
-                      if (open) {
-                        onUseTemplate(programObject);
-                      }
-                    }}
-                    onEdit={onEdit}
-                    fullProgramDataRef={fullProgramDataRef}  // Pass the ref here
-                  />
-                ) : (
-                  rewards.map((reward, index) => {
-                    const rewardId = reward.id || `reward-${index}`;
-                    return (
-                      <div key={rewardId}>
-                        {renderReward(
-                          reward, 
-                          rewards.length === 1 ? "w-[500px]" : "w-[400px]",
-                          rewardId
-                        )}
-                      </div>
-                    );
-                  })
+            return (
+              <>
+                {cleanedContent && (
+                  <div className="bg-gray-200 text-gray-900 p-3 rounded-lg mb-4 whitespace-pre-wrap">
+                    {cleanedContent}
+                  </div>
                 )}
-              </div>
-            </div>
-          );
-        } else {
-          return <p className="whitespace-pre-wrap leading-relaxed">{content}</p>;
+                <div className="space-y-4">
+                  {extractedJson.jsonObjects.map((reward, idx) => (
+                    <RewardCard key={idx} reward={reward} />
+                  ))}
+                </div>
+              </>
+            );
+          } 
+          // Handle legacy cases (array or single object)
+          else {
+            const rewards = Array.isArray(extractedJson) ? extractedJson : [extractedJson];
+            
+            // Remove all JSON blocks from the content before displaying
+            const cleanedContent = content
+              .replace(/```json\n[\s\S]*?\n```/g, '')
+              .replace(/(\{[\s\S]*?\})/g, '') // Remove JSON objects
+              .replace(/\n{3,}/g, '\n\n')
+              .trim();
+            
+            return (
+              <>
+                {cleanedContent && (
+                  <div className="bg-gray-200 text-gray-900 p-3 rounded-lg mb-4 whitespace-pre-wrap">
+                    {cleanedContent}
+                  </div>
+                )}
+                <div className="space-y-4">
+                  {rewards.map((reward, idx) => (
+                    <RewardCard key={idx} reward={reward} />
+                  ))}
+                </div>
+              </>
+            );
+          }
         }
+        
+        // If no JSON, just render the content as is
+        return <div className="whitespace-pre-wrap bg-gray-200 text-gray-900 p-3 rounded-lg">{content}</div>;
       })()}
     </div>
   );
@@ -1777,7 +1776,7 @@ export function TapAiDialog({
       console.log('No threadId, creating new thread');
       
       // Create a simple first message to initialize the thread
-      const initialMessage = "Hello, I'm ready to help with your loyalty program.";
+      const initialMessage = "Hey, this is the initial message";
       
       // Use talkToAssistant to create a thread and get initial response
       const response = await talkToAssistant(initialMessage);
@@ -2441,7 +2440,13 @@ export function TapAiDialog({
               
               {/* Display local messages */}
               {localMessages.map((message, index) => {
+                // Add this line for debugging
+                if (message.role === 'assistant') {
+                  debugJsonParsing(message.content);
+                }
+                
                 const parsedContent = parseMessageContent(message.content);
+                console.log("Parsed content result:", parsedContent);
                 
                 return (
                   <div 
@@ -2465,7 +2470,15 @@ export function TapAiDialog({
                           </div>
                           )}
                           
-                          <RewardCard reward={parsedContent.jsonData} />
+                          {parsedContent.multipleJson ? (
+                            <div className="space-y-4">
+                              {parsedContent.jsonObjects.map((reward, idx) => (
+                                <RewardCard key={idx} reward={reward} />
+                              ))}
+                            </div>
+                          ) : (
+                            <RewardCard reward={parsedContent.jsonData} />
+                          )}
                           
                           {parsedContent.afterJson && (
                             <div className="bg-gray-200 text-gray-900 p-3 rounded-lg mt-2 whitespace-pre-wrap">

@@ -70,6 +70,10 @@ try {
   console.log('Initializing Firebase Storage');
   storage = getStorage(app);
   console.log('Firebase Storage initialized');
+  
+  // The correct format should be the one in the firebaseConfig
+  // No need to override it as it's already set correctly
+  console.log('Using storage bucket:', firebaseConfig.storageBucket);
 } catch (error) {
   console.error('Error initializing Firebase Storage:', error);
 }

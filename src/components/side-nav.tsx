@@ -42,6 +42,7 @@ import { auth } from "@/lib/firebase"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { TapAiButton } from "@/components/tap-ai-button"
 import { Button } from "@/components/ui/button"
+import { toast } from "@/components/ui/use-toast"
 
 const navItems = [
   {
@@ -220,6 +221,11 @@ export function SideNav() {
       router.push('/login')
     } catch (error) {
       console.error("Error signing out:", error)
+      toast({
+        title: "Error",
+        description: "Failed to log out. Please try again.",
+        variant: "destructive"
+      })
     }
   }
 
@@ -338,7 +344,7 @@ export function SideNav() {
       </div>
       
       {/* Profile section at bottom */}
-      <div className="mt-auto border-t pt-4">
+      <div className="mt-auto border-t pt-4 pb-4">
         <div className="flex items-center p-2">
           <div className="w-10 h-10 rounded-full overflow-hidden border mr-3">
             {merchantData?.logoUrl ? (
@@ -367,12 +373,25 @@ export function SideNav() {
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-56">
+              <div className="px-2 py-1.5">
+                <p className="text-sm font-medium">
+                  {merchantData?.tradingName || user?.displayName || "Your Business"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {merchantData?.businessEmail || user?.email || ""}
+                </p>
+              </div>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
                 <Settings className="mr-2 h-4 w-4" />
                 <span>Settings</span>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => signOut()}>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={handleLogout}
+                className="text-red-600 focus:bg-red-50 focus:text-red-600"
+              >
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Log out</span>
               </DropdownMenuItem>

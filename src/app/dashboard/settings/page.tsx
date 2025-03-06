@@ -318,7 +318,36 @@ const SettingsPage: React.FC = () => {
     }
   }
   
-  // Modify the handleSave function to handle logo uploads the same way as documents
+  // Modify the upload function to include additional CORS headers
+  const uploadWithCorsHeaders = async (file, path) => {
+    try {
+      // Create a reference with a unique name
+      const fileRef = ref(storage, path);
+      
+      // Set metadata with CORS headers
+      const metadata = {
+        contentType: file.type,
+        customMetadata: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Content-Disposition, Content-Length'
+        }
+      };
+      
+      // Upload the file with metadata
+      const uploadResult = await uploadBytes(fileRef, file, metadata);
+      
+      // Get the download URL
+      const downloadUrl = await getDownloadURL(uploadResult.ref);
+      
+      return downloadUrl;
+    } catch (error) {
+      console.error("Upload error:", error);
+      throw error;
+    }
+  };
+  
+  // Then use this function in handleSave
   const handleSave = async () => {
     if (!user?.uid) {
       console.error("Error: No user ID available");
@@ -332,43 +361,67 @@ const SettingsPage: React.FC = () => {
     
     setLoading(true);
     console.log("Save process started");
-    console.log("User ID:", user.uid);
     
     try {
-      // Use the existing logoUrl without trying to upload to Firebase Storage
+      // Handle logo upload
       let newLogoUrl = logoUrl;
-      
-      // Skip the Firebase Storage upload for logo in development mode
       if (logoFile) {
-        console.log("Development mode: Using local URL for logo instead of uploading to Firebase Storage");
-        // We're already using the object URL set in handleLogoChange
-        setLogoFile(null);
-      }
-      
-      // Handle ABN verification document upload
-      let newAbnVerificationUrl = abnVerificationUrl
-      if (abnVerificationFile) {
         try {
-          // Similar upload process for ABN verification
-          const timestamp = Date.now()
-          const fileName = `merchants/${user.uid}/verification/${timestamp}-${abnVerificationFile.name}`
-          const verificationRef = ref(storage, fileName)
+          const fileName = `merchants/${user.uid}/logo/${Date.now()}-${logoFile.name}`;
+          newLogoUrl = await uploadWithCorsHeaders(logoFile, fileName);
+          setLogoUrl(newLogoUrl);
+          setLogoFile(null);
           
-          const uploadResult = await uploadBytes(verificationRef, abnVerificationFile)
-          newAbnVerificationUrl = await getDownloadURL(uploadResult.ref)
-          
-          setAbnVerificationUrl(newAbnVerificationUrl)
-          setAbnVerificationFile(null)
+          toast({
+            title: "Logo Uploaded",
+            description: "Your business logo has been updated.",
+          });
         } catch (error) {
-          console.error("Error uploading ABN verification:", error)
+          console.error("Error uploading logo:", error);
+          toast({
+            title: "Upload Failed",
+            description: "Failed to upload logo. Please try again.",
+            variant: "destructive"
+          });
         }
       }
       
-      // Log document data before saving
-      console.log("Documents to save:", documents);
-      console.log("Document file:", documentFile);
+      // Handle document upload
+      if (documentFile) {
+        try {
+          console.log("Uploading document to Firebase Storage");
+          const timestamp = Date.now();
+          const fileName = `merchants/${user.uid}/documents/${timestamp}-${documentFile.name}`;
+          const documentUrl = await uploadWithCorsHeaders(documentFile, fileName);
+          
+          console.log("Document uploaded successfully:", documentUrl);
+          
+          // Add to documents array
+          const newDocument = {
+            name: documentFile.name,
+            url: documentUrl,
+            path: fileName,
+            uploadedAt: new Date()
+          };
+          
+          setDocuments(prev => [...prev, newDocument]);
+          setDocumentFile(null);
+          
+          toast({
+            title: "Document Uploaded",
+            description: "Your document has been uploaded successfully.",
+          });
+        } catch (error) {
+          console.error("Error uploading document:", error);
+          toast({
+            title: "Upload Failed",
+            description: "Failed to upload document. Please try again.",
+            variant: "destructive"
+          });
+        }
+      }
       
-      // Prepare merchant data for update
+      // Save all changes to Firestore
       const merchantData = {
         legalName: legalBusinessName,
         tradingName: tradingName,
@@ -389,77 +442,27 @@ const SettingsPage: React.FC = () => {
         },
         operatingHours,
         abn,
-        abnVerificationUrl: newAbnVerificationUrl,
+        abnVerificationUrl,
         pointOfSale,
         paymentProvider,
         status: storeActive ? "active" : "inactive",
         notifications,
         updatedAt: new Date(),
-        // Add documents array if we have any mock documents
-        ...(documents.length > 0 && { 
-          documents: documents.map(doc => ({
-            name: doc.name,
-            path: doc.path,
-            uploadedAt: doc.uploadedAt,
-            url: doc.url
-          }))
-        })
+        documents: documents.map(doc => ({
+          name: doc.name,
+          path: doc.path,
+          uploadedAt: doc.uploadedAt,
+          url: doc.url
+        }))
       };
       
-      console.log("Merchant data to save:", merchantData);
-      console.log("Firestore path:", `merchants/${user.uid}`);
+      // Update Firestore
+      await updateDoc(doc(db, 'merchants', user.uid), merchantData);
       
-      // Update Firestore document
-      const docRef = doc(db, 'merchants', user.uid);
-      console.log("About to update Firestore document");
-      
-      try {
-        await updateDoc(docRef, merchantData);
-        console.log("Firestore update successful");
-        
-        // Verify the update by reading the document back
-        const updatedDoc = await getDoc(docRef);
-        console.log("Updated document data:", updatedDoc.data());
-        console.log("Documents in updated data:", updatedDoc.data()?.documents);
-        
-        toast({
-          title: "Settings Saved",
-          description: "Your settings have been updated successfully."
-        });
-      } catch (firestoreError) {
-        console.error("Firestore update error:", firestoreError);
-        throw firestoreError;
-      }
-
-      // Document file handling
-      if (documentFile) {
-        console.log("Processing document file:", documentFile.name);
-        try {
-          toast({
-            title: "Development Mode",
-            description: "In development mode, files are not actually uploaded to Firebase Storage",
-          });
-          
-          console.log("Document file would be uploaded to:", `merchants/${user.uid}/documents/${Date.now()}-${documentFile.name}`);
-          
-          // Clear the file from state but keep the documents in the array
-          setDocumentFile(null);
-          
-          toast({
-            title: "Document Saved",
-            description: "Your document has been saved to the database",
-          });
-          
-          // Force a reload to show the changes
-          console.log("Will reload page in 1.5 seconds");
-          setTimeout(() => {
-            window.location.reload();
-          }, 1500);
-          
-        } catch (error) {
-          console.error("Error handling document:", error);
-        }
-      }
+      toast({
+        title: "Settings Saved",
+        description: "Your settings have been updated successfully."
+      });
     } catch (error) {
       console.error("Error saving settings:", error);
       toast({
@@ -469,7 +472,6 @@ const SettingsPage: React.FC = () => {
       });
     } finally {
       setLoading(false);
-      console.log("Save process completed");
     }
   };
 
@@ -788,9 +790,6 @@ const SettingsPage: React.FC = () => {
                                       className="w-full h-full object-cover"
                                     />
                                   </div>
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    gs://tap-loyalty-fb6d0/merchants/{merchantId}/logo
-                                  </p>
                                 </div>
                               ) : null}
                               
@@ -1602,9 +1601,6 @@ const SettingsPage: React.FC = () => {
                                 <p className="text-sm text-muted-foreground">
                                   Uploaded {new Date().toLocaleDateString()}
                                 </p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  gs://tap-loyalty-fb6d0/merchants/{merchantId}/verification
-                                </p>
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -1636,9 +1632,6 @@ const SettingsPage: React.FC = () => {
                                 <p className="font-medium">Business Logo</p>
                                 <p className="text-sm text-muted-foreground">
                                   Uploaded {new Date().toLocaleDateString()}
-                                </p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  gs://tap-loyalty-fb6d0/merchants/{merchantId}/logo
                                 </p>
                               </div>
                             </div>

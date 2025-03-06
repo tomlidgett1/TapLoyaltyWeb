@@ -622,7 +622,6 @@ const SettingsPage: React.FC = () => {
                     {[
                       { id: 'business', label: 'Business Information', icon: <Store className="h-4 w-4" /> },
                       { id: 'address', label: 'Business Address', icon: <MapPin className="h-4 w-4" /> },
-                      { id: 'branding', label: 'Branding & Logo', icon: <Palette className="h-4 w-4" /> },
                       { id: 'merchant', label: 'Merchant ID', icon: <Key className="h-4 w-4" /> }
                     ].map(item => (
                       <button
@@ -655,13 +654,11 @@ const SettingsPage: React.FC = () => {
                     <CardTitle>
                       {profileSection === 'business' && "Business Information"}
                       {profileSection === 'address' && "Business Address"}
-                      {profileSection === 'branding' && "Branding & Logo"}
                       {profileSection === 'merchant' && "Merchant ID"}
                     </CardTitle>
                     <CardDescription>
                       {profileSection === 'business' && "Update your business details"}
                       {profileSection === 'address' && "Set your business location"}
-                      {profileSection === 'branding' && "Customize your business appearance"}
                       {profileSection === 'merchant' && "Your unique merchant identifier"}
                     </CardDescription>
                   </CardHeader>
@@ -770,68 +767,6 @@ const SettingsPage: React.FC = () => {
                               placeholder="0000"
                             />
                           </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Branding & Logo Section */}
-                    {profileSection === 'branding' && (
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="logo">Business Logo</Label>
-                          <div className="border rounded-md p-4 bg-gray-50">
-                            <div className="flex flex-col items-center justify-center w-full">
-                              {logoUrl ? (
-                                <div className="text-center mb-4">
-                                  <div className="relative w-32 h-32 mx-auto mb-2 border rounded-md overflow-hidden">
-                                    <img 
-                                      src={logoUrl} 
-                                      alt="Business Logo" 
-                                      className="w-full h-full object-cover"
-                                    />
-                                  </div>
-                                </div>
-                              ) : null}
-                              
-                              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-white hover:bg-gray-50">
-                                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                  <Upload className="w-8 h-8 mb-2 text-gray-500" />
-                                  <p className="mb-2 text-sm text-gray-500">
-                                    <span className="font-semibold">Click to upload</span> or drag and drop
-                                  </p>
-                                  <p className="text-xs text-gray-500">PNG, JPG (MAX. 2MB)</p>
-                                </div>
-                                <input 
-                                  id="logo"
-                                  type="file" 
-                                  className="hidden" 
-                                  accept=".png,.jpg,.jpeg"
-                                  onChange={handleLogoChange}
-                                />
-                              </label>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label htmlFor="primaryColor">Primary Brand Color</Label>
-                          <div className="flex items-center gap-3">
-                            <input 
-                              type="color" 
-                              id="primaryColor" 
-                              className="h-10 w-10 rounded cursor-pointer"
-                              value={primaryColor}
-                              onChange={(e) => setPrimaryColor(e.target.value)}
-                            />
-                            <Input 
-                              value={primaryColor}
-                              onChange={(e) => setPrimaryColor(e.target.value)}
-                              className="font-mono"
-                            />
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            This color will be used for buttons and accents in your customer-facing store.
-                          </p>
                         </div>
                       </div>
                     )}

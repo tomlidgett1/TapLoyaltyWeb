@@ -130,12 +130,6 @@ export default function SignupPage() {
     }
   }
   
-  const handleLogoChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setLogoFile(e.target.files[0])
-    }
-  }
-  
   const validateCurrentStep = () => {
     const errors = []
     
@@ -347,8 +341,8 @@ export default function SignupPage() {
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
-  return (
-        <div className="space-y-4">
+        return (
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -372,7 +366,7 @@ export default function SignupPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
-          <Button 
+                <Button 
                   type="button"
                   variant="ghost"
                   size="icon"
@@ -384,7 +378,7 @@ export default function SignupPage() {
                   ) : (
                     <Eye className="h-4 w-4 text-gray-500" />
                   )}
-          </Button>
+                </Button>
               </div>
             </div>
             
@@ -453,56 +447,6 @@ export default function SignupPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="logoUpload">Business Logo (Optional)</Label>
-              <div className="border rounded-md p-4 bg-gray-50">
-                <div className="flex items-center justify-center w-full">
-                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-white hover:bg-gray-50">
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                      {logoFile ? (
-                        <div className="relative w-20 h-20 mb-2">
-                          <Image
-                            src={URL.createObjectURL(logoFile)}
-                            alt="Logo preview"
-                            fill
-                            className="object-cover rounded-md"
-                          />
-                        </div>
-                      ) : (
-                        <Upload className="w-8 h-8 mb-2 text-gray-500" />
-                      )}
-                      <p className="mb-2 text-sm text-gray-500">
-                        <span className="font-semibold">Click to upload</span> or drag and drop
-                      </p>
-                      <p className="text-xs text-gray-500">PNG, JPG (Square image recommended)</p>
-                    </div>
-                    <input 
-                      id="logoUpload" 
-                      type="file" 
-                      className="hidden" 
-                      onChange={handleLogoChange}
-                      accept=".png,.jpg,.jpeg"
-                    />
-                  </label>
-                </div>
-                {logoFile && (
-                  <div className="mt-2 flex items-center justify-between">
-                    <p className="text-sm text-green-600">
-                      File selected: {logoFile.name}
-                    </p>
-                    <Button 
-                      type="button" 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => setLogoFile(null)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         )
@@ -847,7 +791,7 @@ export default function SignupPage() {
               </Link>
             </div>
           </CardFooter>
-      </Card>
+        </Card>
         
         <div className="text-center text-xs text-gray-500">
           By creating an account, you agree to our{" "}

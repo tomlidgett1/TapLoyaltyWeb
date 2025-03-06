@@ -5,26 +5,47 @@ import OpenAI from 'openai';
 let openai: OpenAI | null = null;
 
 try {
+  console.log('Initializing OpenAI client, API key exists:', !!process.env.OPENAI_API_KEY);
+  console.log('API key length:', process.env.OPENAI_API_KEY?.length || 0);
+  
   if (process.env.OPENAI_API_KEY) {
     openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY
     });
+    console.log('OpenAI client initialized successfully');
+  } else {
+    console.error('OpenAI API key not found in environment variables');
   }
 } catch (error) {
   console.error('Failed to initialize OpenAI client:', error);
 }
 
 export async function POST(request: NextRequest) {
+  console.log('API route: POST /api/ai called');
+  
   try {
     // Check if OpenAI is initialized
     if (!openai) {
+      console.error('API route: OpenAI client not initialized');
       return NextResponse.json({ 
         content: "AI services are currently unavailable. Please try again later or contact support." 
-      });
+      }, { status: 503 });
     }
     
-    const { message } = await request.json();
+    console.log('API route: Parsing request body');
+    const body = await request.json();
+    console.log('API route: Request body:', body);
     
+    const { message } = body;
+    
+    if (!message) {
+      console.error('API route: No message provided in request');
+      return NextResponse.json({ 
+        content: "No message provided" 
+      }, { status: 400 });
+    }
+    
+    console.log('API route: Calling OpenAI API');
     const completion = await openai.chat.completions.create({
       model: "gpt-4-turbo-preview",
       messages: [
@@ -63,22 +84,25 @@ export async function POST(request: NextRequest) {
       stream: false
     });
 
+    console.log('API route: OpenAI API response received');
+    
     return NextResponse.json({ 
       content: completion.choices[0].message.content 
     });
-  } catch (error: any) {
-    console.error('OpenAI API error:', error);
+  } catch (error) {
+    console.error('API route: OpenAI API error:', error);
     
-    if (error.code === 'insufficient_quota') {
-      return NextResponse.json(
-        { error: 'API quota exceeded. Please try again later.' }, 
-        { status: 429 }
-      );
+    // Log more details about the error
+    if (error instanceof Error) {
+      console.error('API route: Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
     }
     
-    return NextResponse.json(
-      { error: 'Failed to get AI response. Please try again.' }, 
-      { status: 500 }
-    );
+    return NextResponse.json({ 
+      content: "Sorry, I encountered an error processing your request. Please try again." 
+    }, { status: 500 });
   }
 } 

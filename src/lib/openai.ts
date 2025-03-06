@@ -20,7 +20,7 @@ export async function getAIResponse(message: string) {
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to get AI response');
+      throw new Error(errorData.content || 'Failed to get AI response');
     }
 
     const data = await response.json();

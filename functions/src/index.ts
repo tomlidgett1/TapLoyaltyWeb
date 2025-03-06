@@ -439,3 +439,34 @@ export const callOpenAI = onCall({
     }
   }
 });
+
+// Add this to your existing functions
+export const checkOpenAIConfig = onCall({
+  region: "us-central1",
+  cors: {
+    origin: ['https://taployalty.com.au', 'http://localhost:3000'],
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    maxAge: 3600
+  }
+}, async (request) => {
+  try {
+    // Check if user is authenticated
+    if (!request.auth) {
+      throw new Error("Unauthenticated");
+    }
+    
+    // Get the API key from config
+    const apiKey = functions.config().openai?.api_key;
+    
+    return {
+      hasApiKey: !!apiKey,
+      apiKeyLength: apiKey?.length || 0,
+      // First 4 characters only for verification (still secure)
+      apiKeyPrefix: apiKey ? apiKey.substring(0, 4) : null
+    };
+  } catch (error) {
+    console.error("Error checking OpenAI config:", error);
+    throw new Error("Failed to check OpenAI configuration");
+  }
+});

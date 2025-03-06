@@ -1581,100 +1581,12 @@ export function TapAiDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!input.trim() || isLoading) return;
     
-    if (!input.trim() || loading || isLoading) return;
+    const message = input.trim();
+    setInput('');
     
-    try {
-      console.log('handleSubmit called with input:', input);
-      
-      // If we have a current conversation, use the existing handleSendMessage
-      if (currentConversation) {
-        setLoading(true);
-        
-        // Add message to UI
-        const newMessage = {
-          id: Date.now().toString(),
-          role: 'user',
-          content: input,
-          timestamp: new Date().toISOString()
-        };
-        
-        // Update the UI with the new message
-        setConversations(prev => 
-          prev.map(conv => 
-            conv.id === currentConversation 
-              ? { 
-                  ...conv, 
-                  messages: [...conv.messages, newMessage],
-                  updatedAt: new Date().toISOString()
-                } 
-              : conv
-          )
-        );
-        
-        // Clear input
-        setInput('');
-        
-        // Send to API and get response
-        await sendMessageToAPI(currentConversation, input);
-        
-        setLoading(false);
-      } 
-      // If we're using the new thread-based approach
-      else if (threadId) {
-        console.log('Using thread-based approach with threadId:', threadId);
-        // Use our fallback-enabled function
-        await handleSendMessageWithFallback(input);
-      }
-      // If we have neither, create a new thread
-      else {
-        console.log('No threadId, creating new thread');
-        // Create a new thread
-        try {
-          const thread = await createThread();
-          console.log('Thread created:', thread);
-          setThreadId(thread.id);
-          
-          // Send the message
-          await handleSendMessageWithFallback(input);
-        } catch (error) {
-          console.error("Error creating thread:", error);
-          
-          // Generate a mock thread ID and use fallback
-          const mockThreadId = 'thread_' + Math.random().toString(36).substring(2, 15);
-          setThreadId(mockThreadId);
-          
-          // Add the messages to the UI anyway
-          const userMessage = {
-            id: `temp-${Date.now()}`,
-            role: 'user',
-            content: [{ type: 'text', text: { value: input } }],
-            created_at: Date.now()
-          };
-          
-          const fallbackMessage = {
-            id: `fallback-${Date.now()}`,
-            role: 'assistant',
-            content: [{ 
-              type: 'text', 
-              text: { 
-                value: "I'm sorry, I'm having trouble connecting to the server. Please try again in a moment." 
-              } 
-            }],
-            created_at: Date.now() + 1000
-          };
-          
-          setMessages(prev => [...prev, userMessage, fallbackMessage]);
-        }
-      }
-    } catch (error) {
-      console.error("Error sending message:", error);
-      toast({
-        title: "Error",
-        description: "Failed to send message. Please try again.",
-        variant: "destructive"
-      });
-    }
+    await sendMessageToAPI(message);
   };
 
   const handleRenameConversation = async (convId: string, newTitle: string) => {
@@ -2387,6 +2299,90 @@ export function TapAiDialog({
       }
     }
   }, [])
+
+  // Add this function near your other functions in the component
+  const sendMessageToAPI = async (message: string) => {
+    console.log('sendMessageToAPI: Starting with message:', message);
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Add the user message to the UI immediately
+      console.log('sendMessageToAPI: Adding user message to UI');
+      const userMessage = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: message,
+        createdAt: new Date()
+      };
+      setMessages(prev => [...prev, userMessage]);
+      
+      // Call the OpenAI API through your server endpoint
+      console.log('sendMessageToAPI: Calling /api/ai endpoint');
+      const response = await fetch('/api/ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message }),
+      });
+
+      console.log('sendMessageToAPI: Response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('sendMessageToAPI: Error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          console.error('sendMessageToAPI: Failed to parse error response as JSON:', e);
+          errorData = { content: errorText || 'Failed to get AI response' };
+        }
+        
+        throw new Error(errorData.content || 'Failed to get AI response');
+      }
+
+      console.log('sendMessageToAPI: Parsing response JSON');
+      const data = await response.json();
+      console.log('sendMessageToAPI: Response data:', data);
+      
+      // Add the AI response to the UI
+      console.log('sendMessageToAPI: Adding AI response to UI');
+      const aiMessage = {
+        id: `ai-${Date.now()}`,
+        role: 'assistant',
+        content: data.content,
+        createdAt: new Date()
+      };
+      setMessages(prev => [...prev, aiMessage]);
+      
+      return data.content;
+    } catch (error) {
+      console.error('sendMessageToAPI: Error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to get AI response');
+      
+      // Add a fallback message to the UI
+      console.log('sendMessageToAPI: Adding fallback error message to UI');
+      const errorMessage = {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        content: error instanceof Error ? error.message : 'Failed to get AI response. Please try again.',
+        createdAt: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      
+      return null;
+    } finally {
+      console.log('sendMessageToAPI: Completed');
+      setIsLoading(false);
+    }
+  };
 
   if (authLoading) {
     return (

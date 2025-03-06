@@ -22,7 +22,8 @@ import {
   ShoppingBag,
   Clock,
   Settings,
-  Sparkles
+  Sparkles,
+  MoreVertical
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -40,6 +41,7 @@ import { signOut } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { TapAiButton } from "@/components/tap-ai-button"
+import { Button } from "@/components/ui/button"
 
 const navItems = [
   {
@@ -131,6 +133,7 @@ export function SideNav() {
   const [initials, setInitials] = useState("MB")
   const [loading, setLoading] = useState(true)
   const [openItems, setOpenItems] = useState<Record<string, boolean>>({})
+  const [merchantData, setMerchantData] = useState(null)
 
   useEffect(() => {
     // Initialize open state based on current path
@@ -196,6 +199,8 @@ export function SideNav() {
               setInitials(foundName.substring(0, 2).toUpperCase())
             }
           }
+          
+          setMerchantData(data)
         } else {
           console.log("No merchant document found")
         }
@@ -333,45 +338,47 @@ export function SideNav() {
       </div>
       
       {/* Profile section at bottom */}
-      <div className="border-t p-4">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <div className="flex items-center gap-3 cursor-pointer hover:bg-gray-100 p-2 rounded-md transition-colors">
-              <Avatar className="h-9 w-9">
-                <AvatarFallback>{initials}</AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">
-                  {loading ? "Loading..." : merchantName}
-                </p>
-                <p className="text-xs text-muted-foreground truncate">
-                  {loading ? "" : merchantEmail}
-                </p>
+      <div className="mt-auto border-t pt-4">
+        <div className="flex items-center p-2">
+          <div className="w-10 h-10 rounded-full overflow-hidden border mr-3">
+            {merchantData?.logoUrl ? (
+              <img 
+                src={merchantData.logoUrl} 
+                alt={merchantData.tradingName || "Business Logo"} 
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                <User className="h-4 w-4 text-gray-400" />
               </div>
-              <ChevronUp className="h-4 w-4 text-muted-foreground" />
-            </div>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <div className="px-2 py-1.5">
-              <p className="text-sm font-medium">{merchantName}</p>
-              <p className="text-xs text-muted-foreground">{merchantEmail}</p>
-            </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <User className="mr-2 h-4 w-4" />
-              <span>My Account</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <CreditCard className="mr-2 h-4 w-4" />
-              <span>Billing</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-red-600" onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" />
-              <span>Log out</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">
+              {merchantData?.tradingName || user?.displayName || "Your Business"}
+            </p>
+            <p className="text-xs text-muted-foreground truncate">
+              {merchantData?.businessEmail || user?.email || ""}
+            </p>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Settings</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => signOut()}>
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Log out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </div>
   )

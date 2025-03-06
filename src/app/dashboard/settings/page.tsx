@@ -598,6 +598,24 @@ const SettingsPage: React.FC = () => {
               {/* Left Submenu - New Design */}
               <div className="md:col-span-1">
                 <Card className="overflow-hidden">
+                  <div className="p-4 border-b flex flex-col items-center">
+                    <div className="w-24 h-24 rounded-full overflow-hidden border mb-3">
+                      {logoUrl ? (
+                        <img 
+                          src={logoUrl} 
+                          alt={tradingName || "Business Logo"} 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                          <Store className="h-8 w-8 text-gray-400" />
+                        </div>
+                      )}
+                    </div>
+                    <h3 className="font-medium text-sm">{tradingName || legalBusinessName || "Your Business"}</h3>
+                    <p className="text-xs text-muted-foreground mt-1">{businessEmail || "No email set"}</p>
+                  </div>
+                  
                   <div className="p-2">
                     {[
                       { id: 'business', label: 'Business Information', icon: <Store className="h-4 w-4" /> },

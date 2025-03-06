@@ -2115,8 +2115,8 @@ export function TapAiDialog({
   // Add these functions to handle conversation management with Firestore
 
   // Create a new conversation
-  const createNewConversation = async (skipInitialMessage = false) => {
-    console.log('Creating new conversation, skipInitialMessage:', skipInitialMessage);
+  const createNewConversation = async () => {
+    console.log('Creating new conversation');
     setIsLoading(true);
     
     try {
@@ -2124,63 +2124,40 @@ export function TapAiDialog({
       setLocalMessages([]);
       setThreadId(null);
       
-      if (skipInitialMessage) {
-        // Just create a new empty conversation without sending a message
-        const newConversationId = `conv_${Date.now()}`;
-        const newConversation = {
-          id: newConversationId,
-          threadId: null, // We'll get a threadId when the first message is sent
-          title: 'New Conversation',
-          messages: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          userId: user?.uid
-        };
-        
-        // Save to Firestore
-        await setDoc(doc(db, 'conversations', newConversationId), newConversation);
-        
-        // Update local state
-        setCurrentConversation(newConversationId);
-        setConversations(prev => [newConversation, ...prev]);
-        
-        console.log('New empty conversation created:', newConversationId);
-      } else {
-        // Create a new thread via the assistant API with initial message
-        const initialMessage = "Hello, I'm ready to help with your loyalty program.";
-        const response = await talkToAssistant(initialMessage);
-        
-        if (!response.threadId) {
-          throw new Error('Failed to create thread');
-        }
-        
-        // Create a new conversation document in Firestore
-        const newConversationId = `conv_${Date.now()}`;
-        const newConversation = {
-          id: newConversationId,
-          threadId: response.threadId,
-          title: 'New Conversation',
-          messages: [
-            { role: 'assistant', content: response.content }
-          ],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          userId: user?.uid
-        };
-        
-        // Save to Firestore
-        await setDoc(doc(db, 'conversations', newConversationId), newConversation);
-        
-        // Update local state
-        setThreadId(response.threadId);
-        setCurrentConversation(newConversationId);
-        setLocalMessages([{ role: 'assistant', content: response.content }]);
-        
-        // Update conversations list
-        setConversations(prev => [newConversation, ...prev]);
-        
-        console.log('New conversation created with initial message:', newConversationId);
+      // Create a new thread via the assistant API
+      const initialMessage = "Hello, I'm ready to help with your loyalty program.";
+      const response = await talkToAssistant(initialMessage);
+      
+      if (!response.threadId) {
+        throw new Error('Failed to create thread');
       }
+      
+      // Create a new conversation document in Firestore
+      const newConversationId = `conv_${Date.now()}`;
+      const newConversation = {
+        id: newConversationId,
+        threadId: response.threadId,
+        title: 'New Conversation',
+        messages: [
+          { role: 'assistant', content: response.content }
+        ],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        userId: user?.uid
+      };
+      
+      // Save to Firestore
+      await setDoc(doc(db, 'conversations', newConversationId), newConversation);
+      
+      // Update local state
+      setThreadId(response.threadId);
+      setCurrentConversation(newConversationId);
+      setLocalMessages([{ role: 'assistant', content: response.content }]);
+      
+      // Update conversations list
+      setConversations(prev => [newConversation, ...prev]);
+      
+      console.log('New conversation created:', newConversationId);
     } catch (error) {
       console.error('Error creating new conversation:', error);
       setError('Failed to create new conversation');

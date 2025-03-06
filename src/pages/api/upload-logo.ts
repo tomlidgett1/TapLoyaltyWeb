@@ -1,23 +1,26 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { IncomingForm, Fields, Files } from 'formidable';
+import formidable from 'formidable';
 import * as admin from 'firebase-admin';
 import fs from 'fs';
 
-// Initialize Firebase Admin if not already initialized
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      // Your service account details
-    }),
-    storageBucket: 'tap-loyalty-fb6d0.firebasestorage.app' // Updated to the correct bucket name
-  });
-}
-
+// Disable the default body parser to handle form data
 export const config = {
   api: {
     bodyParser: false,
   },
 };
+
+// Initialize Firebase Admin if not already initialized
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+    }),
+    storageBucket: 'tap-loyalty-fb6d0.firebasestorage.app'
+  });
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -25,33 +28,52 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const form = new IncomingForm();
+    // Parse the form data
+    const form = new formidable.IncomingForm();
     
-    form.parse(req, async (err: Error | null, fields: Fields, files: Files) => {
-      if (err) {
-        return res.status(500).json({ error: 'Error parsing form' });
-      }
-
-      const file = files.file[0];
-      const merchantId = fields.merchantId[0];
-      
-      const bucket = admin.storage().bucket();
-      const filename = `merchants/${merchantId}/logo/${Date.now()}-${file.originalFilename}`;
-      
-      await bucket.upload(file.filepath, {
-        destination: filename,
-        metadata: {
-          contentType: file.mimetype,
-        },
+    // Parse the request
+    const [fields, files] = await new Promise<[formidable.Fields, formidable.Files]>((resolve, reject) => {
+      form.parse(req, (err, fields, files) => {
+        if (err) reject(err);
+        resolve([fields, files]);
       });
-      
-      const [url] = await bucket.file(filename).getSignedUrl({
-        action: 'read',
-        expires: '03-01-2500', // Far future expiration
-      });
-      
-      return res.status(200).json({ url });
     });
+
+    // Get the file and merchant ID
+    const file = files.file as formidable.File;
+    const merchantId = fields.merchantId as string;
+    
+    if (!file || !merchantId) {
+      return res.status(400).json({ error: 'Missing file or merchantId' });
+    }
+
+    // Get the file path and read the file
+    const filePath = file.filepath;
+    const fileBuffer = fs.readFileSync(filePath);
+    
+    // Upload to Firebase Storage
+    const bucket = admin.storage().bucket();
+    const fileName = `merchants/${merchantId}/logo/${Date.now()}-${file.originalFilename}`;
+    const fileUpload = bucket.file(fileName);
+    
+    // Upload the file
+    await fileUpload.save(fileBuffer, {
+      metadata: {
+        contentType: file.mimetype || 'application/octet-stream',
+      },
+    });
+    
+    // Get the download URL
+    const [downloadUrl] = await fileUpload.getSignedUrl({
+      action: 'read',
+      expires: '03-01-2500', // Far future
+    });
+    
+    // Clean up the temporary file
+    fs.unlinkSync(filePath);
+    
+    // Return the download URL
+    return res.status(200).json({ url: downloadUrl });
   } catch (error) {
     console.error('Upload error:', error);
     return res.status(500).json({ error: 'Error uploading file' });

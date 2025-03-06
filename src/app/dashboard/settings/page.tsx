@@ -27,7 +27,10 @@ import {
   Key,
   Gift,
   BarChart,
-  ShieldAlert
+  ShieldAlert,
+  FileText,
+  Image,
+  Download
 } from "lucide-react"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
@@ -35,6 +38,7 @@ import { toast } from "@/components/ui/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { storage } from "@/lib/firebase"
+import { firebase } from "@/lib/firebase"
 
 const SettingsPage: React.FC = () => {
   const router = useRouter()
@@ -401,6 +405,31 @@ const SettingsPage: React.FC = () => {
         title: "Settings Saved",
         description: "Your settings have been updated successfully."
       })
+
+      if (documentFile) {
+        try {
+          // Create a reference with a unique name
+          const timestamp = Date.now();
+          const fileName = `merchants/${user.uid}/documents/${timestamp}-${documentFile.name}`;
+          const docRef = ref(storage, fileName);
+          
+          // Upload the file
+          const uploadResult = await uploadBytes(docRef, documentFile);
+          
+          // Get the download URL
+          const documentUrl = await getDownloadURL(uploadResult.ref);
+          
+          // Clear the file from state
+          setDocumentFile(null);
+          
+          toast({
+            title: "Document Uploaded",
+            description: "Your document has been uploaded successfully.",
+          });
+        } catch (error) {
+          console.error("Error uploading document:", error);
+        }
+      }
     } catch (error) {
       console.error("Error saving settings:", error)
       toast({
@@ -423,6 +452,24 @@ const SettingsPage: React.FC = () => {
       [key]: value
     }))
   }
+
+  // Create a simpler document file handler
+  const handleDocumentFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      // Just set the file to state
+      setDocumentFile(file);
+      
+      // Show a toast to indicate the file is ready to upload
+      toast({
+        title: "File Selected",
+        description: `${file.name} will be uploaded when you save changes`,
+      });
+    }
+  };
+
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -488,6 +535,10 @@ const SettingsPage: React.FC = () => {
             <TabsTrigger value="security" className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4" />
               <span>Security</span>
+            </TabsTrigger>
+            <TabsTrigger value="files" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              <span>Files</span>
             </TabsTrigger>
           </TabsList>
           
@@ -1459,6 +1510,144 @@ const SettingsPage: React.FC = () => {
                 </div>
                 
                 <div className="flex justify-end">
+                  <Button 
+                    className="gap-2" 
+                    onClick={handleSave}
+                    disabled={loading}
+                  >
+                    <Save className="h-4 w-4" />
+                    {loading ? "Saving..." : "Save Changes"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="files">
+            <Card>
+              <CardHeader>
+                <CardTitle>Files & Documents</CardTitle>
+                <CardDescription>
+                  Manage your business documents and uploaded files
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">Uploaded Documents</h3>
+                  
+                  <div className="grid grid-cols-1 gap-4">
+                    {/* ABN Verification Document */}
+                    {abnVerificationUrl && (
+                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-blue-50 rounded-md">
+                            <FileText className="h-5 w-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium">ABN Verification</p>
+                            <p className="text-sm text-muted-foreground">
+                              Uploaded {new Date().toLocaleDateString()}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              gs://tap-loyalty-fb6d0/merchants/{merchantId}/verification
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 gap-1"
+                            onClick={() => window.open(abnVerificationUrl, '_blank')}
+                          >
+                            <Download className="h-4 w-4" />
+                            Download
+                          </Button>
+                          <Button variant="outline" size="sm" className="h-8 gap-1">
+                            <Upload className="h-4 w-4" />
+                            Replace
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Business Logo */}
+                    {logoUrl && (
+                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-blue-50 rounded-md">
+                            <Image className="h-5 w-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium">Business Logo</p>
+                            <p className="text-sm text-muted-foreground">
+                              Uploaded {new Date().toLocaleDateString()}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              gs://tap-loyalty-fb6d0/merchants/{merchantId}/logo
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 gap-1"
+                            onClick={() => window.open(logoUrl, '_blank')}
+                          >
+                            <Download className="h-4 w-4" />
+                            Download
+                          </Button>
+                          <Button variant="outline" size="sm" className="h-8 gap-1">
+                            <Upload className="h-4 w-4" />
+                            Replace
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Empty state if no files */}
+                {!abnVerificationUrl && !logoUrl && (
+                  <div className="bg-muted/30 rounded-lg p-8 text-center">
+                    <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-muted-foreground mb-4">
+                      No documents uploaded yet. Upload a file to get started.
+                    </p>
+                  </div>
+                )}
+
+                <Separator className="my-6" />
+
+                {/* Upload New Document Section */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">Upload New Document</h3>
+                  <div className="border rounded-md p-4 bg-gray-50">
+                    <div className="flex items-center justify-center w-full">
+                      <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-white hover:bg-gray-50">
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                          <Upload className="w-8 h-8 mb-2 text-gray-500" />
+                          <p className="mb-2 text-sm text-gray-500">
+                            <span className="font-semibold">Click to upload</span> or drag and drop
+                          </p>
+                          <p className="text-xs text-gray-500">PDF, PNG, JPG, DOCX (MAX. 10MB)</p>
+                          <p className="text-xs text-blue-600 mt-2">
+                            Files will be saved to: gs://tap-loyalty-fb6d0/merchants/{merchantId}/documents
+                          </p>
+                        </div>
+                        <input 
+                          type="file" 
+                          className="hidden" 
+                          accept=".pdf,.png,.jpg,.jpeg,.docx"
+                          onChange={handleDocumentFileChange}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end mt-6">
                   <Button 
                     className="gap-2" 
                     onClick={handleSave}

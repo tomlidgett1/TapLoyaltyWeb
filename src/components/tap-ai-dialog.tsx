@@ -1370,6 +1370,8 @@ export function TapAiDialog({
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [recognitionInstance, setRecognitionInstance] = useState<SpeechRecognition | null>(null)
+  // First, let's define a simpler state for messages
+  const [localMessages, setLocalMessages] = useState<Array<{role: string, content: string}>>([]);
 
   const currentMessages = conversations.find(c => c.id === currentConversation)?.messages || []
 
@@ -2304,83 +2306,38 @@ export function TapAiDialog({
   const sendMessageToAPI = async (message: string) => {
     console.log('sendMessageToAPI: Starting with message:', message);
     setIsLoading(true);
-    setError(null);
+    
+    // Add user message to local state immediately
+    setLocalMessages(prev => [...prev, { role: 'user', content: message }]);
     
     try {
-      // Add the user message to the UI immediately
-      console.log('sendMessageToAPI: Adding user message to UI');
-      const userMessage = {
-        id: `user-${Date.now()}`,
-        role: 'user',
-        content: message,
-        createdAt: new Date()
-      };
-      setMessages(prev => [...prev, userMessage]);
-      
-      // Call the OpenAI API through your server endpoint
-      console.log('sendMessageToAPI: Calling /api/ai endpoint');
+      // Call the OpenAI API
       const response = await fetch('/api/ai', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message }),
       });
-
-      console.log('sendMessageToAPI: Response status:', response.status);
       
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('sendMessageToAPI: Error response:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText
-        });
-        
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch (e) {
-          console.error('sendMessageToAPI: Failed to parse error response as JSON:', e);
-          errorData = { content: errorText || 'Failed to get AI response' };
-        }
-        
-        throw new Error(errorData.content || 'Failed to get AI response');
+        throw new Error('Failed to get AI response');
       }
-
-      console.log('sendMessageToAPI: Parsing response JSON');
+      
       const data = await response.json();
-      console.log('sendMessageToAPI: Response data:', data);
+      console.log('API response:', data);
       
-      // Add the AI response to the UI
-      console.log('sendMessageToAPI: Adding AI response to UI');
-      const aiMessage = {
-        id: `ai-${Date.now()}`,
-        role: 'assistant',
-        content: data.content,
-        createdAt: new Date()
-      };
-      setMessages(prev => [...prev, aiMessage]);
-      
-      return data.content;
+      // Add AI response to local state
+      setLocalMessages(prev => [...prev, { role: 'assistant', content: data.content }]);
     } catch (error) {
-      console.error('sendMessageToAPI: Error:', error);
-      setError(error instanceof Error ? error.message : 'Failed to get AI response');
+      console.error('Error:', error);
       
-      // Add a fallback message to the UI
-      console.log('sendMessageToAPI: Adding fallback error message to UI');
-      const errorMessage = {
-        id: `error-${Date.now()}`,
-        role: 'assistant',
-        content: error instanceof Error ? error.message : 'Failed to get AI response. Please try again.',
-        createdAt: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
-      
-      return null;
+      // Add error message to local state
+      setLocalMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: 'Sorry, there was an error processing your request. Please try again.' 
+      }]);
     } finally {
-      console.log('sendMessageToAPI: Completed');
       setIsLoading(false);
+      setInput('');
     }
   };
 
@@ -2526,10 +2483,15 @@ export function TapAiDialog({
 
             {/* Messages area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* Display messages from the current conversation */}
-              {currentConversation && currentMessages.map((message, index) => (
+              {/* Debug information */}
+              <div className="text-xs text-gray-400 mb-2">
+                Local messages count: {localMessages.length}
+              </div>
+              
+              {/* Display local messages */}
+              {localMessages.map((message, index) => (
                 <div 
-                  key={message.id || index} 
+                  key={index} 
                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div 
@@ -2539,39 +2501,22 @@ export function TapAiDialog({
                         : 'bg-gray-200 text-gray-900'
                     }`}
                   >
-                    {message.content}
+                    <div className="whitespace-pre-wrap">{message.content}</div>
                   </div>
                 </div>
               ))}
               
-              {/* Display messages from the thread-based approach */}
-              {!currentConversation && messages.map((message, index) => (
-                <div 
-                  key={message.id || index} 
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div 
-                    className={`max-w-[80%] p-3 rounded-lg ${
-                      message.role === 'user' 
-                        ? 'bg-blue-500 text-white' 
-                        : 'bg-gray-200 text-gray-900'
-                    }`}
-                  >
-                    {Array.isArray(message.content) 
-                      ? message.content.map((content, i) => (
-                          <div key={i} className="whitespace-pre-wrap">
-                            {content.type === 'text' ? content.text.value : '[Unsupported content]'}
-                          </div>
-                        ))
-                      : typeof message.content === 'string'
-                        ? message.content
-                        : '[Unsupported content format]'}
+              {/* Show a message if there are no messages */}
+              {localMessages.length === 0 && !isLoading && (
+                <div className="flex justify-center items-center h-full">
+                  <div className="text-center text-gray-500">
+                    <p>No messages yet. Start a conversation!</p>
                   </div>
                 </div>
-              ))}
+              )}
               
               {/* Loading indicator */}
-              {(loading || isLoading) && (
+              {isLoading && (
                 <div className="flex justify-center">
                   <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                 </div>

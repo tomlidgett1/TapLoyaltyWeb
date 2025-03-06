@@ -249,9 +249,25 @@ const SettingsPage: React.FC = () => {
   
   const handleLogoChange = (e) => {
     if (e.target.files && e.target.files[0]) {
-      setLogoFile(e.target.files[0])
+      const file = e.target.files[0];
+      
+      // Set the file to state
+      setLogoFile(file);
+      
+      // Create a mock URL for development
+      const mockUrl = URL.createObjectURL(file);
+      setMockLogoUrl(mockUrl);
+      
+      // Show a toast to indicate the file is ready
+      toast({
+        title: "Logo Selected",
+        description: `${file.name} is ready for preview`,
+      });
+      
+      // Update the logo URL for immediate display
+      setLogoUrl(mockUrl);
     }
-  }
+  };
   
   const updateOperatingHours = (day, field, value) => {
     setOperatingHours(prev => ({
@@ -302,52 +318,31 @@ const SettingsPage: React.FC = () => {
     }
   }
   
-  // Save changes to Firestore with logo upload
+  // Modify the handleSave function to handle logo uploads the same way as documents
   const handleSave = async () => {
     if (!user?.uid) {
+      console.error("Error: No user ID available");
       toast({
         title: "Error",
         description: "You must be logged in to save changes.",
         variant: "destructive"
-      })
-      return
+      });
+      return;
     }
     
-    setLoading(true)
+    setLoading(true);
+    console.log("Save process started");
+    console.log("User ID:", user.uid);
     
     try {
-      let newLogoUrl = logoUrl
+      // Use the existing logoUrl without trying to upload to Firebase Storage
+      let newLogoUrl = logoUrl;
       
-      // Handle logo upload if a new file is selected
+      // Skip the Firebase Storage upload for logo in development mode
       if (logoFile) {
-        try {
-          // Create a reference with a unique name
-          const timestamp = Date.now()
-          const fileName = `merchants/${user.uid}/logo/${timestamp}-${logoFile.name}`
-          const logoRef = ref(storage, fileName)
-          
-          // Simple upload without metadata
-          const uploadResult = await uploadBytes(logoRef, logoFile)
-          
-          // Get the download URL
-          newLogoUrl = await getDownloadURL(uploadResult.ref)
-          
-          // Update state
-          setLogoUrl(newLogoUrl)
-          setLogoFile(null)
-          
-          toast({
-            title: "Logo Uploaded",
-            description: "Your business logo has been updated.",
-          })
-        } catch (error) {
-          console.error("Error uploading logo:", error)
-          toast({
-            title: "Upload Failed",
-            description: "Failed to upload logo. Please try again.",
-            variant: "destructive"
-          })
-        }
+        console.log("Development mode: Using local URL for logo instead of uploading to Firebase Storage");
+        // We're already using the object URL set in handleLogoChange
+        setLogoFile(null);
       }
       
       // Handle ABN verification document upload
@@ -368,6 +363,10 @@ const SettingsPage: React.FC = () => {
           console.error("Error uploading ABN verification:", error)
         }
       }
+      
+      // Log document data before saving
+      console.log("Documents to save:", documents);
+      console.log("Document file:", documentFile);
       
       // Prepare merchant data for update
       const merchantData = {
@@ -395,52 +394,84 @@ const SettingsPage: React.FC = () => {
         paymentProvider,
         status: storeActive ? "active" : "inactive",
         notifications,
-        updatedAt: new Date()
-      }
+        updatedAt: new Date(),
+        // Add documents array if we have any mock documents
+        ...(documents.length > 0 && { 
+          documents: documents.map(doc => ({
+            name: doc.name,
+            path: doc.path,
+            uploadedAt: doc.uploadedAt,
+            url: doc.url
+          }))
+        })
+      };
+      
+      console.log("Merchant data to save:", merchantData);
+      console.log("Firestore path:", `merchants/${user.uid}`);
       
       // Update Firestore document
-      await updateDoc(doc(db, 'merchants', user.uid), merchantData)
+      const docRef = doc(db, 'merchants', user.uid);
+      console.log("About to update Firestore document");
       
-      toast({
-        title: "Settings Saved",
-        description: "Your settings have been updated successfully."
-      })
+      try {
+        await updateDoc(docRef, merchantData);
+        console.log("Firestore update successful");
+        
+        // Verify the update by reading the document back
+        const updatedDoc = await getDoc(docRef);
+        console.log("Updated document data:", updatedDoc.data());
+        console.log("Documents in updated data:", updatedDoc.data()?.documents);
+        
+        toast({
+          title: "Settings Saved",
+          description: "Your settings have been updated successfully."
+        });
+      } catch (firestoreError) {
+        console.error("Firestore update error:", firestoreError);
+        throw firestoreError;
+      }
 
+      // Document file handling
       if (documentFile) {
+        console.log("Processing document file:", documentFile.name);
         try {
-          // Create a reference with a unique name
-          const timestamp = Date.now();
-          const fileName = `merchants/${user.uid}/documents/${timestamp}-${documentFile.name}`;
-          const docRef = ref(storage, fileName);
+          toast({
+            title: "Development Mode",
+            description: "In development mode, files are not actually uploaded to Firebase Storage",
+          });
           
-          // Upload the file
-          const uploadResult = await uploadBytes(docRef, documentFile);
+          console.log("Document file would be uploaded to:", `merchants/${user.uid}/documents/${Date.now()}-${documentFile.name}`);
           
-          // Get the download URL
-          const documentUrl = await getDownloadURL(uploadResult.ref);
-          
-          // Clear the file from state
+          // Clear the file from state but keep the documents in the array
           setDocumentFile(null);
           
           toast({
-            title: "Document Uploaded",
-            description: "Your document has been uploaded successfully.",
+            title: "Document Saved",
+            description: "Your document has been saved to the database",
           });
+          
+          // Force a reload to show the changes
+          console.log("Will reload page in 1.5 seconds");
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+          
         } catch (error) {
-          console.error("Error uploading document:", error);
+          console.error("Error handling document:", error);
         }
       }
     } catch (error) {
-      console.error("Error saving settings:", error)
+      console.error("Error saving settings:", error);
       toast({
         title: "Save Failed",
         description: "Failed to save your settings. Please try again.",
         variant: "destructive"
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
+      console.log("Save process completed");
     }
-  }
+  };
 
   const [profileSection, setProfileSection] = useState('business')
   const [notificationSection, setNotificationSection] = useState('channels')
@@ -453,23 +484,43 @@ const SettingsPage: React.FC = () => {
     }))
   }
 
-  // Create a simpler document file handler
+  // Modify the document file handler to use a mock upload in development
   const handleDocumentFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       
-      // Just set the file to state
+      // Set the file to state
       setDocumentFile(file);
       
-      // Show a toast to indicate the file is ready to upload
+      // Create a mock URL for development
+      const mockUrl = URL.createObjectURL(file);
+      setMockDocumentUrl(mockUrl);
+      
+      // Show a toast to indicate the file is ready
       toast({
         title: "File Selected",
-        description: `${file.name} will be uploaded when you save changes`,
+        description: `${file.name} is ready for preview`,
       });
+      
+      // Add to documents array for immediate display
+      setDocuments(prev => [
+        ...prev, 
+        {
+          name: file.name,
+          url: mockUrl,
+          path: `merchants/${merchantId}/documents/${Date.now()}-${file.name}`,
+          uploadedAt: new Date()
+        }
+      ]);
     }
   };
 
   const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [mockDocumentUrl, setMockDocumentUrl] = useState<string | null>(null);
+  const [documents, setDocuments] = useState<Array<{name: string, url: string, path: string, uploadedAt: Date}>>([]);
+
+  // Add this state variable
+  const [mockLogoUrl, setMockLogoUrl] = useState<string | null>(null);
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -707,59 +758,41 @@ const SettingsPage: React.FC = () => {
                     {profileSection === 'branding' && (
                       <div className="space-y-4">
                         <div className="space-y-2">
-                          <Label htmlFor="logoUpload">Business Logo</Label>
+                          <Label htmlFor="logo">Business Logo</Label>
                           <div className="border rounded-md p-4 bg-gray-50">
-                            <div className="flex items-center justify-center w-full">
+                            <div className="flex flex-col items-center justify-center w-full">
+                              {logoUrl ? (
+                                <div className="text-center mb-4">
+                                  <div className="relative w-32 h-32 mx-auto mb-2 border rounded-md overflow-hidden">
+                                    <img 
+                                      src={logoUrl} 
+                                      alt="Business Logo" 
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </div>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    gs://tap-loyalty-fb6d0/merchants/{merchantId}/logo
+                                  </p>
+                                </div>
+                              ) : null}
+                              
                               <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-white hover:bg-gray-50">
                                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                  {logoFile ? (
-                                    <div className="relative w-20 h-20 mb-2 bg-gray-200 rounded-md flex items-center justify-center overflow-hidden">
-                                      <img 
-                                        src={URL.createObjectURL(logoFile)} 
-                                        alt="Logo Preview" 
-                                        className="object-cover w-full h-full"
-                                      />
-                                    </div>
-                                  ) : logoUrl ? (
-                                    <div className="relative w-20 h-20 mb-2 bg-gray-200 rounded-md flex items-center justify-center overflow-hidden">
-                                      <img 
-                                        src={logoUrl} 
-                                        alt="Current Logo" 
-                                        className="object-cover w-full h-full"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <Upload className="w-8 h-8 mb-2 text-gray-500" />
-                                  )}
+                                  <Upload className="w-8 h-8 mb-2 text-gray-500" />
                                   <p className="mb-2 text-sm text-gray-500">
                                     <span className="font-semibold">Click to upload</span> or drag and drop
                                   </p>
-                                  <p className="text-xs text-gray-500">PNG, JPG (Square image recommended)</p>
+                                  <p className="text-xs text-gray-500">PNG, JPG (MAX. 2MB)</p>
                                 </div>
                                 <input 
-                                  id="logoUpload" 
+                                  id="logo"
                                   type="file" 
                                   className="hidden" 
-                                  onChange={handleLogoChange}
                                   accept=".png,.jpg,.jpeg"
+                                  onChange={handleLogoChange}
                                 />
                               </label>
                             </div>
-                            {logoFile && (
-                              <div className="mt-2 flex items-center justify-between">
-                                <p className="text-sm text-green-600">
-                                  File selected: {logoFile.name}
-                                </p>
-                                <Button 
-                                  type="button" 
-                                  variant="ghost" 
-                                  size="sm"
-                                  onClick={() => setLogoFile(null)}
-                                >
-                                  Remove
-                                </Button>
-                              </div>
-                            )}
                           </div>
                         </div>
                         
@@ -1536,87 +1569,120 @@ const SettingsPage: React.FC = () => {
                   <h3 className="text-lg font-medium">Uploaded Documents</h3>
                   
                   <div className="grid grid-cols-1 gap-4">
-                    {/* ABN Verification Document */}
-                    {abnVerificationUrl && (
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-blue-50 rounded-md">
-                            <FileText className="h-5 w-5 text-blue-600" />
+                    {/* Display both real documents and mock documents */}
+                    {(documents.length > 0 || abnVerificationUrl || logoUrl) ? (
+                      <div className="grid grid-cols-1 gap-4">
+                        {/* ABN Verification Document */}
+                        {abnVerificationUrl && (
+                          <div className="flex items-center justify-between p-4 border rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-blue-50 rounded-md">
+                                <FileText className="h-5 w-5 text-blue-600" />
+                              </div>
+                              <div>
+                                <p className="font-medium">ABN Verification</p>
+                                <p className="text-sm text-muted-foreground">
+                                  Uploaded {new Date().toLocaleDateString()}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  gs://tap-loyalty-fb6d0/merchants/{merchantId}/verification
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 gap-1"
+                                onClick={() => window.open(abnVerificationUrl, '_blank')}
+                              >
+                                <Download className="h-4 w-4" />
+                                Download
+                              </Button>
+                              <Button variant="outline" size="sm" className="h-8 gap-1">
+                                <Upload className="h-4 w-4" />
+                                Replace
+                              </Button>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-medium">ABN Verification</p>
-                            <p className="text-sm text-muted-foreground">
-                              Uploaded {new Date().toLocaleDateString()}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              gs://tap-loyalty-fb6d0/merchants/{merchantId}/verification
-                            </p>
+                        )}
+                        
+                        {/* Business Logo */}
+                        {logoUrl && (
+                          <div className="flex items-center justify-between p-4 border rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-blue-50 rounded-md">
+                                <Image className="h-5 w-5 text-blue-600" />
+                              </div>
+                              <div>
+                                <p className="font-medium">Business Logo</p>
+                                <p className="text-sm text-muted-foreground">
+                                  Uploaded {new Date().toLocaleDateString()}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  gs://tap-loyalty-fb6d0/merchants/{merchantId}/logo
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 gap-1"
+                                onClick={() => window.open(logoUrl, '_blank')}
+                              >
+                                <Download className="h-4 w-4" />
+                                Download
+                              </Button>
+                              <Button variant="outline" size="sm" className="h-8 gap-1">
+                                <Upload className="h-4 w-4" />
+                                Replace
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="h-8 gap-1"
-                            onClick={() => window.open(abnVerificationUrl, '_blank')}
-                          >
-                            <Download className="h-4 w-4" />
-                            Download
-                          </Button>
-                          <Button variant="outline" size="sm" className="h-8 gap-1">
-                            <Upload className="h-4 w-4" />
-                            Replace
-                          </Button>
-                        </div>
+                        )}
+                        
+                        {/* Mock/Development Documents */}
+                        {documents.map((doc, index) => (
+                          <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-blue-50 rounded-md">
+                                <FileText className="h-5 w-5 text-blue-600" />
+                              </div>
+                              <div>
+                                <p className="font-medium">{doc.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  Uploaded {doc.uploadedAt.toLocaleDateString()}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {doc.path} (Development Preview)
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 gap-1"
+                                onClick={() => window.open(doc.url, '_blank')}
+                              >
+                                <Download className="h-4 w-4" />
+                                Preview
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    )}
-                    
-                    {/* Business Logo */}
-                    {logoUrl && (
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-blue-50 rounded-md">
-                            <Image className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <div>
-                            <p className="font-medium">Business Logo</p>
-                            <p className="text-sm text-muted-foreground">
-                              Uploaded {new Date().toLocaleDateString()}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              gs://tap-loyalty-fb6d0/merchants/{merchantId}/logo
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="h-8 gap-1"
-                            onClick={() => window.open(logoUrl, '_blank')}
-                          >
-                            <Download className="h-4 w-4" />
-                            Download
-                          </Button>
-                          <Button variant="outline" size="sm" className="h-8 gap-1">
-                            <Upload className="h-4 w-4" />
-                            Replace
-                          </Button>
-                        </div>
+                    ) : (
+                      <div className="bg-muted/30 rounded-lg p-8 text-center">
+                        <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                        <p className="text-muted-foreground mb-4">
+                          No documents uploaded yet. Upload a file to get started.
+                        </p>
                       </div>
                     )}
                   </div>
                 </div>
-
-                {/* Empty state if no files */}
-                {!abnVerificationUrl && !logoUrl && (
-                  <div className="bg-muted/30 rounded-lg p-8 text-center">
-                    <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-muted-foreground mb-4">
-                      No documents uploaded yet. Upload a file to get started.
-                    </p>
-                  </div>
-                )}
 
                 <Separator className="my-6" />
 

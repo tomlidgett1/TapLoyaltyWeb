@@ -165,6 +165,7 @@ const parseMessageContent = (content: string) => {
 // Now, let's create a component to render the reward card
 const RewardCard = ({ reward }: { reward: any }) => {
   const { toast } = useToast();
+  const [isExpanded, setIsExpanded] = useState(false);
   
   // Helper function to format condition text
   const formatCondition = (condition: any) => {
@@ -211,146 +212,155 @@ const RewardCard = ({ reward }: { reward: any }) => {
         return `${limitation.type}: ${JSON.stringify(limitation.value)}`;
     }
   };
-  
+
+  // Get the appropriate icon based on program type
+  const getProgramIcon = () => {
+    switch (reward.programtype) {
+      case 'coffee':
+        return <Coffee className="h-5 w-5" />;
+      case 'points':
+        return <Award className="h-5 w-5" />;
+      case 'voucher':
+        return <Gift className="h-5 w-5" />;
+      case 'discount':
+        return <DollarSign className="h-5 w-5" />;
+      default:
+        return <Gift className="h-5 w-5" />;
+    }
+  };
+
+  // Count conditions and limitations
+  const conditionsCount = reward.conditions?.length || 0;
+  const limitationsCount = reward.limitations?.length || 0;
+
   return (
-    <div className="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
-      {/* Header with program type indicator */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-400 p-1">
-        <div className="flex justify-between items-center px-3 py-1">
-          <div className="flex items-center">
-            {reward.programtype === 'coffee' && <Coffee className="h-4 w-4 text-white mr-2" />}
-            {reward.programtype === 'points' && <Award className="h-4 w-4 text-white mr-2" />}
-            {reward.programtype === 'voucher' && <Gift className="h-4 w-4 text-white mr-2" />}
-            {reward.programtype === 'discount' && <DollarSign className="h-4 w-4 text-white mr-2" />}
-            <span className="text-xs font-medium text-white uppercase tracking-wider">
-              {reward.programtype || 'Reward'} Program
-            </span>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      {/* Header - Clickable to expand/collapse */}
+      <div 
+        className="p-4 border-b border-gray-100 cursor-pointer transition-colors hover:bg-gray-50"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-[#007AFF]/10 flex items-center justify-center text-[#007AFF]">
+              {getProgramIcon()}
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">{reward.rewardName}</h3>
+              <p className="text-sm text-gray-500">{reward.description}</p>
+            </div>
           </div>
-          <Badge variant={reward.isActive ? "success" : "secondary"} className="text-xs">
-            {reward.isActive ? "Active" : "Inactive"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <div className="text-sm font-medium text-[#007AFF]">
+              {reward.pointsCost} points
+            </div>
+            {isExpanded ? (
+              <ChevronUp className="h-4 w-4 text-gray-400" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-gray-400" />
+            )}
+          </div>
         </div>
       </div>
       
-      {/* Main content */}
-      <div className="p-4">
-        <h3 className="text-lg font-bold text-gray-900 mb-2">{reward.rewardName}</h3>
-        <p className="text-gray-600 text-sm mb-4">{reward.description}</p>
-        
-        {/* Reward details */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="bg-blue-50 rounded-md p-2 flex items-center">
-            <DollarSign className="h-4 w-4 text-blue-500 mr-2" />
-            <div>
-              <div className="text-xs text-gray-500">Points Cost</div>
-              <div className="font-medium">{reward.pointsCost}</div>
-            </div>
+      {/* Expandable content */}
+      {isExpanded && (
+        <div className="p-4 bg-gray-50 border-b border-gray-100">
+          {/* Reward details summary */}
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            {reward.voucherAmount && (
+              <div className="bg-white rounded-lg p-3 flex items-center shadow-sm">
+                <Gift className="h-4 w-4 text-[#007AFF] mr-2" />
+                <div>
+                  <div className="text-xs text-gray-500">Voucher Amount</div>
+                  <div className="font-medium">${reward.voucherAmount}</div>
+                </div>
+              </div>
+            )}
+
+            {reward.delayedVisibility && (
+              <div className="bg-white rounded-lg p-3 flex items-center shadow-sm">
+                <Clock className="h-4 w-4 text-[#007AFF] mr-2" />
+                <div>
+                  <div className="text-xs text-gray-500">Delayed Visibility</div>
+                  <div className="font-medium">{reward.delayedVisibility.value} {reward.delayedVisibility.type}</div>
+                </div>
+              </div>
+            )}
           </div>
           
-          <div className="bg-purple-50 rounded-md p-2 flex items-center">
-            <Eye className="h-4 w-4 text-purple-500 mr-2" />
-            <div>
-              <div className="text-xs text-gray-500">Visibility</div>
-              <div className="font-medium">{reward.rewardVisibility}</div>
-            </div>
-          </div>
-          
-          {reward.voucherAmount && (
-            <div className="bg-green-50 rounded-md p-2 flex items-center">
-              <Gift className="h-4 w-4 text-green-500 mr-2" />
-              <div>
-                <div className="text-xs text-gray-500">Voucher Amount</div>
-                <div className="font-medium">${reward.voucherAmount}</div>
-              </div>
-            </div>
-          )}
-          
-          {reward.delayedVisibility && (
-            <div className="bg-amber-50 rounded-md p-2 flex items-center">
-              <Clock className="h-4 w-4 text-amber-500 mr-2" />
-              <div>
-                <div className="text-xs text-gray-500">Delayed Visibility</div>
-                <div className="font-medium">{reward.delayedVisibility.value} {reward.delayedVisibility.type}</div>
-              </div>
-            </div>
-          )}
-        </div>
-        
-        {/* Conditions */}
-        {reward.conditions && reward.conditions.length > 0 && (
-          <div className="mb-4">
-            <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
-              <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
-              Conditions
-            </h4>
-            <div className="bg-gray-50 rounded-md p-3">
-              <ul className="space-y-2">
+          {/* Conditions */}
+          {conditionsCount > 0 && (
+            <div className="mb-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">
+                Conditions ({conditionsCount})
+              </h4>
+              <div className="space-y-2">
                 {reward.conditions.map((condition: any, index: number) => (
-                  <li key={index} className="flex items-start text-sm">
-                    <div className="h-5 w-5 flex items-center justify-center mr-2">
-                      <div className="h-1.5 w-1.5 rounded-full bg-green-500"></div>
+                  <div key={index} className="bg-white rounded-lg p-3 flex items-start shadow-sm">
+                    <div className="h-5 w-5 flex items-center justify-center mr-2 text-[#007AFF]">
+                      <CheckCircle className="h-4 w-4" />
                     </div>
-                    <span className="text-gray-700">{formatCondition(condition)}</span>
-                  </li>
+                    <span className="text-sm text-gray-700">{formatCondition(condition)}</span>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
-          </div>
-        )}
-        
-        {/* Limitations */}
-        {reward.limitations && reward.limitations.length > 0 && (
-          <div className="mb-4">
-            <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
-              <Ban className="h-4 w-4 text-red-500 mr-1" />
-              Limitations
-            </h4>
-            <div className="bg-gray-50 rounded-md p-3">
-              <ul className="space-y-2">
+          )}
+
+          {/* Limitations */}
+          {limitationsCount > 0 && (
+            <div className="mb-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">
+                Limitations ({limitationsCount})
+              </h4>
+              <div className="space-y-2">
                 {reward.limitations.map((limitation: any, index: number) => (
-                  <li key={index} className="flex items-start text-sm">
-                    <div className="h-5 w-5 flex items-center justify-center mr-2">
-                      <div className="h-1.5 w-1.5 rounded-full bg-red-500"></div>
+                  <div key={index} className="bg-white rounded-lg p-3 flex items-start shadow-sm">
+                    <div className="h-5 w-5 flex items-center justify-center mr-2 text-amber-500">
+                      <Ban className="h-4 w-4" />
                     </div>
-                    <span className="text-gray-700">{formatLimitation(limitation)}</span>
-                  </li>
+                    <span className="text-sm text-gray-700">{formatLimitation(limitation)}</span>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
+          )}
+
+          {/* Action buttons */}
+          <div className="flex justify-end gap-2 mt-4">
+            <Button
+              size="sm" 
+              variant="outline" 
+              className="text-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(JSON.stringify(reward, null, 2));
+                toast({
+                  title: "Copied to clipboard",
+                  description: "Reward JSON copied to clipboard",
+                  duration: 3000
+                });
+              }}
+            >
+              <Pencil className="h-3 w-3 mr-1" />
+              Copy JSON
+            </Button>
+            <Button
+              size="sm"
+              className="bg-[#007AFF] hover:bg-[#0066CC] text-white text-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                setCreateRewardData(reward);
+                setEditDialogOpen(true);
+              }}
+            >
+              <Gift className="h-3 w-3 mr-1" />
+              Use This Reward
+            </Button>
           </div>
-        )}
-        
-        {/* Action buttons */}
-        <div className="flex justify-end gap-2 mt-4">
-          <Button 
-            size="sm" 
-            variant="outline" 
-            className="text-xs"
-            onClick={() => {
-              navigator.clipboard.writeText(JSON.stringify(reward, null, 2));
-              toast({
-                title: "Copied to clipboard",
-                description: "Reward JSON copied to clipboard",
-                duration: 3000
-              });
-            }}
-          >
-            <Pencil className="h-3 w-3 mr-1" />
-            Copy JSON
-          </Button>
-          <Button 
-            size="sm"
-            className="bg-blue-600 hover:bg-blue-700 text-xs"
-            onClick={() => {
-              setCreateRewardData(reward);
-              setEditDialogOpen(true);
-            }}
-          >
-            <Gift className="h-3 w-3 mr-1" />
-            Use This Reward
-          </Button>
         </div>
-      </div>
+      )}
     </div>
   );
 };
@@ -1078,7 +1088,6 @@ export function TapAiDialog({
   const { customers, loading: customersLoading } = useCustomers()
   const inputRef = useRef<HTMLInputElement>(null)
   const [renameDialogOpen, setRenameDialogOpen] = useState(false)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null)
   const [newTitle, setNewTitle] = useState("")
   const [mentionQuery, setMentionQuery] = useState("")
@@ -1289,8 +1298,8 @@ export function TapAiDialog({
     console.log('handleSubmit called with input:', input);
     
     if (input.trim() && !isLoading) {
-      const message = input.trim();
-      setInput('');
+    const message = input.trim();
+    setInput('');
       sendMessageToAPI(message);
     }
   };
@@ -1329,34 +1338,46 @@ export function TapAiDialog({
     }
   }
 
-  const handleDeleteConversation = async (convId: string) => {
-    if (!user?.uid) return
-
+  const handleDeleteConversation = async (conversationId: string) => {
+    console.log('Deleting conversation:', conversationId);
+    
     try {
-      await deleteDoc(doc(db, 'merchants', user.uid, 'chats', convId))
+      // Delete from Firestore
+      await deleteDoc(doc(db, 'conversations', conversationId));
       
-      setConversations(prev => prev.filter(conv => conv.id !== convId))
-      if (currentConversation === convId) {
-        const remaining = conversations.filter(conv => conv.id !== convId)
-        setCurrentConversation(remaining.length > 0 ? remaining[0].id : null)
-        if (remaining.length === 0) {
-          handleNewChat()
+      // Update local state
+      setConversations(prev => prev.filter(conv => conv.id !== conversationId));
+      
+      // If the deleted conversation was the current one, reset the state
+      if (currentConversation === conversationId) {
+        setCurrentConversation(null);
+        setThreadId(null);
+        setLocalMessages([]);
+        
+        // If there are other conversations, load the most recent one
+        if (conversations.length > 1) {
+          const nextConversation = conversations.find(conv => conv.id !== conversationId);
+          if (nextConversation) {
+            loadConversation(nextConversation.id);
+          }
         }
       }
 
       toast({
-        title: "Success",
-        description: "Conversation deleted successfully"
-      })
+        title: "Conversation deleted",
+        description: "The conversation has been permanently deleted.",
+        duration: 3000
+      });
     } catch (error) {
-      console.error('Error deleting conversation:', error)
+      console.error('Error deleting conversation:', error);
       toast({
         title: "Error",
-        description: "Failed to delete conversation",
-        variant: "destructive"
-      })
+        description: "Failed to delete conversation. Please try again.",
+        variant: "destructive",
+        duration: 3000
+      });
     }
-  }
+  };
 
   const handleNewChat = async () => {
     if (!user?.uid || !assistant) return
@@ -1707,9 +1728,9 @@ export function TapAiDialog({
       // If we already have a threadId, use it
       if (threadId) {
         console.log('Current threadId:', threadId);
-        return;
-      }
-      
+      return;
+    }
+    
       console.log('No threadId, creating new thread');
       
       // Create a simple first message to initialize the thread
@@ -2271,28 +2292,55 @@ export function TapAiDialog({
           {sidebarVisible && (
             <div className="w-64 border-r border-gray-200 h-full flex flex-col">
               <div className="p-3 border-b border-gray-200">
-                <Button 
+              <Button 
                   onClick={createNewConversation} 
-                  className="w-full justify-start gap-2"
+                  className="w-full justify-start gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white"
                   disabled={isLoading}
-                >
-                  <Plus className="h-4 w-4" />
+              >
+                <Plus className="h-4 w-4" />
                   New Chat
-                </Button>
+              </Button>
               </div>
               
               <ScrollArea className="flex-1">
                 <div className="p-2 space-y-1">
                   {conversations.map((conversation) => (
-                    <Button
-                      key={conversation.id}
-                      variant={currentConversation === conversation.id ? "secondary" : "ghost"}
-                      className="w-full justify-start text-left truncate h-auto py-2"
-                      onClick={() => loadConversation(conversation.id)}
-                    >
-                      <MessageSquare className="h-4 w-4 mr-2 flex-shrink-0" />
-                      <span className="truncate">{conversation.title}</span>
-                    </Button>
+                    <div key={conversation.id} className="relative group">
+                      <Button
+                        variant={currentConversation === conversation.id ? "secondary" : "ghost"}
+                        className="w-full justify-start text-left truncate h-auto py-2 pr-8"
+                        onClick={() => loadConversation(conversation.id)}
+                      >
+                        <MessageSquare className="h-4 w-4 mr-2 flex-shrink-0" />
+                        <span className="truncate">{conversation.title}</span>
+                      </Button>
+                        
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                            size="sm"
+                            className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                            <MoreHorizontal className="h-3 w-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedConversation(conversation.id);
+                              handleDeleteConversation(conversation.id);
+                              }}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                   ))}
                   
                   {conversations.length === 0 && (
@@ -2343,10 +2391,10 @@ export function TapAiDialog({
 
             {/* Messages area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* Debug information */}
-              <div className="text-xs text-gray-400 mb-2">
+              {/* Remove this debug information block */}
+              {/* <div className="text-xs text-gray-400 mb-2">
                 Local messages count: {localMessages.length}
-              </div>
+              </div> */}
               
               {/* Display local messages */}
               {localMessages.map((message, index) => {
@@ -2371,7 +2419,7 @@ export function TapAiDialog({
                           {parsedContent.beforeJson && (
                             <div className="bg-gray-200 text-gray-900 p-3 rounded-lg mb-2 whitespace-pre-wrap">
                               {parsedContent.beforeJson}
-                            </div>
+                          </div>
                           )}
                           
                           <RewardCard reward={parsedContent.jsonData} />
@@ -2379,9 +2427,9 @@ export function TapAiDialog({
                           {parsedContent.afterJson && (
                             <div className="bg-gray-200 text-gray-900 p-3 rounded-lg mt-2 whitespace-pre-wrap">
                               {parsedContent.afterJson}
-                            </div>
+                  </div>
                           )}
-                        </div>
+                </div>
                       ) : (
                         <div className="whitespace-pre-wrap">{message.content}</div>
                       )}
@@ -2493,34 +2541,6 @@ export function TapAiDialog({
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will permanently delete this conversation. This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setDeleteDialogOpen(false)}>
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => {
-                  if (selectedConversation) {
-                    handleDeleteConversation(selectedConversation)
-                    setDeleteDialogOpen(false)
-                    setSelectedConversation(null)
-                  }
-                }}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
 
         <Dialog open={pinDialogOpen} onOpenChange={setPinDialogOpen}>
           <DialogContent className="sm:max-w-[400px]">

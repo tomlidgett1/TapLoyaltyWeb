@@ -46,10 +46,6 @@
       {
         "variable": "NEXT_PUBLIC_OPENAI_AVAILABLE",
         "value": "true"
-      },
-      {
-        "variable": "OPENAI_API_KEY",
-        "value": "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"
       }
     ]
   },

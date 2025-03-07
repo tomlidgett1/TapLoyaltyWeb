@@ -280,13 +280,16 @@ export function OnboardingWizard() {
   const [rewardType, setRewardType] = useState('individual')
   const [expandedRewards, setExpandedRewards] = useState<Record<string, boolean>>({})
 
+  // First, let's fix the toggleRewardDetails function to ensure only one reward is expanded at a time
   const toggleRewardDetails = (rewardId: string) => {
-    console.log("Toggling reward details for:", rewardId);
-    console.log("Current expanded reward:", expandedRewardDetails);
-    setExpandedRewardDetails(prevExpanded => 
-      prevExpanded === rewardId ? null : rewardId
-    );
-  }
+    if (expandedRewardDetails === rewardId) {
+      // If clicking on already expanded reward, close it
+      setExpandedRewardDetails(null);
+    } else {
+      // Otherwise, open this one and close any others
+      setExpandedRewardDetails(rewardId);
+    }
+  };
 
   const handleRewardSelection = (rewardId: string, type: 'individual' | 'program') => {
     // Create a unique ID that includes both the reward ID and the type
@@ -703,8 +706,11 @@ export function OnboardingWizard() {
   // Add this state to track expanded reward details
   const [expandedRewardDetails, setExpandedRewardDetails] = useState<string | null>(null)
 
+  // Add a new state to track if the intro has been viewed
+  const [hasViewedIntro, setHasViewedIntro] = useState(false)
+
   return (
-    <div className="container max-w-5xl py-10">
+    <div className="container max-w-[1600px] py-10">
       {/* Exit button */}
       <Button
         variant="ghost"
@@ -716,54 +722,244 @@ export function OnboardingWizard() {
         <X className="h-4 w-4" />
       </Button>
       
-      <div className="mb-4 text-center">
+      {/* Welcome title section - centered above the grid */}
+      <div className="mb-8 text-center">
         <h1 className="text-2xl font-bold mb-1">Welcome to <span className="text-[#007AFF]">Tap Loyalty</span></h1>
         <p className="text-sm text-gray-500">Let's set up your loyalty program in just a few steps</p>
       </div>
       
-      {/* Progress indicator */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between max-w-xs mx-auto">
-          {Array.from({ length: totalSteps }).map((_, i) => (
-            <div key={i} className="flex items-center">
-              <div className="flex flex-col items-center">
-                <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm ${
-                  i + 1 === step ? "bg-[#007AFF] text-white" : 
-                  i + 1 < step ? "bg-green-100 text-green-600" : 
-                  "bg-gray-100 text-gray-400"
-                }`}>
-                  {i + 1 < step ? <CheckCircle className="h-4 w-4" /> : i + 1}
-                </div>
-                <div className={`h-1 w-12 mt-3 ${
-                  i + 1 < step ? "bg-green-500" : "bg-gray-200"
-                } ${i === totalSteps - 1 ? "opacity-0" : ""}`} />
-              </div>
-              {i < totalSteps - 1 && <div className="w-2"></div>}
-            </div>
-          ))}
+      {/* Grid layout */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+        {/* Empty column for left spacing */}
+        <div className="hidden md:block md:col-span-2">
+          {/* This creates space on the left */}
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {/* Main content - takes up 3/4 of the space */}
-        <div className="md:col-span-3">
+        
+        {/* Main setup module - centered */}
+        <div className={hasViewedIntro ? "md:col-span-7" : "md:col-span-8"}>
           <Card className="border-gray-200 shadow-sm">
-            <CardHeader className="py-3 px-4">
-              <CardTitle className="text-lg">
-                {step === 1 && "Reward Setup"}
-                {step === 2 && "Points Rules"}
-                {step === 3 && "Marketing Banner"}
-              </CardTitle>
-              <CardDescription className="text-xs">
-                {step === 1 && "Set up your loyalty program rewards"}
-                {step === 2 && "Define how customers earn points"}
-                {step === 3 && "Create a banner to promote your program"}
-              </CardDescription>
+            <CardHeader className="py-3 px-4 border-b">
+              {hasViewedIntro && (
+                <div className="flex items-center w-full">
+                  {/* Title section - only show when not on intro page */}
+                  <div className="flex-1">
+                    <CardTitle className="text-lg">
+                      {step === 1 && "Reward Setup"}
+                      {step === 2 && "Points Rules"}
+                      {step === 3 && "Marketing Banner"}
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      {step === 1 && "Set up your loyalty program rewards"}
+                      {step === 2 && "Define how customers earn points"}
+                      {step === 3 && "Create a banner to promote your program"}
+                    </CardDescription>
+                  </div>
+                  
+                  {/* Navigation buttons */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {(step > 1 || (step === 1 && hasViewedIntro)) ? (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          // If we're in a sub-step of the wizard (like 2.2)
+                          if (step === 1 && hasViewedIntro && wizardStep > 1) {
+                            // Go back to the previous wizard step
+                            setWizardStep(wizardStep - 1);
+                          } 
+                          // If we're on the first wizard step but after intro
+                          else if (step === 1 && hasViewedIntro && wizardStep === 1) {
+                            // Go back to intro
+                            setHasViewedIntro(false);
+                          }
+                          // Otherwise use the normal step navigation
+                          else {
+                            handleBack();
+                          }
+                        }}
+                      >
+                        Back
+                      </Button>
+                    ) : (
+                      <div>{/* Empty div to maintain the flex layout */}</div>
+                    )}
+                    
+                    <Button 
+                      onClick={handleNext}
+                      disabled={loading}
+                      className="bg-[#007AFF] hover:bg-[#0066CC]"
+                    >
+                      {loading ? (
+                        <div className="flex items-center gap-2">
+                          <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Processing...
+                        </div>
+                      ) : step === totalSteps ? (
+                        <>Complete Setup</>
+                      ) : (
+                        <>Next <ArrowRight className="ml-2 h-4 w-4" /></>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardHeader>
             
-            <CardContent className="space-y-4">
+            <CardContent className="pt-6 space-y-4">
               {/* Step 1: Create First Reward */}
-              {step === 1 && (
+              {step === 1 && !hasViewedIntro && (
+                <div className="space-y-8">
+                  <div className="bg-gradient-to-br from-blue-50 to-white p-6 rounded-lg border border-blue-100">
+                    <h3 className="text-xl font-semibold mb-4 text-blue-900">
+                      Welcome to{" "}
+                      <span className="font-bold" style={{ color: '#007AFF' }}>
+                        TAP
+                      </span>{" "}
+                      Loyalty
+                    </h3>
+                    
+                    {/* Apps Section */}
+                    <div className="grid md:grid-cols-2 gap-6 mb-8">
+                      <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
+                            <Store className="h-5 w-5 text-purple-600" />
+                          </div>
+                          <h4 className="font-medium text-purple-900">Merchant App</h4>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-3">
+                          Your dashboard to manage rewards, track customer engagement, and grow your business.
+                        </p>
+                        <ul className="space-y-2">
+                          {[
+                            "Create and manage rewards",
+                            "Track customer visits and points",
+                            "View analytics and insights",
+                            "Customize your loyalty program"
+                          ].map((item, i) => (
+                            <li key={i} className="flex items-start gap-2 text-sm">
+                              <CheckCircle className="h-4 w-4 text-purple-500 mt-0.5 flex-shrink-0" />
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
+                            <Users className="h-5 w-5 text-green-600" />
+                          </div>
+                          <h4 className="font-medium text-green-900">Consumer App</h4>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-3">
+                          Where customers discover businesses, earn points, and redeem rewards.
+                        </p>
+                        <ul className="space-y-2">
+                          {[
+                            "Earn points with every visit",
+                            "Discover local businesses",
+                            "Redeem exciting rewards",
+                            "Track points and progress"
+                          ].map((item, i) => (
+                            <li key={i} className="flex items-start gap-2 text-sm">
+                              <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* How It Works Section */}
+                    <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm mb-8">
+                      <h4 className="font-medium text-lg mb-4">How TAP Loyalty Works</h4>
+                      <div className="grid gap-6 md:grid-cols-3">
+                        <div className="text-center">
+                          <div className="h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-3">
+                            <Coffee className="h-6 w-6 text-amber-600" />
+                          </div>
+                          <h5 className="font-medium mb-2">1. Customer Visits</h5>
+                          <p className="text-sm text-gray-600">
+                            Customers visit your business and earn points through the TAP app
+                          </p>
+                        </div>
+
+                        <div className="text-center">
+                          <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-3">
+                            <Gift className="h-6 w-6 text-blue-600" />
+                          </div>
+                          <h5 className="font-medium mb-2">2. Points Accumulate</h5>
+                          <p className="text-sm text-gray-600">
+                            Points add up based on your custom rules and visit frequency
+                          </p>
+                        </div>
+
+                        <div className="text-center">
+                          <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+                            <Award className="h-6 w-6 text-green-600" />
+                          </div>
+                          <h5 className="font-medium mb-2">3. Reward Redemption</h5>
+                          <p className="text-sm text-gray-600">
+                            Customers redeem points for rewards you've created
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Features Overview */}
+                    <div className="space-y-4">
+                      <h4 className="font-medium text-lg">What You Can Create</h4>
+                      <div className="grid md:grid-cols-2 gap-4">
+                        {[
+                          {
+                            icon: <Gift className="h-5 w-5 text-pink-600" />,
+                            title: "Rewards",
+                            description: "Create enticing rewards that customers can redeem with their points"
+                          },
+                          {
+                            icon: <BarChart className="h-5 w-5 text-blue-600" />,
+                            title: "Points Rules",
+                            description: "Set how customers earn points with visits and purchases"
+                          },
+                          {
+                            icon: <Sparkles className="h-5 w-5 text-purple-600" />,
+                            title: "Programs",
+                            description: "Design special programs for new, existing, and loyal customers"
+                          },
+                          {
+                            icon: <Image className="h-5 w-5 text-green-600" />,
+                            title: "Marketing",
+                            description: "Create banners to promote your loyalty program"
+                          }
+                        ].map((feature, i) => (
+                          <div key={i} className="flex items-start gap-3 p-4 bg-white rounded-lg border border-gray-200">
+                            <div className="h-8 w-8 rounded-full bg-gray-50 flex items-center justify-center flex-shrink-0">
+                              {feature.icon}
+                            </div>
+                            <div>
+                              <h5 className="font-medium mb-1">{feature.title}</h5>
+                              <p className="text-sm text-gray-600">{feature.description}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Get Started Button */}
+                    <div className="mt-8 text-center">
+                      <Button
+                        onClick={() => setHasViewedIntro(true)}
+                        className="bg-[#007AFF] hover:bg-[#0066CC] text-white px-8"
+                      >
+                        Let's Get Started <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Original reward creation content - only show after intro */}
+              {step === 1 && hasViewedIntro && (
                 <div className="space-y-6">
                   <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                     <div className="flex items-center gap-3 mb-3">
@@ -781,38 +977,73 @@ export function OnboardingWizard() {
                     {/* Wizard Step 1: Industry Selection */}
                     {wizardStep === 1 && (
                       <div className="space-y-4">
-                        <h4 className="font-medium text-lg">Step 1: Select Your Industry</h4>
-                        <p className="text-sm text-gray-600 mb-4">
-                          We'll customize reward suggestions based on your business type
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium text-lg">Step 1: Select Your Industry</h4>
+                        </div>
+                        
+                        <p className="text-sm text-gray-600 mb-2">
+                          Choose the industry that best matches your business
                         </p>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <Button 
-                            variant="outline" 
-                            className={`h-auto py-6 flex flex-col items-center gap-3 ${selectedIndustry === 'cafe' ? 'border-blue-500 bg-blue-50' : ''}`}
-                            onClick={() => handleIndustrySelection('cafe')}
+                        <div className="space-y-3">
+                          <div 
+                            className={`flex items-center gap-3 p-4 bg-white rounded-md border ${
+                              selectedIndustry === 'cafe' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                            } cursor-pointer transition-colors`}
+                            onClick={() => setSelectedIndustry('cafe')}
                           >
-                            <Coffee className="h-8 w-8 text-amber-500" />
-                            <span>Café</span>
-                          </Button>
+                            <Coffee className="h-6 w-6 text-amber-500" />
+                            <div className="flex-1">
+                              <h5 className="font-medium">Café</h5>
+                              <p className="text-sm text-gray-500">Coffee shops, bakeries, and casual eateries</p>
+                            </div>
+                            {selectedIndustry === 'cafe' && (
+                              <CheckCircle className="h-5 w-5 text-green-600" />
+                            )}
+                          </div>
                           
-                          <Button 
-                            variant="outline" 
-                            className={`h-auto py-6 flex flex-col items-center gap-3 ${selectedIndustry === 'retail' ? 'border-blue-500 bg-blue-50' : ''}`}
-                            onClick={() => handleIndustrySelection('retail')}
+                          <div 
+                            className={`flex items-center gap-3 p-4 bg-white rounded-md border ${
+                              selectedIndustry === 'restaurant' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                            } cursor-pointer transition-colors`}
+                            onClick={() => setSelectedIndustry('restaurant')}
                           >
-                            <Store className="h-8 w-8 text-indigo-500" />
-                            <span>Retail</span>
-                          </Button>
+                            <Utensils className="h-6 w-6 text-red-500" />
+                            <div className="flex-1">
+                              <h5 className="font-medium">Restaurant</h5>
+                              <p className="text-sm text-gray-500">Full-service restaurants and dining establishments</p>
+                            </div>
+                            {selectedIndustry === 'restaurant' && (
+                              <CheckCircle className="h-5 w-5 text-green-600" />
+                            )}
+                          </div>
                           
-                          <Button 
-                            variant="outline" 
-                            className={`h-auto py-6 flex flex-col items-center gap-3 ${selectedIndustry === 'restaurant' ? 'border-blue-500 bg-blue-50' : ''}`}
-                            onClick={() => handleIndustrySelection('restaurant')}
+                          <div 
+                            className={`flex items-center gap-3 p-4 bg-white rounded-md border ${
+                              selectedIndustry === 'retail' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                            } cursor-pointer transition-colors`}
+                            onClick={() => setSelectedIndustry('retail')}
                           >
-                            <Utensils className="h-8 w-8 text-red-500" />
-                            <span>Restaurant</span>
-                          </Button>
+                            <Store className="h-6 w-6 text-blue-500" />
+                            <div className="flex-1">
+                              <h5 className="font-medium">Retail</h5>
+                              <p className="text-sm text-gray-500">Shops, boutiques, and retail stores</p>
+                            </div>
+                            {selectedIndustry === 'retail' && (
+                              <CheckCircle className="h-5 w-5 text-green-600" />
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="mt-4 p-3 bg-blue-50 rounded-md border border-blue-100">
+                          <p className="text-sm text-blue-700">
+                            <span className="font-medium">Selected: </span>
+                            {selectedIndustry ? (
+                              <span className="capitalize">{selectedIndustry}</span>
+                            ) : (
+                              "None"
+                            )}
+                          </p>
                         </div>
                       </div>
                     )}
@@ -878,100 +1109,548 @@ export function OnboardingWizard() {
                           {/* Show rewards based on the current customer category */}
                           {customerCategoryStep === 'new' && (
                             <>
-                              {/* New customer rewards */}
-                              <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
-                                <div 
-                                  className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
-                                    expandedRewardDetails === 'new-welcome-coffee' ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
-                                  }`}
-                                  onClick={() => toggleRewardDetails('new-welcome-coffee')}
-                                >
-                                  <Coffee className="h-6 w-6 text-green-500" />
-                                  <div className="flex-1">
-                                    <h5 className="font-medium">Welcome Coffee</h5>
-                                    <p className="text-sm text-gray-500">
-                                      Free coffee for first-time visitors
-                                    </p>
+                              {/* New customer rewards - displayed in a grid */}
+                              <div className="grid md:grid-cols-2 gap-4">
+                                {/* Welcome Coffee reward */}
+                                <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
+                                  <div 
+                                    className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
+                                      expandedRewardDetails === 'new-welcome-coffee' ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
+                                    }`}
+                                    onClick={() => toggleRewardDetails('new-welcome-coffee')}
+                                  >
+                                    <Coffee className="h-6 w-6 text-green-500" />
+                                    <div className="flex-1">
+                                      <h5 className="font-medium">Welcome Coffee</h5>
+                                      <p className="text-sm text-gray-500">
+                                        Enjoy a complimentary welcome coffee on your first visit! We're thrilled to have you!
+                                      </p>
+                                    </div>
+                                    {expandedRewardDetails === 'new-welcome-coffee' ? (
+                                      <ChevronUp className="h-5 w-5 text-gray-400" />
+                                    ) : (
+                                      <ChevronDown className="h-5 w-5 text-gray-400" />
+                                    )}
                                   </div>
-                                  {expandedRewardDetails === 'new-welcome-coffee' ? (
-                                    <ChevronUp className="h-5 w-5 text-gray-400" />
-                                  ) : (
-                                    <ChevronDown className="h-5 w-5 text-gray-400" />
+                                  
+                                  {expandedRewardDetails === 'new-welcome-coffee' && (
+                                    <div className="p-4 border-t border-gray-200 bg-gray-50">
+                                      <div className="space-y-4">
+                                        <div>
+                                          <h6 className="text-sm font-medium mb-2 flex items-center">
+                                            <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
+                                            Conditions
+                                          </h6>
+                                          <div className="bg-white p-3 rounded border border-gray-200">
+                                            <ul className="text-sm space-y-2">
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                </div>
+                                                <span>First visit only (1 transaction required)</span>
+                                              </li>
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                </div>
+                                                <span>0 points cost</span>
+                                              </li>
+                                            </ul>
+                                          </div>
+                                        </div>
+                                        
+                                        <div>
+                                          <h6 className="text-sm font-medium mb-2 flex items-center">
+                                            <Ban className="h-4 w-4 text-amber-600 mr-1" />
+                                            Limitations
+                                          </h6>
+                                          <div className="bg-white p-3 rounded border border-gray-200">
+                                            <ul className="text-sm space-y-2">
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                </div>
+                                                <span>Limited to 1 per customer</span>
+                                              </li>
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                </div>
+                                                <span>Total redemption limit: 1000</span>
+                                              </li>
+                                            </ul>
+                                          </div>
+                                        </div>
+                                        
+                                        <Button 
+                                          className={`w-full ${
+                                            wizardSelectedRewards.includes('new-welcome-coffee') 
+                                              ? "bg-green-600 hover:bg-green-700" 
+                                              : "bg-[#007AFF] hover:bg-[#0066CC]"
+                                          } text-white`}
+                                          onClick={() => handleRewardTypeSelection('new-welcome-coffee')}
+                                        >
+                                          {wizardSelectedRewards.includes('new-welcome-coffee') 
+                                            ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
+                                            : "Select This Reward"
+                                          }
+                                        </Button>
+                                      </div>
+                                    </div>
                                   )}
                                 </div>
-                                
-                                {expandedRewardDetails === 'new-welcome-coffee' && (
-                                  <div className="p-4 border-t border-gray-200 bg-gray-50">
-                                    <div className="space-y-4">
-                                      <div>
-                                        <h6 className="text-sm font-medium mb-2 flex items-center">
-                                          <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
-                                          Conditions
-                                        </h6>
-                                        <div className="bg-white p-3 rounded border border-gray-200">
-                                          <ul className="text-sm space-y-2">
-                                            <li className="flex items-start gap-2">
-                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                              </div>
-                                              <span>First visit only (0 transactions required)</span>
-                                            </li>
-                                            <li className="flex items-start gap-2">
-                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                              </div>
-                                              <span>0 points cost</span>
-                                            </li>
-                                          </ul>
-                                        </div>
-                                      </div>
-                                      
-                                      <div>
-                                        <h6 className="text-sm font-medium mb-2 flex items-center">
-                                          <Ban className="h-4 w-4 text-amber-600 mr-1" />
-                                          Limitations
-                                        </h6>
-                                        <div className="bg-white p-3 rounded border border-gray-200">
-                                          <ul className="text-sm space-y-2">
-                                            <li className="flex items-start gap-2">
-                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                              </div>
-                                              <span>Limited to 1 per customer</span>
-                                            </li>
-                                            <li className="flex items-start gap-2">
-                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                              </div>
-                                              <span>Total redemption limit: 100</span>
-                                            </li>
-                                          </ul>
-                                        </div>
-                                      </div>
-                                      
-                                      <Button 
-                                        className={`w-full ${
-                                          wizardSelectedRewards.includes('new-welcome-coffee') 
-                                            ? "bg-green-600 hover:bg-green-700" 
-                                            : "bg-[#007AFF] hover:bg-[#0066CC]"
-                                        } text-white`}
-                                        onClick={() => handleRewardTypeSelection('new-welcome-coffee')}
-                                      >
-                                        {wizardSelectedRewards.includes('new-welcome-coffee') 
-                                          ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
-                                          : "Select This Reward"
-                                        }
-                                      </Button>
+
+                                {/* Buy One Get One reward */}
+                                <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
+                                  <div 
+                                    className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
+                                      expandedRewardDetails === 'new-bogo' ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
+                                    }`}
+                                    onClick={() => toggleRewardDetails('new-bogo')}
+                                  >
+                                    <Coffee className="h-6 w-6 text-amber-500" />
+                                    <div className="flex-1">
+                                      <h5 className="font-medium">Buy One Get One</h5>
+                                      <p className="text-sm text-gray-500">
+                                        Purchase any coffee and get a second coffee absolutely free! Treat a friend or just indulge yourself.
+                                      </p>
                                     </div>
+                                    {expandedRewardDetails === 'new-bogo' ? (
+                                      <ChevronUp className="h-5 w-5 text-gray-400" />
+                                    ) : (
+                                      <ChevronDown className="h-5 w-5 text-gray-400" />
+                                    )}
                                   </div>
-                                )}
+                                  
+                                  {expandedRewardDetails === 'new-bogo' && (
+                                    <div className="p-4 border-t border-gray-200 bg-gray-50">
+                                      <div className="space-y-4">
+                                        <div>
+                                          <h6 className="text-sm font-medium mb-2 flex items-center">
+                                            <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
+                                            Conditions
+                                          </h6>
+                                          <div className="bg-white p-3 rounded border border-gray-200">
+                                            <ul className="text-sm space-y-2">
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                </div>
+                                                <span>First visit only (1 transaction required)</span>
+                                              </li>
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                </div>
+                                                <span>0 points cost</span>
+                                              </li>
+                                            </ul>
+                                          </div>
+                                        </div>
+                                        
+                                        <div>
+                                          <h6 className="text-sm font-medium mb-2 flex items-center">
+                                            <Ban className="h-4 w-4 text-amber-600 mr-1" />
+                                            Limitations
+                                          </h6>
+                                          <div className="bg-white p-3 rounded border border-gray-200">
+                                            <ul className="text-sm space-y-2">
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                </div>
+                                                <span>Limited to 1 per customer</span>
+                                              </li>
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                </div>
+                                                <span>Total redemption limit: 1000</span>
+                                              </li>
+                                            </ul>
+                                          </div>
+                                        </div>
+                                        
+                                        <Button 
+                                          className={`w-full ${
+                                            wizardSelectedRewards.includes('new-bogo') 
+                                              ? "bg-green-600 hover:bg-green-700" 
+                                              : "bg-[#007AFF] hover:bg-[#0066CC]"
+                                          } text-white`}
+                                          onClick={() => handleRewardTypeSelection('new-bogo')}
+                                        >
+                                          {wizardSelectedRewards.includes('new-bogo') 
+                                            ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
+                                            : "Select This Reward"
+                                          }
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Free Pastry reward */}
+                                <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
+                                  <div 
+                                    className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
+                                      expandedRewardDetails === 'new-free-pastry' ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
+                                    }`}
+                                    onClick={() => toggleRewardDetails('new-free-pastry')}
+                                  >
+                                    <Cake className="h-6 w-6 text-pink-500" />
+                                    <div className="flex-1">
+                                      <h5 className="font-medium">Free Pastry</h5>
+                                      <p className="text-sm text-gray-500">
+                                        Buy any drink and enjoy a free pastry! A perfect pairing to brighten your day.
+                                      </p>
+                                    </div>
+                                    {expandedRewardDetails === 'new-free-pastry' ? (
+                                      <ChevronUp className="h-5 w-5 text-gray-400" />
+                                    ) : (
+                                      <ChevronDown className="h-5 w-5 text-gray-400" />
+                                    )}
+                                  </div>
+                                  
+                                  {expandedRewardDetails === 'new-free-pastry' && (
+                                    <div className="p-4 border-t border-gray-200 bg-gray-50">
+                                      <div className="space-y-4">
+                                        <div>
+                                          <h6 className="text-sm font-medium mb-2 flex items-center">
+                                            <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
+                                            Conditions
+                                          </h6>
+                                          <div className="bg-white p-3 rounded border border-gray-200">
+                                            <ul className="text-sm space-y-2">
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                </div>
+                                                <span>First visit only (1 transaction required)</span>
+                                              </li>
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                </div>
+                                                <span>0 points cost</span>
+                                              </li>
+                                            </ul>
+                                          </div>
+                                        </div>
+                                        
+                                        <div>
+                                          <h6 className="text-sm font-medium mb-2 flex items-center">
+                                            <Ban className="h-4 w-4 text-amber-600 mr-1" />
+                                            Limitations
+                                          </h6>
+                                          <div className="bg-white p-3 rounded border border-gray-200">
+                                            <ul className="text-sm space-y-2">
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                </div>
+                                                <span>Limited to 1 per customer</span>
+                                              </li>
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                </div>
+                                                <span>Total redemption limit: 1000</span>
+                                              </li>
+                                            </ul>
+                                          </div>
+                                        </div>
+                                        
+                                        <Button 
+                                          className={`w-full ${
+                                            wizardSelectedRewards.includes('new-free-pastry') 
+                                              ? "bg-green-600 hover:bg-green-700" 
+                                              : "bg-[#007AFF] hover:bg-[#0066CC]"
+                                          } text-white`}
+                                          onClick={() => handleRewardTypeSelection('new-free-pastry')}
+                                        >
+                                          {wizardSelectedRewards.includes('new-free-pastry') 
+                                            ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
+                                            : "Select This Reward"
+                                          }
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Coffee Loyalty Card reward */}
+                                <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
+                                  <div 
+                                    className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
+                                      expandedRewardDetails === 'new-loyalty-card' ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
+                                    }`}
+                                    onClick={() => toggleRewardDetails('new-loyalty-card')}
+                                  >
+                                    <Award className="h-6 w-6 text-blue-500" />
+                                    <div className="flex-1">
+                                      <h5 className="font-medium">Coffee Loyalty Card</h5>
+                                      <p className="text-sm text-gray-500">
+                                        Receive a loyalty card on your first visit. Buy 5 coffees and get the 6th one free!
+                                      </p>
+                                    </div>
+                                    {expandedRewardDetails === 'new-loyalty-card' ? (
+                                      <ChevronUp className="h-5 w-5 text-gray-400" />
+                                    ) : (
+                                      <ChevronDown className="h-5 w-5 text-gray-400" />
+                                    )}
+                                  </div>
+                                  
+                                  {expandedRewardDetails === 'new-loyalty-card' && (
+                                    <div className="p-4 border-t border-gray-200 bg-gray-50">
+                                      <div className="space-y-4">
+                                        <div>
+                                          <h6 className="text-sm font-medium mb-2 flex items-center">
+                                            <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
+                                            Conditions
+                                          </h6>
+                                          <div className="bg-white p-3 rounded border border-gray-200">
+                                            <ul className="text-sm space-y-2">
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                </div>
+                                                <span>First visit only (1 transaction required)</span>
+                                              </li>
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                </div>
+                                                <span>0 points cost</span>
+                                              </li>
+                                            </ul>
+                                          </div>
+                                        </div>
+                                        
+                                        <div>
+                                          <h6 className="text-sm font-medium mb-2 flex items-center">
+                                            <Ban className="h-4 w-4 text-amber-600 mr-1" />
+                                            Limitations
+                                          </h6>
+                                          <div className="bg-white p-3 rounded border border-gray-200">
+                                            <ul className="text-sm space-y-2">
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                </div>
+                                                <span>Limited to 1 per customer</span>
+                                              </li>
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                </div>
+                                                <span>Total redemption limit: 1000</span>
+                                              </li>
+                                            </ul>
+                                          </div>
+                                        </div>
+                                        
+                                        <Button 
+                                          className={`w-full ${
+                                            wizardSelectedRewards.includes('new-loyalty-card') 
+                                              ? "bg-green-600 hover:bg-green-700" 
+                                              : "bg-[#007AFF] hover:bg-[#0066CC]"
+                                          } text-white`}
+                                          onClick={() => handleRewardTypeSelection('new-loyalty-card')}
+                                        >
+                                          {wizardSelectedRewards.includes('new-loyalty-card') 
+                                            ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
+                                            : "Select This Reward"
+                                          }
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* 10% Off First Purchase reward */}
+                                <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
+                                  <div 
+                                    className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
+                                      expandedRewardDetails === 'new-discount' ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
+                                    }`}
+                                    onClick={() => toggleRewardDetails('new-discount')}
+                                  >
+                                    <Percent className="h-6 w-6 text-green-500" />
+                                    <div className="flex-1">
+                                      <h5 className="font-medium">10% Off First Purchase</h5>
+                                      <p className="text-sm text-gray-500">
+                                        Enjoy 10% off your first purchase! That's our way of saying welcome.
+                                      </p>
+                                    </div>
+                                    {expandedRewardDetails === 'new-discount' ? (
+                                      <ChevronUp className="h-5 w-5 text-gray-400" />
+                                    ) : (
+                                      <ChevronDown className="h-5 w-5 text-gray-400" />
+                                    )}
+                                  </div>
+                                  
+                                  {expandedRewardDetails === 'new-discount' && (
+                                    <div className="p-4 border-t border-gray-200 bg-gray-50">
+                                      <div className="space-y-4">
+                                        <div>
+                                          <h6 className="text-sm font-medium mb-2 flex items-center">
+                                            <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
+                                            Conditions
+                                          </h6>
+                                          <div className="bg-white p-3 rounded border border-gray-200">
+                                            <ul className="text-sm space-y-2">
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                </div>
+                                                <span>First visit only (1 transaction required)</span>
+                                              </li>
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                </div>
+                                                <span>0 points cost</span>
+                                              </li>
+                                            </ul>
+                                          </div>
+                                        </div>
+                                        
+                                        <div>
+                                          <h6 className="text-sm font-medium mb-2 flex items-center">
+                                            <Ban className="h-4 w-4 text-amber-600 mr-1" />
+                                            Limitations
+                                          </h6>
+                                          <div className="bg-white p-3 rounded border border-gray-200">
+                                            <ul className="text-sm space-y-2">
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                </div>
+                                                <span>Limited to 1 per customer</span>
+                                              </li>
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                </div>
+                                                <span>Total redemption limit: 1000</span>
+                                              </li>
+                                            </ul>
+                                          </div>
+                                        </div>
+                                        
+                                        <Button 
+                                          className={`w-full ${
+                                            wizardSelectedRewards.includes('new-discount') 
+                                              ? "bg-green-600 hover:bg-green-700" 
+                                              : "bg-[#007AFF] hover:bg-[#0066CC]"
+                                          } text-white`}
+                                          onClick={() => handleRewardTypeSelection('new-discount')}
+                                        >
+                                          {wizardSelectedRewards.includes('new-discount') 
+                                            ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
+                                            : "Select This Reward"
+                                          }
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Referral Coffee Discount reward */}
+                                <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
+                                  <div 
+                                    className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
+                                      expandedRewardDetails === 'new-referral' ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
+                                    }`}
+                                    onClick={() => toggleRewardDetails('new-referral')}
+                                  >
+                                    <Users className="h-6 w-6 text-purple-500" />
+                                    <div className="flex-1">
+                                      <h5 className="font-medium">Referral Coffee Discount</h5>
+                                      <p className="text-sm text-gray-500">
+                                        Refer a friend and both enjoy 15% off your next coffee! Share the joy of coffee.
+                                      </p>
+                                    </div>
+                                    {expandedRewardDetails === 'new-referral' ? (
+                                      <ChevronUp className="h-5 w-5 text-gray-400" />
+                                    ) : (
+                                      <ChevronDown className="h-5 w-5 text-gray-400" />
+                                    )}
+                                  </div>
+                                  
+                                  {expandedRewardDetails === 'new-referral' && (
+                                    <div className="p-4 border-t border-gray-200 bg-gray-50">
+                                      <div className="space-y-4">
+                                        <div>
+                                          <h6 className="text-sm font-medium mb-2 flex items-center">
+                                            <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
+                                            Conditions
+                                          </h6>
+                                          <div className="bg-white p-3 rounded border border-gray-200">
+                                            <ul className="text-sm space-y-2">
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                </div>
+                                                <span>First visit only (1 transaction required)</span>
+                                              </li>
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                </div>
+                                                <span>0 points cost</span>
+                                              </li>
+                                            </ul>
+                                          </div>
+                                        </div>
+                                        
+                                        <div>
+                                          <h6 className="text-sm font-medium mb-2 flex items-center">
+                                            <Ban className="h-4 w-4 text-amber-600 mr-1" />
+                                            Limitations
+                                          </h6>
+                                          <div className="bg-white p-3 rounded border border-gray-200">
+                                            <ul className="text-sm space-y-2">
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                </div>
+                                                <span>Limited to 1 per customer</span>
+                                              </li>
+                                              <li className="flex items-start gap-2">
+                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                </div>
+                                                <span>Total redemption limit: 1000</span>
+                                              </li>
+                                            </ul>
+                                          </div>
+                                        </div>
+                                        
+                                        <Button 
+                                          className={`w-full ${
+                                            wizardSelectedRewards.includes('new-referral') 
+                                              ? "bg-green-600 hover:bg-green-700" 
+                                              : "bg-[#007AFF] hover:bg-[#0066CC]"
+                                          } text-white`}
+                                          onClick={() => handleRewardTypeSelection('new-referral')}
+                                        >
+                                          {wizardSelectedRewards.includes('new-referral') 
+                                            ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
+                                            : "Select This Reward"
+                                          }
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </>
                           )}
                           
                           {customerCategoryStep === 'existing' && (
                             <>
-                              {/* Existing customer rewards will go here */}
+                              {/* Existing customer rewards */}
                               <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
                                 <div 
                                   className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
@@ -993,16 +1672,78 @@ export function OnboardingWizard() {
                                   )}
                                 </div>
                                 
-                                {/* Expanded details for this reward */}
+                                {expandedRewardDetails === 'existing-discount' && (
+                                  <div className="p-4 border-t border-gray-200 bg-gray-50">
+                                    <div className="space-y-4">
+                                      <div>
+                                        <h6 className="text-sm font-medium mb-2 flex items-center">
+                                          <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
+                                          Conditions
+                                        </h6>
+                                        <div className="bg-white p-3 rounded border border-gray-200">
+                                          <ul className="text-sm space-y-2">
+                                            <li className="flex items-start gap-2">
+                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                              </div>
+                                              <span>Minimum 5 transactions required</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                              </div>
+                                              <span>300 points cost</span>
+                                            </li>
+                                          </ul>
+                                        </div>
+                                      </div>
+                                      
+                                      <div>
+                                        <h6 className="text-sm font-medium mb-2 flex items-center">
+                                          <Ban className="h-4 w-4 text-amber-600 mr-1" />
+                                          Limitations
+                                        </h6>
+                                        <div className="bg-white p-3 rounded border border-gray-200">
+                                          <ul className="text-sm space-y-2">
+                                            <li className="flex items-start gap-2">
+                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                              </div>
+                                              <span>Limited to 1 per customer per month</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                              </div>
+                                              <span>Valid for 30 days after redemption</span>
+                                            </li>
+                                          </ul>
+                                        </div>
+                                      </div>
+                                      
+                                      <Button 
+                                        className={`w-full ${
+                                          wizardSelectedRewards.includes('existing-discount') 
+                                            ? "bg-green-600 hover:bg-green-700" 
+                                            : "bg-[#007AFF] hover:bg-[#0066CC]"
+                                        } text-white`}
+                                        onClick={() => handleRewardTypeSelection('existing-discount')}
+                                      >
+                                        {wizardSelectedRewards.includes('existing-discount') 
+                                          ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
+                                          : "Select This Reward"
+                                        }
+                                      </Button>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                              
-                              {/* Add more existing customer rewards */}
                             </>
                           )}
                           
                           {customerCategoryStep === 'loyal' && (
                             <>
-                              {/* Loyal customer rewards will go here */}
+                              {/* Loyal customer rewards */}
                               <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
                                 <div 
                                   className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
@@ -1024,10 +1765,72 @@ export function OnboardingWizard() {
                                   )}
                                 </div>
                                 
-                                {/* Expanded details for this reward */}
+                                {expandedRewardDetails === 'loyal-vip' && (
+                                  <div className="p-4 border-t border-gray-200 bg-gray-50">
+                                    <div className="space-y-4">
+                                      <div>
+                                        <h6 className="text-sm font-medium mb-2 flex items-center">
+                                          <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
+                                          Conditions
+                                        </h6>
+                                        <div className="bg-white p-3 rounded border border-gray-200">
+                                          <ul className="text-sm space-y-2">
+                                            <li className="flex items-start gap-2">
+                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                              </div>
+                                              <span>Minimum 20 transactions required</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                              </div>
+                                              <span>750 points cost</span>
+                                            </li>
+                                          </ul>
+                                        </div>
+                                      </div>
+                                      
+                                      <div>
+                                        <h6 className="text-sm font-medium mb-2 flex items-center">
+                                          <Ban className="h-4 w-4 text-amber-600 mr-1" />
+                                          Limitations
+                                        </h6>
+                                        <div className="bg-white p-3 rounded border border-gray-200">
+                                          <ul className="text-sm space-y-2">
+                                            <li className="flex items-start gap-2">
+                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                              </div>
+                                              <span>Limited to 1 per customer per quarter</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                              </div>
+                                              <span>Valid for 60 days after redemption</span>
+                                            </li>
+                                          </ul>
+                                        </div>
+                                      </div>
+                                      
+                                      <Button 
+                                        className={`w-full ${
+                                          wizardSelectedRewards.includes('loyal-vip') 
+                                            ? "bg-green-600 hover:bg-green-700" 
+                                            : "bg-[#007AFF] hover:bg-[#0066CC]"
+                                        } text-white`}
+                                        onClick={() => handleRewardTypeSelection('loyal-vip')}
+                                      >
+                                        {wizardSelectedRewards.includes('loyal-vip') 
+                                          ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
+                                          : "Select This Reward"
+                                        }
+                                      </Button>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                              
-                              {/* Add more loyal customer rewards */}
                             </>
                           )}
                         </div>
@@ -1311,145 +2114,119 @@ export function OnboardingWizard() {
                 </div>
               )}
             </CardContent>
-            
-            <CardFooter className="flex justify-between border-t p-6">
-              <Button
-                variant="outline"
-                onClick={handleBack}
-              >
-                Back
-              </Button>
-              
-              <Button 
-                onClick={handleNext}
-                disabled={loading}
-                className="bg-[#007AFF] hover:bg-[#0066CC]"
-              >
-                {loading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Processing...
-                  </div>
-                ) : step === totalSteps ? (
-                  <>Complete Setup</>
-                ) : (
-                  <>Next <ArrowRight className="ml-2 h-4 w-4" /></>
-                )}
-              </Button>
-            </CardFooter>
           </Card>
         </div>
         
-        {/* Checklist sidebar - takes up 1/4 of the space */}
-        <div className="md:col-span-1">
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
-            <h3 className="text-lg font-medium mb-4">Your Setup Progress</h3>
-            
-            <div className="space-y-3">
-              {/* Reward creation status */}
-              <div className="flex items-center gap-3">
-                <div className={`h-6 w-6 rounded-full flex items-center justify-center ${
-                  businessData.selectedRewards.length > 0 ? "bg-green-100" : "bg-gray-100"
-                }`}>
-                  {businessData.selectedRewards.length > 0 ? (
-                    <Check className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <span className="h-4 w-4" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <p className={`text-sm ${businessData.selectedRewards.length > 0 ? "text-gray-900" : "text-gray-500"}`}>
-                    Selected Rewards ({businessData.selectedRewards.length})
-                  </p>
-                  {businessData.selectedRewards.length > 0 && (
-                    <div className="mt-1 space-y-1">
-                      {businessData.selectedRewards.map((reward) => (
-                        <div key={reward.id} className="flex items-center gap-1">
-                          <span className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0"></span>
-                          <p className="text-xs text-gray-600 truncate">{reward.name}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
+        {/* Progress bar - only show when not on intro page */}
+        {hasViewedIntro && (
+          <div className="md:col-span-3">
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5 sticky top-6">
+              <h3 className="text-lg font-medium mb-4">Your Setup Progress</h3>
               
-              {/* Points rule status */}
-              <div className="flex items-center gap-3">
-                <div className={`h-6 w-6 rounded-full flex items-center justify-center ${
-                  businessData.hasSetupPointsRule ? "bg-green-100" : "bg-gray-100"
-                }`}>
-                  {businessData.hasSetupPointsRule ? (
-                    <Check className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <span className="h-4 w-4" />
-                  )}
+              {/* Add step indicator at the top */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-600">Progress</span>
+                  <span className="text-sm font-medium text-[#007AFF]">Step {step} of {totalSteps}</span>
                 </div>
-                <div className="flex-1">
-                  <p className={`text-sm ${businessData.hasSetupPointsRule ? "text-gray-900" : "text-gray-500"}`}>
-                    Set Up Points Rules
-                  </p>
-                  {businessData.pointsRuleDetails && (
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {businessData.pointsRuleDetails.name}
-                    </p>
-                  )}
-                </div>
-              </div>
-              
-              {/* Banner status */}
-              <div className="flex items-center gap-3">
-                <div className={`h-6 w-6 rounded-full flex items-center justify-center ${
-                  businessData.hasSetupBanner ? "bg-green-100" : "bg-gray-100"
-                }`}>
-                  {businessData.hasSetupBanner ? (
-                    <Check className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <span className="h-4 w-4" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <p className={`text-sm ${businessData.hasSetupBanner ? "text-gray-900" : "text-gray-500"}`}>
-                    Create Homepage Banner
-                  </p>
-                  {businessData.bannerDetails && (
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {businessData.bannerDetails.name}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-            
-            {/* Summary section */}
-            <div className="mt-6 pt-4 border-t border-gray-200">
-              <h4 className="text-sm font-medium mb-2">Setup Summary</h4>
-              <div className="bg-blue-50 rounded-md p-3">
-                <p className="text-xs text-blue-700">
-                  <span className="font-medium">
-                    {[
-                      businessData.selectedRewards.length > 0 && "Rewards",
-                      businessData.hasSetupPointsRule && "Points Rules",
-                      businessData.hasSetupBanner && "Banner"
-                    ].filter(Boolean).join(", ") || "No items"} 
-                  </span> 
-                  {[businessData.selectedRewards.length > 0, businessData.hasSetupPointsRule, businessData.hasSetupBanner].some(Boolean) 
-                    ? " completed"
-                    : " completed yet"}
-                </p>
-                <div className="w-full bg-blue-200 rounded-full h-1.5 mt-2">
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div 
-                    className="bg-blue-600 h-1.5 rounded-full" 
-                    style={{ 
-                      width: `${([businessData.selectedRewards.length > 0, businessData.hasSetupPointsRule, businessData.hasSetupBanner]
-                        .filter(Boolean).length / 3) * 100}%` 
-                    }}
-                  ></div>
+                    className="h-full bg-[#007AFF] rounded-full transition-all duration-300"
+                    style={{ width: `${(step / totalSteps) * 100}%` }}
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                {/* Reward creation status */}
+                <div className="flex items-center gap-3">
+                  <div className={`h-6 w-6 rounded-full flex items-center justify-center ${
+                    step === 1 ? "bg-[#007AFF] text-white" :
+                    step > 1 ? "bg-green-100 text-green-600" :
+                    "bg-gray-100 text-gray-400"
+                  }`}>
+                    {step > 1 ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <span className="text-xs">1</span>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className={`text-sm ${
+                      step >= 1 ? "text-gray-900" : "text-gray-500"
+                    }`}>
+                      Create Rewards
+                    </p>
+                    {businessData.selectedRewards.length > 0 && (
+                      <div className="mt-1 space-y-1">
+                        {businessData.selectedRewards.map((reward) => (
+                          <div key={reward.id} className="flex items-center gap-1">
+                            <span className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0"></span>
+                            <p className="text-xs text-gray-600 truncate">{reward.name}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Points rule status */}
+                <div className="flex items-center gap-3">
+                  <div className={`h-6 w-6 rounded-full flex items-center justify-center ${
+                    step === 2 ? "bg-[#007AFF] text-white" :
+                    step > 2 ? "bg-green-100 text-green-600" :
+                    "bg-gray-100 text-gray-400"
+                  }`}>
+                    {step > 2 ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <span className="text-xs">2</span>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className={`text-sm ${
+                      step >= 2 ? "text-gray-900" : "text-gray-500"
+                    }`}>
+                      Set Up Points Rules
+                    </p>
+                    {businessData.pointsRuleDetails && (
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {businessData.pointsRuleDetails.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Banner status */}
+                <div className="flex items-center gap-3">
+                  <div className={`h-6 w-6 rounded-full flex items-center justify-center ${
+                    step === 3 ? "bg-[#007AFF] text-white" :
+                    step > 3 ? "bg-green-100 text-green-600" :
+                    "bg-gray-100 text-gray-400"
+                  }`}>
+                    {step > 3 ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <span className="text-xs">3</span>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className={`text-sm ${
+                      step >= 3 ? "text-gray-900" : "text-gray-500"
+                    }`}>
+                      Create Homepage Banner
+                    </p>
+                    {businessData.bannerDetails && (
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {businessData.bannerDetails.name}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
       
       {/* Add the exit confirmation dialog */}

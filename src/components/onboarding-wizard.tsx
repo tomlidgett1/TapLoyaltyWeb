@@ -14,10 +14,12 @@ import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, updateDoc, writeBatch } from "firebase/firestore"
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { ArrowRight, CheckCircle, Coffee, Gift, Store, Users, Upload, Sparkles, Award, BarChart, Image, Utensils, Percent, Cake, Wine, UtensilsCrossed, Check, X, ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Ban } from "lucide-react"
+import { ArrowRight, CheckCircle, Coffee, Gift, Store, Users, Upload, Sparkles, Award, BarChart, Image, Utensils, Percent, Cake, Wine, UtensilsCrossed, Check, X, ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Ban, Calendar, ChevronLeft, Clock, Package } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 
 export function OnboardingWizard() {
   const [step, setStep] = useState(1)
@@ -45,7 +47,7 @@ export function OnboardingWizard() {
   const totalSteps = 3
   
   const [customerCategoryStep, setCustomerCategoryStep] = useState<'new' | 'existing' | 'loyal' | null>(null)
-
+  
   const handleNext = () => {
     // If we're in Step 1 (Create First Reward)
     if (step === 1) {
@@ -275,7 +277,7 @@ export function OnboardingWizard() {
       setLoading(false)
     }
   }
-  
+
   const [selectedIndustry, setSelectedIndustry] = useState('cafe')
   const [rewardType, setRewardType] = useState('individual')
   const [expandedRewards, setExpandedRewards] = useState<Record<string, boolean>>({})
@@ -653,23 +655,57 @@ export function OnboardingWizard() {
   // Add this state to track selected rewards in the wizard
   const [wizardSelectedRewards, setWizardSelectedRewards] = useState<string[]>([])
 
-  // Modify the handleRewardTypeSelection function to close the collapsible after selection
-  const handleRewardTypeSelection = (type: string) => {
-    // Add the reward to selected rewards if not already selected
-    if (!wizardSelectedRewards.includes(type)) {
-      setWizardSelectedRewards(prev => [...prev, type])
+  // Update the handleRewardTypeSelection function
+  const handleRewardTypeSelection = (rewardId: string) => {
+    console.log("Selected reward:", rewardId); // Add logging for debugging
+    
+    // Check if this is a coffee program
+    if (rewardId.includes('coffee-lovers-program')) {
+      // Add or remove from selected rewards
+      if (wizardSelectedRewards.includes(rewardId)) {
+        // If already selected, just show the config dialog
+        setShowCoffeeProgramConfig(true);
+      } else {
+        // Add to selected rewards and show config dialog
+        setWizardSelectedRewards(prev => [...prev, rewardId]);
+        
+        // Show a success toast
+        toast({
+          title: "Coffee Program Selected",
+          description: "Configure your coffee loyalty program settings",
+          variant: "default"
+        });
+        
+        // Show the configuration dialog
+        setShowCoffeeProgramConfig(true);
+      }
+      return;
+    }
+    
+    // For non-coffee program rewards, toggle selection
+    if (wizardSelectedRewards.includes(rewardId)) {
+      setWizardSelectedRewards(prev => prev.filter(r => r !== rewardId));
+      
+      // Show a toast for removal
+      toast({
+        title: "Reward Removed",
+        description: "The reward has been removed from your selections",
+        variant: "default"
+      });
+    } else {
+      setWizardSelectedRewards(prev => [...prev, rewardId]);
       
       // Show a success toast
       toast({
-        title: "Reward selected!",
-        description: `"${type}" has been added to your selections.`,
+        title: "Reward Selected",
+        description: "The reward has been added to your selections",
         variant: "default"
-      })
+      });
     }
     
-    // Close the collapsible by setting expandedRewardDetails to null
-    setExpandedRewardDetails(null)
-  }
+    // Close the expanded details
+    setExpandedRewardDetails(null);
+  };
 
   // Add a function to continue to the next step when ready
   const continueToNextStep = () => {
@@ -709,6 +745,145 @@ export function OnboardingWizard() {
   // Add a new state to track if the intro has been viewed
   const [hasViewedIntro, setHasViewedIntro] = useState(false)
 
+  // Fix the duplicate variable declaration
+  // Add these new states to manage pagination
+  const [currentRewardPage, setCurrentRewardPage] = useState(1);
+  const [currentNewCustomerPage, setCurrentNewCustomerPage] = useState(1);
+  const rewardsPerPage = 6; // Only declare this once
+
+  // Create a function to handle reward pagination
+  const handleRewardPageChange = (pageNumber: number) => {
+    setCurrentRewardPage(pageNumber);
+    // Reset expanded reward when changing pages
+    setExpandedRewardDetails(null);
+  };
+
+  // Create a function to handle new customer reward pagination
+  const handleNewCustomerPageChange = (pageNumber: number) => {
+    setCurrentNewCustomerPage(pageNumber);
+    // Reset expanded reward when changing pages
+    setExpandedRewardDetails(null);
+  };
+
+  // Add a new state to manage pagination for loyal customers
+  const [currentLoyalCustomerPage, setCurrentLoyalCustomerPage] = useState(1);
+
+  // Create a function to handle loyal customer reward pagination
+  const handleLoyalCustomerPageChange = (pageNumber: number) => {
+    setCurrentLoyalCustomerPage(pageNumber);
+    // Reset expanded reward when changing pages
+    setExpandedRewardDetails(null);
+  };
+
+  // Add these states to handle coffee program configuration
+  const [coffeeProgram, setCoffeeProgram] = useState({
+    pin: '',
+    freeRewardTiming: 'after' as 'before' | 'after',
+    frequency: '5',
+    levels: '5'
+  });
+
+  // Add a function to handle coffee program selection
+  const handleCoffeeProgramSelection = (rewardId: string) => {
+    // First add the reward to selected rewards
+    handleRewardTypeSelection(rewardId);
+    
+    // Then show the coffee program configuration dialog
+    setShowCoffeeProgramConfig(true);
+  };
+
+  // Add state to control the coffee program configuration dialog
+  const [showCoffeeProgramConfig, setShowCoffeeProgramConfig] = useState(false);
+
+  // First, let's add a state to track if the coffee program has been configured
+  const [coffeeProgramConfigured, setCoffeeProgramConfigured] = useState(false);
+
+  // Update the saveCoffeeProgram function to mark the program as configured
+  const saveCoffeeProgram = () => {
+    // Validate PIN code
+    if (coffeeProgram.pin.length !== 4 || isNaN(Number(coffeeProgram.pin))) {
+      toast({
+        title: "Invalid PIN",
+        description: "Please enter a 4-digit PIN code",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Find the selected coffee program type
+    const isTraditionalCoffeeProgram = wizardSelectedRewards.includes('traditional-coffee-program');
+    
+    if (!isTraditionalCoffeeProgram) {
+      toast({
+        title: "Error",
+        description: "No coffee program selected",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Create the coffee program reward with configuration
+    const coffeeReward = {
+      id: 'traditional-coffee-program',
+      name: 'Traditional Coffee Program',
+      type: 'program',
+      industry: selectedIndustry,
+      isNewCustomer: false,
+      pointsCost: 0,
+      description: 'Buy X coffees, get 1 free (stamp card style)',
+      coffeeConfig: {
+        pin: coffeeProgram.pin,
+        freeRewardTiming: coffeeProgram.freeRewardTiming,
+        frequency: parseInt(coffeeProgram.frequency),
+        levels: parseInt(coffeeProgram.levels)
+      }
+    };
+    
+    // Update business data
+    setBusinessData(prev => ({
+      ...prev,
+      selectedRewards: [...prev.selectedRewards.filter(r => 
+        r.id !== 'traditional-coffee-program'
+      ), coffeeReward]
+    }));
+    
+    // Mark the coffee program as configured
+    setCoffeeProgramConfigured(true);
+    
+    // Close the configuration dialog
+    setShowCoffeeProgramConfig(false);
+    
+    // Show success toast
+    toast({
+      title: "Coffee Program Configured",
+      description: "Your coffee program has been configured successfully",
+      variant: "default"
+    });
+  };
+
+  // In the review step (Step 4), add a function to handle coffee program configuration
+  const handleCoffeeProgramConfig = () => {
+    // Find if there's a coffee program in the selected rewards
+    const coffeeProgram = businessData.selectedRewards.find(reward => 
+      reward.name === "Coffee Lovers Program" || reward.id.includes('coffee-lovers')
+    );
+    
+    if (coffeeProgram) {
+      // If there's already a configuration, load it
+      if (coffeeProgram.coffeeConfig) {
+        setCoffeeProgram({
+          pin: coffeeProgram.coffeeConfig.pin,
+          freeRewardTiming: coffeeProgram.coffeeConfig.freeRewardTiming,
+          frequency: coffeeProgram.coffeeConfig.frequency.toString(),
+          levels: coffeeProgram.coffeeConfig.levels.toString()
+        });
+      }
+      
+      // Show the configuration dialog
+      setShowCoffeeProgramConfig(true);
+    }
+  };
+
   return (
     <div className="container max-w-[1600px] py-10">
       {/* Exit button */}
@@ -733,8 +908,8 @@ export function OnboardingWizard() {
         {/* Empty column for left spacing */}
         <div className="hidden md:block md:col-span-2">
           {/* This creates space on the left */}
-        </div>
-        
+      </div>
+
         {/* Main setup module - centered */}
         <div className={hasViewedIntro ? "md:col-span-7" : "md:col-span-8"}>
           <Card className="border-gray-200 shadow-sm">
@@ -747,12 +922,12 @@ export function OnboardingWizard() {
                       {step === 1 && "Reward Setup"}
                       {step === 2 && "Points Rules"}
                       {step === 3 && "Marketing Banner"}
-                    </CardTitle>
+              </CardTitle>
                     <CardDescription className="text-xs">
                       {step === 1 && "Set up your loyalty program rewards"}
                       {step === 2 && "Define how customers earn points"}
                       {step === 3 && "Create a banner to promote your program"}
-                    </CardDescription>
+              </CardDescription>
                   </div>
                   
                   {/* Navigation buttons */}
@@ -823,7 +998,7 @@ export function OnboardingWizard() {
                         <div className="flex items-center gap-3 mb-3">
                           <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
                             <Store className="h-5 w-5 text-purple-600" />
-                          </div>
+                      </div>
                           <h4 className="font-medium text-purple-900">Merchant App</h4>
                         </div>
                         <p className="text-sm text-gray-600 mb-3">
@@ -869,7 +1044,7 @@ export function OnboardingWizard() {
                         </ul>
                       </div>
                     </div>
-
+                    
                     {/* How It Works Section */}
                     <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm mb-8">
                       <h4 className="font-medium text-lg mb-4">How TAP Loyalty Works</h4>
@@ -879,7 +1054,7 @@ export function OnboardingWizard() {
                             <Coffee className="h-6 w-6 text-amber-600" />
                           </div>
                           <h5 className="font-medium mb-2">1. Customer Visits</h5>
-                          <p className="text-sm text-gray-600">
+                        <p className="text-sm text-gray-600">
                             Customers visit your business and earn points through the TAP app
                           </p>
                         </div>
@@ -892,18 +1067,18 @@ export function OnboardingWizard() {
                           <p className="text-sm text-gray-600">
                             Points add up based on your custom rules and visit frequency
                           </p>
-                        </div>
-
+                    </div>
+                    
                         <div className="text-center">
                           <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
                             <Award className="h-6 w-6 text-green-600" />
-                          </div>
+                      </div>
                           <h5 className="font-medium mb-2">3. Reward Redemption</h5>
                           <p className="text-sm text-gray-600">
                             Customers redeem points for rewards you've created
                           </p>
-                        </div>
-                      </div>
+                  </div>
+                </div>
                     </div>
 
                     {/* Features Overview */}
@@ -935,8 +1110,8 @@ export function OnboardingWizard() {
                           <div key={i} className="flex items-start gap-3 p-4 bg-white rounded-lg border border-gray-200">
                             <div className="h-8 w-8 rounded-full bg-gray-50 flex items-center justify-center flex-shrink-0">
                               {feature.icon}
-                            </div>
-                            <div>
+                      </div>
+                      <div>
                               <h5 className="font-medium mb-1">{feature.title}</h5>
                               <p className="text-sm text-gray-600">{feature.description}</p>
                             </div>
@@ -944,7 +1119,7 @@ export function OnboardingWizard() {
                         ))}
                       </div>
                     </div>
-
+                    
                     {/* Get Started Button */}
                     <div className="mt-8 text-center">
                       <Button
@@ -953,8 +1128,8 @@ export function OnboardingWizard() {
                       >
                         Let's Get Started <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
-                    </div>
-                  </div>
+                            </div>
+                          </div>
                 </div>
               )}
 
@@ -966,20 +1141,20 @@ export function OnboardingWizard() {
                       <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
                         <Gift className="h-5 w-5 text-[#007AFF]" />
                       </div>
-                      <div>
+                            <div>
                         <h3 className="text-base font-medium">Create Your First Reward</h3>
                         <p className="text-xs text-gray-500">
                           Rewards are what customers can redeem with their points
                         </p>
-                      </div>
-                    </div>
+                            </div>
+                          </div>
                     
                     {/* Wizard Step 1: Industry Selection */}
                     {wizardStep === 1 && (
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <h4 className="font-medium text-lg">Step 1: Select Your Industry</h4>
-                        </div>
+                            </div>
                         
                         <p className="text-sm text-gray-600 mb-2">
                           Choose the industry that best matches your business
@@ -996,12 +1171,12 @@ export function OnboardingWizard() {
                             <div className="flex-1">
                               <h5 className="font-medium">Café</h5>
                               <p className="text-sm text-gray-500">Coffee shops, bakeries, and casual eateries</p>
-                            </div>
+                          </div>
                             {selectedIndustry === 'cafe' && (
                               <CheckCircle className="h-5 w-5 text-green-600" />
                             )}
-                          </div>
-                          
+                    </div>
+                    
                           <div 
                             className={`flex items-center gap-3 p-4 bg-white rounded-md border ${
                               selectedIndustry === 'restaurant' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
@@ -1012,13 +1187,13 @@ export function OnboardingWizard() {
                             <div className="flex-1">
                               <h5 className="font-medium">Restaurant</h5>
                               <p className="text-sm text-gray-500">Full-service restaurants and dining establishments</p>
-                            </div>
+                          </div>
                             {selectedIndustry === 'restaurant' && (
                               <CheckCircle className="h-5 w-5 text-green-600" />
                             )}
-                          </div>
-                          
-                          <div 
+                        </div>
+                        
+                        <div 
                             className={`flex items-center gap-3 p-4 bg-white rounded-md border ${
                               selectedIndustry === 'retail' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
                             } cursor-pointer transition-colors`}
@@ -1028,12 +1203,12 @@ export function OnboardingWizard() {
                             <div className="flex-1">
                               <h5 className="font-medium">Retail</h5>
                               <p className="text-sm text-gray-500">Shops, boutiques, and retail stores</p>
-                            </div>
+                          </div>
                             {selectedIndustry === 'retail' && (
                               <CheckCircle className="h-5 w-5 text-green-600" />
                             )}
-                          </div>
                         </div>
+                      </div>
                         
                         <div className="mt-4 p-3 bg-blue-50 rounded-md border border-blue-100">
                           <p className="text-sm text-blue-700">
@@ -1044,13 +1219,13 @@ export function OnboardingWizard() {
                               "None"
                             )}
                           </p>
-                        </div>
+                    </div>
                       </div>
                     )}
                     
                     {/* Wizard Step 2: Individual Reward Selection */}
                     {wizardStep === 2 && (
-                      <div className="space-y-4">
+                    <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <h4 className="font-medium text-lg">
                             {customerCategoryStep === 'new' && "Step 2.1: New Customer Rewards"}
@@ -1070,7 +1245,7 @@ export function OnboardingWizard() {
                           <div className={`h-2.5 w-2.5 rounded-full ${customerCategoryStep === 'new' ? 'bg-blue-600' : 'bg-gray-300'}`}></div>
                           <div className={`h-2.5 w-2.5 rounded-full ${customerCategoryStep === 'existing' ? 'bg-blue-600' : 'bg-gray-300'}`}></div>
                           <div className={`h-2.5 w-2.5 rounded-full ${customerCategoryStep === 'loyal' ? 'bg-blue-600' : 'bg-gray-300'}`}></div>
-                        </div>
+                              </div>
                         
                         {/* Show selected rewards for the current category */}
                         {wizardSelectedRewards.filter(r => 
@@ -1097,740 +1272,983 @@ export function OnboardingWizard() {
                                       onClick={() => removeSelectedReward(reward)}
                                     >
                                       <X className="h-3 w-3" />
-                                    </Button>
-                                  </div>
+                                </Button>
+                            </div>
                                 ))
                               }
                             </div>
                           </div>
                         )}
-                        
-                        <div className="space-y-3">
+                            
+                              <div className="space-y-3">
                           {/* Show rewards based on the current customer category */}
                           {customerCategoryStep === 'new' && (
                             <>
-                              {/* New customer rewards - displayed in a grid */}
-                              <div className="grid md:grid-cols-2 gap-4">
-                                {/* Welcome Coffee reward */}
-                                <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
-                                  <div 
-                                    className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
-                                      expandedRewardDetails === 'new-welcome-coffee' ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
-                                    }`}
-                                    onClick={() => toggleRewardDetails('new-welcome-coffee')}
-                                  >
-                                    <Coffee className="h-6 w-6 text-green-500" />
-                                    <div className="flex-1">
-                                      <h5 className="font-medium">Welcome Coffee</h5>
-                                      <p className="text-sm text-gray-500">
-                                        Enjoy a complimentary welcome coffee on your first visit! We're thrilled to have you!
-                                      </p>
-                                    </div>
-                                    {expandedRewardDetails === 'new-welcome-coffee' ? (
-                                      <ChevronUp className="h-5 w-5 text-gray-400" />
-                                    ) : (
-                                      <ChevronDown className="h-5 w-5 text-gray-400" />
-                                    )}
-                                  </div>
-                                  
-                                  {expandedRewardDetails === 'new-welcome-coffee' && (
-                                    <div className="p-4 border-t border-gray-200 bg-gray-50">
-                                      <div className="space-y-4">
-                                        <div>
-                                          <h6 className="text-sm font-medium mb-2 flex items-center">
-                                            <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
-                                            Conditions
-                                          </h6>
-                                          <div className="bg-white p-3 rounded border border-gray-200">
-                                            <ul className="text-sm space-y-2">
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                </div>
-                                                <span>First visit only (1 transaction required)</span>
-                                              </li>
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                </div>
-                                                <span>0 points cost</span>
-                                              </li>
-                                            </ul>
-                                          </div>
-                                        </div>
-                                        
-                                        <div>
-                                          <h6 className="text-sm font-medium mb-2 flex items-center">
-                                            <Ban className="h-4 w-4 text-amber-600 mr-1" />
-                                            Limitations
-                                          </h6>
-                                          <div className="bg-white p-3 rounded border border-gray-200">
-                                            <ul className="text-sm space-y-2">
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                </div>
-                                                <span>Limited to 1 per customer</span>
-                                              </li>
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                </div>
-                                                <span>Total redemption limit: 1000</span>
-                                              </li>
-                                            </ul>
-                                          </div>
-                                        </div>
-                                        
-                                        <Button 
-                                          className={`w-full ${
-                                            wizardSelectedRewards.includes('new-welcome-coffee') 
-                                              ? "bg-green-600 hover:bg-green-700" 
-                                              : "bg-[#007AFF] hover:bg-[#0066CC]"
-                                          } text-white`}
-                                          onClick={() => handleRewardTypeSelection('new-welcome-coffee')}
-                                        >
-                                          {wizardSelectedRewards.includes('new-welcome-coffee') 
-                                            ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
-                                            : "Select This Reward"
-                                          }
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  )}
+                              {/* All new customer rewards data */}
+                              {(() => {
+                                // Define all rewards in one array
+                                const allNewCustomerRewards = [
+                                  // Original rewards
+                                  {
+                                    id: 'new-welcome-coffee',
+                                    icon: <Coffee className="h-6 w-6 text-green-500" />,
+                                    title: 'Welcome Coffee',
+                                    description: 'Enjoy a complimentary welcome coffee on your first visit! We\'re thrilled to have you!',
+                                    redemptionLimit: 1000
+                                  },
+                                  {
+                                    id: 'new-bogo',
+                                    icon: <Coffee className="h-6 w-6 text-amber-500" />,
+                                    title: 'Buy One Get One',
+                                    description: 'Purchase any coffee and get a second coffee absolutely free! Treat a friend or just indulge yourself.',
+                                    redemptionLimit: 1000
+                                  },
+                                  {
+                                    id: 'new-free-pastry',
+                                    icon: <Cake className="h-6 w-6 text-pink-500" />,
+                                    title: 'Free Pastry',
+                                    description: 'Buy any drink and enjoy a free pastry! A perfect pairing to brighten your day.',
+                                    redemptionLimit: 1000
+                                  },
+                                  {
+                                    id: 'new-loyalty-card',
+                                    icon: <Award className="h-6 w-6 text-blue-500" />,
+                                    title: 'Coffee Loyalty Card',
+                                    description: 'Receive a loyalty card on your first visit. Buy 5 coffees and get the 6th one free!',
+                                    redemptionLimit: 1000
+                                  },
+                                  // New rewards
+                                  {
+                                    id: 'new-welcome-drink',
+                                    icon: <Coffee className="h-6 w-6 text-purple-500" />,
+                                    title: 'Welcome Drink',
+                                    description: 'Enjoy a complimentary drink on your first visit! We\'re excited to serve you.',
+                                    redemptionLimit: 1000
+                                  },
+                                  {
+                                    id: 'new-newcomer-pastry',
+                                    icon: <Cake className="h-6 w-6 text-orange-500" />,
+                                    title: 'Newcomer Pastry',
+                                    description: 'Get a free pastry with your first purchase. A sweet welcome to our café!',
+                                    redemptionLimit: 900
+                                  },
+                                  {
+                                    id: 'new-first-visit-discount',
+                                    icon: <Percent className="h-6 w-6 text-green-500" />,
+                                    title: 'First Visit Discount',
+                                    description: 'Enjoy 15% off on your first visit. We\'re delighted to have you here!',
+                                    redemptionLimit: 950
+                                  },
+                                  {
+                                    id: 'new-complimentary-coffee',
+                                    icon: <Coffee className="h-6 w-6 text-brown-500" />,
+                                    title: 'Complimentary Coffee',
+                                    description: 'Receive a free coffee with your first food purchase. Welcome to a world of delightful beverages!',
+                                    redemptionLimit: 850
+                                  },
+                                  {
+                                    id: 'new-newbies-choice',
+                                    icon: <Gift className="h-6 w-6 text-indigo-500" />,
+                                    title: 'Newbie\'s Choice',
+                                    description: 'Choose a free add-on with your first drink. Welcome to the community!',
+                                    redemptionLimit: 800
+                                  },
+                                  {
+                                    id: 'new-try-us-out',
+                                    icon: <Gift className="h-6 w-6 text-yellow-500" />,
+                                    title: 'Try Us Out',
+                                    description: 'Receive a $5 voucher towards your next purchase after your first visit.',
+                                    redemptionLimit: 700
+                                  },
+                                  {
+                                    id: 'new-first-timers-brunch',
+                                    icon: <Utensils className="h-6 w-6 text-amber-500" />,
+                                    title: 'First Timer\'s Brunch',
+                                    description: 'Enjoy a free brunch item on your first morning visit. A warm start to your day!',
+                                    redemptionLimit: 650
+                                  },
+                                  {
+                                    id: 'new-welcome-muffin',
+                                    icon: <Cake className="h-6 w-6 text-pink-500" />,
+                                    title: 'Welcome Muffin',
+                                    description: 'Get a free muffin on us for trying out our cafe! Perfect with your first coffee.',
+                                    redemptionLimit: 700
+                                  },
+                                  {
+                                    id: 'new-starter-pack',
+                                    icon: <Package className="h-6 w-6 text-blue-500" />,
+                                    title: 'Starter Pack',
+                                    description: 'Enjoy a bundle deal exclusively for new customers. Get more on your first visit!',
+                                    redemptionLimit: 950
+                                  },
+                                  {
+                                    id: 'new-exclusive-first-sip',
+                                    icon: <Coffee className="h-6 w-6 text-purple-500" />,
+                                    title: 'Exclusive First Sip',
+                                    description: 'Receive an exclusive drink on your first visit, crafted just for newcomers!',
+                                    redemptionLimit: 600
+                                  },
+                                  {
+                                    id: 'new-partner-welcome-gift',
+                                    icon: <Users className="h-6 w-6 text-green-500" />,
+                                    title: 'Partner Welcome Gift',
+                                    description: 'Bring a friend on your first visit and enjoy a 2-for-1 offer on any beverage.',
+                                    redemptionLimit: 900
+                                  },
+                                  {
+                                    id: 'new-welcome-plate',
+                                    icon: <Utensils className="h-6 w-6 text-orange-500" />,
+                                    title: 'Welcome Plate',
+                                    description: 'Get a free appetizer on your first dinner visit. Discover what we offer!',
+                                    redemptionLimit: 700
+                                  },
+                                  {
+                                    id: 'new-first-visit-gift-card',
+                                    icon: <Gift className="h-6 w-6 text-red-500" />,
+                                    title: 'First Visit Gift Card',
+                                    description: 'Receive a $10 gift card towards your next purchase after your first visit.',
+                                    redemptionLimit: 800
+                                  },
+                                  // Add a coffee program reward to the list
+                                  {
+                                    id: 'coffee-lovers-program',
+                                    icon: <Coffee className="h-6 w-6 text-brown-500" />,
+                                    title: 'Coffee Lovers Program',
+                                    description: 'Create a buy-X-get-1-free coffee loyalty program for your customers',
+                                    redemptionLimit: 1000,
+                                    specialCondition: 'Configurable frequency and rewards'
+                                  },
+                                  {
+                                    id: 'new-coffee-lovers-program',
+                                    icon: <Coffee className="h-6 w-6 text-brown-500" />,
+                                    title: 'Coffee Lovers Program',
+                                    description: 'Create a buy-X-get-1-free coffee loyalty program for your new customers',
+                                    redemptionLimit: 1000,
+                                    specialCondition: 'Configurable frequency and rewards'
+                                  }
+                                ];
+                                
+                                // Calculate total pages for new customer rewards
+                                const totalNewCustomerPages = Math.ceil(allNewCustomerRewards.length / rewardsPerPage);
+                                
+                                // Get current page rewards
+                                const indexOfLastReward = currentNewCustomerPage * rewardsPerPage;
+                                const indexOfFirstReward = indexOfLastReward - rewardsPerPage;
+                                const currentRewards = allNewCustomerRewards.slice(indexOfFirstReward, indexOfLastReward);
+                                
+                                return (
+                                <div>
+                                    {/* New customer rewards - displayed in a grid */}
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                      {currentRewards.map((reward) => (
+                                        <div key={reward.id} className="border border-gray-200 rounded-md overflow-hidden bg-white">
+                                          {/* Header section - always visible */}
+                                          <div 
+                                            className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
+                                              expandedRewardDetails === reward.id ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
+                                            }`}
+                                            onClick={() => toggleRewardDetails(reward.id)}
+                                          >
+                                            {reward.icon}
+                                            <div className="flex-1">
+                                              <h5 className="font-medium">{reward.title}</h5>
+                                              <p className="text-sm text-gray-500">
+                                                {reward.description}
+                                              </p>
+                                            </div>
+                                            <div>
+                                              {expandedRewardDetails === reward.id ? (
+                                                <ChevronUp className="h-5 w-5 text-gray-400" />
+                                              ) : (
+                                                <ChevronDown className="h-5 w-5 text-gray-400" />
+                                              )}
+                                            </div>
                                 </div>
-
-                                {/* Buy One Get One reward */}
-                                <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
-                                  <div 
-                                    className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
-                                      expandedRewardDetails === 'new-bogo' ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
-                                    }`}
-                                    onClick={() => toggleRewardDetails('new-bogo')}
-                                  >
-                                    <Coffee className="h-6 w-6 text-amber-500" />
-                                    <div className="flex-1">
-                                      <h5 className="font-medium">Buy One Get One</h5>
-                                      <p className="text-sm text-gray-500">
-                                        Purchase any coffee and get a second coffee absolutely free! Treat a friend or just indulge yourself.
-                                      </p>
-                                    </div>
-                                    {expandedRewardDetails === 'new-bogo' ? (
-                                      <ChevronUp className="h-5 w-5 text-gray-400" />
-                                    ) : (
-                                      <ChevronDown className="h-5 w-5 text-gray-400" />
-                                    )}
-                                  </div>
-                                  
-                                  {expandedRewardDetails === 'new-bogo' && (
-                                    <div className="p-4 border-t border-gray-200 bg-gray-50">
-                                      <div className="space-y-4">
-                                        <div>
-                                          <h6 className="text-sm font-medium mb-2 flex items-center">
-                                            <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
-                                            Conditions
-                                          </h6>
-                                          <div className="bg-white p-3 rounded border border-gray-200">
-                                            <ul className="text-sm space-y-2">
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                </div>
-                                                <span>First visit only (1 transaction required)</span>
-                                              </li>
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                </div>
-                                                <span>0 points cost</span>
-                                              </li>
-                                            </ul>
-                                          </div>
-                                        </div>
-                                        
-                                        <div>
-                                          <h6 className="text-sm font-medium mb-2 flex items-center">
-                                            <Ban className="h-4 w-4 text-amber-600 mr-1" />
-                                            Limitations
-                                          </h6>
-                                          <div className="bg-white p-3 rounded border border-gray-200">
-                                            <ul className="text-sm space-y-2">
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                </div>
-                                                <span>Limited to 1 per customer</span>
-                                              </li>
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                </div>
-                                                <span>Total redemption limit: 1000</span>
-                                              </li>
-                                            </ul>
-                                          </div>
-                                        </div>
-                                        
-                                        <Button 
-                                          className={`w-full ${
-                                            wizardSelectedRewards.includes('new-bogo') 
-                                              ? "bg-green-600 hover:bg-green-700" 
-                                              : "bg-[#007AFF] hover:bg-[#0066CC]"
-                                          } text-white`}
-                                          onClick={() => handleRewardTypeSelection('new-bogo')}
-                                        >
-                                          {wizardSelectedRewards.includes('new-bogo') 
-                                            ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
-                                            : "Select This Reward"
-                                          }
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  )}
+                                
+                                          {/* Expanded details section */}
+                                          {expandedRewardDetails === reward.id && (
+                                            <div className="p-4 border-t border-gray-200 bg-gray-50">
+                                              <div className="space-y-4">
+                                                {/* Conditions */}
+                                <div>
+                                                  <h6 className="text-sm font-medium mb-2 flex items-center">
+                                                    <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
+                                                    Conditions
+                                                  </h6>
+                                                  <div className="bg-white p-3 rounded border border-gray-200">
+                                                    <ul className="text-sm space-y-2">
+                                                      <li className="flex items-start gap-2">
+                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                          <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                        </div>
+                                                        <span>First visit only</span>
+                                                      </li>
+                                                      <li className="flex items-start gap-2">
+                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                          <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                        </div>
+                                                        <span>0 points cost</span>
+                                                      </li>
+                                  </ul>
+                                                  </div>
                                 </div>
-
-                                {/* Free Pastry reward */}
-                                <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
-                                  <div 
-                                    className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
-                                      expandedRewardDetails === 'new-free-pastry' ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
-                                    }`}
-                                    onClick={() => toggleRewardDetails('new-free-pastry')}
-                                  >
-                                    <Cake className="h-6 w-6 text-pink-500" />
-                                    <div className="flex-1">
-                                      <h5 className="font-medium">Free Pastry</h5>
-                                      <p className="text-sm text-gray-500">
-                                        Buy any drink and enjoy a free pastry! A perfect pairing to brighten your day.
-                                      </p>
-                                    </div>
-                                    {expandedRewardDetails === 'new-free-pastry' ? (
-                                      <ChevronUp className="h-5 w-5 text-gray-400" />
-                                    ) : (
-                                      <ChevronDown className="h-5 w-5 text-gray-400" />
-                                    )}
-                                  </div>
-                                  
-                                  {expandedRewardDetails === 'new-free-pastry' && (
-                                    <div className="p-4 border-t border-gray-200 bg-gray-50">
-                                      <div className="space-y-4">
-                                        <div>
-                                          <h6 className="text-sm font-medium mb-2 flex items-center">
-                                            <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
-                                            Conditions
-                                          </h6>
-                                          <div className="bg-white p-3 rounded border border-gray-200">
-                                            <ul className="text-sm space-y-2">
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                </div>
-                                                <span>First visit only (1 transaction required)</span>
-                                              </li>
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                </div>
-                                                <span>0 points cost</span>
-                                              </li>
-                                            </ul>
-                                          </div>
-                                        </div>
-                                        
-                                        <div>
-                                          <h6 className="text-sm font-medium mb-2 flex items-center">
-                                            <Ban className="h-4 w-4 text-amber-600 mr-1" />
-                                            Limitations
-                                          </h6>
-                                          <div className="bg-white p-3 rounded border border-gray-200">
-                                            <ul className="text-sm space-y-2">
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                </div>
-                                                <span>Limited to 1 per customer</span>
-                                              </li>
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                </div>
-                                                <span>Total redemption limit: 1000</span>
-                                              </li>
-                                            </ul>
-                                          </div>
-                                        </div>
-                                        
-                                        <Button 
-                                          className={`w-full ${
-                                            wizardSelectedRewards.includes('new-free-pastry') 
-                                              ? "bg-green-600 hover:bg-green-700" 
-                                              : "bg-[#007AFF] hover:bg-[#0066CC]"
-                                          } text-white`}
-                                          onClick={() => handleRewardTypeSelection('new-free-pastry')}
-                                        >
-                                          {wizardSelectedRewards.includes('new-free-pastry') 
-                                            ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
-                                            : "Select This Reward"
-                                          }
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  )}
+                                
+                                                {/* Limitations */}
+                                <div>
+                                                  <h6 className="text-sm font-medium mb-2 flex items-center">
+                                                    <Ban className="h-4 w-4 text-amber-600 mr-1" />
+                                                    Limitations
+                                                  </h6>
+                                                  <div className="bg-white p-3 rounded border border-gray-200">
+                                                    <ul className="text-sm space-y-2">
+                                                      <li className="flex items-start gap-2">
+                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                        </div>
+                                                        <span>Limited to 1 per customer</span>
+                                                      </li>
+                                                      <li className="flex items-start gap-2">
+                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                        </div>
+                                                        <span>Total redemption limit: {reward.redemptionLimit}</span>
+                                                      </li>
+                                                    </ul>
+                                                  </div>
                                 </div>
-
-                                {/* Coffee Loyalty Card reward */}
-                                <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
-                                  <div 
-                                    className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
-                                      expandedRewardDetails === 'new-loyalty-card' ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
-                                    }`}
-                                    onClick={() => toggleRewardDetails('new-loyalty-card')}
-                                  >
-                                    <Award className="h-6 w-6 text-blue-500" />
-                                    <div className="flex-1">
-                                      <h5 className="font-medium">Coffee Loyalty Card</h5>
-                                      <p className="text-sm text-gray-500">
-                                        Receive a loyalty card on your first visit. Buy 5 coffees and get the 6th one free!
-                                      </p>
-                                    </div>
-                                    {expandedRewardDetails === 'new-loyalty-card' ? (
-                                      <ChevronUp className="h-5 w-5 text-gray-400" />
-                                    ) : (
-                                      <ChevronDown className="h-5 w-5 text-gray-400" />
-                                    )}
-                                  </div>
-                                  
-                                  {expandedRewardDetails === 'new-loyalty-card' && (
-                                    <div className="p-4 border-t border-gray-200 bg-gray-50">
-                                      <div className="space-y-4">
-                                        <div>
-                                          <h6 className="text-sm font-medium mb-2 flex items-center">
-                                            <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
-                                            Conditions
-                                          </h6>
-                                          <div className="bg-white p-3 rounded border border-gray-200">
-                                            <ul className="text-sm space-y-2">
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                </div>
-                                                <span>First visit only (1 transaction required)</span>
-                                              </li>
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                </div>
-                                                <span>0 points cost</span>
-                                              </li>
-                                            </ul>
-                                          </div>
-                                        </div>
-                                        
-                                        <div>
-                                          <h6 className="text-sm font-medium mb-2 flex items-center">
-                                            <Ban className="h-4 w-4 text-amber-600 mr-1" />
-                                            Limitations
-                                          </h6>
-                                          <div className="bg-white p-3 rounded border border-gray-200">
-                                            <ul className="text-sm space-y-2">
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                </div>
-                                                <span>Limited to 1 per customer</span>
-                                              </li>
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                </div>
-                                                <span>Total redemption limit: 1000</span>
-                                              </li>
-                                            </ul>
-                                          </div>
-                                        </div>
-                                        
-                                        <Button 
-                                          className={`w-full ${
-                                            wizardSelectedRewards.includes('new-loyalty-card') 
-                                              ? "bg-green-600 hover:bg-green-700" 
-                                              : "bg-[#007AFF] hover:bg-[#0066CC]"
-                                          } text-white`}
-                                          onClick={() => handleRewardTypeSelection('new-loyalty-card')}
-                                        >
-                                          {wizardSelectedRewards.includes('new-loyalty-card') 
-                                            ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
-                                            : "Select This Reward"
-                                          }
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  )}
+                                
+                                                <Button 
+                                                  className={`w-full ${
+                                                    wizardSelectedRewards.includes(reward.id) 
+                                                      ? "bg-green-600 hover:bg-green-700" 
+                                                      : "bg-[#007AFF] hover:bg-[#0066CC]"
+                                                  } text-white`}
+                                                  onClick={() => handleRewardTypeSelection(reward.id)}
+                                                >
+                                                  {wizardSelectedRewards.includes(reward.id) 
+                                                    ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
+                                                    : "Select This Reward"
+                                                  }
+                                                </Button>
                                 </div>
-
-                                {/* 10% Off First Purchase reward */}
-                                <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
-                                  <div 
-                                    className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
-                                      expandedRewardDetails === 'new-discount' ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
-                                    }`}
-                                    onClick={() => toggleRewardDetails('new-discount')}
-                                  >
-                                    <Percent className="h-6 w-6 text-green-500" />
-                                    <div className="flex-1">
-                                      <h5 className="font-medium">10% Off First Purchase</h5>
-                                      <p className="text-sm text-gray-500">
-                                        Enjoy 10% off your first purchase! That's our way of saying welcome.
-                                      </p>
-                                    </div>
-                                    {expandedRewardDetails === 'new-discount' ? (
-                                      <ChevronUp className="h-5 w-5 text-gray-400" />
-                                    ) : (
-                                      <ChevronDown className="h-5 w-5 text-gray-400" />
-                                    )}
-                                  </div>
-                                  
-                                  {expandedRewardDetails === 'new-discount' && (
-                                    <div className="p-4 border-t border-gray-200 bg-gray-50">
-                                      <div className="space-y-4">
-                                        <div>
-                                          <h6 className="text-sm font-medium mb-2 flex items-center">
-                                            <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
-                                            Conditions
-                                          </h6>
-                                          <div className="bg-white p-3 rounded border border-gray-200">
-                                            <ul className="text-sm space-y-2">
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                </div>
-                                                <span>First visit only (1 transaction required)</span>
-                                              </li>
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                </div>
-                                                <span>0 points cost</span>
-                                              </li>
-                                            </ul>
-                                          </div>
+                                            </div>
+                                          )}
                                         </div>
-                                        
-                                        <div>
-                                          <h6 className="text-sm font-medium mb-2 flex items-center">
-                                            <Ban className="h-4 w-4 text-amber-600 mr-1" />
-                                            Limitations
-                                          </h6>
-                                          <div className="bg-white p-3 rounded border border-gray-200">
-                                            <ul className="text-sm space-y-2">
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                </div>
-                                                <span>Limited to 1 per customer</span>
-                                              </li>
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                </div>
-                                                <span>Total redemption limit: 1000</span>
-                                              </li>
-                                            </ul>
-                                          </div>
-                                        </div>
-                                        
-                                        <Button 
-                                          className={`w-full ${
-                                            wizardSelectedRewards.includes('new-discount') 
-                                              ? "bg-green-600 hover:bg-green-700" 
-                                              : "bg-[#007AFF] hover:bg-[#0066CC]"
-                                          } text-white`}
-                                          onClick={() => handleRewardTypeSelection('new-discount')}
-                                        >
-                                          {wizardSelectedRewards.includes('new-discount') 
-                                            ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
-                                            : "Select This Reward"
-                                          }
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Referral Coffee Discount reward */}
-                                <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
-                                  <div 
-                                    className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
-                                      expandedRewardDetails === 'new-referral' ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
-                                    }`}
-                                    onClick={() => toggleRewardDetails('new-referral')}
-                                  >
-                                    <Users className="h-6 w-6 text-purple-500" />
-                                    <div className="flex-1">
-                                      <h5 className="font-medium">Referral Coffee Discount</h5>
-                                      <p className="text-sm text-gray-500">
-                                        Refer a friend and both enjoy 15% off your next coffee! Share the joy of coffee.
-                                      </p>
-                                    </div>
-                                    {expandedRewardDetails === 'new-referral' ? (
-                                      <ChevronUp className="h-5 w-5 text-gray-400" />
-                                    ) : (
-                                      <ChevronDown className="h-5 w-5 text-gray-400" />
-                                    )}
-                                  </div>
-                                  
-                                  {expandedRewardDetails === 'new-referral' && (
-                                    <div className="p-4 border-t border-gray-200 bg-gray-50">
-                                      <div className="space-y-4">
-                                        <div>
-                                          <h6 className="text-sm font-medium mb-2 flex items-center">
-                                            <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
-                                            Conditions
-                                          </h6>
-                                          <div className="bg-white p-3 rounded border border-gray-200">
-                                            <ul className="text-sm space-y-2">
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                </div>
-                                                <span>First visit only (1 transaction required)</span>
-                                              </li>
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                </div>
-                                                <span>0 points cost</span>
-                                              </li>
-                                            </ul>
-                                          </div>
-                                        </div>
-                                        
-                                        <div>
-                                          <h6 className="text-sm font-medium mb-2 flex items-center">
-                                            <Ban className="h-4 w-4 text-amber-600 mr-1" />
-                                            Limitations
-                                          </h6>
-                                          <div className="bg-white p-3 rounded border border-gray-200">
-                                            <ul className="text-sm space-y-2">
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                </div>
-                                                <span>Limited to 1 per customer</span>
-                                              </li>
-                                              <li className="flex items-start gap-2">
-                                                <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                </div>
-                                                <span>Total redemption limit: 1000</span>
-                                              </li>
-                                            </ul>
-                                          </div>
-                                        </div>
-                                        
-                                        <Button 
-                                          className={`w-full ${
-                                            wizardSelectedRewards.includes('new-referral') 
-                                              ? "bg-green-600 hover:bg-green-700" 
-                                              : "bg-[#007AFF] hover:bg-[#0066CC]"
-                                          } text-white`}
-                                          onClick={() => handleRewardTypeSelection('new-referral')}
-                                        >
-                                          {wizardSelectedRewards.includes('new-referral') 
-                                            ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
-                                            : "Select This Reward"
-                                          }
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
+                                      ))}
                               </div>
+                              
+                                    {/* Pagination controls for new customer rewards */}
+                                    {totalNewCustomerPages > 1 && (
+                                      <div className="flex justify-center items-center gap-2 mt-6">
+                                <Button 
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleNewCustomerPageChange(currentNewCustomerPage - 1)}
+                                          disabled={currentNewCustomerPage === 1}
+                                          className="h-8 w-8 p-0"
+                                        >
+                                          <ChevronLeft className="h-4 w-4" />
+                                </Button>
+                                        
+                                        <div className="flex items-center gap-1">
+                                          {Array.from({ length: totalNewCustomerPages }).map((_, i) => (
+                                            <Button
+                                              key={i}
+                                              variant={currentNewCustomerPage === i + 1 ? "default" : "outline"}
+                                              size="sm"
+                                              onClick={() => handleNewCustomerPageChange(i + 1)}
+                                              className={`h-8 w-8 p-0 ${
+                                                currentNewCustomerPage === i + 1 ? "bg-[#007AFF]" : ""
+                                              }`}
+                                            >
+                                              {i + 1}
+                                            </Button>
+                                          ))}
+                                        </div>
+                                
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                          onClick={() => handleNewCustomerPageChange(currentNewCustomerPage + 1)}
+                                          disabled={currentNewCustomerPage === totalNewCustomerPages}
+                                          className="h-8 w-8 p-0"
+                                >
+                                          <ChevronRight className="h-4 w-4" />
+                                </Button>
+                              </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </>
                           )}
                           
                           {customerCategoryStep === 'existing' && (
                             <>
-                              {/* Existing customer rewards */}
-                              <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
-                                <div 
-                                  className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
-                                    expandedRewardDetails === 'existing-discount' ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
-                                  }`}
-                                  onClick={() => toggleRewardDetails('existing-discount')}
-                                >
-                                  <Percent className="h-6 w-6 text-amber-500" />
-                                  <div className="flex-1">
-                                    <h5 className="font-medium">10% Discount</h5>
-                                    <p className="text-sm text-gray-500">
-                                      10% off your next purchase
-                                    </p>
-                                  </div>
-                                  {expandedRewardDetails === 'existing-discount' ? (
-                                    <ChevronUp className="h-5 w-5 text-gray-400" />
-                                  ) : (
-                                    <ChevronDown className="h-5 w-5 text-gray-400" />
-                                  )}
-                                </div>
+                              {/* All existing customer rewards data */}
+                              {(() => {
+                                // Define all rewards in one array
+                                const allRewards = [
+                                  // First page rewards (original 5)
+                                  {
+                                    id: 'existing-loyalty-coffee',
+                                    icon: <Coffee className="h-6 w-6 text-blue-500" />,
+                                    title: 'Loyalty Coffee',
+                                    description: 'Enjoy a free coffee for being a loyal customer! Thank you for choosing us.',
+                                    redemptionLimit: 500
+                                  },
+                                  {
+                                    id: 'existing-birthday-treat',
+                                    icon: <Cake className="h-6 w-6 text-pink-500" />,
+                                    title: 'Birthday Treat',
+                                    description: 'Celebrate your birthday with a complimentary pastry! Enjoy a sweet treat on your special day.',
+                                    redemptionLimit: 200,
+                                    specialCondition: true
+                                  },
+                                  {
+                                    id: 'existing-coffee-club',
+                                    icon: <Users className="h-6 w-6 text-purple-500" />,
+                                    title: 'Coffee Club',
+                                    description: 'Join our Coffee Club and receive 20% off your next purchase! Sign up for exclusive offers.',
+                                    redemptionLimit: 300
+                                  },
+                                  {
+                                    id: 'existing-refer-friend',
+                                    icon: <Gift className="h-6 w-6 text-green-500" />,
+                                    title: 'Refer a Friend',
+                                    description: 'Refer a friend and receive a $5 voucher for your next purchase! Share the love of coffee.',
+                                    redemptionLimit: 400
+                                  },
+                                  {
+                                    id: 'existing-weekend-special',
+                                    icon: <Calendar className="h-6 w-6 text-amber-500" />,
+                                    title: 'Weekend Special',
+                                    description: 'Enjoy a 15% discount on all coffee purchases every weekend! A treat to brighten your days.',
+                                    redemptionLimit: 300
+                                  },
+                                  {
+                                    id: 'existing-midweek-bonus',
+                                    icon: <Cake className="h-6 w-6 text-orange-500" />,
+                                    title: 'Midweek Bonus',
+                                    description: 'Enjoy a complimentary muffin with any coffee purchase every Wednesday! A midweek treat just for you.',
+                                    redemptionLimit: 300
+                                  },
+                                  // Second page rewards (new rewards)
+                                  {
+                                    id: 'existing-double-points',
+                                    icon: <Award className="h-6 w-6 text-yellow-500" />,
+                                    title: 'Double Points Day',
+                                    description: 'Earn double points on all purchases every Friday! Boost your rewards and enjoy more perks.',
+                                    redemptionLimit: 400
+                                  },
+                                  {
+                                    id: 'existing-exclusive-blend',
+                                    icon: <Coffee className="h-6 w-6 text-red-500" />,
+                                    title: 'Exclusive Blend Access',
+                                    description: 'Be the first to try our exclusive blend coffee! Enjoy a free cup with your next purchase.',
+                                    redemptionLimit: 250
+                                  },
+                                  {
+                                    id: 'existing-free-upgrade',
+                                    icon: <ArrowRight className="h-6 w-6 text-blue-500" />,
+                                    title: 'Free Upgrade',
+                                    description: 'Upgrade your regular coffee to a large for free! Your coffee, your way.',
+                                    redemptionLimit: 300
+                                  },
+                                  {
+                                    id: 'existing-holiday-special',
+                                    icon: <Gift className="h-6 w-6 text-red-500" />,
+                                    title: 'Holiday Special',
+                                    description: 'Celebrate the holidays with a 15% discount on your total bill! Cheers to festive moments.',
+                                    redemptionLimit: 300
+                                  },
+                                  {
+                                    id: 'existing-weekend-brunch',
+                                    icon: <Utensils className="h-6 w-6 text-green-500" />,
+                                    title: 'Weekend Brunch Offer',
+                                    description: 'Enjoy a 20% discount on our brunch menu every weekend! Perfect for a leisurely meal.',
+                                    redemptionLimit: 350
+                                  },
+                                  // Additional rewards
+                                  {
+                                    id: 'existing-early-bird',
+                                    icon: <Coffee className="h-6 w-6 text-yellow-500" />,
+                                    title: 'Early Bird Special',
+                                    description: 'Get a 20% discount on any purchase before 10 AM.',
+                                    redemptionLimit: 300,
+                                    pointsCost: 5,
+                                    specialCondition: 'Minimum 3 transactions required',
+                                    specialLimitation: 'Available 7:00 AM - 10:00 AM only'
+                                  },
+                                  {
+                                    id: 'existing-weekend-brunch',
+                                    icon: <Utensils className="h-6 w-6 text-green-500" />,
+                                    title: 'Weekend Brunch Deal',
+                                    description: 'Enjoy 25% off our brunch menu on weekends.',
+                                    redemptionLimit: 500,
+                                    pointsCost: 10,
+                                    specialLimitation: 'Available Saturday and Sunday only'
+                                  },
+                                  {
+                                    id: 'existing-afternoon-tea',
+                                    icon: <Coffee className="h-6 w-6 text-purple-500" />,
+                                    title: 'Afternoon Tea Time',
+                                    description: 'Buy one tea, get one free every weekday afternoon.',
+                                    redemptionLimit: 400,
+                                    pointsCost: 8,
+                                    specialCondition: 'Minimum lifetime spend of $50',
+                                    specialLimitation: 'Available 2:00 PM - 5:00 PM only'
+                                  },
+                                  {
+                                    id: 'existing-loyalty-bonus',
+                                    icon: <Coffee className="h-6 w-6 text-blue-500" />,
+                                    title: 'Loyalty Bonus Coffee',
+                                    description: 'Enjoy a free coffee for every $100 spent.',
+                                    redemptionLimit: 700,
+                                    pointsCost: 12,
+                                    specialCondition: 'Total lifetime spend of $100',
+                                    customerLimit: 3
+                                  },
+                                  {
+                                    id: 'existing-midweek-motivator',
+                                    icon: <Calendar className="h-6 w-6 text-green-500" />,
+                                    title: 'Midweek Motivator',
+                                    description: 'Get 15% off all purchases on Wednesdays.',
+                                    redemptionLimit: 500,
+                                    pointsCost: 10,
+                                    customerLimit: 2,
+                                    specialLimitation: 'Available on Wednesdays only'
+                                  },
+                                  {
+                                    id: 'existing-seasonal-sips',
+                                    icon: <Coffee className="h-6 w-6 text-red-500" />,
+                                    title: 'Seasonal Sips',
+                                    description: 'Receive a complimentary seasonal drink with any purchase.',
+                                    redemptionLimit: 600,
+                                    pointsCost: 15,
+                                    specialCondition: '30 days since last visit'
+                                  },
+                                  {
+                                    id: 'existing-bring-friend',
+                                    icon: <Users className="h-6 w-6 text-indigo-500" />,
+                                    title: 'Bring a Friend',
+                                    description: 'Bring a friend and enjoy a 2-for-1 deal on any drink.',
+                                    redemptionLimit: 350,
+                                    pointsCost: 20,
+                                    specialCondition: 'Minimum 5 transactions required',
+                                    customerLimit: 2
+                                  },
+                                  {
+                                    id: 'existing-happy-hour',
+                                    icon: <Clock className="h-6 w-6 text-amber-500" />,
+                                    title: 'Happy Hour Savers',
+                                    description: '50% off all beverages during happy hour.',
+                                    redemptionLimit: 400,
+                                    pointsCost: 7,
+                                    specialLimitation: 'Available 4:00 PM - 6:00 PM only'
+                                  },
+                                  {
+                                    id: 'existing-exclusive-event',
+                                    icon: <Calendar className="h-6 w-6 text-purple-500" />,
+                                    title: 'Exclusive Event Access',
+                                    description: 'Access to invitation-only tasting events.',
+                                    redemptionLimit: 100,
+                                    pointsCost: 0,
+                                    specialCondition: 'Gold membership level required'
+                                  },
+                                  {
+                                    id: 'existing-anniversary',
+                                    icon: <Cake className="h-6 w-6 text-pink-500" />,
+                                    title: 'Anniversary Treat',
+                                    description: 'Celebrate your membership anniversary with a free dessert.',
+                                    redemptionLimit: 150,
+                                    pointsCost: 0,
+                                    specialCondition: '1 year since joining'
+                                  },
+                                  {
+                                    id: 'existing-coffee-bundle',
+                                    icon: <Package className="h-6 w-6 text-brown-500" />,
+                                    title: 'Coffee Lovers\' Bundle',
+                                    description: 'Get a special bundle price on three coffees.',
+                                    redemptionLimit: 250,
+                                    pointsCost: 30,
+                                    specialCondition: 'Minimum points balance of 100',
+                                    customerLimit: 2
+                                  },
+                                  {
+                                    id: 'existing-voucher-surprise',
+                                    icon: <Gift className="h-6 w-6 text-green-500" />,
+                                    title: 'Voucher Surprise',
+                                    description: 'Get a surprise voucher after every 10th visit.',
+                                    redemptionLimit: 500,
+                                    pointsCost: 0,
+                                    specialCondition: 'Minimum 10 transactions required',
+                                    customerLimit: 3
+                                  },
+                                  {
+                                    id: 'existing-coffee-lovers-program',
+                                    icon: <Coffee className="h-6 w-6 text-brown-500" />,
+                                    title: 'Coffee Lovers Program',
+                                    description: 'Create a buy-X-get-1-free coffee loyalty program for your regular customers',
+                                    redemptionLimit: 1000,
+                                    specialCondition: 'Configurable frequency and rewards'
+                                  }
+                                ];
                                 
-                                {expandedRewardDetails === 'existing-discount' && (
-                                  <div className="p-4 border-t border-gray-200 bg-gray-50">
-                                    <div className="space-y-4">
-                                      <div>
-                                        <h6 className="text-sm font-medium mb-2 flex items-center">
-                                          <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
-                                          Conditions
-                                        </h6>
-                                        <div className="bg-white p-3 rounded border border-gray-200">
-                                          <ul className="text-sm space-y-2">
-                                            <li className="flex items-start gap-2">
-                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                              </div>
-                                              <span>Minimum 5 transactions required</span>
-                                            </li>
-                                            <li className="flex items-start gap-2">
-                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                              </div>
-                                              <span>300 points cost</span>
-                                            </li>
-                                          </ul>
-                                        </div>
-                                      </div>
-                                      
-                                      <div>
-                                        <h6 className="text-sm font-medium mb-2 flex items-center">
-                                          <Ban className="h-4 w-4 text-amber-600 mr-1" />
-                                          Limitations
-                                        </h6>
-                                        <div className="bg-white p-3 rounded border border-gray-200">
-                                          <ul className="text-sm space-y-2">
-                                            <li className="flex items-start gap-2">
-                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                              </div>
-                                              <span>Limited to 1 per customer per month</span>
-                                            </li>
-                                            <li className="flex items-start gap-2">
-                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                              </div>
-                                              <span>Valid for 30 days after redemption</span>
-                                            </li>
-                                          </ul>
-                                        </div>
-                                      </div>
-                                      
-                                      <Button 
-                                        className={`w-full ${
-                                          wizardSelectedRewards.includes('existing-discount') 
-                                            ? "bg-green-600 hover:bg-green-700" 
-                                            : "bg-[#007AFF] hover:bg-[#0066CC]"
-                                        } text-white`}
-                                        onClick={() => handleRewardTypeSelection('existing-discount')}
-                                      >
-                                        {wizardSelectedRewards.includes('existing-discount') 
-                                          ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
-                                          : "Select This Reward"
-                                        }
-                                      </Button>
-                                    </div>
-                                  </div>
-                                )}
+                                // Calculate total pages
+                                const totalPages = Math.ceil(allRewards.length / rewardsPerPage);
+                                
+                                // Get current page rewards
+                                const indexOfLastReward = currentRewardPage * rewardsPerPage;
+                                const indexOfFirstReward = indexOfLastReward - rewardsPerPage;
+                                const currentRewards = allRewards.slice(indexOfFirstReward, indexOfLastReward);
+                                
+                                return (
+                                  <div className="space-y-4">
+                                    {/* Rewards grid */}
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                      {currentRewards.map((reward) => (
+                                        <div key={reward.id} className="border border-gray-200 rounded-md overflow-hidden bg-white">
+                                          {/* Header section - always visible */}
+                                          <div 
+                                            className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
+                                              expandedRewardDetails === reward.id ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
+                                            }`}
+                                            onClick={() => toggleRewardDetails(reward.id)}
+                                          >
+                                            {reward.icon}
+                              <div className="flex-1">
+                                              <h5 className="font-medium">{reward.title}</h5>
+                                <p className="text-sm text-gray-500">
+                                                {reward.description}
+                                </p>
                               </div>
-                            </>
-                          )}
-                          
+                                            {expandedRewardDetails === reward.id ? (
+                                              <ChevronUp className="h-5 w-5 text-gray-400" />
+                                            ) : (
+                                              <ChevronDown className="h-5 w-5 text-gray-400" />
+                                            )}
+                            </div>
+                            
+                                          {/* Expanded details section - only visible when expanded */}
+                                          {expandedRewardDetails === reward.id && (
+                                            <div className="p-4 border-t border-gray-200 bg-gray-50">
+                                              <div className="space-y-4">
+                                                {/* Conditions */}
+                              <div>
+                                                  <h6 className="text-sm font-medium mb-2 flex items-center">
+                                                    <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
+                                                    Conditions
+                                                  </h6>
+                                                  <div className="bg-white p-3 rounded border border-gray-200">
+                                                    <ul className="text-sm space-y-2">
+                                                      {reward.specialCondition ? (
+                                                        <li className="flex items-start gap-2">
+                                                          <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                              </div>
+                                                          <span>{reward.specialCondition}</span>
+                                                        </li>
+                                                      ) : reward.id === 'existing-birthday-treat' ? (
+                                                        <li className="flex items-start gap-2">
+                                                          <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                          </div>
+                                                          <span>Customer must be a member for at least 30 days</span>
+                                                        </li>
+                                                      ) : (
+                                                        <li className="flex items-start gap-2">
+                                                          <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                          </div>
+                                                          <span>Minimum 1 transaction required</span>
+                                                        </li>
+                                                      )}
+                                                      <li className="flex items-start gap-2">
+                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                          <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                        </div>
+                                                        <span>{reward.pointsCost ? `${reward.pointsCost} points cost` : '0 points cost'}</span>
+                                                      </li>
+                                                    </ul>
+                                                  </div>
+                                                </div>
+                                                
+                                                {/* Limitations */}
+                                                <div>
+                                                  <h6 className="text-sm font-medium mb-2 flex items-center">
+                                                    <Ban className="h-4 w-4 text-amber-600 mr-1" />
+                                                    Limitations
+                                                  </h6>
+                                                  <div className="bg-white p-3 rounded border border-gray-200">
+                                                    <ul className="text-sm space-y-2">
+                                                      <li className="flex items-start gap-2">
+                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                        </div>
+                                                        <span>Limited to {reward.customerLimit || 1} per customer</span>
+                                                      </li>
+                                                      {reward.specialLimitation && (
+                                                        <li className="flex items-start gap-2">
+                                                          <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                          </div>
+                                                          <span>{reward.specialLimitation}</span>
+                                                        </li>
+                                                      )}
+                                                      <li className="flex items-start gap-2">
+                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                        </div>
+                                                        <span>Total redemption limit: {reward.redemptionLimit}</span>
+                                                      </li>
+                                                    </ul>
+                                                  </div>
+                                                </div>
+                                                
+                                <Button 
+                                                  className={`w-full ${
+                                                    wizardSelectedRewards.includes(reward.id) 
+                                                      ? "bg-green-600 hover:bg-green-700" 
+                                                      : "bg-[#007AFF] hover:bg-[#0066CC]"
+                                                  } text-white`}
+                                                  onClick={() => handleRewardTypeSelection(reward.id)}
+                                                >
+                                                  {wizardSelectedRewards.includes(reward.id) 
+                                                    ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
+                                                    : "Select This Reward"
+                                                  }
+                                </Button>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                    
+                                    {/* Pagination controls */}
+                                    {totalPages > 1 && (
+                                      <div className="flex justify-center items-center gap-2 mt-6">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                          onClick={() => handleRewardPageChange(currentRewardPage - 1)}
+                                          disabled={currentRewardPage === 1}
+                                          className="h-8 w-8 p-0"
+                                >
+                                          <ChevronLeft className="h-4 w-4" />
+                                </Button>
+                                        
+                                        <div className="flex items-center gap-1">
+                                          {Array.from({ length: totalPages }).map((_, i) => (
+                                            <Button
+                                              key={i}
+                                              variant={currentRewardPage === i + 1 ? "default" : "outline"}
+                                              size="sm"
+                                              onClick={() => handleRewardPageChange(i + 1)}
+                                              className={`h-8 w-8 p-0 ${
+                                                currentRewardPage === i + 1 ? "bg-[#007AFF]" : ""
+                                              }`}
+                                            >
+                                              {i + 1}
+                                            </Button>
+                                          ))}
+                              </div>
+                                        
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleRewardPageChange(currentRewardPage + 1)}
+                                          disabled={currentRewardPage === totalPages}
+                                          className="h-8 w-8 p-0"
+                                        >
+                                          <ChevronRight className="h-4 w-4" />
+                                </Button>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                        </>
+                      )}
+                      
                           {customerCategoryStep === 'loyal' && (
                             <>
-                              {/* Loyal customer rewards */}
-                              <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
-                                <div 
-                                  className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
-                                    expandedRewardDetails === 'loyal-vip' ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
-                                  }`}
-                                  onClick={() => toggleRewardDetails('loyal-vip')}
-                                >
-                                  <Award className="h-6 w-6 text-purple-500" />
-                                  <div className="flex-1">
-                                    <h5 className="font-medium">VIP Experience</h5>
-                                    <p className="text-sm text-gray-500">
-                                      Special perks for your most loyal customers
-                                    </p>
-                                  </div>
-                                  {expandedRewardDetails === 'loyal-vip' ? (
-                                    <ChevronUp className="h-5 w-5 text-gray-400" />
-                                  ) : (
-                                    <ChevronDown className="h-5 w-5 text-gray-400" />
-                                  )}
-                                </div>
+                              {/* All loyal customer rewards data */}
+                              {(() => {
+                                // Define all rewards in one array
+                                const allLoyalCustomerRewards = [
+                                  // Original rewards
+                                  {
+                                    id: 'loyal-points-multiplier',
+                                    icon: <Award className="h-6 w-6 text-amber-500" />,
+                                    title: 'Points Multiplier',
+                                    description: 'Earn double points on all purchases',
+                                    redemptionLimit: 1000,
+                                    specialCondition: 'Minimum 10 transactions required'
+                                  },
+                                  {
+                                    id: 'loyal-vip',
+                                    icon: <Award className="h-6 w-6 text-purple-500" />,
+                                    title: 'VIP Experience',
+                                    description: 'Special perks for your most loyal customers',
+                                    redemptionLimit: 500,
+                                    specialCondition: 'Minimum 20 transactions required'
+                                  },
+                                  // New rewards
+                                  {
+                                    id: 'loyal-free-beverage',
+                                    icon: <Coffee className="h-6 w-6 text-blue-500" />,
+                                    title: 'VIP Free Beverage',
+                                    description: 'As a loyal member, enjoy a complimentary beverage of your choice every month.',
+                                    redemptionLimit: 200,
+                                    specialCondition: 'Total lifetime spend of $500',
+                                    customerLimit: 12
+                                  },
+                                  {
+                                    id: 'loyal-lunch',
+                                    icon: <Utensils className="h-6 w-6 text-green-500" />,
+                                    title: 'Loyalty Lunch',
+                                    description: 'Enjoy a free lunch meal with every 10th visit. Thank you for being a part of our family!',
+                                    redemptionLimit: 300,
+                                    specialCondition: 'Minimum 10 transactions required',
+                                    customerLimit: 3
+                                  },
+                                  {
+                                    id: 'loyal-vip-event',
+                                    icon: <Calendar className="h-6 w-6 text-purple-500" />,
+                                    title: 'Exclusive VIP Event',
+                                    description: 'Access to exclusive VIP events throughout the year. Join us for special tastings and gatherings.',
+                                    redemptionLimit: 100,
+                                    specialCondition: 'Platinum membership level required',
+                                    customerLimit: 3
+                                  },
+                                  {
+                                    id: 'loyal-weekly-coffee',
+                                    icon: <Coffee className="h-6 w-6 text-brown-500" />,
+                                    title: 'Complimentary Weekly Coffee',
+                                    description: 'Receive one free coffee every week as a thank you for your continued support.',
+                                    redemptionLimit: 500,
+                                    specialCondition: 'Member for at least 1 year',
+                                    customerLimit: 52
+                                  },
+                                  {
+                                    id: 'loyal-milestone-dining',
+                                    icon: <Utensils className="h-6 w-6 text-amber-500" />,
+                                    title: 'Milestone Dining Experience',
+                                    description: 'Celebrate your loyalty with a dining experience for two on us after reaching 50 visits.',
+                                    redemptionLimit: 50,
+                                    specialCondition: 'Minimum 50 transactions required',
+                                    customerLimit: 1
+                                  },
+                                  {
+                                    id: 'loyal-anniversary',
+                                    icon: <Gift className="h-6 w-6 text-red-500" />,
+                                    title: 'Anniversary Special',
+                                    description: 'Enjoy a special gift on your loyalty anniversary, perfect to celebrate the time with us.',
+                                    redemptionLimit: 300,
+                                    specialCondition: 'Minimum lifetime spend of $1,000',
+                                    customerLimit: 1
+                                  },
+                                  {
+                                    id: 'loyal-birthday-bash',
+                                    icon: <Cake className="h-6 w-6 text-pink-500" />,
+                                    title: 'VIP Birthday Bash',
+                                    description: 'Celebrate your birthday with us — receive a cake and a drink for you and your guests.',
+                                    redemptionLimit: 150,
+                                    specialCondition: 'Gold membership level required',
+                                    customerLimit: 1
+                                  },
+                                  {
+                                    id: 'loyal-coffee-subscription',
+                                    icon: <Package className="h-6 w-6 text-blue-500" />,
+                                    title: 'Exclusive Coffee Subscription',
+                                    description: 'Subscribe to our exclusive coffee shipment – free monthly bags delivered to your door.',
+                                    redemptionLimit: 200,
+                                    specialCondition: 'Minimum points balance of 300',
+                                    customerLimit: 6,
+                                    pointsCost: 75
+                                  },
+                                  {
+                                    id: 'loyal-coffee-experience',
+                                    icon: <Coffee className="h-6 w-6 text-green-500" />,
+                                    title: 'Ultimate Coffee Experience',
+                                    description: 'Join us behind the scenes for a coffee-making masterclass. Perfect for true enthusiasts.',
+                                    redemptionLimit: 100,
+                                    specialCondition: 'Total lifetime spend of $1,500',
+                                    customerLimit: 1
+                                  },
+                                  {
+                                    id: 'loyal-customer-recognition',
+                                    icon: <Award className="h-6 w-6 text-yellow-500" />,
+                                    title: 'Loyal Customer Recognition',
+                                    description: 'Get recognized on our Wall of Fame and enjoy a dedicated week\'s worth of free snacks.',
+                                    redemptionLimit: 50,
+                                    specialCondition: 'Minimum 100 transactions required',
+                                    customerLimit: 1
+                                  },
+                                  {
+                                    id: 'loyal-coffee-lovers-program',
+                                    icon: <Coffee className="h-6 w-6 text-brown-500" />,
+                                    title: 'Coffee Lovers Program',
+                                    description: 'Create a premium buy-X-get-1-free coffee loyalty program for your most loyal customers',
+                                    redemptionLimit: 1000,
+                                    specialCondition: 'Configurable frequency and rewards'
+                                  }
+                                ];
                                 
-                                {expandedRewardDetails === 'loyal-vip' && (
-                                  <div className="p-4 border-t border-gray-200 bg-gray-50">
-                                    <div className="space-y-4">
-                                      <div>
-                                        <h6 className="text-sm font-medium mb-2 flex items-center">
-                                          <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
-                                          Conditions
-                                        </h6>
-                                        <div className="bg-white p-3 rounded border border-gray-200">
-                                          <ul className="text-sm space-y-2">
-                                            <li className="flex items-start gap-2">
-                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                              </div>
-                                              <span>Minimum 20 transactions required</span>
-                                            </li>
-                                            <li className="flex items-start gap-2">
-                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                              </div>
-                                              <span>750 points cost</span>
-                                            </li>
-                                          </ul>
+                                // Calculate total pages for loyal customer rewards
+                                const totalLoyalCustomerPages = Math.ceil(allLoyalCustomerRewards.length / rewardsPerPage);
+                                
+                                // Get current page rewards
+                                const indexOfLastReward = currentLoyalCustomerPage * rewardsPerPage;
+                                const indexOfFirstReward = indexOfLastReward - rewardsPerPage;
+                                const currentRewards = allLoyalCustomerRewards.slice(indexOfFirstReward, indexOfLastReward);
+                                
+                                return (
+                                  <div className="space-y-4">
+                                    {/* Loyal customer rewards - displayed in a grid */}
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                      {currentRewards.map((reward) => (
+                                        <div key={reward.id} className="border border-gray-200 rounded-md overflow-hidden bg-white">
+                                          {/* Header section - always visible */}
+                                          <div 
+                                            className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
+                                              expandedRewardDetails === reward.id ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
+                                            }`}
+                                            onClick={() => toggleRewardDetails(reward.id)}
+                                          >
+                                            {reward.icon}
+                            <div className="flex-1">
+                                              <h5 className="font-medium">{reward.title}</h5>
+                              <p className="text-sm text-gray-500">
+                                                {reward.description}
+                              </p>
+                            </div>
+                                            <div>
+                                              {expandedRewardDetails === reward.id ? (
+                                                <ChevronUp className="h-5 w-5 text-gray-400" />
+                                              ) : (
+                                                <ChevronDown className="h-5 w-5 text-gray-400" />
+                                              )}
+                                            </div>
+                                          </div>
+                                          
+                                          {/* Expanded details section */}
+                                          {expandedRewardDetails === reward.id && (
+                                            <div className="p-4 border-t border-gray-200 bg-gray-50">
+                                              <div className="space-y-4">
+                                                {/* Conditions */}
+                                                <div>
+                                                  <h6 className="text-sm font-medium mb-2 flex items-center">
+                                                    <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
+                                                    Conditions
+                                                  </h6>
+                                                  <div className="bg-white p-3 rounded border border-gray-200">
+                                                    <ul className="text-sm space-y-2">
+                                                      <li className="flex items-start gap-2">
+                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                          <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                        </div>
+                                                        <span>{reward.specialCondition}</span>
+                                                      </li>
+                                                      <li className="flex items-start gap-2">
+                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                          <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                        </div>
+                                                        <span>{reward.pointsCost ? `${reward.pointsCost} points cost` : '0 points cost'}</span>
+                                                      </li>
+                                                    </ul>
+                                                  </div>
+                                                </div>
+                                                
+                                                {/* Limitations */}
+                                                <div>
+                                                  <h6 className="text-sm font-medium mb-2 flex items-center">
+                                                    <Ban className="h-4 w-4 text-amber-600 mr-1" />
+                                                    Limitations
+                                                  </h6>
+                                                  <div className="bg-white p-3 rounded border border-gray-200">
+                                                    <ul className="text-sm space-y-2">
+                                                      <li className="flex items-start gap-2">
+                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                        </div>
+                                                        <span>Limited to {reward.customerLimit || 1} per customer</span>
+                                                      </li>
+                                                      <li className="flex items-start gap-2">
+                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
+                                                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                                        </div>
+                                                        <span>Total redemption limit: {reward.redemptionLimit}</span>
+                                                      </li>
+                                                    </ul>
+                                                  </div>
+                                                </div>
+                                                
+                            <Button 
+                                                  className={`w-full ${
+                                                    wizardSelectedRewards.includes(reward.id) 
+                                                      ? "bg-green-600 hover:bg-green-700" 
+                                                      : "bg-[#007AFF] hover:bg-[#0066CC]"
+                                                  } text-white`}
+                                                  onClick={() => handleRewardTypeSelection(reward.id)}
+                                                >
+                                                  {wizardSelectedRewards.includes(reward.id) 
+                                                    ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
+                                                    : "Select This Reward"
+                                                  }
+                            </Button>
+                          </div>
+                            </div>
+                                          )}
                                         </div>
-                                      </div>
-                                      
-                                      <div>
-                                        <h6 className="text-sm font-medium mb-2 flex items-center">
-                                          <Ban className="h-4 w-4 text-amber-600 mr-1" />
-                                          Limitations
-                                        </h6>
-                                        <div className="bg-white p-3 rounded border border-gray-200">
-                                          <ul className="text-sm space-y-2">
-                                            <li className="flex items-start gap-2">
-                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                              </div>
-                                              <span>Limited to 1 per customer per quarter</span>
-                                            </li>
-                                            <li className="flex items-start gap-2">
-                                              <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                              </div>
-                                              <span>Valid for 60 days after redemption</span>
-                                            </li>
-                                          </ul>
-                                        </div>
-                                      </div>
-                                      
-                                      <Button 
-                                        className={`w-full ${
-                                          wizardSelectedRewards.includes('loyal-vip') 
-                                            ? "bg-green-600 hover:bg-green-700" 
-                                            : "bg-[#007AFF] hover:bg-[#0066CC]"
-                                        } text-white`}
-                                        onClick={() => handleRewardTypeSelection('loyal-vip')}
-                                      >
-                                        {wizardSelectedRewards.includes('loyal-vip') 
-                                          ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
-                                          : "Select This Reward"
-                                        }
-                                      </Button>
+                                      ))}
                                     </div>
+                                    
+                                    {/* Pagination controls for loyal customer rewards */}
+                                    {totalLoyalCustomerPages > 1 && (
+                                      <div className="flex justify-center items-center gap-2 mt-6">
+                            <Button 
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleLoyalCustomerPageChange(currentLoyalCustomerPage - 1)}
+                                          disabled={currentLoyalCustomerPage === 1}
+                                          className="h-8 w-8 p-0"
+                                        >
+                                          <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                                        
+                                        <div className="flex items-center gap-1">
+                                          {Array.from({ length: totalLoyalCustomerPages }).map((_, i) => (
+                                            <Button
+                                              key={i}
+                                              variant={currentLoyalCustomerPage === i + 1 ? "default" : "outline"}
+                                              size="sm"
+                                              onClick={() => handleLoyalCustomerPageChange(i + 1)}
+                                              className={`h-8 w-8 p-0 ${
+                                                currentLoyalCustomerPage === i + 1 ? "bg-[#007AFF]" : ""
+                                              }`}
+                                            >
+                                              {i + 1}
+                                            </Button>
+                                          ))}
+                            </div>
+                                        
+                            <Button 
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleLoyalCustomerPageChange(currentLoyalCustomerPage + 1)}
+                                          disabled={currentLoyalCustomerPage === totalLoyalCustomerPages}
+                                          className="h-8 w-8 p-0"
+                                        >
+                                          <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
+                                    )}
                                   </div>
-                                )}
-                              </div>
+                                );
+                              })()}
                             </>
                           )}
                         </div>
@@ -1839,49 +2257,93 @@ export function OnboardingWizard() {
                     
                     {/* Wizard Step 3: Program Selection */}
                     {wizardStep === 3 && (
-                      <div className="space-y-4">
+                      <div className="space-y-6">
                         <div className="flex items-center justify-between">
                           <h4 className="font-medium text-lg">Step 3: Choose a Reward Program</h4>
                         </div>
                         
-                        <p className="text-sm text-gray-600 mb-4">
-                          Now, select a program that offers multiple rewards at different levels
-                        </p>
+                        <p className="text-gray-600">Now, select a program that offers multiple rewards at different levels</p>
                         
-                        <div className="space-y-3">
-                          {selectedIndustry === 'cafe' && (
-                            <>
-                              <div 
-                                className="flex items-center gap-3 p-4 bg-white rounded-md border border-gray-200 hover:border-blue-500 hover:bg-blue-50 cursor-pointer transition-colors"
-                                onClick={() => handleProgramTypeSelection('coffee-lovers')}
-                              >
-                                <Award className="h-6 w-6 text-amber-500" />
-                                <div className="flex-1">
-                                  <h5 className="font-medium">Coffee Lovers Program</h5>
-                                  <p className="text-sm text-gray-500">
-                                    A tiered program with coffee-related rewards
-                                  </p>
+                        <div className="space-y-4">
+                          {/* Traditional Coffee Program */}
+                          <div className="border border-gray-200 rounded-lg overflow-hidden">
+                            <div className="p-4">
+                              <div className="flex items-center gap-3">
+                                <div className="h-12 w-12 rounded-full bg-brown-100 flex items-center justify-center text-brown-600">
+                                  <Coffee className="h-6 w-6" />
                                 </div>
-                                <ChevronRight className="h-5 w-5 text-gray-400" />
+                                <div className="flex-1">
+                                  <h5 className="font-medium">Traditional Coffee Program</h5>
+                                  <p className="text-sm text-gray-500">Buy X coffees, get 1 free (stamp card style)</p>
+                                </div>
+                                {coffeeProgramConfigured ? (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-green-600 flex items-center">
+                                      <CheckCircle className="h-4 w-4 mr-1" /> Configured
+                                    </span>
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm"
+                                      onClick={() => setShowCoffeeProgramConfig(true)}
+                                    >
+                                      Edit
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button 
+                                    className="bg-[#007AFF] hover:bg-[#0066CC] text-white"
+                                    onClick={() => {
+                                      setWizardSelectedRewards(prev => 
+                                        prev.includes('traditional-coffee-program') 
+                                          ? prev 
+                                          : [...prev, 'traditional-coffee-program']
+                                      );
+                                      setShowCoffeeProgramConfig(true);
+                                    }}
+                                  >
+                                    Configure
+                                  </Button>
+                                )}
                               </div>
                               
-                              <div 
-                                className="flex items-center gap-3 p-4 bg-white rounded-md border border-gray-200 hover:border-blue-500 hover:bg-blue-50 cursor-pointer transition-colors"
-                                onClick={() => handleProgramTypeSelection('sweet-treats')}
-                              >
-                                <Cake className="h-6 w-6 text-pink-500" />
-                                <div className="flex-1">
-                                  <h5 className="font-medium">Sweet Treats Program</h5>
-                                  <p className="text-sm text-gray-500">
-                                    A program with pastry and dessert rewards
-                                  </p>
+                              {coffeeProgramConfigured && (
+                                <div className="mt-4 pt-4 border-t border-gray-200">
+                                  <h6 className="text-sm font-medium mb-2">Configuration Details</h6>
+                                  <div className="grid grid-cols-2 gap-3 text-sm">
+                                    <div>
+                                      <span className="text-gray-500">PIN Code:</span>
+                                      <span className="ml-2 font-medium">{coffeeProgram.pin}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500">First Free Coffee:</span>
+                                      <span className="ml-2 font-medium">
+                                        {coffeeProgram.freeRewardTiming === 'before' ? 'Before first transaction' : 'After first transaction'}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500">Frequency:</span>
+                                      <span className="ml-2 font-medium">Every {coffeeProgram.frequency} transactions</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500">Number of Rewards:</span>
+                                      <span className="ml-2 font-medium">{coffeeProgram.levels}</span>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="mt-4 flex justify-end">
+                                    <Button 
+                                      className="bg-green-600 hover:bg-green-700 text-white"
+                                      onClick={() => {
+                                        setWizardStep(4); // Move to the next step
+                                      }}
+                                    >
+                                      Continue
+                                    </Button>
+                                  </div>
                                 </div>
-                                <ChevronRight className="h-5 w-5 text-gray-400" />
-                              </div>
-                            </>
-                          )}
-                          
-                          {/* Add similar sections for retail and restaurant */}
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -1916,7 +2378,7 @@ export function OnboardingWizard() {
                             </div>
                           </div>
                           
-                          <Button 
+                            <Button 
                             className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white"
                             onClick={() => {
                               // Add the selected rewards to the businessData
@@ -1953,10 +2415,10 @@ export function OnboardingWizard() {
                             }}
                           >
                             Confirm Selections & Continue
-                          </Button>
-                        </div>
+                            </Button>
+                          </div>
                       </div>
-                    )}
+                      )}
                   </div>
                 </div>
               )}
@@ -1990,20 +2452,20 @@ export function OnboardingWizard() {
                           {wizardSelectedRewards.map(reward => (
                             <div key={reward} className="flex items-center gap-1 bg-white px-2 py-1 rounded-md border border-blue-200">
                               <span className="text-xs">{reward}</span>
-                              <Button 
+                        <Button 
                                 variant="ghost" 
                                 size="icon" 
                                 className="h-4 w-4 rounded-full"
                                 onClick={() => removeSelectedReward(reward)}
                               >
                                 <X className="h-3 w-3" />
-                              </Button>
+                        </Button>
                             </div>
                           ))}
                         </div>
                       )}
-                    </div>
-                    
+                      </div>
+                      
                     <div className="space-y-6">
                       {/* Category 1: New Customers */}
                       <div>
@@ -2015,7 +2477,7 @@ export function OnboardingWizard() {
                           {/* Placeholder for new customer rewards - will be populated later */}
                           <div className="p-4 bg-white rounded-md border border-dashed border-gray-300 text-center">
                             <p className="text-sm text-gray-500">Rewards for new customers will appear here</p>
-                          </div>
+                        </div>
                         </div>
                       </div>
                       
@@ -2121,8 +2583,8 @@ export function OnboardingWizard() {
         {hasViewedIntro && (
           <div className="md:col-span-3">
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5 sticky top-6">
-              <h3 className="text-lg font-medium mb-4">Your Setup Progress</h3>
-              
+            <h3 className="text-lg font-medium mb-4">Your Setup Progress</h3>
+            
               {/* Add step indicator at the top */}
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-2">
@@ -2133,102 +2595,102 @@ export function OnboardingWizard() {
                   <div 
                     className="h-full bg-[#007AFF] rounded-full transition-all duration-300"
                     style={{ width: `${(step / totalSteps) * 100}%` }}
-                  />
-                </div>
+                    />
+                  </div>
               </div>
               
               <div className="space-y-3">
-                {/* Reward creation status */}
-                <div className="flex items-center gap-3">
-                  <div className={`h-6 w-6 rounded-full flex items-center justify-center ${
+              {/* Reward creation status */}
+              <div className="flex items-center gap-3">
+                <div className={`h-6 w-6 rounded-full flex items-center justify-center ${
                     step === 1 ? "bg-[#007AFF] text-white" :
                     step > 1 ? "bg-green-100 text-green-600" :
                     "bg-gray-100 text-gray-400"
-                  }`}>
+                }`}>
                     {step > 1 ? (
                       <Check className="h-4 w-4" />
-                    ) : (
+                  ) : (
                       <span className="text-xs">1</span>
-                    )}
-                  </div>
-                  <div className="flex-1">
+                  )}
+                </div>
+                <div className="flex-1">
                     <p className={`text-sm ${
                       step >= 1 ? "text-gray-900" : "text-gray-500"
                     }`}>
                       Create Rewards
-                    </p>
-                    {businessData.selectedRewards.length > 0 && (
-                      <div className="mt-1 space-y-1">
-                        {businessData.selectedRewards.map((reward) => (
-                          <div key={reward.id} className="flex items-center gap-1">
-                            <span className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0"></span>
-                            <p className="text-xs text-gray-600 truncate">{reward.name}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  </p>
+                  {businessData.selectedRewards.length > 0 && (
+                    <div className="mt-1 space-y-1">
+                      {businessData.selectedRewards.map((reward) => (
+                        <div key={reward.id} className="flex items-center gap-1">
+                          <span className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0"></span>
+                          <p className="text-xs text-gray-600 truncate">{reward.name}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                
-                {/* Points rule status */}
-                <div className="flex items-center gap-3">
-                  <div className={`h-6 w-6 rounded-full flex items-center justify-center ${
+              </div>
+              
+              {/* Points rule status */}
+              <div className="flex items-center gap-3">
+                <div className={`h-6 w-6 rounded-full flex items-center justify-center ${
                     step === 2 ? "bg-[#007AFF] text-white" :
                     step > 2 ? "bg-green-100 text-green-600" :
                     "bg-gray-100 text-gray-400"
-                  }`}>
+                }`}>
                     {step > 2 ? (
                       <Check className="h-4 w-4" />
-                    ) : (
+                  ) : (
                       <span className="text-xs">2</span>
-                    )}
-                  </div>
-                  <div className="flex-1">
+                  )}
+                </div>
+                <div className="flex-1">
                     <p className={`text-sm ${
                       step >= 2 ? "text-gray-900" : "text-gray-500"
                     }`}>
-                      Set Up Points Rules
+                    Set Up Points Rules
+                  </p>
+                  {businessData.pointsRuleDetails && (
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {businessData.pointsRuleDetails.name}
                     </p>
-                    {businessData.pointsRuleDetails && (
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {businessData.pointsRuleDetails.name}
-                      </p>
-                    )}
-                  </div>
+                  )}
                 </div>
-                
-                {/* Banner status */}
-                <div className="flex items-center gap-3">
-                  <div className={`h-6 w-6 rounded-full flex items-center justify-center ${
+              </div>
+              
+              {/* Banner status */}
+              <div className="flex items-center gap-3">
+                <div className={`h-6 w-6 rounded-full flex items-center justify-center ${
                     step === 3 ? "bg-[#007AFF] text-white" :
                     step > 3 ? "bg-green-100 text-green-600" :
                     "bg-gray-100 text-gray-400"
-                  }`}>
+                }`}>
                     {step > 3 ? (
                       <Check className="h-4 w-4" />
-                    ) : (
+                  ) : (
                       <span className="text-xs">3</span>
-                    )}
-                  </div>
-                  <div className="flex-1">
+                  )}
+                </div>
+                <div className="flex-1">
                     <p className={`text-sm ${
                       step >= 3 ? "text-gray-900" : "text-gray-500"
                     }`}>
-                      Create Homepage Banner
+                    Create Homepage Banner
+                  </p>
+                  {businessData.bannerDetails && (
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {businessData.bannerDetails.name}
                     </p>
-                    {businessData.bannerDetails && (
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {businessData.bannerDetails.name}
-                      </p>
-                    )}
-                  </div>
+                  )}
                 </div>
+              </div>
               </div>
             </div>
           </div>
         )}
-      </div>
-      
+            </div>
+            
       {/* Add the exit confirmation dialog */}
       <AlertDialog open={showExitConfirmation} onOpenChange={setShowExitConfirmation}>
         <AlertDialogContent>
@@ -2249,6 +2711,101 @@ export function OnboardingWizard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Coffee Program Configuration Dialog */}
+      <Dialog open={showCoffeeProgramConfig} onOpenChange={setShowCoffeeProgramConfig}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>
+              <div className="flex items-center">
+                <span className="text-[#007AFF]">Configure</span>{' '}Coffee Program
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="py-4 min-h-[300px] space-y-6">
+            <div className="space-y-4">
+              <div className="grid gap-2">
+                <Label>PIN Code</Label>
+                <Input
+                  type="text"
+                  maxLength={4}
+                  value={coffeeProgram.pin}
+                  onChange={(e) => setCoffeeProgram({ ...coffeeProgram, pin: e.target.value })}
+                  placeholder="Enter 4-digit PIN"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Staff will enter this PIN when redeeming free coffees
+                </p>
+                </div>
+
+              <div className="grid gap-2">
+                <Label>First Free Coffee Timing</Label>
+                <RadioGroup
+                  value={coffeeProgram.freeRewardTiming}
+                  onValueChange={(value: 'before' | 'after') => 
+                    setCoffeeProgram({ ...coffeeProgram, freeRewardTiming: value })
+                  }
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="after" id="after" />
+                    <Label htmlFor="after">After first transaction</Label>
+              </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="before" id="before" />
+                    <Label htmlFor="before">Before first transaction</Label>
+            </div>
+                </RadioGroup>
+                <p className="text-sm text-muted-foreground">
+                  Choose when customers receive their first free coffee
+                </p>
+          </div>
+
+              <div className="grid gap-2">
+                <Label>Frequency</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={coffeeProgram.frequency}
+                  onChange={(e) => setCoffeeProgram({ ...coffeeProgram, frequency: e.target.value })}
+                  placeholder="Enter number of transactions"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Number of transactions required between free coffees
+                </p>
+        </div>
+
+              <div className="grid gap-2">
+                <Label>Number of Rewards</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={coffeeProgram.levels}
+                  onChange={(e) => setCoffeeProgram({ ...coffeeProgram, levels: e.target.value })}
+                  placeholder="Enter number of rewards"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Total number of free coffees in the program
+                </p>
+      </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-4 flex justify-end gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowCoffeeProgramConfig(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={saveCoffeeProgram}
+            >
+              Create Program
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

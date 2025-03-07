@@ -12,14 +12,52 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, updateDoc, writeBatch } from "firebase/firestore"
+import { doc, updateDoc, writeBatch, collection } from "firebase/firestore"
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { ArrowRight, CheckCircle, Coffee, Gift, Store, Users, Upload, Sparkles, Award, BarChart, Image, Utensils, Percent, Cake, Wine, UtensilsCrossed, Check, X, ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Ban, Calendar, ChevronLeft, Clock, Package } from "lucide-react"
+import { ArrowRight, CheckCircle, Coffee, Gift, Store, Users, Upload, Sparkles, Award, BarChart, Image, Utensils, Percent, Cake, Wine, UtensilsCrossed, Check, X, ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Ban, Calendar, ChevronLeft, Clock, Package, Plus } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Checkbox } from "@/components/ui/checkbox"
+
+// Update the businessData type to include selectedRules and add missing properties to selectedRewards
+type BusinessData = {
+  hasSetupReward: boolean
+  selectedRewards: {
+    id: string
+    name: string
+    type: string
+    industry: string
+    isNewCustomer: boolean
+    pointsCost: number
+    description: string
+    rewardName?: string
+    conditions?: any[]
+    limitations?: any[]
+    programtype?: string
+    voucherAmount?: number
+    coffeeConfig?: {
+      pin: string
+      freeRewardTiming: 'before' | 'after'
+      frequency: number
+      levels: number
+    }
+  }[]
+  hasSetupPointsRule: boolean
+  pointsRuleDetails: {
+    name: string
+    type: string
+  } | null
+  hasSetupBanner: boolean
+  bannerDetails: {
+    name: string
+    type: string
+  } | null
+  selectedIndustry: string
+  selectedRules: string[] // Add this property
+}
 
 export function OnboardingWizard() {
   const [step, setStep] = useState(1)
@@ -234,7 +272,7 @@ export function OnboardingWizard() {
         
         // Format the reward data according to the required structure
         const rewardData = {
-          rewardName: reward.rewardName,
+          rewardName: reward.rewardName || reward.name,
           description: reward.description,
           isActive: true,
           pointsCost: reward.pointsCost,
@@ -294,14 +332,14 @@ export function OnboardingWizard() {
   };
 
   const handleRewardSelection = (rewardId: string, type: 'individual' | 'program') => {
-    // Create a unique ID that includes both the reward ID and the type
-    const uniqueId = `${rewardId}-${type}`;
+    // Generate a truly unique ID by adding a timestamp
+    const uniqueId = `${selectedIndustry}-${type}-${rewardId}-${Date.now()}`
     
     // Define the base reward details with the required JSON structure
     const rewardDetails = {
       id: uniqueId,
       name: '',
-      type: type,
+      type,
       industry: selectedIndustry,
       isNewCustomer: false,
       rewardName: '',
@@ -345,7 +383,7 @@ export function OnboardingWizard() {
             value: {
               startDate: new Date().toISOString().split('T')[0],
               endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
-            }
+            } as any // Type assertion to avoid type error
           });
         } else {
           rewardDetails.name = 'Coffee Lovers Program';
@@ -868,21 +906,243 @@ export function OnboardingWizard() {
       reward.name === "Coffee Lovers Program" || reward.id.includes('coffee-lovers')
     );
     
-    if (coffeeProgram) {
+    if (coffeeProgram && coffeeProgram.coffeeConfig) {
       // If there's already a configuration, load it
-      if (coffeeProgram.coffeeConfig) {
-        setCoffeeProgram({
-          pin: coffeeProgram.coffeeConfig.pin,
-          freeRewardTiming: coffeeProgram.coffeeConfig.freeRewardTiming,
-          frequency: coffeeProgram.coffeeConfig.frequency.toString(),
-          levels: coffeeProgram.coffeeConfig.levels.toString()
-        });
-      }
+      setCoffeeProgram({
+        pin: coffeeProgram.coffeeConfig.pin,
+        freeRewardTiming: coffeeProgram.coffeeConfig.freeRewardTiming,
+        frequency: coffeeProgram.coffeeConfig.frequency.toString(),
+        levels: coffeeProgram.coffeeConfig.levels.toString()
+      });
       
       // Show the configuration dialog
       setShowCoffeeProgramConfig(true);
     }
   };
+
+  // Add a function to handle cancellation of coffee program configuration
+  const handleCancelCoffeeConfig = () => {
+    // If this is a new configuration (not editing an existing one)
+    if (!coffeeProgramConfigured) {
+      // Remove the traditional coffee program from selected rewards
+      setWizardSelectedRewards(prev => 
+        prev.filter(id => id !== 'traditional-coffee-program')
+      );
+      
+      // Show a toast to inform the user
+      toast({
+        title: "Configuration Cancelled",
+        description: "Coffee program was not added to your selections",
+        variant: "default"
+      });
+    }
+    
+    // Close the configuration dialog
+    setShowCoffeeProgramConfig(false);
+  };
+
+  // Add a function to handle removing the coffee program configuration
+  const handleRemoveCoffeeConfig = () => {
+    // Reset the coffee program configuration
+    setCoffeeProgram({
+      pin: '',
+      freeRewardTiming: 'after',
+      frequency: '5',
+      levels: '5'
+    });
+    
+    // Mark as not configured
+    setCoffeeProgramConfigured(false);
+    
+    // Remove from selected rewards
+    setWizardSelectedRewards(prev => 
+      prev.filter(id => id !== 'traditional-coffee-program')
+    );
+    
+    // Remove from business data
+    setBusinessData(prev => ({
+      ...prev,
+      selectedRewards: prev.selectedRewards.filter(r => 
+        r.id !== 'traditional-coffee-program'
+      )
+    }));
+    
+    // Show a toast to inform the user
+    toast({
+      title: "Configuration Removed",
+      description: "Coffee program configuration has been removed",
+      variant: "default"
+    });
+  };
+
+  // Add states for voucher program configuration
+  const [voucherProgram, setVoucherProgram] = useState({
+    name: 'Standard Voucher Program',
+    description: 'Earn vouchers based on your total spend',
+    totalSpendRequired: '100',
+    voucherAmount: '10',
+    voucherType: 'amount' as 'amount' | 'percent'
+  });
+
+  // Add state to control the voucher program configuration dialog
+  const [showVoucherProgramConfig, setShowVoucherProgramConfig] = useState(false);
+
+  // Add state to track if the voucher program has been configured
+  const [voucherProgramConfigured, setVoucherProgramConfigured] = useState(false);
+
+  // Add a function to save voucher program configuration
+  const saveVoucherProgram = () => {
+    // Validate inputs
+    if (!voucherProgram.name.trim()) {
+      toast({
+        title: "Invalid Name",
+        description: "Please enter a name for the voucher program",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (isNaN(Number(voucherProgram.totalSpendRequired)) || Number(voucherProgram.totalSpendRequired) <= 0) {
+      toast({
+        title: "Invalid Spend Amount",
+        description: "Please enter a valid total spend amount",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (isNaN(Number(voucherProgram.voucherAmount)) || Number(voucherProgram.voucherAmount) <= 0) {
+      toast({
+        title: "Invalid Voucher Amount",
+        description: "Please enter a valid voucher amount",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Create the voucher program reward with configuration
+    const voucherReward = {
+      id: 'standard-voucher-program',
+      name: voucherProgram.name,
+      type: 'program',
+      industry: selectedIndustry,
+      isNewCustomer: false,
+      pointsCost: 0,
+      description: voucherProgram.description,
+      voucherConfig: {
+        totalSpendRequired: Number(voucherProgram.totalSpendRequired),
+        voucherAmount: Number(voucherProgram.voucherAmount),
+        voucherType: voucherProgram.voucherType
+      }
+    };
+    
+    // Update business data
+    setBusinessData(prev => ({
+      ...prev,
+      selectedRewards: [...prev.selectedRewards.filter(r => 
+        r.id !== 'standard-voucher-program'
+      ), voucherReward]
+    }));
+    
+    // Mark the voucher program as configured
+    setVoucherProgramConfigured(true);
+    
+    // Close the configuration dialog
+    setShowVoucherProgramConfig(false);
+    
+    // Show success toast
+    toast({
+      title: "Voucher Program Configured",
+      description: "Your voucher program has been configured successfully",
+      variant: "default"
+    });
+  };
+
+  // Add a function to handle removing the voucher program configuration
+  const handleRemoveVoucherConfig = () => {
+    // Reset the voucher program configuration
+    setVoucherProgram({
+      name: 'Standard Voucher Program',
+      description: 'Earn vouchers based on your total spend',
+      totalSpendRequired: '100',
+      voucherAmount: '10',
+      voucherType: 'amount'
+    });
+    
+    // Mark as not configured
+    setVoucherProgramConfigured(false);
+    
+    // Remove from selected rewards
+    setWizardSelectedRewards(prev => 
+      prev.filter(id => id !== 'standard-voucher-program')
+    );
+    
+    // Remove from business data
+    setBusinessData(prev => ({
+      ...prev,
+      selectedRewards: prev.selectedRewards.filter(r => 
+        r.id !== 'standard-voucher-program'
+      )
+    }));
+    
+    // Show a toast to inform the user
+    toast({
+      title: "Configuration Removed",
+      description: "Voucher program configuration has been removed",
+      variant: "default"
+    });
+  };
+
+  // Add a function to handle cancellation of voucher program configuration
+  const handleCancelVoucherConfig = () => {
+    // If this is a new configuration (not editing an existing one)
+    if (!voucherProgramConfigured) {
+      // Remove the voucher program from selected rewards
+      setWizardSelectedRewards(prev => 
+        prev.filter(id => id !== 'standard-voucher-program')
+      );
+      
+      // Show a toast to inform the user
+      toast({
+        title: "Configuration Cancelled",
+        description: "Voucher program was not added to your selections",
+        variant: "default"
+      });
+    }
+    
+    // Close the configuration dialog
+    setShowVoucherProgramConfig(false);
+  };
+
+  // Step 2: Points Rules
+  const renderPointsRulesStep = () => {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold">Step 2: Points Rules</h2>
+          <Button variant="outline" onClick={handleWizardBack}>
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
+          </Button>
+        </div>
+        
+        <p className="text-muted-foreground">
+          This section is currently under development.
+        </p>
+        
+        {/* Empty space for future content */}
+        <div className="min-h-[400px]"></div>
+
+        <div className="flex justify-between mt-8">
+          <Button variant="outline" onClick={handleBack}>
+            Back
+          </Button>
+          <Button onClick={handleNext}>
+            Next <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="container max-w-[1600px] py-10">
@@ -1062,12 +1322,12 @@ export function OnboardingWizard() {
                         <div className="text-center">
                           <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-3">
                             <Gift className="h-6 w-6 text-blue-600" />
-                          </div>
+                            </div>
                           <h5 className="font-medium mb-2">2. Points Accumulate</h5>
                           <p className="text-sm text-gray-600">
                             Points add up based on your custom rules and visit frequency
                           </p>
-                    </div>
+                          </div>
                     
                         <div className="text-center">
                           <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
@@ -1111,7 +1371,7 @@ export function OnboardingWizard() {
                             <div className="h-8 w-8 rounded-full bg-gray-50 flex items-center justify-center flex-shrink-0">
                               {feature.icon}
                       </div>
-                      <div>
+                            <div>
                               <h5 className="font-medium mb-1">{feature.title}</h5>
                               <p className="text-sm text-gray-600">{feature.description}</p>
                             </div>
@@ -1154,8 +1414,8 @@ export function OnboardingWizard() {
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <h4 className="font-medium text-lg">Step 1: Select Your Industry</h4>
-                            </div>
-                        
+                    </div>
+                    
                         <p className="text-sm text-gray-600 mb-2">
                           Choose the industry that best matches your business
                         </p>
@@ -1175,9 +1435,9 @@ export function OnboardingWizard() {
                             {selectedIndustry === 'cafe' && (
                               <CheckCircle className="h-5 w-5 text-green-600" />
                             )}
-                    </div>
-                    
-                          <div 
+                        </div>
+                        
+                        <div 
                             className={`flex items-center gap-3 p-4 bg-white rounded-md border ${
                               selectedIndustry === 'restaurant' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
                             } cursor-pointer transition-colors`}
@@ -1207,9 +1467,9 @@ export function OnboardingWizard() {
                             {selectedIndustry === 'retail' && (
                               <CheckCircle className="h-5 w-5 text-green-600" />
                             )}
-                        </div>
                       </div>
-                        
+                    </div>
+                    
                         <div className="mt-4 p-3 bg-blue-50 rounded-md border border-blue-100">
                           <p className="text-sm text-blue-700">
                             <span className="font-medium">Selected: </span>
@@ -2266,28 +2526,28 @@ export function OnboardingWizard() {
                         
                         <div className="space-y-4">
                           {/* Traditional Coffee Program */}
-                          <div className="border border-gray-200 rounded-lg overflow-hidden">
+                          <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
                             <div className="p-4">
                               <div className="flex items-center gap-3">
                                 <div className="h-12 w-12 rounded-full bg-brown-100 flex items-center justify-center text-brown-600">
                                   <Coffee className="h-6 w-6" />
                                 </div>
-                                <div className="flex-1">
+                            <div className="flex-1">
                                   <h5 className="font-medium">Traditional Coffee Program</h5>
                                   <p className="text-sm text-gray-500">Buy X coffees, get 1 free (stamp card style)</p>
-                                </div>
+                            </div>
                                 {coffeeProgramConfigured ? (
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm font-medium text-green-600 flex items-center">
                                       <CheckCircle className="h-4 w-4 mr-1" /> Configured
                                     </span>
-                                    <Button 
+                            <Button 
                                       variant="outline" 
                                       size="sm"
                                       onClick={() => setShowCoffeeProgramConfig(true)}
                                     >
                                       Edit
-                                    </Button>
+                            </Button>
                                   </div>
                                 ) : (
                                   <Button 
@@ -2304,8 +2564,8 @@ export function OnboardingWizard() {
                                     Configure
                                   </Button>
                                 )}
-                              </div>
-                              
+                          </div>
+                          
                               {coffeeProgramConfigured && (
                                 <div className="mt-4 pt-4 border-t border-gray-200">
                                   <h6 className="text-sm font-medium mb-2">Configuration Details</h6>
@@ -2313,7 +2573,7 @@ export function OnboardingWizard() {
                                     <div>
                                       <span className="text-gray-500">PIN Code:</span>
                                       <span className="ml-2 font-medium">{coffeeProgram.pin}</span>
-                                    </div>
+                            </div>
                                     <div>
                                       <span className="text-gray-500">First Free Coffee:</span>
                                       <span className="ml-2 font-medium">
@@ -2330,7 +2590,15 @@ export function OnboardingWizard() {
                                     </div>
                                   </div>
                                   
-                                  <div className="mt-4 flex justify-end">
+                                  <div className="mt-4 flex justify-between">
+                            <Button 
+                                      variant="outline"
+                                      className="text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600"
+                                      onClick={handleRemoveCoffeeConfig}
+                                    >
+                                      Remove Configuration
+                            </Button>
+                                    
                                     <Button 
                                       className="bg-green-600 hover:bg-green-700 text-white"
                                       onClick={() => {
@@ -2344,10 +2612,99 @@ export function OnboardingWizard() {
                               )}
                             </div>
                           </div>
-                        </div>
-                      </div>
-                    )}
-                    
+                          {/* Standard Voucher Program */}
+                          <div className="border border-gray-200 rounded-lg overflow-hidden bg-white mt-4">
+                            <div className="p-4">
+                              <div className="flex items-center gap-3">
+                                <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+                                  <Percent className="h-6 w-6" />
+                                </div>
+                            <div className="flex-1">
+                                  <h5 className="font-medium">Standard Voucher Program</h5>
+                                  <p className="text-sm text-gray-500">Reward customers with vouchers based on their spending</p>
+                            </div>
+                                {voucherProgramConfigured ? (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-green-600 flex items-center">
+                                      <CheckCircle className="h-4 w-4 mr-1" /> Configured
+                                    </span>
+                            <Button 
+                                      variant="outline" 
+                                      size="sm"
+                                      onClick={() => setShowVoucherProgramConfig(true)}
+                                    >
+                                      Edit
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button 
+                                    className="bg-[#007AFF] hover:bg-[#0066CC] text-white"
+                                    onClick={() => {
+                                      setWizardSelectedRewards(prev => 
+                                        prev.includes('standard-voucher-program') 
+                                          ? prev 
+                                          : [...prev, 'standard-voucher-program']
+                                      );
+                                      setShowVoucherProgramConfig(true);
+                                    }}
+                                  >
+                                    Configure
+                                  </Button>
+                                )}
+                              </div>
+                              
+                              {voucherProgramConfigured && (
+                                <div className="mt-4 pt-4 border-t border-gray-200">
+                                  <h6 className="text-sm font-medium mb-2">Configuration Details</h6>
+                                  <div className="grid grid-cols-2 gap-3 text-sm">
+                                    <div>
+                                      <span className="text-gray-500">Program Name:</span>
+                                      <span className="ml-2 font-medium">{voucherProgram.name}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500">Spend Required:</span>
+                                      <span className="ml-2 font-medium">${voucherProgram.totalSpendRequired}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500">Voucher Value:</span>
+                                      <span className="ml-2 font-medium">
+                                        {voucherProgram.voucherType === 'percent' ? 
+                                          `${voucherProgram.voucherAmount}%` : 
+                                          `$${voucherProgram.voucherAmount}`}
+                                </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500">Description:</span>
+                                      <span className="ml-2 font-medium">{voucherProgram.description}</span>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="mt-4 flex justify-between">
+                                    <Button 
+                                      variant="outline"
+                                      className="text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600"
+                                      onClick={handleRemoveVoucherConfig}
+                                    >
+                                      Remove Configuration
+                                    </Button>
+                                    
+                                    <Button 
+                                      className="bg-green-600 hover:bg-green-700 text-white"
+                                      onClick={() => {
+                                        setWizardStep(4); // Move to the next step
+                                      }}
+                                    >
+                                      Continue
+                            </Button>
+                          </div>
+                                </div>
+                      )}
+                            </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
                     {/* Wizard Step 4: Confirmation */}
                     {wizardStep === 4 && (
                       <div className="space-y-4">
@@ -2429,82 +2786,139 @@ export function OnboardingWizard() {
                   <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
                     <div className="flex items-center gap-4 mb-4">
                       <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                        <Gift className="h-6 w-6 text-[#007AFF]" />
+                        <BarChart className="h-6 w-6 text-[#007AFF]" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-medium">Select Rewards by Customer Type</h3>
+                        <h3 className="text-lg font-medium">Set Up Points Rules</h3>
                         <p className="text-sm text-gray-500">
-                          Choose rewards for different customer segments
+                          Define how customers earn points with your business
                         </p>
                       </div>
                     </div>
                     
-                    {/* Selected rewards count */}
-                    <div className="mb-6 p-4 bg-blue-50 rounded-md border border-blue-100">
-                      <h4 className="font-medium text-blue-800 mb-1">Selected Rewards: {wizardSelectedRewards.length}/3</h4>
-                      <p className="text-sm text-blue-700">
-                        Please select at least one reward from each category: New Customers, Existing Customers, and Loyal Customers.
-                      </p>
-                      
-                      {/* Show selected rewards */}
-                      {wizardSelectedRewards.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {wizardSelectedRewards.map(reward => (
-                            <div key={reward} className="flex items-center gap-1 bg-white px-2 py-1 rounded-md border border-blue-200">
-                              <span className="text-xs">{reward}</span>
-                        <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-4 w-4 rounded-full"
-                                onClick={() => removeSelectedReward(reward)}
-                              >
-                                <X className="h-3 w-3" />
-                        </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      </div>
-                      
                     <div className="space-y-6">
-                      {/* Category 1: New Customers */}
-                      <div>
-                        <h4 className="text-base font-medium mb-3 flex items-center">
-                          <Users className="h-5 w-5 mr-2 text-green-600" />
-                          New Customers
-                        </h4>
-                        <div className="space-y-3">
-                          {/* Placeholder for new customer rewards - will be populated later */}
-                          <div className="p-4 bg-white rounded-md border border-dashed border-gray-300 text-center">
-                            <p className="text-sm text-gray-500">Rewards for new customers will appear here</p>
-                        </div>
-                        </div>
-                      </div>
-                      
-                      {/* Category 2: Existing Customers */}
-                      <div>
-                        <h4 className="text-base font-medium mb-3 flex items-center">
-                          <Coffee className="h-5 w-5 mr-2 text-amber-600" />
-                          Existing Customers
-                        </h4>
-                        <div className="space-y-3">
-                          {/* Placeholder for existing customer rewards - will be populated later */}
-                          <div className="p-4 bg-white rounded-md border border-dashed border-gray-300 text-center">
-                            <p className="text-sm text-gray-500">Rewards for existing customers will appear here</p>
+                      <div className="space-y-6">
+                        <Collapsible className="bg-white p-4 rounded-lg border border-gray-200">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center">
+                                <Coffee className="h-5 w-5 text-amber-600" />
+                              </div>
+                              <div>
+                                <h4 className="font-medium">Morning Coffee Bonus</h4>
+                                <p className="text-sm text-gray-500">Earn 1.5x points on morning coffee purchases</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Checkbox 
+                                id="morning-coffee-bonus" 
+                                checked={true}
+                                className="h-5 w-5 border-gray-300"
+                              />
+                              <CollapsibleTrigger className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100">
+                                <ChevronDown className="h-5 w-5 text-gray-500" />
+                              </CollapsibleTrigger>
+                            </div>
+                          </div>
+                          
+                          <CollapsibleContent className="pt-4 mt-3 border-t border-gray-100">
+                            <div className="space-y-4">
+                              <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <h5 className="text-sm font-medium mb-1 flex items-center">
+                                      <Clock className="h-4 w-4 mr-1 text-blue-500" />
+                                      Time Condition
+                                    </h5>
+                                    <p className="text-xs text-gray-600">7:00 AM - 10:00 AM</p>
+                                  </div>
+                                  <div>
+                                    <h5 className="text-sm font-medium mb-1 flex items-center">
+                                      <Calendar className="h-4 w-4 mr-1 text-blue-500" />
+                                      Day Condition
+                                    </h5>
+                                    <p className="text-xs text-gray-600">Monday - Friday</p>
+                                  </div>
+                                  <div>
+                                    <h5 className="text-sm font-medium mb-1 flex items-center">
+                                      <Award className="h-4 w-4 mr-1 text-blue-500" />
+                                      Points Multiplier
+                                    </h5>
+                                    <p className="text-xs text-gray-600">1.5x points</p>
+                                  </div>
+                                  <div>
+                                    <h5 className="text-sm font-medium mb-1 flex items-center">
+                                      <Store className="h-4 w-4 mr-1 text-blue-500" />
+                                      Applied To
+                                    </h5>
+                                    <p className="text-xs text-gray-600">All purchases</p>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                                <h5 className="text-sm font-medium mb-2">JSON Configuration</h5>
+                                <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">
+{`{
+  "name": "Morning Coffee Bonus",
+  "pointsmultiplier": 1.5,
+  "conditions": [
+    {
+      "type": "timeOfDay",
+      "startTime": "07:00",
+      "endTime": "10:00"
+    },
+    {
+      "type": "daysOfWeek",
+      "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    }
+  ],
+  "merchantId": "cafe123",
+  "createdAt": "${new Date().toISOString()}"
+}`}
+                                </pre>
+                              </div>
+                              
+                              <div className="flex justify-end gap-2">
+                                <Button variant="outline" size="sm">
+                                  Edit Rule
+                                </Button>
+                                <Button variant="outline" size="sm" className="text-red-500 border-red-200 hover:bg-red-50">
+                                  Delete
+                                </Button>
+                              </div>
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
+                        
+                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                          <div className="flex items-start gap-3">
+                            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <Sparkles className="h-4 w-4 text-blue-600" />
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-blue-800">Points Rule Added</h4>
+                              <p className="text-sm text-blue-700 mt-1">
+                                The "Morning Coffee Bonus" rule has been added to your loyalty program. Customers will earn 1.5x points when they make purchases between 7:00 AM and 10:00 AM on weekdays.
+                              </p>
+                              <div className="mt-3">
+                                <Button variant="outline" size="sm" className="text-blue-600 border-blue-200 hover:bg-blue-50">
+                                  Edit Rule
+                                </Button>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      
-                      {/* Category 3: Loyal Customers */}
-                      <div>
-                        <h4 className="text-base font-medium mb-3 flex items-center">
-                          <Award className="h-5 w-5 mr-2 text-purple-600" />
-                          Loyal Customers
-                        </h4>
-                        <div className="space-y-3">
-                          {/* Placeholder for loyal customer rewards - will be populated later */}
-                          <div className="p-4 bg-white rounded-md border border-dashed border-gray-300 text-center">
-                            <p className="text-sm text-gray-500">Rewards for loyal customers will appear here</p>
+                        
+                        <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                          <div className="text-center">
+                            <p className="text-gray-500 mb-2">Add more points rules</p>
+                            <p className="text-xs text-gray-400 mb-4">
+                              Create additional rules to reward customers in different ways
+                            </p>
+                            <Button variant="outline" className="border-gray-300">
+                              <Plus className="h-4 w-4 mr-2" /> Add Another Rule
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -2794,12 +3208,120 @@ export function OnboardingWizard() {
           <div className="border-t pt-4 flex justify-end gap-2">
             <Button 
               variant="outline" 
-              onClick={() => setShowCoffeeProgramConfig(false)}
+              onClick={handleCancelCoffeeConfig}
             >
               Cancel
             </Button>
             <Button 
               onClick={saveCoffeeProgram}
+            >
+              Create Program
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* Voucher Program Configuration Dialog */}
+      <Dialog open={showVoucherProgramConfig} onOpenChange={setShowVoucherProgramConfig}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>
+              <div className="flex items-center">
+                <span className="text-[#007AFF]">Configure</span>{' '}Voucher Program
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="py-4 min-h-[300px] space-y-6">
+            <div className="space-y-4">
+              <div className="grid gap-2">
+                <Label>Program Name</Label>
+                <Input
+                  type="text"
+                  value={voucherProgram.name}
+                  onChange={(e) => setVoucherProgram({ ...voucherProgram, name: e.target.value })}
+                  placeholder="Enter program name"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Name of your voucher program
+                </p>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Description</Label>
+                <Input
+                  type="text"
+                  value={voucherProgram.description}
+                  onChange={(e) => setVoucherProgram({ ...voucherProgram, description: e.target.value })}
+                  placeholder="Enter program description"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Brief description of your voucher program
+                </p>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Total Spend Required</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={voucherProgram.totalSpendRequired}
+                  onChange={(e) => setVoucherProgram({ ...voucherProgram, totalSpendRequired: e.target.value })}
+                  placeholder="Enter amount"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Amount customers need to spend to earn a voucher
+                </p>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Voucher Type</Label>
+                <RadioGroup
+                  value={voucherProgram.voucherType}
+                  onValueChange={(value: 'amount' | 'percent') => 
+                    setVoucherProgram({ ...voucherProgram, voucherType: value })
+                  }
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="amount" id="amount" />
+                    <Label htmlFor="amount">Fixed Amount ($)</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="percent" id="percent" />
+                    <Label htmlFor="percent">Percentage (%)</Label>
+                  </div>
+                </RadioGroup>
+                <p className="text-sm text-muted-foreground">
+                  Choose the type of voucher to issue
+                </p>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Voucher Amount</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={voucherProgram.voucherAmount}
+                  onChange={(e) => setVoucherProgram({ ...voucherProgram, voucherAmount: e.target.value })}
+                  placeholder="Enter amount"
+                />
+                <p className="text-sm text-muted-foreground">
+                  {voucherProgram.voucherType === 'percent' ? 
+                    'Percentage discount for the voucher' : 
+                    'Dollar amount for the voucher'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-4 flex justify-end gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleCancelVoucherConfig}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={saveVoucherProgram}
             >
               Create Program
             </Button>

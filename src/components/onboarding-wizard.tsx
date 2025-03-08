@@ -21,6 +21,8 @@ import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFoo
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
+import { CreateBannerDialog } from "@/components/create-banner-dialog"
+import { AnnouncementDesignerDialog } from "@/components/announcement-designer-dialog"
 
 // Helper function to format a UNIX timestamp (in seconds) into hh:mm AM/PM
 function formatTimestamp(seconds: number) {
@@ -1147,6 +1149,25 @@ export function OnboardingWizard() {
     } else {
       setSelectedPointsRules((prev) => [...prev, ruleId]);
     }
+  }
+
+  // Add the states below for banner and announcement handling
+  const [showBannerDialog, setShowBannerDialog] = useState(false)
+  const [bannerData, setBannerData] = useState<any>(null)
+  const [showAnnouncementDesigner, setShowAnnouncementDesigner] = useState(false)
+  const [announcementData, setAnnouncementData] = useState<any>(null)
+
+  // Example function that handles saving the banner
+  const handleSaveBanner = (data: any) => {
+    setBannerData(data)
+    setShowBannerDialog(false)
+    // Optionally open the AnnouncementDesignerDialog here
+  }
+
+  // Example function that handles saving the announcement
+  const handleSaveAnnouncement = (newAnnouncement: any) => {
+    setAnnouncementData(newAnnouncement)
+    setShowAnnouncementDesigner(false)
   }
 
   return (
@@ -2816,24 +2837,26 @@ export function OnboardingWizard() {
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              {selectedPointsRules.includes("morning-coffee-bonus") ? (
-                                <Button
-                                  onClick={() => handlePointsRuleToggle("morning-coffee-bonus")}
-                                  size="sm"
-                                  className="bg-green-600 hover:bg-green-700 text-white"
-                                >
-                                  <Check className="h-4 w-4 mr-1" />
-                                  Selected
-                                </Button>
-                              ) : (
-                                <Button
-                                  onClick={() => handlePointsRuleToggle("morning-coffee-bonus")}
-                                  size="sm"
-                                  className="bg-green-500 hover:bg-green-600 text-white"
-                                >
-                                  Select
-                                </Button>
-                              )}
+                              {selectedPointsRules.includes("morning-coffee-bonus")
+                                ? (
+                                  <Button
+                                    onClick={() => handlePointsRuleToggle("morning-coffee-bonus")}
+                                    size="sm"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                  >
+                                    <Check className="h-4 w-4 mr-1" />
+                                    Selected
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    onClick={() => handlePointsRuleToggle("morning-coffee-bonus")}
+                                    size="sm"
+                                    className="bg-slate-200 hover:bg-slate-300 text-black"
+                                  >
+                                    Select
+                                  </Button>
+                                )
+                              }
                               <CollapsibleTrigger
                                 className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
                               >
@@ -2913,24 +2936,26 @@ export function OnboardingWizard() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {selectedPointsRules.includes("lunchtime-special") ? (
-                              <Button
-                                onClick={() => handlePointsRuleToggle("lunchtime-special")}
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700 text-white"
-                              >
-                                <Check className="h-4 w-4 mr-1" />
-                                Selected
-                              </Button>
-                            ) : (
-                              <Button
-                                onClick={() => handlePointsRuleToggle("lunchtime-special")}
-                                size="sm"
-                                className="bg-green-500 hover:bg-green-600 text-white"
-                              >
-                                Select
-                              </Button>
-                            )}
+                            {selectedPointsRules.includes("lunchtime-special")
+                              ? (
+                                <Button
+                                  onClick={() => handlePointsRuleToggle("lunchtime-special")}
+                                  size="sm"
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                >
+                                  <Check className="h-4 w-4 mr-1" />
+                                  Selected
+                                </Button>
+                              ) : (
+                                <Button
+                                  onClick={() => handlePointsRuleToggle("lunchtime-special")}
+                                  size="sm"
+                                  className="bg-slate-200 hover:bg-slate-300 text-black"
+                                >
+                                  Select
+                                </Button>
+                              )
+                            }
                             <CollapsibleTrigger
                               className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
                             >
@@ -3010,24 +3035,26 @@ export function OnboardingWizard() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {selectedPointsRules.includes("weekend-treat") ? (
-                              <Button
-                                onClick={() => handlePointsRuleToggle("weekend-treat")}
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700 text-white"
-                              >
-                                <Check className="h-4 w-4 mr-1" />
-                                Selected
-                              </Button>
-                            ) : (
-                              <Button
-                                onClick={() => handlePointsRuleToggle("weekend-treat")}
-                                size="sm"
-                                className="bg-green-500 hover:bg-green-600 text-white"
-                              >
-                                Select
-                              </Button>
-                            )}
+                            {selectedPointsRules.includes("weekend-treat")
+                              ? (
+                                <Button
+                                  onClick={() => handlePointsRuleToggle("weekend-treat")}
+                                  size="sm"
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                >
+                                  <Check className="h-4 w-4 mr-1" />
+                                  Selected
+                                </Button>
+                              ) : (
+                                <Button
+                                  onClick={() => handlePointsRuleToggle("weekend-treat")}
+                                  size="sm"
+                                  className="bg-slate-200 hover:bg-slate-300 text-black"
+                                >
+                                  Select
+                                </Button>
+                              )
+                            }
                             <CollapsibleTrigger
                               className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
                             >
@@ -3095,24 +3122,26 @@ export function OnboardingWizard() {
                         </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {selectedPointsRules.includes("happy-hour-delight") ? (
-                              <Button
-                                onClick={() => handlePointsRuleToggle("happy-hour-delight")}
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700 text-white"
-                              >
-                                <Check className="h-4 w-4 mr-1" />
-                                Selected
-                              </Button>
-                            ) : (
-                              <Button
-                                onClick={() => handlePointsRuleToggle("happy-hour-delight")}
-                                size="sm"
-                                className="bg-green-500 hover:bg-green-600 text-white"
-                              >
-                                Select
-                              </Button>
-                            )}
+                            {selectedPointsRules.includes("happy-hour-delight")
+                              ? (
+                                <Button
+                                  onClick={() => handlePointsRuleToggle("happy-hour-delight")}
+                                  size="sm"
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                >
+                                  <Check className="h-4 w-4 mr-1" />
+                                  Selected
+                                </Button>
+                              ) : (
+                                <Button
+                                  onClick={() => handlePointsRuleToggle("happy-hour-delight")}
+                                  size="sm"
+                                  className="bg-slate-200 hover:bg-slate-300 text-black"
+                                >
+                                  Select
+                                </Button>
+                              )
+                            }
                             <CollapsibleTrigger
                               className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
                             >
@@ -3181,24 +3210,26 @@ export function OnboardingWizard() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {selectedPointsRules.includes("big-spender-bonus") ? (
-                              <Button
-                                onClick={() => handlePointsRuleToggle("big-spender-bonus")}
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700 text-white"
-                              >
-                                <Check className="h-4 w-4 mr-1" />
-                                Selected
-                              </Button>
-                            ) : (
-                              <Button
-                                onClick={() => handlePointsRuleToggle("big-spender-bonus")}
-                                size="sm"
-                                className="bg-green-500 hover:bg-green-600 text-white"
-                              >
-                                Select
-                              </Button>
-                            )}
+                            {selectedPointsRules.includes("big-spender-bonus")
+                              ? (
+                                <Button
+                                  onClick={() => handlePointsRuleToggle("big-spender-bonus")}
+                                  size="sm"
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                >
+                                  <Check className="h-4 w-4 mr-1" />
+                                  Selected
+                                </Button>
+                              ) : (
+                                <Button
+                                  onClick={() => handlePointsRuleToggle("big-spender-bonus")}
+                                  size="sm"
+                                  className="bg-slate-200 hover:bg-slate-300 text-black"
+                                >
+                                  Select
+                                </Button>
+                              )
+                            }
                             <CollapsibleTrigger
                               className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
                             >
@@ -3266,24 +3297,26 @@ export function OnboardingWizard() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {selectedPointsRules.includes("monday-recovery") ? (
-                              <Button
-                                onClick={() => handlePointsRuleToggle("monday-recovery")}
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700 text-white"
-                              >
-                                <Check className="h-4 w-4 mr-1" />
-                                Selected
-                              </Button>
-                            ) : (
-                              <Button
-                                onClick={() => handlePointsRuleToggle("monday-recovery")}
-                                size="sm"
-                                className="bg-green-500 hover:bg-green-600 text-white"
-                              >
-                                Select
-                              </Button>
-                            )}
+                            {selectedPointsRules.includes("monday-recovery")
+                              ? (
+                                <Button
+                                  onClick={() => handlePointsRuleToggle("monday-recovery")}
+                                  size="sm"
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                >
+                                  <Check className="h-4 w-4 mr-1" />
+                                  Selected
+                                </Button>
+                              ) : (
+                                <Button
+                                  onClick={() => handlePointsRuleToggle("monday-recovery")}
+                                  size="sm"
+                                  className="bg-slate-200 hover:bg-slate-300 text-black"
+                                >
+                                  Select
+                                </Button>
+                              )
+                            }
                             <CollapsibleTrigger
                               className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
                             >
@@ -3374,18 +3407,14 @@ export function OnboardingWizard() {
                           <h4 className="font-medium">Welcome Banner</h4>
                           <p className="text-sm text-gray-500">Introduce customers to your loyalty program</p>
                         </div>
-                        <Button 
-                          className={`w-full ${
-                            wizardSelectedRewards.includes('welcome-banner') 
-                              ? "bg-green-600 hover:bg-green-700" 
-                              : "bg-[#007AFF] hover:bg-[#0066CC]"
-                          } text-white`}
-                          onClick={() => handleRewardTypeSelection('welcome-banner')}
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setShowBannerDialog(true)
+                            // Possibly pre-fill bannerData with a "Welcome Banner" template
+                          }}
                         >
-                          {wizardSelectedRewards.includes('welcome-banner') 
-                            ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
-                            : "Select This Reward"
-                          }
+                          Customize Banner
                         </Button>
                       </div>
                       
@@ -3395,20 +3424,102 @@ export function OnboardingWizard() {
                           <h4 className="font-medium">Promotional Banner</h4>
                           <p className="text-sm text-gray-500">Highlight special offers or limited-time rewards</p>
                         </div>
-                        <Button 
-                          className={`w-full ${
-                            wizardSelectedRewards.includes('promotional-banner') 
-                              ? "bg-green-600 hover:bg-green-700" 
-                              : "bg-[#007AFF] hover:bg-[#0066CC]"
-                          } text-white`}
-                          onClick={() => handleRewardTypeSelection('promotional-banner')}
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setShowBannerDialog(true)
+                            // Possibly pre-fill bannerData with a "Promotional Banner" template
+                          }}
                         >
-                          {wizardSelectedRewards.includes('promotional-banner') 
-                            ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
-                            : "Select This Reward"
-                          }
+                          Customize Banner
                         </Button>
                       </div>
+                      
+                      {/* Optionally, show a quick link to the Announcement designer */}
+                      <div className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200 mt-4">
+                        <div>
+                          <h4 className="font-medium">Optional Announcement</h4>
+                          <p className="text-sm text-gray-500">Attach an announcement to your banner</p>
+                        </div>
+                        <Button 
+                          onClick={() => setShowAnnouncementDesigner(true)}
+                          variant="default"
+                        >
+                          Create Announcement
+                        </Button>
+                      </div>
+
+                      {/* Banner Preview */}
+                      {bannerData && (
+                        <div className="mt-6 p-4 bg-white border border-gray-200 rounded-lg">
+                          <h4 className="font-medium text-gray-700 mb-2">Banner Preview</h4>
+                          {/* 
+                            Below is an example of how you might visually show the banner.
+                            Adjust the styling and fields to match your data and design.
+                          */}
+                          <div 
+                            className="rounded-md shadow p-6 max-w-xl mx-auto"
+                            style={{
+                              backgroundColor: bannerData.cssColor || "#F3F4F6" // fallback
+                            }}
+                          >
+                            <h3 className="text-xl font-bold mb-2">
+                              {bannerData.bannerName || "Untitled Banner"}
+                            </h3>
+                            <p className="text-sm mb-4">
+                              {bannerData.description || "No description provided"}
+                            </p>
+                            
+                            {/* If you have a merchant name field */}
+                            {bannerData.merchantName && (
+                              <p className="text-xs italic mb-4">
+                                By {bannerData.merchantName}
+                              </p>
+                            )}
+                            
+                            {/* Optional CTA button */}
+                            {bannerData.buttonText && (
+                              <button 
+                                className="px-4 py-2 text-white rounded bg-[color:var(--button-color)]"
+                                style={{ backgroundColor: "#007AFF" }}
+                              >
+                                {bannerData.buttonText}
+                              </button>
+                            )}
+                          </div>
+                          
+                          {/* Show the style or visibility if relevant */}
+                          <p className="text-sm text-gray-600 mt-3">
+                            <strong>Style:</strong> {bannerData.styleType || "Default"}
+                          </p>
+                          {bannerData.visibilityType && (
+                            <p className="text-sm text-gray-600">
+                              <strong>Visibility:</strong> {bannerData.visibilityType}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Announcement Preview */}
+                      {announcementData && (
+                        <div className="mt-4 p-4 bg-white border border-gray-200 rounded-lg">
+                          <h4 className="font-medium text-gray-700 mb-2">Announcement Preview</h4>
+                          <p className="text-sm text-gray-600">
+                            <strong>Title:</strong> {announcementData.title}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            <strong>Subtitle:</strong> {announcementData.subtitle}
+                          </p>
+                          {announcementData.messages?.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              <p className="font-medium text-sm text-gray-600">Messages:</p>
+                              {announcementData.messages.map((msg: string, i: number) => (
+                                <p key={i} className="text-sm text-gray-500 ml-4">• {msg}</p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -3752,6 +3863,22 @@ export function OnboardingWizard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* The Create Banner Dialog */}
+      <CreateBannerDialog
+        open={showBannerDialog}
+        onOpenChange={setShowBannerDialog}
+        initialBannerData={bannerData}
+        onSave={(data) => handleSaveBanner(data)}
+      />
+
+      {/* The Announcement Designer Dialog */}
+      <AnnouncementDesignerDialog
+        open={showAnnouncementDesigner}
+        onOpenChange={setShowAnnouncementDesigner}
+        onSave={(newAnnouncement) => handleSaveAnnouncement(newAnnouncement)}
+        initialAnnouncement={announcementData}
+      />
     </div>
   )
 } 

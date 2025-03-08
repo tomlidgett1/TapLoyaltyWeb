@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
 import { CreatePointsRuleDialog } from "@/components/create-points-rule-dialog"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
+import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { useState } from "react"
 import { 
   Gift, 
@@ -26,7 +27,7 @@ interface OptionType {
   title: string
   description: string
   icon: React.ReactNode
-  type: "reward" | "program" | "recurring"
+  type: "reward" | "program" | "recurring" | "rule" | "banner"
 }
 
 export default function CreatePage() {
@@ -35,6 +36,7 @@ export default function CreatePage() {
   const [createProgramOpen, setCreateProgramOpen] = useState(false)
   const [createRecurringOpen, setCreateRecurringOpen] = useState(false)
   const [createRuleOpen, setCreateRuleOpen] = useState(false)
+  const [createBannerOpen, setCreateBannerOpen] = useState(false)
   const [selectedOption, setSelectedOption] = useState<OptionType | null>(null)
 
   const rewardOptions: OptionType[] = [
@@ -63,7 +65,7 @@ export default function CreatePage() {
       title: "Points Rule",
       description: "Set up rules for how customers earn points at your business",
       icon: Zap,
-      type: "reward"
+      type: "rule"
     }
   ]
   
@@ -72,7 +74,7 @@ export default function CreatePage() {
       title: "Create Banner",
       description: "Add a promotional banner to your customer-facing app",
       icon: ImagePlus,
-      type: "reward"
+      type: "banner"
     },
     {
       title: "Send Broadcast",
@@ -131,12 +133,22 @@ export default function CreatePage() {
   const handleOptionClick = (option: OptionType) => {
     setSelectedOption(option)
     
-    if (option.type === "reward") {
-      setCreateRewardOpen(true)
-    } else if (option.type === "program") {
-      setCreateProgramOpen(true)
-    } else if (option.type === "recurring") {
-      setCreateRecurringOpen(true)
+    switch (option.type) {
+      case "reward":
+        setCreateRewardOpen(true)
+        break
+      case "program":
+        setCreateProgramOpen(true)
+        break
+      case "recurring":
+        setCreateRecurringOpen(true)
+        break
+      case "rule":
+        setCreateRuleOpen(true)
+        break
+      case "banner":
+        setCreateBannerOpen(true)
+        break
     }
   }
 
@@ -201,6 +213,11 @@ export default function CreatePage() {
       <CreatePointsRuleDialog 
         open={createRuleOpen}
         onOpenChange={setCreateRuleOpen}
+      />
+      
+      <CreateBannerDialog 
+        open={createBannerOpen} 
+        onOpenChange={setCreateBannerOpen} 
       />
     </div>
   )

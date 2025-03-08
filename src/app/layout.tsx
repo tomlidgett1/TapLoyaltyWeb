@@ -7,6 +7,7 @@ import { OnboardingCheck } from "@/components/onboarding-check"
 import { OpenAIProvider } from '@/components/providers/openai-provider';
 import Link from 'next/link';
 import { TapAiDialogProvider } from "@/components/tap-ai-dialog-provider";
+import { CommandPalette } from "@/components/command-palette"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -44,6 +45,7 @@ export default function RootLayout({
               {children}
               <Toaster />
               <OnboardingCheck />
+              <CommandPalette />
             </TapAiDialogProvider>
           </AuthProvider>
         </OpenAIProvider>

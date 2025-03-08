@@ -3407,15 +3407,22 @@ export function OnboardingWizard() {
                           <h4 className="font-medium">Welcome Banner</h4>
                           <p className="text-sm text-gray-500">Introduce customers to your loyalty program</p>
                         </div>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setShowBannerDialog(true)
-                            // Possibly pre-fill bannerData with a "Welcome Banner" template
-                          }}
-                        >
-                          Customize Banner
-                        </Button>
+                        {bannerData ? (
+                          <div className="flex items-center gap-2 text-green-600">
+                            <CheckCircle className="h-5 w-5" />
+                            <span className="text-sm font-medium">Selected!</span>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setShowBannerDialog(true)
+                              // Possibly pre-fill bannerData with a "Welcome Banner" template
+                            }}
+                          >
+                            Customize Banner
+                          </Button>
+                        )}
                       </div>
                       
                       <div className="flex items-center gap-3 p-3 bg-white rounded-md border border-gray-200">
@@ -3424,15 +3431,22 @@ export function OnboardingWizard() {
                           <h4 className="font-medium">Promotional Banner</h4>
                           <p className="text-sm text-gray-500">Highlight special offers or limited-time rewards</p>
                         </div>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setShowBannerDialog(true)
-                            // Possibly pre-fill bannerData with a "Promotional Banner" template
-                          }}
-                        >
-                          Customize Banner
-                        </Button>
+                        {bannerData ? (
+                          <div className="flex items-center gap-2 text-green-600">
+                            <CheckCircle className="h-5 w-5" />
+                            <span className="text-sm font-medium">Selected!</span>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setShowBannerDialog(true)
+                              // Possibly pre-fill bannerData with a "Promotional Banner" template
+                            }}
+                          >
+                            Customize Banner
+                          </Button>
+                        )}
                       </div>
                       
                       {/* Optionally, show a quick link to the Announcement designer */}
@@ -3441,85 +3455,20 @@ export function OnboardingWizard() {
                           <h4 className="font-medium">Optional Announcement</h4>
                           <p className="text-sm text-gray-500">Attach an announcement to your banner</p>
                         </div>
-                        <Button 
-                          onClick={() => setShowAnnouncementDesigner(true)}
-                          variant="default"
-                        >
-                          Create Announcement
-                        </Button>
-                      </div>
-
-                      {/* Banner Preview */}
-                      {bannerData && (
-                        <div className="mt-6 p-4 bg-white border border-gray-200 rounded-lg">
-                          <h4 className="font-medium text-gray-700 mb-2">Banner Preview</h4>
-                          {/* 
-                            Below is an example of how you might visually show the banner.
-                            Adjust the styling and fields to match your data and design.
-                          */}
-                          <div 
-                            className="rounded-md shadow p-6 max-w-xl mx-auto"
-                            style={{
-                              backgroundColor: bannerData.cssColor || "#F3F4F6" // fallback
-                            }}
-                          >
-                            <h3 className="text-xl font-bold mb-2">
-                              {bannerData.bannerName || "Untitled Banner"}
-                            </h3>
-                            <p className="text-sm mb-4">
-                              {bannerData.description || "No description provided"}
-                            </p>
-                            
-                            {/* If you have a merchant name field */}
-                            {bannerData.merchantName && (
-                              <p className="text-xs italic mb-4">
-                                By {bannerData.merchantName}
-                              </p>
-                            )}
-                            
-                            {/* Optional CTA button */}
-                            {bannerData.buttonText && (
-                              <button 
-                                className="px-4 py-2 text-white rounded bg-[color:var(--button-color)]"
-                                style={{ backgroundColor: "#007AFF" }}
-                              >
-                                {bannerData.buttonText}
-                              </button>
-                            )}
+                        {announcementData ? (
+                          <div className="flex items-center gap-2 text-green-600">
+                            <CheckCircle className="h-5 w-5" />
+                            <span className="text-sm font-medium">Selected!</span>
                           </div>
-                          
-                          {/* Show the style or visibility if relevant */}
-                          <p className="text-sm text-gray-600 mt-3">
-                            <strong>Style:</strong> {bannerData.styleType || "Default"}
-                          </p>
-                          {bannerData.visibilityType && (
-                            <p className="text-sm text-gray-600">
-                              <strong>Visibility:</strong> {bannerData.visibilityType}
-                            </p>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Announcement Preview */}
-                      {announcementData && (
-                        <div className="mt-4 p-4 bg-white border border-gray-200 rounded-lg">
-                          <h4 className="font-medium text-gray-700 mb-2">Announcement Preview</h4>
-                          <p className="text-sm text-gray-600">
-                            <strong>Title:</strong> {announcementData.title}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            <strong>Subtitle:</strong> {announcementData.subtitle}
-                          </p>
-                          {announcementData.messages?.length > 0 && (
-                            <div className="mt-2 space-y-1">
-                              <p className="font-medium text-sm text-gray-600">Messages:</p>
-                              {announcementData.messages.map((msg: string, i: number) => (
-                                <p key={i} className="text-sm text-gray-500 ml-4">• {msg}</p>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                        ) : (
+                          <Button 
+                            onClick={() => setShowAnnouncementDesigner(true)}
+                            variant="default"
+                          >
+                            Create Announcement
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

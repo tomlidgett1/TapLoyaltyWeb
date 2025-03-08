@@ -39,6 +39,58 @@ export function CreatePointsRuleDialog({ open, onOpenChange }: CreatePointsRuleD
     dayRestrictions: [] as string[],
   })
 
+  // After the form data state declaration, add a list of predefined rules that users can select from
+  const TEMPLATE_RULES = [
+    {
+      name: "Morning Coffee Bonus",
+      pointsmultiplier: 1.5,
+      conditions: [
+        {
+          type: "timeOfDay",
+          startTime: "07:00",
+          endTime: "10:00"
+        },
+        {
+          type: "daysOfWeek",
+          days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+        }
+      ]
+    },
+    {
+      name: "Weekend Treat",
+      pointsmultiplier: 3,
+      conditions: [
+        {
+          type: "daysOfWeek",
+          days: ["Saturday", "Sunday"]
+        }
+      ]
+    }
+  ]
+
+  // Add a function to apply a template rule to the form
+  const applyTemplate = (template: any) => {
+    // Create a new form data object
+    const newFormData = { ...formData, name: template.name, pointsmultiplier: template.pointsmultiplier.toString() }
+    
+    // Apply conditions from the template
+    template.conditions.forEach((condition: any) => {
+      if (condition.type === "timeOfDay") {
+        newFormData.useTimeRestrictions = true
+        newFormData.startTime = condition.startTime
+        newFormData.endTime = condition.endTime
+      } else if (condition.type === "daysOfWeek") {
+        newFormData.useDayRestrictions = true
+        newFormData.dayRestrictions = condition.days
+      } else if (condition.type === "minimumSpend") {
+        newFormData.useMinimumSpend = true
+        newFormData.minimumSpend = condition.amount.toString()
+      }
+    })
+    
+    setFormData(newFormData)
+  }
+
   // Helper function to convert local 12h time to UTC 12-hour format
   const toUTCTime = (time12h: string): string => {
     if (!time12h) return ""
@@ -155,6 +207,31 @@ export function CreatePointsRuleDialog({ open, onOpenChange }: CreatePointsRuleD
                       onChange={(e) => setFormData({ ...formData, pointsmultiplier: e.target.value })}
                       placeholder="Enter points multiplier"
                     />
+                  </div>
+                </div>
+                
+                {/* Add this new section */}
+                <div className="mt-6 border-t pt-4">
+                  <h3 className="text-base font-medium mb-3">Quick Templates</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Select a template to quickly set up a common points rule:
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {TEMPLATE_RULES.map((template, index) => (
+                      <Button
+                        key={index}
+                        variant="outline"
+                        className="h-auto p-3 justify-start"
+                        onClick={() => applyTemplate(template)}
+                      >
+                        <div className="flex flex-col items-start text-left">
+                          <span className="font-medium">{template.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {template.pointsmultiplier}x points multiplier
+                          </span>
+                        </div>
+                      </Button>
+                    ))}
                   </div>
                 </div>
               </div>

@@ -12,15 +12,47 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, updateDoc, writeBatch, collection } from "firebase/firestore"
+import { doc, updateDoc, writeBatch, collection, Timestamp } from "firebase/firestore"
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { ArrowRight, CheckCircle, Coffee, Gift, Store, Users, Upload, Sparkles, Award, BarChart, Image, Utensils, Percent, Cake, Wine, UtensilsCrossed, Check, X, ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Ban, Calendar, ChevronLeft, Clock, Package, Plus } from "lucide-react"
+import { ArrowRight, CheckCircle, Coffee, Gift, Store, Users, Upload, Sparkles, Award, BarChart, Image, Utensils, Percent, Cake, Wine, UtensilsCrossed, Check, X, ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Ban, Calendar, ChevronLeft, Clock, Package, Plus, DollarSign } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
+
+// Helper function to format a UNIX timestamp (in seconds) into hh:mm AM/PM
+function formatTimestamp(seconds: number) {
+  const date = new Date(seconds * 1000);
+  const hours = date.getHours();
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours % 12 || 12;
+  return `${hours12}:${minutes} ${ampm}`;
+}
+
+/**
+ * Extracts only the time (HH:MM AM/PM) from a string like:
+ * "December 11, 2024 at 7:00:00 AM UTC+11"
+ *
+ * Returns something like "7am" or "12:30pm".
+ * If parsing fails, returns the original string.
+ */
+function formatShortAmPm(dateString: string) {
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) {
+    return dateString; // fallback if parsing fails
+  }
+  let hours = date.getHours();
+  const minutes = date.getMinutes();
+  const ampm = hours >= 12 ? 'pm' : 'am';
+  hours = hours % 12 || 12;
+  // if minutes are zero, omit them for a simpler look
+  return minutes === 0
+    ? `${hours}${ampm}`
+    : `${hours}:${minutes.toString().padStart(2, '0')}${ampm}`;
+}
 
 // Update the businessData type to include selectedRules and add missing properties to selectedRewards
 type BusinessData = {
@@ -45,18 +77,12 @@ type BusinessData = {
       levels: number
     }
   }[]
-  hasSetupPointsRule: boolean
-  pointsRuleDetails: {
-    name: string
-    type: string
-  } | null
   hasSetupBanner: boolean
   bannerDetails: {
     name: string
     type: string
   } | null
   selectedIndustry: string
-  selectedRules: string[] // Add this property
 }
 
 export function OnboardingWizard() {
@@ -73,8 +99,6 @@ export function OnboardingWizard() {
       pointsCost: number,
       description: string
     }[],
-    hasSetupPointsRule: false,
-    pointsRuleDetails: null as { name: string, type: string } | null,
     hasSetupBanner: false,
     bannerDetails: null as { name: string, type: string } | null
   })
@@ -332,8 +356,8 @@ export function OnboardingWizard() {
   };
 
   const handleRewardSelection = (rewardId: string, type: 'individual' | 'program') => {
-    // Generate a truly unique ID by adding a timestamp
-    const uniqueId = `${selectedIndustry}-${type}-${rewardId}-${Date.now()}`
+    // Generate a unique ID using a timestamp and a random string
+    const uniqueId = `${selectedIndustry}-${type}-${rewardId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     
     // Define the base reward details with the required JSON structure
     const rewardDetails = {
@@ -1114,34 +1138,15 @@ export function OnboardingWizard() {
     setShowVoucherProgramConfig(false);
   };
 
-  // Step 2: Points Rules
-  const renderPointsRulesStep = () => {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold">Step 2: Points Rules</h2>
-          <Button variant="outline" onClick={handleWizardBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
-          </Button>
-        </div>
-        
-        <p className="text-muted-foreground">
-          This section is currently under development.
-        </p>
-        
-        {/* Empty space for future content */}
-        <div className="min-h-[400px]"></div>
+  const [selectedPointsRules, setSelectedPointsRules] = useState<string[]>([]);
 
-        <div className="flex justify-between mt-8">
-          <Button variant="outline" onClick={handleBack}>
-            Back
-          </Button>
-          <Button onClick={handleNext}>
-            Next <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-    )
+  // Toggler for points rules
+  function handlePointsRuleToggle(ruleId: string) {
+    if (selectedPointsRules.includes(ruleId)) {
+      setSelectedPointsRules((prev) => prev.filter((id) => id !== ruleId));
+    } else {
+      setSelectedPointsRules((prev) => [...prev, ruleId]);
+    }
   }
 
   return (
@@ -2790,37 +2795,52 @@ export function OnboardingWizard() {
                       </div>
                       <div>
                         <h3 className="text-lg font-medium">Set Up Points Rules</h3>
-                        <p className="text-sm text-gray-500">
-                          Define how customers earn points with your business
-                        </p>
+                        <p className="text-sm text-gray-500">Add predefined rules to reward your customers.</p>
                       </div>
                     </div>
                     
+                    {/* NEW RULES WITH UPDATED DATE FORMATS */}
                     <div className="space-y-6">
-                      <div className="space-y-6">
+                      {/* Morning Coffee Bonus */}
                         <Collapsible className="bg-white p-4 rounded-lg border border-gray-200">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center">
-                                <Coffee className="h-5 w-5 text-amber-600" />
+                            <div className="h-10 w-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                              <Coffee className="h-5 w-5 text-yellow-600" />
                               </div>
                               <div>
                                 <h4 className="font-medium">Morning Coffee Bonus</h4>
-                                <p className="text-sm text-gray-500">Earn 1.5x points on morning coffee purchases</p>
+                              <p className="text-sm text-gray-500">
+                                Earn 1.5x points in the morning on weekdays.
+                              </p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <Checkbox 
-                                id="morning-coffee-bonus" 
-                                checked={true}
-                                className="h-5 w-5 border-gray-300"
-                              />
-                              <CollapsibleTrigger className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100">
-                                <ChevronDown className="h-5 w-5 text-gray-500" />
+                            <div className="flex items-center gap-2">
+                              {selectedPointsRules.includes("morning-coffee-bonus") ? (
+                                <Button
+                                  onClick={() => handlePointsRuleToggle("morning-coffee-bonus")}
+                                  size="sm"
+                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                  <Check className="h-4 w-4 mr-1" />
+                                  Selected
+                                </Button>
+                              ) : (
+                                <Button
+                                  onClick={() => handlePointsRuleToggle("morning-coffee-bonus")}
+                                  size="sm"
+                                  className="bg-green-500 hover:bg-green-600 text-white"
+                                >
+                                  Select
+                                </Button>
+                              )}
+                              <CollapsibleTrigger
+                                className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
+                              >
+                                <ChevronDown className="h-5 w-5 text-gray-500"/>
                               </CollapsibleTrigger>
                             </div>
                           </div>
-                          
                           <CollapsibleContent className="pt-4 mt-3 border-t border-gray-100">
                             <div className="space-y-4">
                               <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
@@ -2828,16 +2848,16 @@ export function OnboardingWizard() {
                                   <div>
                                     <h5 className="text-sm font-medium mb-1 flex items-center">
                                       <Clock className="h-4 w-4 mr-1 text-blue-500" />
-                                      Time Condition
+                                    Time Range
                                     </h5>
-                                    <p className="text-xs text-gray-600">7:00 AM - 10:00 AM</p>
+                                  <p className="text-xs text-gray-600">7am to 10am</p>
                                   </div>
                                   <div>
                                     <h5 className="text-sm font-medium mb-1 flex items-center">
                                       <Calendar className="h-4 w-4 mr-1 text-blue-500" />
-                                      Day Condition
+                                    Days of Week
                                     </h5>
-                                    <p className="text-xs text-gray-600">Monday - Friday</p>
+                                  <p className="text-xs text-gray-600">Monday, Tuesday, Wednesday, Thursday, Friday</p>
                                   </div>
                                   <div>
                                     <h5 className="text-sm font-medium mb-1 flex items-center">
@@ -2846,27 +2866,18 @@ export function OnboardingWizard() {
                                     </h5>
                                     <p className="text-xs text-gray-600">1.5x points</p>
                                   </div>
-                                  <div>
-                                    <h5 className="text-sm font-medium mb-1 flex items-center">
-                                      <Store className="h-4 w-4 mr-1 text-blue-500" />
-                                      Applied To
-                                    </h5>
-                                    <p className="text-xs text-gray-600">All purchases</p>
                                   </div>
                                 </div>
-                              </div>
-                              
                               <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
                                 <h5 className="text-sm font-medium mb-2">JSON Configuration</h5>
-                                <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">
-{`{
+                              <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">{`{
   "name": "Morning Coffee Bonus",
   "pointsmultiplier": 1.5,
   "conditions": [
     {
       "type": "timeOfDay",
-      "startTime": "07:00",
-      "endTime": "10:00"
+      "startTime": "7:00:00",
+      "endTime": "10:00:00"
     },
     {
       "type": "daysOfWeek",
@@ -2874,15 +2885,108 @@ export function OnboardingWizard() {
     }
   ],
   "merchantId": "cafe123",
-  "createdAt": "${new Date().toISOString()}"
-}`}
-                                </pre>
+  "createdAt": "December 11, 2024 at 4:00:00 PM UTC+11"
+}`}</pre>
                               </div>
-                              
                               <div className="flex justify-end gap-2">
-                                <Button variant="outline" size="sm">
-                                  Edit Rule
+                              <Button variant="outline" size="sm">Edit Rule</Button>
+                              <Button variant="outline" size="sm" className="text-red-500 border-red-200 hover:bg-red-50">
+                                Delete
                                 </Button>
+                            </div>
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+
+                      {/* Lunchtime Special */}
+                      <Collapsible className="bg-white p-4 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
+                              <Utensils className="h-5 w-5 text-green-600" />
+                            </div>
+                            <div>
+                              <h4 className="font-medium">Lunchtime Special</h4>
+                              <p className="text-sm text-gray-500">
+                                Earn 2x points at midday with a minimum spend of $10.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {selectedPointsRules.includes("lunchtime-special") ? (
+                              <Button
+                                onClick={() => handlePointsRuleToggle("lunchtime-special")}
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                              >
+                                <Check className="h-4 w-4 mr-1" />
+                                Selected
+                              </Button>
+                            ) : (
+                              <Button
+                                onClick={() => handlePointsRuleToggle("lunchtime-special")}
+                                size="sm"
+                                className="bg-green-500 hover:bg-green-600 text-white"
+                              >
+                                Select
+                              </Button>
+                            )}
+                            <CollapsibleTrigger
+                              className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
+                            >
+                              <ChevronDown className="h-5 w-5 text-gray-500"/>
+                            </CollapsibleTrigger>
+                          </div>
+                        </div>
+                        <CollapsibleContent className="pt-4 mt-3 border-t border-gray-100">
+                          <div className="space-y-4">
+                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <h5 className="text-sm font-medium mb-1 flex items-center">
+                                    <Clock className="h-4 w-4 mr-1 text-blue-500" />
+                                    Time Range
+                                  </h5>
+                                  <p className="text-xs text-gray-600">12pm to 3pm</p>
+                                </div>
+                                <div>
+                                  <h5 className="text-sm font-medium mb-1 flex items-center">
+                                    <DollarSign className="h-4 w-4 mr-1 text-blue-500" />
+                                    Minimum Spend
+                                  </h5>
+                                  <p className="text-xs text-gray-600">$10.00</p>
+                                </div>
+                                <div>
+                                  <h5 className="text-sm font-medium mb-1 flex items-center">
+                                    <Award className="h-4 w-4 mr-1 text-blue-500" />
+                                    Points Multiplier
+                                  </h5>
+                                  <p className="text-xs text-gray-600">2x points</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                              <h5 className="text-sm font-medium mb-2">JSON Configuration</h5>
+                              <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">{`{
+  "name": "Lunchtime Special",
+  "pointsmultiplier": 2,
+  "conditions": [
+    {
+      "type": "timeOfDay",
+      "startTime": "12:00:00",
+      "endTime": "15:00:00"
+    },
+    {
+      "type": "minimumSpend",
+      "amount": 10.0
+    }
+  ],
+  "merchantId": "cafe123",
+  "createdAt": "December 11, 2024 at 4:00:00 PM UTC+11"
+}`}</pre>
+                            </div>
+                            <div className="flex justify-end gap-2">
+                              <Button variant="outline" size="sm">Edit Rule</Button>
                                 <Button variant="outline" size="sm" className="text-red-500 border-red-200 hover:bg-red-50">
                                   Delete
                                 </Button>
@@ -2891,37 +2995,357 @@ export function OnboardingWizard() {
                           </CollapsibleContent>
                         </Collapsible>
                         
-                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                          <div className="flex items-start gap-3">
-                            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                              <Sparkles className="h-4 w-4 text-blue-600" />
+                      {/* Weekend Treat */}
+                      <Collapsible className="bg-white p-4 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-pink-100 flex items-center justify-center">
+                              <Calendar className="h-5 w-5 text-pink-600" />
                             </div>
                             <div>
-                              <h4 className="font-medium text-blue-800">Points Rule Added</h4>
-                              <p className="text-sm text-blue-700 mt-1">
-                                The "Morning Coffee Bonus" rule has been added to your loyalty program. Customers will earn 1.5x points when they make purchases between 7:00 AM and 10:00 AM on weekdays.
+                              <h4 className="font-medium">Weekend Treat</h4>
+                              <p className="text-sm text-gray-500">
+                                Earn 3x points on weekend days.
                               </p>
-                              <div className="mt-3">
-                                <Button variant="outline" size="sm" className="text-blue-600 border-blue-200 hover:bg-blue-50">
-                                  Edit Rule
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {selectedPointsRules.includes("weekend-treat") ? (
+                              <Button
+                                onClick={() => handlePointsRuleToggle("weekend-treat")}
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                              >
+                                <Check className="h-4 w-4 mr-1" />
+                                Selected
+                              </Button>
+                            ) : (
+                              <Button
+                                onClick={() => handlePointsRuleToggle("weekend-treat")}
+                                size="sm"
+                                className="bg-green-500 hover:bg-green-600 text-white"
+                              >
+                                Select
+                              </Button>
+                            )}
+                            <CollapsibleTrigger
+                              className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
+                            >
+                              <ChevronDown className="h-5 w-5 text-gray-500"/>
+                            </CollapsibleTrigger>
+                          </div>
+                        </div>
+                        <CollapsibleContent className="pt-4 mt-3 border-t border-gray-100">
+                          <div className="space-y-4">
+                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <h5 className="text-sm font-medium mb-1 flex items-center">
+                                    <Calendar className="h-4 w-4 mr-1 text-blue-500" />
+                                    Days of Week
+                                  </h5>
+                                  <p className="text-xs text-gray-600">Saturday, Sunday</p>
+                                </div>
+                                <div>
+                                  <h5 className="text-sm font-medium mb-1 flex items-center">
+                                    <Award className="h-4 w-4 mr-1 text-blue-500" />
+                                    Points Multiplier
+                                  </h5>
+                                  <p className="text-xs text-gray-600">3x points</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                              <h5 className="text-sm font-medium mb-2">JSON Configuration</h5>
+                              <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">{`{
+  "name": "Weekend Treat",
+  "pointsmultiplier": 3,
+  "conditions": [
+    {
+      "type": "daysOfWeek",
+      "days": ["Saturday", "Sunday"]
+    }
+  ],
+  "merchantId": "cafe123",
+  "createdAt": "December 11, 2024 at 4:00:00 PM UTC+11"
+}`}</pre>
+                            </div>
+                            <div className="flex justify-end gap-2">
+                              <Button variant="outline" size="sm">Edit Rule</Button>
+                              <Button variant="outline" size="sm" className="text-red-500 border-red-200 hover:bg-red-50">
+                                Delete
                                 </Button>
                               </div>
                             </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+
+                      {/* Happy Hour Delight */}
+                      <Collapsible className="bg-white p-4 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
+                              <Clock className="h-5 w-5 text-purple-600" />
+                          </div>
+                            <div>
+                              <h4 className="font-medium">Happy Hour Delight</h4>
+                              <p className="text-sm text-gray-500">
+                                Earn 2.5x points during a limited time window.
+                              </p>
+                        </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {selectedPointsRules.includes("happy-hour-delight") ? (
+                              <Button
+                                onClick={() => handlePointsRuleToggle("happy-hour-delight")}
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                              >
+                                <Check className="h-4 w-4 mr-1" />
+                                Selected
+                              </Button>
+                            ) : (
+                              <Button
+                                onClick={() => handlePointsRuleToggle("happy-hour-delight")}
+                                size="sm"
+                                className="bg-green-500 hover:bg-green-600 text-white"
+                              >
+                                Select
+                              </Button>
+                            )}
+                            <CollapsibleTrigger
+                              className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
+                            >
+                              <ChevronDown className="h-5 w-5 text-gray-500"/>
+                            </CollapsibleTrigger>
                           </div>
                         </div>
-                        
-                        <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                          <div className="text-center">
-                            <p className="text-gray-500 mb-2">Add more points rules</p>
-                            <p className="text-xs text-gray-400 mb-4">
-                              Create additional rules to reward customers in different ways
-                            </p>
-                            <Button variant="outline" className="border-gray-300">
-                              <Plus className="h-4 w-4 mr-2" /> Add Another Rule
+                        <CollapsibleContent className="pt-4 mt-3 border-t border-gray-100">
+                          <div className="space-y-4">
+                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <h5 className="text-sm font-medium mb-1 flex items-center">
+                                    <Clock className="h-4 w-4 mr-1 text-blue-500" />
+                                    Time Range
+                                  </h5>
+                                  <p className="text-xs text-gray-600">5pm to 8pm</p>
+                                </div>
+                                <div>
+                                  <h5 className="text-sm font-medium mb-1 flex items-center">
+                                    <Award className="h-4 w-4 mr-1 text-blue-500" />
+                                    Points Multiplier
+                                  </h5>
+                                  <p className="text-xs text-gray-600">2.5x points</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                              <h5 className="text-sm font-medium mb-2">JSON Configuration</h5>
+                              <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">{`{
+  "name": "Happy Hour Delight",
+  "pointsmultiplier": 2.5,
+  "conditions": [
+    {
+      "type": "timeOfDay",
+      "startTime": "17:00:00",
+      "endTime": "20:00:00"
+    }
+  ],
+  "merchantId": "cafe123",
+  "createdAt": "December 11, 2024 at 4:00:00 PM UTC+11"
+}`}</pre>
+                            </div>
+                            <div className="flex justify-end gap-2">
+                              <Button variant="outline" size="sm">Edit Rule</Button>
+                              <Button variant="outline" size="sm" className="text-red-500 border-red-200 hover:bg-red-50">
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+
+                      {/* Big Spender Bonus */}
+                      <Collapsible className="bg-white p-4 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center">
+                              <DollarSign className="h-5 w-5 text-amber-600" />
+                            </div>
+                            <div>
+                              <h4 className="font-medium">Big Spender Bonus</h4>
+                              <p className="text-sm text-gray-500">
+                                Earn 5x points when customers spend over $30 in a single visit.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {selectedPointsRules.includes("big-spender-bonus") ? (
+                              <Button
+                                onClick={() => handlePointsRuleToggle("big-spender-bonus")}
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                              >
+                                <Check className="h-4 w-4 mr-1" />
+                                Selected
+                              </Button>
+                            ) : (
+                              <Button
+                                onClick={() => handlePointsRuleToggle("big-spender-bonus")}
+                                size="sm"
+                                className="bg-green-500 hover:bg-green-600 text-white"
+                              >
+                                Select
+                              </Button>
+                            )}
+                            <CollapsibleTrigger
+                              className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
+                            >
+                              <ChevronDown className="h-5 w-5 text-gray-500"/>
+                            </CollapsibleTrigger>
+                          </div>
+                        </div>
+                        <CollapsibleContent className="pt-4 mt-3 border-t border-gray-100">
+                          <div className="space-y-4">
+                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <h5 className="text-sm font-medium mb-1 flex items-center">
+                                    <DollarSign className="h-4 w-4 mr-1 text-blue-500" />
+                                    Minimum Spend
+                                  </h5>
+                                  <p className="text-xs text-gray-600">$30.00</p>
+                                </div>
+                                <div>
+                                  <h5 className="text-sm font-medium mb-1 flex items-center">
+                                    <Award className="h-4 w-4 mr-1 text-blue-500" />
+                                    Points Multiplier
+                                  </h5>
+                                  <p className="text-xs text-gray-600">5x points</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                              <h5 className="text-sm font-medium mb-2">JSON Configuration</h5>
+                              <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">{`{
+  "name": "Big Spender Bonus",
+  "pointsmultiplier": 5,
+  "conditions": [
+    {
+      "type": "minimumSpend",
+      "amount": 30.0
+    }
+  ],
+  "merchantId": "cafe123",
+  "createdAt": "December 11, 2024 at 4:00:00 PM UTC+11"
+}`}</pre>
+                            </div>
+                            <div className="flex justify-end gap-2">
+                              <Button variant="outline" size="sm">Edit Rule</Button>
+                              <Button variant="outline" size="sm" className="text-red-500 border-red-200 hover:bg-red-50">
+                                Delete
                             </Button>
                           </div>
                         </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+
+                      {/* Monday Recovery */}
+                      <Collapsible className="bg-white p-4 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                              <Calendar className="h-5 w-5 text-indigo-600" />
                       </div>
+                            <div>
+                              <h4 className="font-medium">Monday Recovery</h4>
+                              <p className="text-sm text-gray-500">
+                                Earn 2x points on Mondays with a minimum spend of $5.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {selectedPointsRules.includes("monday-recovery") ? (
+                              <Button
+                                onClick={() => handlePointsRuleToggle("monday-recovery")}
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                              >
+                                <Check className="h-4 w-4 mr-1" />
+                                Selected
+                              </Button>
+                            ) : (
+                              <Button
+                                onClick={() => handlePointsRuleToggle("monday-recovery")}
+                                size="sm"
+                                className="bg-green-500 hover:bg-green-600 text-white"
+                              >
+                                Select
+                              </Button>
+                            )}
+                            <CollapsibleTrigger
+                              className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
+                            >
+                              <ChevronDown className="h-5 w-5 text-gray-500"/>
+                            </CollapsibleTrigger>
+                          </div>
+                        </div>
+                        <CollapsibleContent className="pt-4 mt-3 border-t border-gray-100">
+                          <div className="space-y-4">
+                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <h5 className="text-sm font-medium mb-1 flex items-center">
+                                    <Calendar className="h-4 w-4 mr-1 text-blue-500" />
+                                    Days of Week
+                                  </h5>
+                                  <p className="text-xs text-gray-600">Monday</p>
+                                </div>
+                                <div>
+                                  <h5 className="text-sm font-medium mb-1 flex items-center">
+                                    <DollarSign className="h-4 w-4 mr-1 text-blue-500" />
+                                    Minimum Spend
+                                  </h5>
+                                  <p className="text-xs text-gray-600">$5.00</p>
+                                </div>
+                                <div>
+                                  <h5 className="text-sm font-medium mb-1 flex items-center">
+                                    <Award className="h-4 w-4 mr-1 text-blue-500" />
+                                    Points Multiplier
+                                  </h5>
+                                  <p className="text-xs text-gray-600">2x points</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                              <h5 className="text-sm font-medium mb-2">JSON Configuration</h5>
+                              <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">{`{
+  "name": "Monday Recovery",
+  "pointsmultiplier": 2,
+  "conditions": [
+    {
+      "type": "daysOfWeek",
+      "days": ["Monday"]
+    },
+    {
+      "type": "minimumSpend",
+      "amount": 5.0
+    }
+  ],
+  "merchantId": "cafe123",
+  "createdAt": "December 11, 2024 at 4:00:00 PM UTC+11"
+}`}</pre>
+                            </div>
+                            <div className="flex justify-end gap-2">
+                              <Button variant="outline" size="sm">Edit Rule</Button>
+                              <Button variant="outline" size="sm" className="text-red-500 border-red-200 hover:bg-red-50">
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
                     </div>
                   </div>
                 </div>

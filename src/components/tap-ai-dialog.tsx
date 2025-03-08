@@ -137,12 +137,51 @@ const debugJsonParsing = (content: string) => {
   }
 };
 
-// Replace the existing parseMessageContent function with this simpler version
+// Replace the existing parseMessageContent function with this improved version
 const parseMessageContent = (content: string) => {
   // First log the content for debugging
-  console.log("Parsing content:", content.substring(0, 100) + "...");
+  console.log("Parsing content:", content);
   
-  // Simple regex to find JSON objects
+  // Check for JSON in code blocks (```json ... ```)
+  const codeBlockRegex = /```json\s*([\s\S]*?)\s*```/g;
+  const codeBlockMatches = Array.from(content.matchAll(codeBlockRegex));
+  
+  if (codeBlockMatches.length > 0) {
+    console.log("Found JSON code blocks:", codeBlockMatches.length);
+    const jsonObjects = [];
+    
+    // Extract JSON from each code block
+    for (const match of codeBlockMatches) {
+      try {
+        const jsonString = match[1].trim();
+        const parsed = JSON.parse(jsonString);
+        if (parsed && typeof parsed === 'object' && parsed.rewardName) {
+          jsonObjects.push(parsed);
+          console.log("Found valid reward object in code block:", parsed.rewardName);
+        }
+      } catch (e) {
+        console.error("Failed to parse JSON from code block:", e);
+      }
+    }
+    
+    if (jsonObjects.length > 0) {
+      // Split content by code blocks to get text before and after
+      const parts = content.split(/```json[\s\S]*?```/);
+      const beforeJson = parts[0].trim();
+      const afterJson = parts.slice(1).join('').trim();
+      
+      return {
+        hasJson: true,
+        beforeJson: beforeJson,
+        jsonData: jsonObjects[0], // For backward compatibility
+        jsonObjects: jsonObjects,
+        multipleJson: jsonObjects.length > 1,
+        afterJson: afterJson
+      };
+    }
+  }
+  
+  // If no code blocks with JSON, try the old method with regex
   const jsonRegex = /\{[\s\S]*?\}/g;
   const matches = Array.from(content.matchAll(jsonRegex));
   
@@ -2314,6 +2353,25 @@ export function TapAiDialog({
     }
   };
 
+  // Add the StaggeredText component inside the main component
+  const StaggeredText = ({ text }: { text: string }) => {
+    // Split the text by spaces
+    const words = text.split(" ");
+    return (
+      <>
+        {words.map((word, idx) => (
+          <span
+            key={idx}
+            className="staggered-fade"
+            style={{ animationDelay: `${idx * 0.04}s` }}
+          >
+            {word}{" "}
+          </span>
+        ))}
+      </>
+    );
+  };
+
   if (authLoading) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -2328,7 +2386,9 @@ export function TapAiDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[1400px] h-[90vh] flex flex-col p-0 border-0 rounded-xl overflow-hidden">
+      <DialogContent 
+        className="sm:max-w-[1400px] h-[90vh] flex flex-col p-0 border-0 rounded-xl overflow-hidden focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+      >
         <div className="flex h-full">
           {/* Conversations sidebar */}
           {sidebarVisible && (
@@ -2432,85 +2492,95 @@ export function TapAiDialog({
             </DialogHeader>
 
             {/* Messages area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* Remove this debug information block */}
-              {/* <div className="text-xs text-gray-400 mb-2">
-                Local messages count: {localMessages.length}
-              </div> */}
-              
-              {/* Display local messages */}
-              {localMessages.map((message, index) => {
-                // Add this line for debugging
-                if (message.role === 'assistant') {
-                  debugJsonParsing(message.content);
-                }
-                
-                const parsedContent = parseMessageContent(message.content);
-                console.log("Parsed content result:", parsedContent);
-                
-                return (
-                  <div 
-                    key={index} 
-                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div 
-                      className={`max-w-[80%] ${
-                        message.role === 'user' 
-                          ? 'bg-blue-500 text-white p-3 rounded-lg' 
-                          : parsedContent.hasJson 
-                            ? 'bg-transparent' 
-                            : 'bg-gray-200 text-gray-900 p-3 rounded-lg'
+            <div className="flex-1 overflow-y-auto flex flex-col items-center">
+              <div className="w-full max-w-4xl px-4 py-4 space-y-3">
+                {localMessages.map((message, index) => {
+                  // Add this line for debugging
+                  if (message.role === 'assistant') {
+                    debugJsonParsing(message.content);
+                  }
+
+                  const parsedContent = parseMessageContent(message.content);
+                  console.log("Parsed content result:", parsedContent);
+
+                  return (
+                    <div
+                      key={index}
+                      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} ${
+                        message.role === 'assistant' ? 'fade-in' : ''
                       }`}
                     >
-                      {parsedContent.hasJson ? (
-                        <div>
-                          {parsedContent.beforeJson && (
-                            <div className="bg-gray-200 text-gray-900 p-3 rounded-lg mb-2 whitespace-pre-wrap">
-                              {parsedContent.beforeJson}
+                      <div
+                        className={`max-w-[90%] ${
+                          message.role === 'user'
+                            ? 'bg-blue-500 text-white p-2.5 rounded-lg'
+                            : parsedContent.hasJson
+                              ? 'bg-transparent'
+                              : 'bg-gray-200 text-gray-900 p-2.5 rounded-lg'
+                        }`}
+                      >
+                        {parsedContent.hasJson ? (
+                          <div>
+                            {parsedContent.beforeJson && (
+                              <div className="bg-gray-200 text-gray-900 p-3 rounded-lg mb-2 whitespace-pre-wrap">
+                                {message.role === 'assistant' ? (
+                                  <StaggeredText text={parsedContent.beforeJson} />
+                                ) : (
+                                  parsedContent.beforeJson
+                                )}
+                              </div>
+                            )}
+
+                            {parsedContent.multipleJson ? (
+                              <div className="space-y-4">
+                                {parsedContent.jsonObjects.map((reward, idx) => (
+                                  <RewardCard key={idx} reward={reward} />
+                                ))}
+                              </div>
+                            ) : (
+                              <RewardCard reward={parsedContent.jsonData} />
+                            )}
+
+                            {parsedContent.afterJson && (
+                              <div className="bg-gray-200 text-gray-900 p-3 rounded-lg mt-2 whitespace-pre-wrap">
+                                {message.role === 'assistant' ? (
+                                  <StaggeredText text={parsedContent.afterJson} />
+                                ) : (
+                                  parsedContent.afterJson
+                                )}
+                              </div>
+                            )}
                           </div>
-                          )}
-                          
-                          {parsedContent.multipleJson ? (
-                            <div className="space-y-4">
-                              {parsedContent.jsonObjects.map((reward, idx) => (
-                                <RewardCard key={idx} reward={reward} />
-                              ))}
-                            </div>
-                          ) : (
-                            <RewardCard reward={parsedContent.jsonData} />
-                          )}
-                          
-                          {parsedContent.afterJson && (
-                            <div className="bg-gray-200 text-gray-900 p-3 rounded-lg mt-2 whitespace-pre-wrap">
-                              {parsedContent.afterJson}
-                  </div>
-                          )}
-                </div>
-                      ) : (
-                        <div className="whitespace-pre-wrap">{message.content}</div>
-                      )}
+                        ) : (
+                          <div className="whitespace-pre-wrap">
+                            {message.role === 'assistant' ? (
+                              <StaggeredText text={message.content} />
+                            ) : (
+                              message.content
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                
+                {/* Show a message if there are no messages */}
+                {localMessages.length === 0 && !isLoading && (
+                  <div className="flex justify-center items-center h-full">
+                    <div className="text-center text-gray-500">
+                      <p>No messages yet. Start a conversation!</p>
                     </div>
                   </div>
-                );
-              })}
-              
-              {/* Show a message if there are no messages */}
-              {localMessages.length === 0 && !isLoading && (
-                <div className="flex justify-center items-center h-full">
-                  <div className="text-center text-gray-500">
-                    <p>No messages yet. Start a conversation!</p>
+                )}
+
+                {/* Loading indicator */}
+                {isLoading && (
+                  <div className="flex justify-center">
+                    <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                   </div>
-                </div>
-              )}
-              
-              {/* Loading indicator */}
-              {isLoading && (
-                <div className="flex justify-center">
-                  <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                </div>
-              )}
-              
-              <div ref={messagesEndRef} />
+                )}
+              </div>
             </div>
 
             <div className="px-4 py-2 border-gray-100 max-w-3xl mx-auto w-full">
@@ -2690,3 +2760,36 @@ export function TapAiDialog({
     </Dialog>
   )
 } 
+
+<style jsx>{`
+  .fade-in {
+    animation: fadeIn 0.4s ease-in-out forwards;
+  }
+  @keyframes fadeIn {
+    0% {
+      opacity: 0;
+      transform: translateY(5px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .staggered-fade {
+    display: inline-block;
+    opacity: 0;
+    animation: staggeredFade 0.3s forwards ease;
+  }
+ 
+  @keyframes staggeredFade {
+    from {
+      opacity: 0;
+      transform: translateY(3px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+`}</style>

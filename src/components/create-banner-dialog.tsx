@@ -14,10 +14,12 @@ import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, collection, addDoc, updateDoc, getDoc } from "firebase/firestore"
-import { Store, Gift, Sparkles, Users, UserPlus, ChevronLeft, ChevronRight, Edit, Copy, PenLine, Library } from "lucide-react"
+import { Store, Gift, Sparkles, Users, UserPlus, ChevronLeft, ChevronRight, Edit, Copy, PenLine, Library, HelpCircle, X, Check, Plus } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Card, CardContent } from "@/components/ui/card"
 import { AnnouncementDesignerDialog } from "@/components/announcement-designer-dialog"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { useRouter } from "next/navigation"
 
 // Banner enumerations
 export const BannerVisibility = {
@@ -374,6 +376,7 @@ const bannerTemplates = [
 export function CreateBannerDialog({ open, onOpenChange, onSave }: CreateBannerDialogProps) {
   const { user } = useAuth()
   const { toast } = useToast()
+  const router = useRouter()
   
   // Form State
   const [title, setTitle] = useState('')
@@ -444,6 +447,9 @@ export function CreateBannerDialog({ open, onOpenChange, onSave }: CreateBannerD
   // Add this new state for filtering templates
   const [templateFilter, setTemplateFilter] = useState<string>("all")
 
+  // First, add a new state to track if the guide is open
+  const [guideOpen, setGuideOpen] = useState(false);
+
   // Add this effect to fetch the merchant name when the dialog opens
   useEffect(() => {
     const fetchMerchantName = async () => {
@@ -489,16 +495,20 @@ export function CreateBannerDialog({ open, onOpenChange, onSave }: CreateBannerD
   const createBanner = async () => {
     setLoading(true)
     try {
-      // Build the banner object
+      // Get the color name from the hex value
+      const colorName = getColorNameFromHex(selectedColor)
+      
+      // Build the banner object with the correct field names
       const bannerObj = {
-        bannerName: title,
-        cssColor: selectedColor,
+        title: title,
+        cssColor: selectedColor, // Keep the original hex for CSS
+        color: colorName, // Add the color name field
         description,
         buttonText,
         merchantName,
         visibilityType,
         isActive,
-        styleType: selectedStyle,
+        style: selectedStyle,
         bannerAction: bannerAction,
         merchantId: user.uid,
         // We'll add the announcement reference later if needed
@@ -572,11 +582,77 @@ export function CreateBannerDialog({ open, onOpenChange, onSave }: CreateBannerD
     }
   }
 
+  // Helper function to convert hex to color name
+  const getColorNameFromHex = (hex: string): string => {
+    // Simple mapping of common hex values to color names
+    const colorMap: Record<string, string> = {
+      "#FF9500": "orange",
+      "#007AFF": "blue",
+      "#AF52DE": "purple",
+      "#FF3B30": "red",
+      "#34C759": "green",
+      "#5856D6": "indigo",
+      "#FF2D55": "pink",
+      "#5AC8FA": "lightblue",
+      "#4CD964": "lightgreen",
+      "#FF6482": "rose",
+      "#FFCC00": "yellow"
+    }
+    
+    // Return the mapped color name or a default
+    return colorMap[hex] || "blue"
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Create Banner</DialogTitle>
+        <DialogHeader className="flex flex-row items-center justify-between">
+          <DialogTitle>
+            <span className="text-[#007AFF]">Create</span> Banner
+          </DialogTitle>
+          
+          <div className="flex items-center gap-2 mr-8">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="flex items-center gap-1 h-8 text-gray-600"
+              onClick={() => router.push("/store/banner")}
+            >
+              <Store className="h-4 w-4" />
+              <span>My Banners</span>
+            </Button>
+            
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex items-center gap-1 h-8 text-gray-600"
+                    onClick={() => setGuideOpen(!guideOpen)}
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                    <span>Guide</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-sm">
+                  <div className="space-y-2 p-2">
+                    <h4 className="font-medium">Banner Creation Guide</h4>
+                    <p className="text-sm text-gray-500">
+                      Banners appear at the top of your customer's app and can be used to promote offers, 
+                      announce news, or highlight important information.
+                    </p>
+                    <ul className="text-xs text-gray-500 list-disc pl-4 space-y-1">
+                      <li>Choose from pre-made templates or create your own</li>
+                      <li>Select a style that matches your brand</li>
+                      <li>Add an action - link to your store or show an announcement</li>
+                      <li>Target specific customer groups</li>
+                    </ul>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "create" | "library")}>
@@ -798,51 +874,122 @@ export function CreateBannerDialog({ open, onOpenChange, onSave }: CreateBannerD
               {/* Action Section */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Banner Action</h3>
+                <p className="text-sm text-gray-500">What happens when a customer taps on your banner?</p>
                 
-                <RadioGroup 
-                  value={bannerAction} 
-                  onValueChange={(value) => setBannerAction(value)}
-                  className="space-y-2"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value={BannerAction.STORE_REDIRECT} id="store" />
-                    <Label htmlFor="store">Take to store page</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value={BannerAction.SHOW_ANNOUNCEMENT} id="announcement" />
-                    <Label htmlFor="announcement">Show announcement</Label>
-                  </div>
-                </RadioGroup>
-                
-                {bannerAction === BannerAction.SHOW_ANNOUNCEMENT && (
-                  <div className="pl-4 border-l-2 border-gray-200">
-                    {announcement ? (
-                      <div className="p-3 bg-gray-50 rounded-md">
-                        <div className="flex justify-between items-center mb-2">
-                          <h4 className="font-medium">{announcement.title}</h4>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => setAnnouncement(null)}
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                        <p className="text-sm text-gray-600">
-                          {announcement.messages?.[0]}
-                          {announcement.messages?.length > 1 && "..."}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Design: {announcement.designName}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div 
+                    className={`relative cursor-pointer rounded-xl border-2 p-4 transition-all ${
+                      bannerAction === BannerAction.STORE_REDIRECT 
+                        ? 'border-[#007AFF] bg-blue-50' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => setBannerAction(BannerAction.STORE_REDIRECT)}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${
+                        bannerAction === BannerAction.STORE_REDIRECT ? 'bg-[#007AFF]' : 'bg-gray-100'
+                      }`}>
+                        <Store className={`h-5 w-5 ${
+                          bannerAction === BannerAction.STORE_REDIRECT ? 'text-white' : 'text-gray-500'
+                        }`} />
+                      </div>
+                      <div>
+                        <h4 className="font-medium">Take to Store Page</h4>
+                        <p className="text-sm text-gray-500">
+                          Redirect customers to your store page when they tap the banner.
                         </p>
                       </div>
-                    ) : (
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setShowAnnouncementDesigner(true)}
-                      >
-                        Create Announcement
-                      </Button>
+                    </div>
+                    {bannerAction === BannerAction.STORE_REDIRECT && (
+                      <div className="absolute top-3 right-3 h-5 w-5 rounded-full bg-[#007AFF] flex items-center justify-center">
+                        <Check className="h-3 w-3 text-white" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div 
+                    className={`relative cursor-pointer rounded-xl border-2 p-4 transition-all ${
+                      bannerAction === BannerAction.SHOW_ANNOUNCEMENT 
+                        ? 'border-[#007AFF] bg-blue-50' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => setBannerAction(BannerAction.SHOW_ANNOUNCEMENT)}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${
+                        bannerAction === BannerAction.SHOW_ANNOUNCEMENT ? 'bg-[#007AFF]' : 'bg-gray-100'
+                      }`}>
+                        <Sparkles className={`h-5 w-5 ${
+                          bannerAction === BannerAction.SHOW_ANNOUNCEMENT ? 'text-white' : 'text-gray-500'
+                        }`} />
+                      </div>
+                      <div>
+                        <h4 className="font-medium">Show Announcement</h4>
+                        <p className="text-sm text-gray-500">
+                          Display a detailed announcement with more information.
+                        </p>
+                      </div>
+                    </div>
+                    {bannerAction === BannerAction.SHOW_ANNOUNCEMENT && (
+                      <div className="absolute top-3 right-3 h-5 w-5 rounded-full bg-[#007AFF] flex items-center justify-center">
+                        <Check className="h-3 w-3 text-white" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {bannerAction === BannerAction.SHOW_ANNOUNCEMENT && (
+                  <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium">Announcement Details</h4>
+                        <p className="text-sm text-gray-500">
+                          {announcement 
+                            ? "Your announcement is ready" 
+                            : "Create an announcement that will show when customers tap the banner"}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        {announcement && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setAnnouncement(null)}
+                            className="flex items-center gap-1 text-red-600 border-red-200 hover:bg-red-50"
+                          >
+                            <X className="h-4 w-4" />
+                            <span>Remove</span>
+                          </Button>
+                        )}
+                        <Button
+                          onClick={() => setShowAnnouncementDesigner(true)}
+                          variant={announcement ? "outline" : "default"}
+                          className="flex items-center gap-1"
+                        >
+                          {announcement ? (
+                            <>
+                              <Edit className="h-4 w-4" />
+                              <span>Edit Announcement</span>
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="h-4 w-4" />
+                              <span>Create Announcement</span>
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {announcement && (
+                      <div className="mt-3 p-3 bg-white rounded-md border border-gray-100">
+                        <h5 className="font-medium text-sm">{announcement.title}</h5>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {announcement.messages && announcement.messages.length > 0 
+                            ? announcement.messages[0] 
+                            : "No message content"}
+                        </p>
+                      </div>
                     )}
                   </div>
                 )}
@@ -947,6 +1094,92 @@ export function CreateBannerDialog({ open, onOpenChange, onSave }: CreateBannerD
           }}
           initialAnnouncement={announcement}
         />
+        
+        {/* Guide Panel */}
+        <div 
+          className={`fixed top-0 right-0 h-full w-[320px] bg-white shadow-lg z-[100] transition-transform duration-300 transform ${
+            guideOpen ? "translate-x-0" : "translate-x-full"
+          } overflow-y-auto border-l border-gray-200`}
+        >
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold">Banner Guide</h3>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setGuideOpen(false)}
+                className="h-8 w-8"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <h4 className="font-medium text-[#007AFF]">What are Banners?</h4>
+                <p className="text-sm text-gray-600">
+                  Banners are promotional elements that appear at the top of your customers' app. 
+                  They're perfect for announcing sales, new products, or important information.
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <h4 className="font-medium text-[#007AFF]">Creating Effective Banners</h4>
+                <ul className="text-sm text-gray-600 space-y-3">
+                  <li className="flex gap-2">
+                    <div className="flex-shrink-0 h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">1</div>
+                    <div>
+                      <strong>Keep it concise</strong> - Use short, compelling text that grabs attention.
+                    </div>
+                  </li>
+                  <li className="flex gap-2">
+                    <div className="flex-shrink-0 h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">2</div>
+                    <div>
+                      <strong>Clear call-to-action</strong> - Make sure your button text clearly indicates what will happen when clicked.
+                    </div>
+                  </li>
+                  <li className="flex gap-2">
+                    <div className="flex-shrink-0 h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">3</div>
+                    <div>
+                      <strong>Choose the right style</strong> - Match the banner style to your message: Dark for impact, Light for subtlety, Glass for elegance.
+                    </div>
+                  </li>
+                  <li className="flex gap-2">
+                    <div className="flex-shrink-0 h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">4</div>
+                    <div>
+                      <strong>Target appropriately</strong> - Use customer targeting to show relevant banners to specific groups.
+                    </div>
+                  </li>
+                </ul>
+              </div>
+              
+              <div className="space-y-2">
+                <h4 className="font-medium text-[#007AFF]">Banner Actions</h4>
+                <div className="space-y-3">
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <h5 className="font-medium text-sm">Store Redirect</h5>
+                    <p className="text-xs text-gray-600">
+                      Takes customers to your store page when they click the banner.
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <h5 className="font-medium text-sm">Show Announcement</h5>
+                    <p className="text-xs text-gray-600">
+                      Opens a detailed announcement with more information, perfect for promotions with terms and conditions.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <h4 className="font-medium text-[#007AFF]">Need More Help?</h4>
+                <p className="text-sm text-gray-600">
+                  Visit our <a href="/help" className="text-blue-600 underline">help center</a> for more detailed guides and best practices.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   )

@@ -118,7 +118,9 @@ export function AnnouncementDesignerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Design Announcement</DialogTitle>
+          <DialogTitle>
+            <span className="text-[#007AFF]">Design</span> Announcement
+          </DialogTitle>
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "edit" | "preview")}>

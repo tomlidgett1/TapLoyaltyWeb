@@ -162,6 +162,7 @@ export function SendBroadcastDialog({ open, onOpenChange }: SendBroadcastDialogP
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Enter the message you want to send to your customers..."
               rows={4}
+              className="focus-visible:ring-[#007AFF] focus-visible:ring-offset-0"
             />
           </div>
           

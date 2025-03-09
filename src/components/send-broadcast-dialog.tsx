@@ -9,12 +9,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
-import { Users, Send, Bell, Store, MessageSquare } from "lucide-react"
+import { Users, Send, Bell, Store, MessageSquare, Clock, Award, DollarSign, AlertTriangle, UserPlus, Repeat, TrendingUp, AlertCircle, HelpCircle } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { collection, addDoc, Timestamp } from "firebase/firestore"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AnnouncementDesignerDialog } from "@/components/announcement-designer-dialog"
+import { useRouter } from "next/navigation"
 
 interface SendBroadcastDialogProps {
   open: boolean
@@ -31,6 +32,7 @@ export function SendBroadcastDialog({ open, onOpenChange }: SendBroadcastDialogP
   const [notificationAction, setNotificationAction] = useState("showAnnouncement")
   const [showAnnouncementDesigner, setShowAnnouncementDesigner] = useState(false)
   const [announcement, setAnnouncement] = useState<any>(null)
+  const router = useRouter()
   
   const toTitleCase = (str: string) => {
     return str
@@ -107,15 +109,39 @@ export function SendBroadcastDialog({ open, onOpenChange }: SendBroadcastDialogP
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="pb-2">
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="pb-2 flex flex-row items-center justify-between">
           <DialogTitle className="flex items-center gap-2">
             <Bell className="h-5 w-5 text-[#007AFF]" />
-            <span>Send Broadcast Message</span>
+            <span>
+              <span className="text-[#007AFF]">Broadcast</span>
+              <span> Message</span>
+            </span>
           </DialogTitle>
+          
+          <div className="flex items-center gap-2 mr-4">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-8 text-xs flex items-center gap-1"
+              onClick={() => router.push('/broadcasts')}
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              My Messages
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-8 text-xs flex items-center gap-1"
+            >
+              <HelpCircle className="h-3.5 w-3.5" />
+              Guide
+            </Button>
+          </div>
         </DialogHeader>
         
-        <div className="space-y-3 py-2">
+        <div className="space-y-4 py-2">
           <div className="space-y-1.5">
             <Label htmlFor="title">Message Title</Label>
             <Input
@@ -135,8 +161,21 @@ export function SendBroadcastDialog({ open, onOpenChange }: SendBroadcastDialogP
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Enter the message you want to send to your customers..."
-              rows={3}
+              rows={4}
             />
+          </div>
+          
+          <div className="bg-gray-50 p-4 rounded-md border border-gray-100">
+            <h3 className="text-sm font-medium mb-2">Broadcast Preview</h3>
+            <div className="bg-white border border-gray-200 rounded-md p-3 shadow-sm">
+              <div className="flex items-start gap-2">
+                <Bell className="h-5 w-5 text-blue-500 mt-0.5" />
+                <div>
+                  <h4 className="font-medium text-sm">{title || "Message Title"}</h4>
+                  <p className="text-xs text-gray-500 mt-1">{message || "Your message content will appear here..."}</p>
+                </div>
+              </div>
+            </div>
           </div>
           
           <div className="space-y-1.5">
@@ -249,10 +288,30 @@ export function SendBroadcastDialog({ open, onOpenChange }: SendBroadcastDialogP
                     <SelectValue placeholder="Choose a customer segment" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="new">New customers (last 30 days)</SelectItem>
-                    <SelectItem value="loyal">Loyal customers (5+ purchases)</SelectItem>
-                    <SelectItem value="high-value">High-value customers</SelectItem>
-                    <SelectItem value="at-risk">At-risk customers</SelectItem>
+                    <SelectItem value="new">
+                      <div className="flex items-center gap-2">
+                        <UserPlus className="h-4 w-4 text-gray-500" />
+                        <span>New customers (last 30 days)</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="loyal">
+                      <div className="flex items-center gap-2">
+                        <Repeat className="h-4 w-4 text-gray-500" />
+                        <span>Loyal customers (5+ purchases)</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="high-value">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 text-gray-500" />
+                        <span>High-value customers</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="at-risk">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 text-gray-500" />
+                        <span>At-risk customers</span>
+                      </div>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>

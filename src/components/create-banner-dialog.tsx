@@ -40,7 +40,7 @@ export const BannerAction = {
 interface CreateBannerDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSave: (bannerData: any) => void
+  onSave?: (bannerData: any) => void
 }
 
 // Pre-made banner templates with shorter text
@@ -489,7 +489,7 @@ export function CreateBannerDialog({ open, onOpenChange, onSave }: CreateBannerD
   const createBanner = async () => {
     setLoading(true)
     try {
-      // Build the data object with the fields you need for the preview
+      // Build the banner object
       const bannerObj = {
         bannerName: title,
         cssColor: selectedColor,
@@ -498,17 +498,77 @@ export function CreateBannerDialog({ open, onOpenChange, onSave }: CreateBannerD
         merchantName,
         visibilityType,
         isActive,
-        styleType: selectedStyle
+        styleType: selectedStyle,
+        bannerAction: bannerAction,
+        merchantId: user.uid,
+        // We'll add the announcement reference later if needed
       }
       
-      // Instead of just closing, call onSave with these fields:
-      onSave(bannerObj)
+      // Check if onSave exists before calling it
+      if (typeof onSave === 'function') {
+        // For external save function, include the full announcement data
+        onSave({
+          ...bannerObj,
+          announcement: bannerAction === BannerAction.SHOW_ANNOUNCEMENT ? announcement : null
+        })
+      } else {
+        // If no onSave function is provided, save directly to Firestore
+        const merchantRef = doc(db, 'merchants', user.uid)
+        const bannersCollectionRef = collection(merchantRef, 'banners')
+        
+        // First create the banner document
+        const bannerDocRef = await addDoc(bannersCollectionRef, {
+          ...bannerObj,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        
+        // If this is an announcement banner, save the announcement in a separate collection
+        if (bannerAction === BannerAction.SHOW_ANNOUNCEMENT && announcement) {
+          // Create the announcements subcollection for this banner
+          const announcementsCollectionRef = collection(
+            doc(db, 'merchants', user.uid, 'banners', bannerDocRef.id), 
+            'announcements'
+          )
+          
+          // Add the announcement document with the exact field names
+          const announcementDocRef = await addDoc(announcementsCollectionRef, {
+            // Use the exact field names from the example
+            announcementId: announcement.id || crypto.randomUUID(),
+            colorHex: announcement.colorHex || selectedColor,
+            designIndex: announcement.designIndex || 4,
+            designName: announcement.designName || "Compact",
+            messages: announcement.messages || [],
+            subtitle: announcement.subtitle || "",
+            termsAndConditions: announcement.termsAndConditions || "",
+            title: announcement.title || title,
+            merchantId: user.uid,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          })
+          
+          // Update the banner with a reference to the announcement
+          await updateDoc(bannerDocRef, {
+            announcementId: announcementDocRef.id
+          })
+        }
+        
+        toast({
+          title: "Banner created",
+          description: "Your banner has been created successfully.",
+        })
+      }
       
       setLoading(false)
       onOpenChange(false)
     } catch (error) {
       console.error(error)
       setLoading(false)
+      toast({
+        title: "Error",
+        description: "There was an error creating your banner.",
+        variant: "destructive"
+      })
     }
   }
 

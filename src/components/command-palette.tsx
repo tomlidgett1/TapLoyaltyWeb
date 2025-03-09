@@ -34,6 +34,7 @@ import {
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
 import { CreateProgramDialog } from "@/components/create-program-dialog"
 import { CreateBannerDialog } from "@/components/create-banner-dialog"
+import { TapAiDialog } from "@/components/tap-ai-dialog"
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false)
@@ -41,12 +42,17 @@ export function CommandPalette() {
   const [createRewardOpen, setCreateRewardOpen] = useState(false)
   const [createProgramOpen, setCreateProgramOpen] = useState(false)
   const [createBannerOpen, setCreateBannerOpen] = useState(false)
+  const [tapAIOpen, setTapAIOpen] = useState(false)
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         setOpen((open) => !open)
+      }
+      if (e.key === "i" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        setTapAIOpen(true)
       }
     }
 
@@ -179,6 +185,11 @@ export function CommandPalette() {
       <CreateBannerDialog 
         open={createBannerOpen} 
         onOpenChange={setCreateBannerOpen} 
+      />
+      
+      <TapAiDialog
+        open={tapAIOpen}
+        onOpenChange={setTapAIOpen}
       />
     </>
   )

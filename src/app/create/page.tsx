@@ -21,13 +21,14 @@ import {
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { SendBroadcastDialog } from "@/components/send-broadcast-dialog"
 
 // Define type for options
 interface OptionType {
   title: string
   description: string
   icon: React.ReactNode
-  type: "reward" | "program" | "recurring" | "rule" | "banner"
+  type: "reward" | "program" | "recurring" | "rule" | "banner" | "broadcast"
 }
 
 export default function CreatePage() {
@@ -38,6 +39,7 @@ export default function CreatePage() {
   const [createRuleOpen, setCreateRuleOpen] = useState(false)
   const [createBannerOpen, setCreateBannerOpen] = useState(false)
   const [selectedOption, setSelectedOption] = useState<OptionType | null>(null)
+  const [broadcastDialogOpen, setBroadcastDialogOpen] = useState(false)
 
   const rewardOptions: OptionType[] = [
     {
@@ -80,7 +82,7 @@ export default function CreatePage() {
       title: "Send Broadcast",
       description: "Send a message to all or selected customers",
       icon: Bell,
-      type: "reward"
+      type: "broadcast"
     }
   ]
   
@@ -148,6 +150,9 @@ export default function CreatePage() {
         break
       case "banner":
         setCreateBannerOpen(true)
+        break
+      case "broadcast":
+        setBroadcastDialogOpen(true)
         break
     }
   }
@@ -218,6 +223,11 @@ export default function CreatePage() {
       <CreateBannerDialog 
         open={createBannerOpen} 
         onOpenChange={setCreateBannerOpen} 
+      />
+      
+      <SendBroadcastDialog
+        open={broadcastDialogOpen}
+        onOpenChange={setBroadcastDialogOpen}
       />
     </div>
   )

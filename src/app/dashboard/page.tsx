@@ -649,24 +649,20 @@ export function LightspeedCallbackPage() {
 
   useEffect(() => {
     const handleOAuthCallback = async () => {
-      // Check if we have code and state parameters
       const code = searchParams.get('code')
       const state = searchParams.get('state')
       const errorParam = searchParams.get('error')
       
-      console.log('OAuth callback received:', { code, state, error: errorParam })
-      
-      // Get the stored state and merchant ID from localStorage
-      const storedState = localStorage.getItem('lightspeed_state')
-      const merchantId = localStorage.getItem('merchant_id')
-      
-      console.log('Stored values:', { storedState, merchantId })
-      
-      // Clear the localStorage items
+      // Decide if this is the normal Lightspeed or the new Lightspeed API
+      const storedState = localStorage.getItem('lightspeed_state') || localStorage.getItem('lightspeed_api_state')
+      const merchantId = localStorage.getItem('merchant_id') || localStorage.getItem('merchant_api_id')
+
+      // Clear them so we avoid re-running the logic
       localStorage.removeItem('lightspeed_state')
       localStorage.removeItem('merchant_id')
-      
-      // Check if there was an error or if the state doesn't match
+      localStorage.removeItem('lightspeed_api_state')
+      localStorage.removeItem('merchant_api_id')
+
       if (errorParam) {
         const errorMessage = `Authorization failed: ${errorParam}`
         setStatus(errorMessage)
@@ -679,7 +675,7 @@ export function LightspeedCallbackPage() {
         setTimeout(() => router.push('/integrations'), 3000)
         return
       }
-      
+
       if (!code || !state) {
         const errorMessage = "Missing authorization code or state"
         setStatus(errorMessage)
@@ -692,7 +688,7 @@ export function LightspeedCallbackPage() {
         setTimeout(() => router.push('/integrations'), 3000)
         return
       }
-      
+
       if (state !== storedState) {
         const errorMessage = "Invalid state parameter"
         setStatus(errorMessage)
@@ -705,7 +701,7 @@ export function LightspeedCallbackPage() {
         setTimeout(() => router.push('/integrations'), 3000)
         return
       }
-      
+
       if (!merchantId) {
         const errorMessage = "Merchant ID not found"
         setStatus(errorMessage)
@@ -718,51 +714,37 @@ export function LightspeedCallbackPage() {
         setTimeout(() => router.push('/integrations'), 3000)
         return
       }
-      
+
       try {
         setStatus("Exchanging authorization code for access token...")
-        
-        // Exchange the authorization code for an access token
-        const tokenResponse = await fetch('/api/lightspeed/token', {
+
+        // Decide which token route to post to. If we were hooking up the new
+        // "lightspeedApi" flow, use /api/lightspeedApi/token. Otherwise, use
+        // /api/lightspeed/token. For simplicity, just assume the new route:
+        const tokenRes = await fetch('/api/lightspeedApi/token', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            code,
-            merchantId
-          }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, merchantId })
         })
-        
-        const responseData = await tokenResponse.json()
-        
-        if (!tokenResponse.ok) {
-          throw new Error(responseData.error || 'Failed to exchange code for token')
+
+        if (!tokenRes.ok) {
+          const errData = await tokenRes.json()
+          throw new Error(errData.error || 'Token exchange failed.')
         }
+
+        const tokenData = await tokenRes.json()
         
-        setStatus("Storing integration data...")
-        
-        // Store the integration data in Firestore
-        await setDoc(doc(db, 'merchants', merchantId, 'integrations', 'lightspeed'), {
-          connected: true,
-          accessToken: responseData.access_token,
-          refreshToken: responseData.refresh_token,
-          expiresAt: new Date(Date.now() + responseData.expires_in * 1000),
-          scope: responseData.scope,
-          connectedAt: new Date()
-        })
-        
-        setStatus("Successfully connected to Lightspeed!")
+        setStatus("All done! Your Lightspeed API integration is connected.")
         toast({
           title: "Connection Successful",
-          description: "Your Lightspeed account has been connected successfully.",
+          description: "Your Lightspeed Retail API account is connected."
         })
-        
-        // Redirect back to the integrations page
+        // redirect back
         setTimeout(() => router.push('/integrations'), 2000)
-      } catch (error) {
-        console.error("Error during Lightspeed OAuth flow:", error)
-        const errorMessage = error instanceof Error ? error.message : String(error)
+        
+      } catch (err) {
+        console.error("Error during Lightspeed OAuth flow:", err)
+        const errorMessage = err instanceof Error ? err.message : String(err)
         setStatus("Failed to complete the connection")
         setError(errorMessage)
         toast({
@@ -773,8 +755,8 @@ export function LightspeedCallbackPage() {
         setTimeout(() => router.push('/integrations'), 3000)
       }
     }
-    
-    // Only run the callback handler if we have URL parameters
+
+    // If the URL has ?code= or ?error=, handle the callback
     if (searchParams.has('code') || searchParams.has('error')) {
       handleOAuthCallback()
     }

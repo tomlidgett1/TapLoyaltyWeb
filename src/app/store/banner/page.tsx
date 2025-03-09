@@ -38,6 +38,7 @@ import { db } from "@/lib/firebase"
 import { collection, query, getDocs, orderBy, Timestamp, where, doc, getDoc, deleteDoc } from "firebase/firestore"
 import { TapAiButton } from "@/components/tap-ai-button"
 import { toast } from "@/components/ui/use-toast"
+import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banner-preview"
 
 /** 
  * Replace this interface with your actual banner data fields.
@@ -52,6 +53,8 @@ interface Banner {
   expiresAt?: Timestamp | string
   link?: string
   description?: string
+  color?: string
+  cssColor?: string
 }
 
 export default function BannerPage() {
@@ -230,6 +233,10 @@ export default function BannerPage() {
               <ImageIcon className="h-4 w-4" />
               All Banners
             </TabsTrigger>
+            <TabsTrigger value="previews" className="flex items-center gap-2">
+              <Eye className="h-4 w-4" />
+              Preview Styles
+            </TabsTrigger>
           </TabsList>
 
           <div className="flex items-center gap-2">
@@ -323,127 +330,108 @@ export default function BannerPage() {
           </div>
         </div>
         
-        <TabsContent value="all" className="space-y-4">
-          <Card>
-            <CardHeader className="py-4">
-              <CardTitle>Banners</CardTitle>
-              <CardDescription>All of your store banners</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[150px]">Created At</TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Expires</TableHead>
-                    <TableHead className="w-[100px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center">
-                        <div className="flex justify-center">
-                          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredBanners.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center">
-                        <div className="flex flex-col items-center justify-center">
-                          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                            <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                          </div>
-                          <h3 className="mt-4 text-lg font-medium">
-                            No banners found
-                          </h3>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {searchQuery
-                              ? "Try adjusting your search query"
-                              : "No banner records available"}
-                          </p>
-                          <Button 
-                            variant="default" 
-                            className="mt-4 gap-2"
-                            onClick={() => router.push('/store/banner/create')}
-                          >
-                            <Plus className="h-4 w-4" />
-                            Create Your First Banner
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredBanners.map((banner) => (
-                      <TableRow key={banner.id} className="hover:bg-muted/50">
-                        <TableCell>
-                          {formatDate(banner.createdAt)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {banner.imageUrl && (
-                              <div className="h-10 w-10 rounded overflow-hidden">
-                                <img 
-                                  src={banner.imageUrl} 
-                                  alt={banner.title} 
-                                  className="h-full w-full object-cover"
-                                />
-                              </div>
-                            )}
-                            <span>{banner.title}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {banner.status === "active" ? (
-                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 rounded-md">
-                              Active
-                            </Badge>
-                          ) : banner.status === "draft" ? (
-                            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 rounded-md">
-                              Draft
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 rounded-md">
-                              Expired
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {banner.expiresAt ? formatDate(banner.expiresAt) : "No expiration"}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              className="h-8 w-8 rounded-full"
-                              onClick={() => router.push(`/store/banner/edit/${banner.id}`)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              className="h-8 w-8 rounded-full text-red-500 hover:text-red-600 hover:bg-red-50"
-                              onClick={() => {
-                                if (confirm("Are you sure you want to delete this banner? This action cannot be undone.")) {
-                                  // Implement delete logic here
-                                }
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+        <TabsContent value="all">
+          {loading ? (
+            <div className="h-24 flex items-center justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
+            </div>
+          ) : filteredBanners.length === 0 ? (
+            <div className="h-24 flex flex-col items-center justify-center space-y-2">
+              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                <ImageIcon className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-medium">No banners found</h3>
+              <p className="text-sm text-muted-foreground">
+                {searchQuery
+                  ? "Try adjusting your search query"
+                  : "No banner records available"}
+              </p>
+              <Button
+                variant="default"
+                className="mt-2 gap-2"
+                onClick={() => router.push("/store/banner/create")}
+              >
+                <Plus className="h-4 w-4" />
+                Create Your First Banner
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+              {filteredBanners.map((banner) => {
+                console.log("Banner style:", banner.style, "Color:", banner.color);
+                return (
+                  <BannerPreview
+                    key={banner.id}
+                    title={banner.title}
+                    description={banner.description}
+                    buttonText={banner.buttonText}
+                    color={banner.color ?? "#0ea5e9"}
+                    styleType={
+                      banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
+                      banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
+                      banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
+                      BannerStyle.LIGHT // Default to LIGHT if style is undefined
+                    }
+                    merchantName={banner.merchantName ?? "My Store"}
+                    visibilityType={BannerVisibility.ALL}
+                    isActive={banner.isActive}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="previews">
+          <div className="mb-6">
+            <h3 className="text-lg font-medium mb-2">Previews</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Explore different banner styles below
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex flex-col">
+                <BannerPreview
+                  title="Light Banner"
+                  description="This is a light style banner preview"
+                  buttonText="Shop Now"
+                  color="#0ea5e9"
+                  styleType={BannerStyle.LIGHT}
+                  merchantName="My Test Store"
+                  visibilityType={BannerVisibility.ALL}
+                  isActive
+                />
+                <p className="text-center text-sm mt-2 font-medium">Light</p>
+              </div>
+
+              <div className="flex flex-col">
+                <BannerPreview
+                  title="Dark Banner"
+                  description="This is a dark style banner preview"
+                  buttonText="Learn More"
+                  color="#374151"
+                  styleType={BannerStyle.DARK}
+                  merchantName="My Test Store"
+                  visibilityType={BannerVisibility.ALL}
+                  isActive
+                />
+                <p className="text-center text-sm mt-2 font-medium">Dark</p>
+              </div>
+
+              <div className="flex flex-col">
+                <BannerPreview
+                  title="Glass Banner"
+                  description="This is a glass style banner preview"
+                  buttonText="Read More"
+                  color="#333333"
+                  styleType={BannerStyle.GLASS}
+                  merchantName="My Test Store"
+                  visibilityType={BannerVisibility.ALL}
+                  isActive
+                />
+                <p className="text-center text-sm mt-2 font-medium">Glass</p>
+              </div>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

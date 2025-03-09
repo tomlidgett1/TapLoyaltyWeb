@@ -1,9 +1,12 @@
+"use client"
+
 import React from "react"
 import {
   Store,
   Gift,
   Sparkles,
   Users,
+  UserPlus,
   // etc. (any needed icons)
 } from "lucide-react"
 
@@ -57,85 +60,166 @@ function hexToRgba(hex: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+/**
+ * Example enum for banner styles—same as in create-banner-dialog
+ */
+export enum BannerStyle {
+  LIGHT = "light",
+  DARK = "dark",
+  GLASS = "glass",
+}
+
+/**
+ * Example enum for banner visibility—same as in create-banner-dialog
+ */
+export enum BannerVisibility {
+  ALL = "ALL",
+  NEW = "NEW",
+  // Add more if needed
+}
+
+function getIcon(styleType: BannerStyle) {
+  switch (styleType) {
+    case BannerStyle.DARK:
+      return Gift
+    case BannerStyle.GLASS:
+      return Sparkles
+    case BannerStyle.LIGHT:
+      return Store
+    default:
+      return Store
+  }
+}
+
+// Add a color mapping function to convert color names to hex
+function getColorHex(colorName: string | undefined): string {
+  if (!colorName) return "#0ea5e9"; // Default blue
+  
+  const colorMap: Record<string, string> = {
+    "red": "#ef4444",
+    "green": "#22c55e",
+    "blue": "#3b82f6",
+    "yellow": "#eab308",
+    "purple": "#a855f7",
+    "pink": "#ec4899",
+    "orange": "#f97316",
+    "teal": "#14b8a6",
+    "cyan": "#06b6d4",
+    "indigo": "#6366f1",
+    "gray": "#6b7280",
+    "black": "#000000",
+    "white": "#ffffff"
+  };
+  
+  return colorMap[colorName.toLowerCase()] || colorName; // Return the hex or the original if not found
+}
+
 export function BannerPreview({
   title,
   description,
   buttonText,
-  color = "#007AFF",
+  color,
   styleType,
   merchantName,
   visibilityType,
   isActive,
-}: BannerPreviewProps) {
-  // Pick an icon based on styleType (or your own logic)
-  let Icon = Store;
-  if (styleType === "gift") {
-    Icon = Gift;
-  } else if (styleType === "sparkles") {
-    Icon = Sparkles;
-  } else if (styleType === "users") {
-    Icon = Users;
+}: {
+  title?: string
+  description?: string
+  buttonText?: string
+  color?: string
+  styleType: BannerStyle
+  merchantName?: string
+  visibilityType?: BannerVisibility
+  isActive?: boolean
+}) {
+  const Icon = getIcon(styleType)
+  const colorHex = getColorHex(color)
+
+  // Helper function(s) to get styling from style type:
+  function getBackground() {
+    if (styleType === BannerStyle.DARK && color) {
+      console.log("Using dark style with color:", color, "hex:", colorHex);
+      return `linear-gradient(
+        135deg, 
+        ${hexToRgba(colorHex, 0.8)}, 
+        ${hexToRgba(darkenColor(colorHex, 20), 0.9)}
+      )`
+    } else if (styleType === BannerStyle.DARK) {
+      console.log("Using dark style without color");
+      return "#333" // fallback if no color
+    } else if (styleType === BannerStyle.GLASS && color) {
+      console.log("Using glass style with color:", color, "hex:", colorHex);
+      // Glass effect with user color
+      return hexToRgba(colorHex, 0.2)
+    } else if (styleType === BannerStyle.GLASS) {
+      console.log("Using glass style without color");
+      return "rgba(255, 255, 255, 0.4)"
+    }
+    // LIGHT or default
+    console.log("Using light style with color:", color, "hex:", colorHex);
+    return colorHex || "#F5F5F5"
   }
 
-  // Example background style logic: could differ from your original
-  const containerBg = color + "20"; // makes a lighter version of the color
-  const darkenedBg = darkenColor(color, -20); // slightly darken for button hover, if wanted
+  function getTextColor() {
+    if (styleType === BannerStyle.DARK) {
+      return "text-white"
+    } else {
+      return "text-black"
+    }
+  }
+
+  function getButtonColor() {
+    if (styleType === BannerStyle.DARK) {
+      return "underline decoration-white"
+    }
+    return "underline decoration-black"
+  }
 
   return (
     <div
-      className="relative w-full rounded-md shadow p-4"
+      className={`relative rounded-xl overflow-hidden p-4 ${getTextColor()}`}
       style={{
-        backgroundColor: containerBg,
+        background: getBackground(),
+        opacity: isActive ? 1 : 0.6,
       }}
     >
-      {/* Banner header with an icon */}
-      <div className="flex items-center mb-2">
-        <Icon className="mr-2 h-6 w-6" style={{ color }} />
-        <h2 className="font-bold text-lg" style={{ color }}>
-          {title}
-        </h2>
+      <div className="flex">
+        <div className="flex-1 z-10">
+          <div className="text-xs font-medium px-2 py-1 rounded-md bg-black/10 inline-block mb-1">
+            {merchantName || "MerchantName"}
+          </div>
+          <h3 className="text-lg font-bold mb-1">
+            {title || "Banner Title"}
+          </h3>
+          <p
+            className={`text-sm ${
+              styleType === BannerStyle.DARK ? "text-gray-100" : "text-gray-600"
+            }`}
+          >
+            {description || "Banner description text will appear here."}
+          </p>
+          {buttonText && (
+            <button
+              className={`mt-2 text-sm font-medium ${getButtonColor()}`}
+              style={{
+                color: styleType === BannerStyle.DARK ? "white" : color || "black",
+              }}
+            >
+              {buttonText} →
+            </button>
+          )}
+        </div>
+        <div className="absolute top-0 right-0 opacity-20">
+          <Icon size={100} color={styleType === BannerStyle.DARK ? "white" : color || "#333"} />
+        </div>
       </div>
-
-      {/* Description */}
-      <p className="text-sm mb-3">{description}</p>
-
-      {/* Optional CTA button */}
-      {buttonText && (
-        <button
-          className="px-3 py-1 text-sm text-white rounded-md transition-colors"
-          style={{
-            backgroundColor: color,
-          }}
-          onMouseEnter={(e) => {
-            // If you want a darker hover effect:
-            (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-              darkenedBg;
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.backgroundColor = color;
-          }}
-        >
-          {buttonText}
-        </button>
-      )}
-
-      {/* Merchant info, visibility, etc. */}
-      {merchantName && (
-        <p className="text-xs text-gray-600 mt-2 italic">By {merchantName}</p>
-      )}
-      {visibilityType && (
-        <p className="text-xs text-gray-500 mt-1">
-          Visible to: <strong>{visibilityType}</strong>
-        </p>
-      )}
-      {typeof isActive === "boolean" && (
-        <p className="text-[10px] mt-2 font-medium">
-          Status:{" "}
-          <span style={{ color: isActive ? "#34C759" : "#FF3B30" }}>
-            {isActive ? "Active" : "Inactive"}
-          </span>
-        </p>
+      {visibilityType === BannerVisibility.NEW && (
+        <div className="absolute bottom-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
+          <UserPlus className="h-3 w-3 mr-1" />
+          <span>New Customers</span>
+        </div>
       )}
     </div>
-  );
+  )
 } 

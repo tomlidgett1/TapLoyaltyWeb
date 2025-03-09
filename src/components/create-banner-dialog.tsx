@@ -1036,45 +1036,38 @@ export function CreateBannerDialog({ open, onOpenChange, onSave }: CreateBannerD
                   {bannerTemplates
                     .filter(template => templateFilter === "all" || template.category === templateFilter)
                     .map(template => (
-                      <Card key={template.id} className="overflow-hidden">
-                        <CardContent className="p-0">
-                          <div className="p-4">
-                            <BannerPreview
-                              title={template.title}
-                              description={template.description}
-                              buttonText={template.buttonText}
-                              color={template.color}
-                              styleType={template.style}
-                              merchantName={merchantName}
-                              visibilityType={BannerVisibility.ALL}
-                              isActive={true}
-                            />
-                          </div>
-                          <div className="flex justify-end gap-2 p-2 bg-gray-50 border-t">
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => applyTemplate(template)}
-                              className="flex items-center gap-1"
-                            >
-                              <Edit className="h-3 w-3" />
-                              <span>Customize</span>
-                            </Button>
-                            <Button 
-                              variant="default" 
-                              size="sm"
-                              onClick={() => {
-                                applyTemplate(template)
-                                createBanner()
-                              }}
-                              className="flex items-center gap-1"
-                            >
-                              <Copy className="h-3 w-3" />
-                              <span>Use This</span>
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
+                      <div 
+                        key={template.id} 
+                        className="relative group rounded-lg overflow-hidden cursor-pointer"
+                        onClick={() => applyTemplate(template)}
+                      >
+                        <BannerPreview
+                          title={template.title}
+                          description={template.description}
+                          buttonText={template.buttonText}
+                          color={template.color}
+                          styleType={template.style}
+                          merchantName={merchantName}
+                          visibilityType={BannerVisibility.ALL}
+                          isActive={true}
+                        />
+                        
+                        {/* Lighter overlay that appears on hover */}
+                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                          <Button 
+                            variant="default" 
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent double-triggering the parent onClick
+                              console.log("Customizing template:", template.id);
+                              applyTemplate(template);
+                            }}
+                            className="flex items-center gap-1"
+                          >
+                            <Edit className="h-4 w-4" />
+                            <span>Customize</span>
+                          </Button>
+                        </div>
+                      </div>
                     ))}
                 </div>
               </ScrollArea>

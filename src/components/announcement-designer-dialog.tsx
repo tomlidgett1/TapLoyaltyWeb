@@ -9,7 +9,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Card, CardContent } from "@/components/ui/card"
-import { ChevronLeft, ChevronRight, Image as ImageIcon, Check, X, Edit, Eye } from "lucide-react"
+import { ChevronLeft, ChevronRight, Image as ImageIcon, Check, X, Edit, Eye, Store, HelpCircle, Plus } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface AnnouncementDesignerDialogProps {
   open: boolean
@@ -39,7 +41,7 @@ export function AnnouncementDesignerDialog({
   const [message3, setMessage3] = useState(initialAnnouncement?.messages?.[2] || "Limited to one free coffee per day, per member.")
   const [terms, setTerms] = useState(initialAnnouncement?.terms || "Valid Monday-Friday, 2-4pm only. Must present this offer at time of purchase. Cannot be combined with other offers.")
   const [selectedColor, setSelectedColor] = useState(initialAnnouncement?.color || "#007AFF")
-  const [selectedImage, setSelectedImage] = useState<string | null>(initialAnnouncement?.image || null)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [showingPreview, setShowingPreview] = useState(false)
   const [selectedDesignIndex, setSelectedDesignIndex] = useState(() => {
     // If there's an initial announcement with a design index
@@ -57,32 +59,10 @@ export function AnnouncementDesignerDialog({
   })
   const [activeTab, setActiveTab] = useState<"edit" | "preview">("edit")
   
-  // File input ref
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const router = useRouter()
   
-  // List of available colors
-  const colors = [
-    "#007AFF", // iOS blue
-    "#34C759", // iOS green
-    "#FF9500", // iOS orange
-    "#FF2D55", // iOS pink
-    "#AF52DE", // iOS purple
-    "#5856D6", // iOS indigo
-    "#FF3B30", // iOS red
-    "#FFCC00"  // iOS yellow
-  ]
-  
-  // Handle image selection
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setSelectedImage(e.target?.result as string)
-      }
-      reader.readAsDataURL(file)
-    }
-  }
+  // Add state for the guide panel
+  const [guideOpen, setGuideOpen] = useState(false)
   
   // Build announcement object
   const createAnnouncement = () => {
@@ -99,7 +79,6 @@ export function AnnouncementDesignerDialog({
       messages,
       terms,
       color: selectedColor,
-      image: selectedImage,
       designIndex: safeDesignIndex,
       designName: DESIGN_STYLES[safeDesignIndex].name,
       createdAt: new Date().toISOString()
@@ -117,10 +96,52 @@ export function AnnouncementDesignerDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+        <DialogHeader className="flex flex-row items-center justify-between">
           <DialogTitle>
             <span className="text-[#007AFF]">Design</span> Announcement
           </DialogTitle>
+          
+          <div className="flex items-center gap-2 mr-8">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="flex items-center gap-1 h-8 text-gray-600"
+              onClick={() => router.push("/store/announcement")}
+            >
+              <Store className="h-4 w-4" />
+              <span>My Announcements</span>
+            </Button>
+            
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex items-center gap-1 h-8 text-gray-600"
+                    onClick={() => setGuideOpen(!guideOpen)}
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                    <span>Guide</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-sm">
+                  <div className="space-y-2 p-2">
+                    <h4 className="font-medium">Announcement Design Guide</h4>
+                    <p className="text-sm text-gray-500">
+                      Announcements provide detailed information to your customers when they tap on a banner.
+                    </p>
+                    <ul className="text-xs text-gray-500 list-disc pl-4 space-y-1">
+                      <li>Create eye-catching titles and subtitles</li>
+                      <li>Add clear, concise messages</li>
+                      <li>Include terms and conditions if needed</li>
+                      <li>Choose a design style that fits your brand</li>
+                    </ul>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "edit" | "preview")}>
@@ -214,81 +235,6 @@ export function AnnouncementDesignerDialog({
                 />
               </div>
             </div>
-            
-            {/* Image Section */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Image</h3>
-              
-              <div className="grid gap-2">
-                <Button 
-                  variant="outline" 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-2"
-                >
-                  <ImageIcon className="h-4 w-4" />
-                  <span>{selectedImage ? "Change Image" : "Add Image"}</span>
-                </Button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleImageSelect}
-                  accept="image/*"
-                  className="hidden"
-                />
-                
-                {selectedImage && (
-                  <div className="relative mt-2">
-                    <img 
-                      src={selectedImage} 
-                      alt="Selected" 
-                      className="w-full max-h-48 object-cover rounded-md" 
-                    />
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      className="absolute top-2 right-2 h-8 w-8 rounded-full"
-                      onClick={() => setSelectedImage(null)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            {/* Color Picker Section */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Theme Color</h3>
-              
-              <div className="flex flex-wrap gap-3">
-                {colors.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    className={`h-10 w-10 rounded-full transition-all ${selectedColor === color ? 'ring-2 ring-offset-2 ring-primary' : ''}`}
-                    style={{ backgroundColor: color }}
-                    onClick={() => setSelectedColor(color)}
-                  />
-                ))}
-              </div>
-            </div>
-            
-            {/* Design Style Section */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Design Style</h3>
-              
-              <div className="grid gap-2">
-                <div className="flex items-center justify-between">
-                  <span>Selected Style: {DESIGN_STYLES[selectedDesignIndex].name}</span>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setActiveTab("preview")}
-                  >
-                    Change Style
-                  </Button>
-                </div>
-              </div>
-            </div>
           </TabsContent>
           
           <TabsContent value="preview">
@@ -309,14 +255,6 @@ export function AnnouncementDesignerDialog({
                         <h2 className="text-xl font-bold" style={{ color: selectedColor }}>{title}</h2>
                         <h3 className="text-sm font-medium">{subtitle}</h3>
                       </div>
-                      
-                      {selectedImage && (
-                        <img 
-                          src={selectedImage} 
-                          alt="" 
-                          className="w-full h-24 object-cover rounded-lg mb-4" 
-                        />
-                      )}
                       
                       <div className="space-y-3 mb-4">
                         <div className="flex items-start">
@@ -368,14 +306,6 @@ export function AnnouncementDesignerDialog({
                       <h2 className="text-2xl font-light mb-1" style={{ color: selectedColor }}>{title}</h2>
                       <h3 className="text-sm font-medium text-gray-400 mb-6">{subtitle}</h3>
                       
-                      {selectedImage && (
-                        <img 
-                          src={selectedImage} 
-                          alt="" 
-                          className="w-full h-24 object-cover mb-6" 
-                        />
-                      )}
-                      
                       <div className="space-y-4 mb-6">
                         <p className="text-sm">{message1}</p>
                         {message2 && <p className="text-sm">{message2}</p>}
@@ -405,16 +335,6 @@ export function AnnouncementDesignerDialog({
                   <div className="bg-white rounded-xl shadow-md overflow-hidden h-[400px]">
                     <div className="compact-design p-5">
                       <div className="flex mb-4">
-                        {selectedImage && (
-                          <div className="w-1/3 mr-3">
-                            <img 
-                              src={selectedImage} 
-                              alt="" 
-                              className="w-full h-24 object-cover rounded-lg" 
-                            />
-                          </div>
-                        )}
-                        
                         <div className={selectedImage ? "w-2/3" : "w-full"}>
                           <h2 className="text-lg font-bold" style={{ color: selectedColor }}>{title}</h2>
                           <h3 className="text-xs font-medium text-gray-500 mb-1">{subtitle}</h3>
@@ -465,6 +385,91 @@ export function AnnouncementDesignerDialog({
             Save Announcement
           </Button>
         </DialogFooter>
+        
+        {/* Guide Panel - moved inside DialogContent */}
+        <div 
+          className={`fixed top-0 right-0 h-full w-[320px] bg-white shadow-lg z-[100] transition-transform duration-300 transform ${
+            guideOpen ? "translate-x-0" : "translate-x-full"
+          } overflow-y-auto border-l border-gray-200`}
+        >
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold">Announcement Guide</h3>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setGuideOpen(false)}
+                className="h-8 w-8"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <h4 className="font-medium text-[#007AFF]">What are Announcements?</h4>
+                <p className="text-sm text-gray-600">
+                  Announcements are detailed messages that appear when customers tap on a banner. 
+                  They're perfect for providing more information about promotions, events, or offers.
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <h4 className="font-medium text-[#007AFF]">Creating Effective Announcements</h4>
+                <ul className="text-sm text-gray-600 space-y-3">
+                  <li className="flex gap-2">
+                    <div className="flex-shrink-0 h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">1</div>
+                    <div>
+                      <strong>Clear title</strong> - Use a title that clearly communicates the offer or information.
+                    </div>
+                  </li>
+                  <li className="flex gap-2">
+                    <div className="flex-shrink-0 h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">2</div>
+                    <div>
+                      <strong>Structured messages</strong> - Break information into digestible bullet points.
+                    </div>
+                  </li>
+                  <li className="flex gap-2">
+                    <div className="flex-shrink-0 h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">3</div>
+                    <div>
+                      <strong>Include terms</strong> - Always include any limitations or conditions for offers.
+                    </div>
+                  </li>
+                  <li className="flex gap-2">
+                    <div className="flex-shrink-0 h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">4</div>
+                    <div>
+                      <strong>Choose the right design</strong> - Select a design that matches the tone of your message.
+                    </div>
+                  </li>
+                </ul>
+              </div>
+              
+              <div className="space-y-2">
+                <h4 className="font-medium text-[#007AFF]">Design Styles</h4>
+                <div className="space-y-3">
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <h5 className="font-medium text-sm">Bold Impact</h5>
+                    <p className="text-xs text-gray-600">
+                      High contrast with visual emphasis - great for important announcements.
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <h5 className="font-medium text-sm">Minimalist</h5>
+                    <p className="text-xs text-gray-600">
+                      Clean and simple - perfect for elegant, straightforward messages.
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <h5 className="font-medium text-sm">Compact</h5>
+                    <p className="text-xs text-gray-600">
+                      Space-efficient design for announcements with lots of information.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   )

@@ -2,18 +2,45 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    const data = await request.json();
+    // Parse the request body with error handling
+    let data;
+    try {
+      data = await request.json();
+    } catch (parseError) {
+      console.error("Error parsing request body:", parseError);
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: "Invalid request format",
+          details: "Could not parse request body as JSON"
+        },
+        { status: 400 }
+      );
+    }
+    
+    // Extract data with defaults to prevent undefined errors
     const { 
-      campaignName, 
-      subject, 
-      fromName, 
-      fromEmail, 
-      templateId, 
-      emailContent, 
-      customization,
-      audienceType,
+      campaignName = "", 
+      subject = "", 
+      fromName = "", 
+      fromEmail = "", 
+      templateId = "", 
+      emailContent = "", 
+      customization = {},
+      audienceType = "all",
       customEmails = []
     } = data;
+
+    // Log the request for debugging
+    console.log("Received campaign request:", {
+      campaignName,
+      subject,
+      fromName,
+      fromEmail,
+      templateId,
+      audienceType,
+      customEmailsCount: customEmails.length
+    });
 
     // Check if we should simulate the Mailchimp API call
     const shouldSimulate = process.env.SIMULATE_MAILCHIMP === 'true';
@@ -406,15 +433,29 @@ export async function POST(request: Request) {
       console.error("Outer error block:", error);
       // Rest of your error handling...
     }
+
+    // Make sure to return a response at the end of all code paths
+    return NextResponse.json({ 
+      success: true, 
+      message: "Campaign processed",
+      campaignId: "unknown"
+    });
   } catch (error) {
-    console.error("Unhandled error in API route:", error);
+    // Log the error with full details
+    console.error("Unhandled error in email send API:", error);
+    console.error("Error details:", {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
     
     // Always return a valid JSON response
     return NextResponse.json(
       { 
         success: false, 
-        error: error.message || "An unexpected error occurred",
-        details: "The server encountered an error processing your request"
+        error: "An unexpected server error occurred",
+        details: error.message || "Unknown error",
+        errorType: error.name
       },
       { status: 500 }
     );

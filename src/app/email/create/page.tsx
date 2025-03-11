@@ -519,6 +519,7 @@ export default function CreateEmailCampaign() {
   const [showDebugInfo, setShowDebugInfo] = useState(false)
   const [debugLogs, setDebugLogs] = useState([])
   const [sendingStatus, setSendingStatus] = useState({ success: 0, failed: 0, total: 0 })
+  const [campaignResult, setCampaignResult] = useState(null);
   
   // Add a ref to track the element that had focus before opening the dialog
   const previousFocusRef = React.useRef<HTMLElement | null>(null);
@@ -561,12 +562,15 @@ export default function CreateEmailCampaign() {
     setShowSendConfirmation(true)
   }
   
-  // Update the fetch with timeout function to handle empty responses
+  // Update the fetch with timeout function to handle network errors better
   const fetchWithTimeout = async (url, options, timeout = 30000) => {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
     
     try {
+      // Log the request
+      console.log(`Fetching ${url} with timeout ${timeout}ms`);
+      
       const response = await fetch(url, {
         ...options,
         signal: controller.signal
@@ -575,6 +579,8 @@ export default function CreateEmailCampaign() {
       
       // Check if the response is empty
       const text = await response.text();
+      console.log(`Received response from ${url}: ${text.substring(0, 100)}...`);
+      
       if (!text) {
         throw new Error('Empty response from server');
       }
@@ -596,9 +602,14 @@ export default function CreateEmailCampaign() {
       }
     } catch (error) {
       clearTimeout(id);
+      console.error(`Fetch error for ${url}:`, error);
+      
       if (error.name === 'AbortError') {
-        throw new Error('Request timed out');
+        throw new Error(`Request to ${url} timed out after ${timeout}ms`);
       }
+      
+      // Add more context to the error
+      error.message = `Network error when fetching ${url}: ${error.message}`;
       throw error;
     }
   };
@@ -645,12 +656,144 @@ export default function CreateEmailCampaign() {
     }
   };
   
-  // Update the confirmSendCampaign function with better error handling
+  // Add this function to make a direct API call to Mailchimp
+  const sendDirectToMailchimp = async (payload) => {
+    try {
+      addDebugLog("Attempting direct Mailchimp API call...", "info");
+      
+      // Get the API key and server prefix from environment variables
+      const apiKey = process.env.NEXT_PUBLIC_MAILCHIMP_API_KEY;
+      const serverPrefix = process.env.NEXT_PUBLIC_MAILCHIMP_SERVER_PREFIX;
+      
+      if (!apiKey || !serverPrefix) {
+        addDebugLog("Missing Mailchimp credentials in client environment", "error");
+        return false;
+      }
+      
+      // Create a campaign directly
+      const createResponse = await fetch(`https://${serverPrefix}.api.mailchimp.com/3.0/campaigns`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${btoa(`anystring:${apiKey}`)}`
+        },
+        body: JSON.stringify({
+          type: "regular",
+          recipients: {
+            list_id: process.env.NEXT_PUBLIC_MAILCHIMP_AUDIENCE_ID
+          },
+          settings: {
+            subject_line: payload.subject,
+            title: payload.campaignName,
+            from_name: payload.fromName,
+            reply_to: payload.fromEmail
+          }
+        })
+      });
+      
+      const createResult = await createResponse.json();
+      
+      if (!createResponse.ok) {
+        addDebugLog(`Error creating campaign directly: ${createResult.detail || 'Unknown error'}`, "error");
+        return false;
+      }
+      
+      const campaignId = createResult.id;
+      addDebugLog(`Campaign created directly with ID: ${campaignId}`, "success");
+      
+      // Set the campaign content
+      const contentResponse = await fetch(`https://${serverPrefix}.api.mailchimp.com/3.0/campaigns/${campaignId}/content`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${btoa(`anystring:${apiKey}`)}`
+        },
+        body: JSON.stringify({
+          html: payload.emailContent
+        })
+      });
+      
+      const contentResult = await contentResponse.json();
+      
+      if (!contentResponse.ok) {
+        addDebugLog(`Error setting campaign content: ${contentResult.detail || 'Unknown error'}`, "error");
+        return false;
+      }
+      
+      addDebugLog("Campaign content set successfully", "success");
+      
+      // Send the campaign
+      const sendResponse = await fetch(`https://${serverPrefix}.api.mailchimp.com/3.0/campaigns/${campaignId}/actions/send`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${btoa(`anystring:${apiKey}`)}`
+        }
+      });
+      
+      if (!sendResponse.ok) {
+        const sendError = await sendResponse.json();
+        addDebugLog(`Error sending campaign: ${sendError.detail || 'Unknown error'}`, "error");
+        return false;
+      }
+      
+      addDebugLog("Campaign sent successfully via direct API call", "success");
+      return true;
+    } catch (error) {
+      addDebugLog(`Error in direct Mailchimp API call: ${error.message}`, "error");
+      return false;
+    }
+  };
+  
+  // Add this function to check audience size before sending
+  const checkAudienceBeforeSending = async () => {
+    try {
+      addDebugLog("Checking audience size before sending...", "info");
+      
+      const response = await fetch('/api/email/check-audience-size');
+      const result = await response.json();
+      
+      if (result.success) {
+        addDebugLog(`✓ Audience has ${result.audience.memberCount} subscribers`, "success");
+        return true;
+      } else {
+        addDebugLog(`✗ ${result.error}`, "error");
+        
+        if (result.details) {
+          addDebugLog(`Details: ${result.details}`, "error");
+        }
+        
+        if (result.solution) {
+          addDebugLog(`Solution: ${result.solution}`, "info");
+        }
+        
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive",
+        });
+        
+        return false;
+      }
+    } catch (error) {
+      addDebugLog(`✗ Error checking audience: ${error.message}`, "error");
+      return false;
+    }
+  };
+  
+  // Update the confirmSendCampaign function to check audience size first
   const confirmSendCampaign = async () => {
     try {
       setIsLoading(true);
       addDebugLog("Sending campaign...", "info");
       setShowDebugInfo(true);
+      
+      // Check audience size first
+      const audienceOk = await checkAudienceBeforeSending();
+      if (!audienceOk) {
+        addDebugLog("Cannot send campaign: audience check failed", "error");
+        setIsLoading(false);
+        return;
+      }
       
       // Prepare the request payload
       const payload = {
@@ -686,6 +829,9 @@ export default function CreateEmailCampaign() {
         if (!result.ok) {
           // Handle error response
           addDebugLog(`API Error: ${result.data.error}`, "error");
+          
+          // Store the result
+          setCampaignResult(result.data);
           
           // Add more detailed debugging information
           if (result.data.details) {
@@ -734,8 +880,11 @@ export default function CreateEmailCampaign() {
           throw new Error(result.data.error || "Failed to send campaign");
         }
         
-        // Success case
+        // Handle success response
         addDebugLog(`Campaign created successfully! ID: ${result.data.campaignId}`, "success");
+        
+        // Store the result
+        setCampaignResult(result.data);
         
         if (result.data.simulated) {
           addDebugLog("Note: This was a simulated send (not a real email)", "info");
@@ -770,20 +919,26 @@ export default function CreateEmailCampaign() {
         
       } catch (fetchError) {
         addDebugLog(`Network error: ${fetchError.message}`, "error");
+        addDebugLog("Attempting fallback method...", "info");
         
-        setSendingStatus(prev => ({
-          ...prev,
-          failed: prev.failed + 1,
-          total: prev.total + 1
-        }));
+        // Try the direct API call as a fallback
+        const fallbackSuccess = await sendDirectToMailchimp(payload);
         
-        toast({
-          title: "Error",
-          description: `Failed to send campaign: ${fetchError.message}`,
-          variant: "destructive",
-        });
-        
-        throw fetchError;
+        if (fallbackSuccess) {
+          addDebugLog("Fallback method succeeded!", "success");
+          toast({
+            title: "Success",
+            description: "Campaign sent successfully via fallback method",
+            variant: "default",
+          });
+        } else {
+          addDebugLog("Fallback method failed", "error");
+          toast({
+            title: "Error",
+            description: "Failed to send campaign via all methods",
+            variant: "destructive",
+          });
+        }
       }
       
     } catch (error) {
@@ -978,17 +1133,179 @@ export default function CreateEmailCampaign() {
     }
   };
   
-  // Add this function to try sending via direct API call
+  // Update this function to try sending via direct API call
   const trySendDirectly = async (campaignId) => {
     try {
       addDebugLog(`Attempting to send campaign ${campaignId} directly...`, "info");
       
-      const response = await fetch('/api/email/direct-send', {
+      // Show a loading indicator
+      setIsLoading(true);
+      
+      try {
+        // Use the new endpoint
+        const response = await fetch('/api/email/direct-send-v2', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ campaignId }),
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          addDebugLog(`API error (${response.status}): ${errorText}`, "error");
+          throw new Error(`API returned status ${response.status}`);
+        }
+        
+        const responseText = await response.text();
+        addDebugLog(`Raw API response: ${responseText}`, "data");
+        
+        let result;
+        try {
+          result = JSON.parse(responseText);
+        } catch (parseError) {
+          addDebugLog(`Error parsing JSON response: ${parseError.message}`, "error");
+          throw new Error(`Invalid JSON response from server: ${responseText.substring(0, 100)}...`);
+        }
+        
+        if (result.success) {
+          addDebugLog("✓ Direct send request successful!", "success");
+          addDebugLog(`Campaign status: ${result.status}`, "info");
+          
+          if (result.status === 'sending' || result.status === 'sent') {
+            addDebugLog("✓ Campaign is being sent!", "success");
+            
+            toast({
+              title: "Success",
+              description: "Campaign is being sent!",
+              variant: "default",
+            });
+          } else {
+            addDebugLog(`⚠️ Campaign status is ${result.status}, which may indicate it's not being sent yet`, "warning");
+            addDebugLog("Check campaign status in a few moments...", "info");
+            
+            // Check status after a delay
+            setTimeout(() => checkCampaignStatus(campaignId), 5000);
+          }
+        } else {
+          addDebugLog(`✗ Direct send failed: ${result.error}`, "error");
+          
+          if (result.details) {
+            addDebugLog(`Details: ${result.details}`, "error");
+          }
+          
+          if (result.checklistItems) {
+            addDebugLog("Campaign checklist issues:", "error");
+            result.checklistItems.forEach(item => {
+              addDebugLog(`- ${item.type}: ${item.details}`, item.type === "error" ? "error" : "info");
+            });
+          }
+          
+          toast({
+            title: "Error",
+            description: result.error || "Failed to send campaign",
+            variant: "destructive",
+          });
+        }
+      } catch (fetchError) {
+        addDebugLog(`✗ Fetch error: ${fetchError.message}`, "error");
+        
+        // Try using the Mailchimp API directly
+        addDebugLog("Attempting to use Mailchimp API directly...", "info");
+        
+        // This would require exposing your API key to the client, which is not recommended
+        // Instead, suggest using the manual send method
+        addDebugLog("⚠️ Direct API access not available in the browser", "warning");
+        addDebugLog("Please try the 'Manual Send' button instead", "info");
+        
+        toast({
+          title: "Error",
+          description: "API call failed. Try using Manual Send instead.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      addDebugLog(`✗ Error in direct send: ${error.message}`, "error");
+      
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Add this function to test a simple API call
+  const testSimpleApi = async () => {
+    try {
+      addDebugLog("Testing simple API...", "info");
+      setShowDebugInfo(true);
+      
+      const payload = {
+        campaignName: "Test Campaign",
+        subject: "Test Subject",
+        fromEmail: "test@example.com"
+      };
+      
+      const response = await fetch('/api/email/simple-send', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ campaignId }),
+        body: JSON.stringify(payload),
+      });
+      
+      const text = await response.text();
+      addDebugLog(`Raw API response: ${text}`, "data");
+      
+      try {
+        const result = JSON.parse(text);
+        addDebugLog(`Simple API test ${result.success ? 'succeeded' : 'failed'}`, result.success ? "success" : "error");
+        
+        if (result.message) {
+          addDebugLog(`Message: ${result.message}`, "info");
+        }
+        
+        if (!result.success && result.error) {
+          addDebugLog(`Error: ${result.error}`, "error");
+        }
+      } catch (parseError) {
+        addDebugLog(`Error parsing response: ${parseError.message}`, "error");
+      }
+    } catch (error) {
+      addDebugLog(`Error testing simple API: ${error.message}`, "error");
+    }
+  };
+  
+  // Add this function to manually create and send a campaign
+  const manualSendCampaign = async () => {
+    try {
+      addDebugLog("Manually creating and sending campaign...", "info");
+      setShowDebugInfo(true);
+      setIsLoading(true);
+      
+      // Prepare the request payload
+      const payload = {
+        campaignName,
+        subject,
+        fromName,
+        fromEmail,
+        emailContent: `
+          <h1>${subject}</h1>
+          <div>${emailContent}</div>
+        `
+      };
+      
+      addDebugLog(`Sending request to manual-send API...`, "info");
+      
+      const response = await fetch('/api/email/manual-send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
       });
       
       const responseText = await response.text();
@@ -1003,19 +1320,49 @@ export default function CreateEmailCampaign() {
       }
       
       if (result.success) {
-        addDebugLog("✓ Direct send request successful!", "success");
-        addDebugLog("Check campaign status in a few moments...", "info");
+        addDebugLog(`✓ Campaign created and sent with ID: ${result.campaignId}`, "success");
+        addDebugLog(`Campaign status: ${result.status}`, "info");
+        
+        setCampaignResult(result);
+        
+        toast({
+          title: "Success",
+          description: "Campaign created and sent successfully!",
+          variant: "default",
+        });
         
         // Check status after a delay
-        setTimeout(() => checkCampaignStatus(campaignId), 3000);
+        setTimeout(() => checkCampaignStatus(result.campaignId), 5000);
       } else {
-        addDebugLog(`✗ Direct send failed: ${result.error}`, "error");
+        addDebugLog(`✗ Manual send failed: ${result.error}`, "error");
+        
         if (result.details) {
           addDebugLog(`Details: ${result.details}`, "error");
         }
+        
+        if (result.checklistItems) {
+          addDebugLog("Campaign checklist issues:", "error");
+          result.checklistItems.forEach(item => {
+            addDebugLog(`- ${item.type}: ${item.details}`, item.type === "error" ? "error" : "info");
+          });
+        }
+        
+        toast({
+          title: "Error",
+          description: result.error || "Failed to send campaign",
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      addDebugLog(`✗ Error in direct send: ${error.message}`, "error");
+      addDebugLog(`✗ Error in manual send: ${error.message}`, "error");
+      
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
   
@@ -1616,43 +1963,48 @@ export default function CreateEmailCampaign() {
           </Button>
           
           {/* Add a button for this function */}
-          {result.campaignId && (
+          {campaignResult && campaignResult.campaignId && (
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => trySendDirectly(result.campaignId)}
+              onClick={() => trySendDirectly(campaignResult.campaignId)}
               className="ml-2"
             >
               Try Direct Send
             </Button>
           )}
           
-          {/* Add this button to check campaign status */}
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => {
-              const campaignId = prompt("Enter campaign ID:");
-              if (campaignId) {
-                checkCampaignStatus(campaignId);
-              }
-            }}
-            className="ml-2"
-          >
-            Check Campaign Status
-          </Button>
-          
           {/* Add this button when a campaign ID is available */}
-          {result.campaignId && (
+          {campaignResult && campaignResult.campaignId && (
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => checkCampaignStatus(result.campaignId)}
+              onClick={() => checkCampaignStatus(campaignResult.campaignId)}
               className="ml-2"
             >
               Check Status
             </Button>
           )}
+          
+          {/* Add a button for this function */}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={testSimpleApi}
+            className="ml-2"
+          >
+            Test Simple API
+          </Button>
+          
+          {/* Add a button for this function */}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={manualSendCampaign}
+            className="ml-2"
+          >
+            Manual Send
+          </Button>
         </DialogContent>
       </Dialog>
     </div>

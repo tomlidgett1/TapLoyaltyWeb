@@ -29,16 +29,17 @@ import {
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { Calendar } from "lucide-react"
+import { Calendar, Clock } from "lucide-react"
 import { Filter, Download, Search, MoreHorizontal, Eye, Image as ImageIcon, Plus, Edit, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, query, getDocs, orderBy, Timestamp, where, doc, getDoc, deleteDoc } from "firebase/firestore"
+import { collection, query, getDocs, orderBy, Timestamp, where, doc, getDoc, deleteDoc, updateDoc } from "firebase/firestore"
 import { TapAiButton } from "@/components/tap-ai-button"
 import { toast } from "@/components/ui/use-toast"
 import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banner-preview"
+import { BannerScheduler } from "@/components/banner-scheduler"
 
 /** 
  * Replace this interface with your actual banner data fields.
@@ -55,6 +56,11 @@ interface Banner {
   description?: string
   color?: string
   cssColor?: string
+  isActive: boolean
+  scheduleStartMinutes?: number
+  scheduleEndMinutes?: number
+  scheduleStartHour?: number
+  scheduleEndHour?: number
 }
 
 export default function BannerPage() {
@@ -85,9 +91,16 @@ export default function BannerPage() {
         
         const bannersData: Banner[] = []
         bannersSnapshot.forEach((doc) => {
+          const data = doc.data();
+          console.log("Banner data:", data);
+          console.log("Status:", data.status);
+          console.log("isActive field:", data.isActive);
+          
           bannersData.push({
             id: doc.id,
-            ...doc.data() as Omit<Banner, 'id'>
+            ...data as Omit<Banner, 'id'>,
+            // Use the actual isActive field if it exists, otherwise derive from status
+            isActive: data.isActive !== undefined ? data.isActive : data.status === "active"
           })
         })
         
@@ -189,6 +202,92 @@ export default function BannerPage() {
     }))
   }
 
+  const handleToggleActive = async (bannerId: string, newActiveState: boolean) => {
+    try {
+      if (!user?.uid) return;
+      
+      const bannerRef = doc(db, 'merchants', user.uid, 'banners', bannerId);
+      
+      // If activating, also set scheduled=true
+      if (newActiveState) {
+        await updateDoc(bannerRef, {
+          isActive: true,
+          scheduled: true,
+          updatedAt: new Date()
+        });
+      } else {
+        // If deactivating, just update isActive
+        await updateDoc(bannerRef, {
+          isActive: false,
+          updatedAt: new Date()
+        });
+      }
+      
+      // Update local state
+      setBanners(prev => prev.map(banner => 
+        banner.id === bannerId 
+          ? {
+              ...banner, 
+              isActive: newActiveState,
+              // Also update scheduled in local state if activating
+              ...(newActiveState ? { scheduled: true } : {})
+            } 
+          : banner
+      ));
+      
+      toast({
+        title: newActiveState ? "Banner activated" : "Banner deactivated",
+        description: `The banner has been ${newActiveState ? "activated" : "deactivated"} successfully.`,
+      });
+    } catch (error) {
+      console.error("Error toggling banner active state:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update banner. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleBannerScheduleUpdate = async (bannerId: string, updates: any) => {
+    try {
+      if (!user?.uid) return;
+      
+      const bannerRef = doc(db, 'merchants', user.uid, 'banners', bannerId);
+      await updateDoc(bannerRef, {
+        ...updates,
+        updatedAt: new Date()
+      });
+      
+      // Update local state
+      setBanners(prev => prev.map(banner => 
+        banner.id === bannerId 
+          ? {...banner, ...updates} 
+          : banner
+      ));
+      
+      return Promise.resolve();
+    } catch (error) {
+      console.error("Error updating banner schedule:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update banner schedule. Please try again.",
+        variant: "destructive"
+      });
+      return Promise.reject(error);
+    }
+  };
+
+  const formatTime = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60)
+    const mins = minutes % 60
+    
+    const period = hours < 12 ? 'AM' : 'PM'
+    const displayHours = hours === 0 || hours === 12 ? 12 : hours % 12
+    
+    return `${displayHours}:${mins.toString().padStart(2, '0')} ${period}`
+  }
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
 
@@ -202,15 +301,9 @@ export default function BannerPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <TapAiButton 
-            initialPrompt="Help me create a banner for my store" 
-            variant="outline"
-            className="gap-2"
-          />
           <Button 
-            variant="default" 
-            className="h-9 gap-2 rounded-md bg-blue-600 hover:bg-blue-700"
             onClick={() => router.push('/store/banner/create')}
+            className="flex items-center gap-1"
           >
             <Plus className="h-4 w-4" />
             Create Banner
@@ -228,16 +321,32 @@ export default function BannerPage() {
 
       <Tabs defaultValue="all" className="w-full">
         <div className="flex items-center justify-between mb-4">
-          <TabsList className="whitespace-nowrap">
-            <TabsTrigger value="all" className="flex items-center gap-2">
-              <ImageIcon className="h-4 w-4" />
-              All Banners
-            </TabsTrigger>
-            <TabsTrigger value="previews" className="flex items-center gap-2">
-              <Eye className="h-4 w-4" />
-              Preview Styles
-            </TabsTrigger>
-          </TabsList>
+          <div className="flex items-center">
+            <TabsList className="whitespace-nowrap">
+              <TabsTrigger value="all" className="flex items-center gap-2">
+                <ImageIcon className="h-4 w-4" />
+                All Banners
+              </TabsTrigger>
+              <TabsTrigger value="active" className="flex items-center gap-2">
+                <Eye className="h-4 w-4" />
+                Active
+              </TabsTrigger>
+              <TabsTrigger value="inactive" className="flex items-center gap-2">
+                <Eye className="h-4 w-4 opacity-50" />
+                Inactive
+              </TabsTrigger>
+            </TabsList>
+            
+            {/* Vertical divider */}
+            <div className="h-8 w-px bg-gray-200 mx-2"></div>
+            
+            <TabsList className="whitespace-nowrap">
+              <TabsTrigger value="schedule" className="flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Schedule
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <div className="flex items-center gap-2">
             <div className="relative w-[250px]">
@@ -356,80 +465,468 @@ export default function BannerPage() {
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
-              {filteredBanners.map((banner) => {
-                console.log("Banner style:", banner.style, "Color:", banner.color);
-                return (
-                  <BannerPreview
-                    key={banner.id}
-                    title={banner.title}
-                    description={banner.description}
-                    buttonText={banner.buttonText}
-                    color={banner.color ?? "#0ea5e9"}
-                    styleType={
-                      banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
-                      banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
-                      banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
-                      BannerStyle.LIGHT // Default to LIGHT if style is undefined
-                    }
-                    merchantName={banner.merchantName ?? "My Store"}
-                    visibilityType={BannerVisibility.ALL}
-                    isActive={banner.isActive}
-                  />
-                );
-              })}
+            <div className="grid grid-cols-1 gap-6">
+              {filteredBanners.map((banner) => (
+                <div key={banner.id} className="group relative bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition-all">
+                  <div className="flex flex-col md:flex-row">
+                    {/* Banner Preview - Takes 1/3 of the space */}
+                    <div className="w-full md:w-1/3 h-[180px] relative overflow-hidden flex items-center justify-center">
+                      <div className="w-full max-w-[320px] px-2">
+                        <BannerPreview
+                          title={banner.title}
+                          description={banner.description}
+                          buttonText={banner.buttonText}
+                          color={banner.color ?? "#0ea5e9"}
+                          styleType={
+                            banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
+                            banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
+                            banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
+                            BannerStyle.LIGHT
+                          }
+                          merchantName={banner.merchantName ?? "My Store"}
+                          visibilityType={BannerVisibility.ALL}
+                          isActive={banner.isActive}
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Banner Details - Takes 2/3 of the space */}
+                    <div className="w-full md:w-2/3 p-5">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <h3 className="text-lg font-semibold">{banner.title}</h3>
+                          <p className="text-sm text-gray-500">{banner.description}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={banner.isActive ? "default" : "outline"} className={banner.isActive ? "bg-green-100 text-green-800 hover:bg-green-200" : ""}>
+                            {banner.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                          <Badge variant="outline" className="capitalize">
+                            {banner.style || "Light"}
+                          </Badge>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                        <div className="bg-gray-50 p-3 rounded-md">
+                          <p className="text-xs text-gray-500">Impressions</p>
+                          <p className="text-lg font-medium">{banner.impressions || 0}</p>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-md">
+                          <p className="text-xs text-gray-500">Unique Viewers</p>
+                          <p className="text-lg font-medium">{banner.impressioncustomercount || 0}</p>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-md">
+                          <p className="text-xs text-gray-500">Action</p>
+                          <p className="text-sm font-medium truncate" title={banner.bannerAction}>
+                            {banner.bannerAction === "Take to store page" ? "Store Page" : 
+                             banner.bannerAction === "Show announcement" ? "Announcement" : 
+                             banner.bannerAction || "None"}
+                          </p>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-md">
+                          <p className="text-xs text-gray-500">Visibility</p>
+                          <p className="text-sm font-medium truncate" title={banner.visibilityType}>
+                            {banner.visibilityType || "All customers"}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-between items-center">
+                        <div className="text-xs text-gray-500">
+                          Created: {formatDate(banner.createdAt)}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8"
+                            onClick={() => router.push(`/store/banner/${banner.id}/edit`)}
+                          >
+                            <Edit className="h-3.5 w-3.5 mr-1" />
+                            Edit
+                          </Button>
+                          <Button 
+                            variant={banner.isActive ? "destructive" : "default"} 
+                            size="sm" 
+                            className={`h-8 ${!banner.isActive ? "bg-green-600 hover:bg-green-700" : ""}`}
+                            onClick={() => handleToggleActive(banner.id, !banner.isActive)}
+                          >
+                            {banner.isActive ? (
+                              <>
+                                <Eye className="h-3.5 w-3.5 mr-1 opacity-50" />
+                                Deactivate
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="h-3.5 w-3.5 mr-1" />
+                                Activate
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </TabsContent>
 
-        <TabsContent value="previews">
-          <div className="mb-6">
-            <h3 className="text-lg font-medium mb-2">Previews</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Explore different banner styles below
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="flex flex-col">
-                <BannerPreview
-                  title="Light Banner"
-                  description="This is a light style banner preview"
-                  buttonText="Shop Now"
-                  color="#0ea5e9"
-                  styleType={BannerStyle.LIGHT}
-                  merchantName="My Test Store"
-                  visibilityType={BannerVisibility.ALL}
-                  isActive
-                />
-                <p className="text-center text-sm mt-2 font-medium">Light</p>
+        <TabsContent value="active">
+          {loading ? (
+            <div className="h-24 flex items-center justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
+            </div>
+          ) : filteredBanners.filter(banner => banner.isActive).length === 0 ? (
+            <div className="h-24 flex flex-col items-center justify-center space-y-2">
+              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                <ImageIcon className="h-6 w-6 text-muted-foreground" />
               </div>
+              <h3 className="text-lg font-medium">No active banners found</h3>
+              <p className="text-sm text-muted-foreground">
+                {searchQuery
+                  ? "Try adjusting your search query"
+                  : "You don't have any active banners"}
+              </p>
+              <Button
+                variant="default"
+                className="mt-2 gap-2"
+                onClick={() => router.push("/store/banner/create")}
+              >
+                <Plus className="h-4 w-4" />
+                Create Banner
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-6">
+              {filteredBanners
+                .filter(banner => banner.isActive)
+                .map((banner) => (
+                  <div key={banner.id} className="group relative bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition-all">
+                    <div className="flex flex-col md:flex-row">
+                      {/* Banner Preview - Takes 1/3 of the space */}
+                      <div className="w-full md:w-1/3 h-[180px] relative overflow-hidden flex items-center justify-center">
+                        <div className="w-full max-w-[320px] px-2">
+                          <BannerPreview
+                            title={banner.title}
+                            description={banner.description}
+                            buttonText={banner.buttonText}
+                            color={banner.color ?? "#0ea5e9"}
+                            styleType={
+                              banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
+                              banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
+                              banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
+                              BannerStyle.LIGHT
+                            }
+                            merchantName={banner.merchantName ?? "My Store"}
+                            visibilityType={BannerVisibility.ALL}
+                            isActive={banner.isActive}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Banner Details - Takes 2/3 of the space */}
+                      <div className="w-full md:w-2/3 p-5">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h3 className="text-lg font-semibold">{banner.title}</h3>
+                            <p className="text-sm text-gray-500">{banner.description}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={banner.isActive ? "default" : "outline"} className={banner.isActive ? "bg-green-100 text-green-800 hover:bg-green-200" : ""}>
+                              {banner.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                            <Badge variant="outline" className="capitalize">
+                              {banner.style || "Light"}
+                            </Badge>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                          <div className="bg-gray-50 p-3 rounded-md">
+                            <p className="text-xs text-gray-500">Impressions</p>
+                            <p className="text-lg font-medium">{banner.impressions || 0}</p>
+                          </div>
+                          <div className="bg-gray-50 p-3 rounded-md">
+                            <p className="text-xs text-gray-500">Unique Viewers</p>
+                            <p className="text-lg font-medium">{banner.impressioncustomercount || 0}</p>
+                          </div>
+                          <div className="bg-gray-50 p-3 rounded-md">
+                            <p className="text-xs text-gray-500">Action</p>
+                            <p className="text-sm font-medium truncate" title={banner.bannerAction}>
+                              {banner.bannerAction === "Take to store page" ? "Store Page" : 
+                               banner.bannerAction === "Show announcement" ? "Announcement" : 
+                               banner.bannerAction || "None"}
+                            </p>
+                          </div>
+                          <div className="bg-gray-50 p-3 rounded-md">
+                            <p className="text-xs text-gray-500">Visibility</p>
+                            <p className="text-sm font-medium truncate" title={banner.visibilityType}>
+                              {banner.visibilityType || "All customers"}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex justify-between items-center">
+                          <div className="text-xs text-gray-500">
+                            Created: {formatDate(banner.createdAt)}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8"
+                              onClick={() => router.push(`/store/banner/${banner.id}/edit`)}
+                            >
+                              <Edit className="h-3.5 w-3.5 mr-1" />
+                              Edit
+                            </Button>
+                            <Button 
+                              variant={banner.isActive ? "destructive" : "default"} 
+                              size="sm" 
+                              className={`h-8 ${!banner.isActive ? "bg-green-600 hover:bg-green-700" : ""}`}
+                              onClick={() => handleToggleActive(banner.id, !banner.isActive)}
+                            >
+                              {banner.isActive ? (
+                                <>
+                                  <Eye className="h-3.5 w-3.5 mr-1 opacity-50" />
+                                  Deactivate
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="h-3.5 w-3.5 mr-1" />
+                                  Activate
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </TabsContent>
 
-              <div className="flex flex-col">
-                <BannerPreview
-                  title="Dark Banner"
-                  description="This is a dark style banner preview"
-                  buttonText="Learn More"
-                  color="#374151"
-                  styleType={BannerStyle.DARK}
-                  merchantName="My Test Store"
-                  visibilityType={BannerVisibility.ALL}
-                  isActive
-                />
-                <p className="text-center text-sm mt-2 font-medium">Dark</p>
+        <TabsContent value="inactive">
+          {loading ? (
+            <div className="h-24 flex items-center justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
+            </div>
+          ) : filteredBanners.filter(banner => !banner.isActive).length === 0 ? (
+            <div className="h-24 flex flex-col items-center justify-center space-y-2">
+              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                <ImageIcon className="h-6 w-6 text-muted-foreground" />
               </div>
+              <h3 className="text-lg font-medium">No inactive banners found</h3>
+              <p className="text-sm text-muted-foreground">
+                {searchQuery
+                  ? "Try adjusting your search query"
+                  : "You don't have any inactive banners"}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-6">
+              {filteredBanners
+                .filter(banner => !banner.isActive)
+                .map((banner) => (
+                  <div key={banner.id} className="group relative bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition-all">
+                    <div className="flex flex-col md:flex-row">
+                      {/* Banner Preview - Takes 1/3 of the space */}
+                      <div className="w-full md:w-1/3 h-[180px] relative overflow-hidden flex items-center justify-center">
+                        <div className="w-full max-w-[320px] px-2">
+                          <BannerPreview
+                            title={banner.title}
+                            description={banner.description}
+                            buttonText={banner.buttonText}
+                            color={banner.color ?? "#0ea5e9"}
+                            styleType={
+                              banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
+                              banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
+                              banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
+                              BannerStyle.LIGHT
+                            }
+                            merchantName={banner.merchantName ?? "My Store"}
+                            visibilityType={BannerVisibility.ALL}
+                            isActive={banner.isActive}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Banner Details - Takes 2/3 of the space */}
+                      <div className="w-full md:w-2/3 p-5">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h3 className="text-lg font-semibold">{banner.title}</h3>
+                            <p className="text-sm text-gray-500">{banner.description}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={banner.isActive ? "default" : "outline"} className={banner.isActive ? "bg-green-100 text-green-800 hover:bg-green-200" : ""}>
+                              {banner.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                            <Badge variant="outline" className="capitalize">
+                              {banner.style || "Light"}
+                            </Badge>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                          <div className="bg-gray-50 p-3 rounded-md">
+                            <p className="text-xs text-gray-500">Impressions</p>
+                            <p className="text-lg font-medium">{banner.impressions || 0}</p>
+                          </div>
+                          <div className="bg-gray-50 p-3 rounded-md">
+                            <p className="text-xs text-gray-500">Unique Viewers</p>
+                            <p className="text-lg font-medium">{banner.impressioncustomercount || 0}</p>
+                          </div>
+                          <div className="bg-gray-50 p-3 rounded-md">
+                            <p className="text-xs text-gray-500">Action</p>
+                            <p className="text-sm font-medium truncate" title={banner.bannerAction}>
+                              {banner.bannerAction === "Take to store page" ? "Store Page" : 
+                               banner.bannerAction === "Show announcement" ? "Announcement" : 
+                               banner.bannerAction || "None"}
+                            </p>
+                          </div>
+                          <div className="bg-gray-50 p-3 rounded-md">
+                            <p className="text-xs text-gray-500">Visibility</p>
+                            <p className="text-sm font-medium truncate" title={banner.visibilityType}>
+                              {banner.visibilityType || "All customers"}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex justify-between items-center">
+                          <div className="text-xs text-gray-500">
+                            Created: {formatDate(banner.createdAt)}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8"
+                              onClick={() => router.push(`/store/banner/${banner.id}/edit`)}
+                            >
+                              <Edit className="h-3.5 w-3.5 mr-1" />
+                              Edit
+                            </Button>
+                            <Button 
+                              variant={banner.isActive ? "destructive" : "default"} 
+                              size="sm" 
+                              className={`h-8 ${!banner.isActive ? "bg-green-600 hover:bg-green-700" : ""}`}
+                              onClick={() => handleToggleActive(banner.id, !banner.isActive)}
+                            >
+                              {banner.isActive ? (
+                                <>
+                                  <Eye className="h-3.5 w-3.5 mr-1 opacity-50" />
+                                  Deactivate
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="h-3.5 w-3.5 mr-1" />
+                                  Activate
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </TabsContent>
 
-              <div className="flex flex-col">
-                <BannerPreview
-                  title="Glass Banner"
-                  description="This is a glass style banner preview"
-                  buttonText="Read More"
-                  color="#333333"
-                  styleType={BannerStyle.GLASS}
-                  merchantName="My Test Store"
-                  visibilityType={BannerVisibility.ALL}
-                  isActive
-                />
-                <p className="text-center text-sm mt-2 font-medium">Glass</p>
-              </div>
+        <TabsContent value="schedule">
+          <div className="space-y-6">
+            <BannerScheduler 
+              banners={banners} 
+              onBannerUpdate={handleBannerScheduleUpdate} 
+            />
+            
+            <div className="bg-white rounded-xl shadow-sm border p-5">
+              <h3 className="text-lg font-medium mb-4">Scheduled Banners</h3>
+              
+              {loading ? (
+                <div className="h-24 flex items-center justify-center">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
+                </div>
+              ) : filteredBanners.filter(banner => banner.isActive).length === 0 ? (
+                <div className="h-24 flex flex-col items-center justify-center space-y-2">
+                  <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                    <Clock className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-lg font-medium">No active banners to schedule</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Activate banners first to schedule them
+                  </p>
+                  <Button
+                    variant="default"
+                    className="mt-2 gap-2"
+                    onClick={() => router.push("/store/banner/create")}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create Banner
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredBanners
+                    .filter(banner => banner.isActive)
+                    .map((banner) => (
+                      <div key={banner.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-[40px] h-[40px] overflow-hidden rounded">
+                            <BannerPreview
+                              title={banner.title}
+                              description=""
+                              buttonText=""
+                              color={banner.color ?? "#0ea5e9"}
+                              styleType={
+                                banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
+                                banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
+                                banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
+                                BannerStyle.LIGHT
+                              }
+                              merchantName=""
+                              visibilityType={BannerVisibility.ALL}
+                              isActive={banner.isActive}
+                            />
+                          </div>
+                          <div>
+                            <h4 className="font-medium">{banner.title}</h4>
+                            <p className="text-sm text-gray-500">
+                              {banner.scheduleStartMinutes !== undefined && banner.scheduleEndMinutes !== undefined ? (
+                                <>
+                                  Scheduled: {formatTime(banner.scheduleStartMinutes)} - {formatTime(banner.scheduleEndMinutes)}
+                                </>
+                              ) : (
+                                "Showing all day"
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            handleBannerScheduleUpdate(banner.id, {
+                              scheduleStartMinutes: 0,
+                              scheduleEndMinutes: 24 * 60,
+                              scheduleStartHour: 0,
+                              scheduleEndHour: 24
+                            })
+                          }}
+                        >
+                          Reset Schedule
+                        </Button>
+                      </div>
+                    ))}
+                </div>
+              )}
             </div>
           </div>
         </TabsContent>

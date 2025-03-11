@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -20,6 +20,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { AnnouncementDesignerDialog } from "@/components/announcement-designer-dialog"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useRouter } from "next/navigation"
+import { HexColorPicker } from "react-colorful"
 
 // Banner enumerations
 export const BannerVisibility = {
@@ -42,6 +43,7 @@ export const BannerAction = {
 interface CreateBannerDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  initialBannerData?: any
   onSave?: (bannerData: any) => void
 }
 
@@ -373,10 +375,29 @@ const bannerTemplates = [
   }
 ];
 
-export function CreateBannerDialog({ open, onOpenChange, onSave }: CreateBannerDialogProps) {
+export function CreateBannerDialog({
+  open,
+  onOpenChange,
+  initialBannerData,
+  onSave
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initialBannerData?: any; // Make sure this is optional
+  onSave: (data: any) => void;
+}) {
+  console.log("CreateBannerDialog - Received initialBannerData:", initialBannerData);
+  
   const { user } = useAuth()
   const { toast } = useToast()
   const router = useRouter()
+  
+  // Initialize form data with initialBannerData or defaults
+  const [formData, setFormData] = useState(initialBannerData || {
+    name: "Welcome Banner",
+    type: "welcome",
+    // other default properties
+  });
   
   // Form State
   const [title, setTitle] = useState('')
@@ -393,6 +414,7 @@ export function CreateBannerDialog({ open, onOpenChange, onSave }: CreateBannerD
   const [showAnnouncementDesigner, setShowAnnouncementDesigner] = useState(false)
   const [announcement, setAnnouncement] = useState<any>(null)
   const [merchantName, setMerchantName] = useState("Your Business")
+  const [showColorPicker, setShowColorPicker] = useState(false)
   
   // Options arrays
   const buttonOptions = ['Explore', 'Redeem', 'Learn More', 'View Offer', 'Shop Now']
@@ -501,8 +523,7 @@ export function CreateBannerDialog({ open, onOpenChange, onSave }: CreateBannerD
       // Build the banner object with the correct field names
       const bannerObj = {
         title: title,
-        cssColor: selectedColor, // Keep the original hex for CSS
-        color: colorName, // Add the color name field
+        color: selectedColor, // Save the hex color directly in the color field
         description,
         buttonText,
         merchantName,
@@ -603,56 +624,19 @@ export function CreateBannerDialog({ open, onOpenChange, onSave }: CreateBannerD
     return colorMap[hex] || "blue"
   }
 
+  const handleSave = () => {
+    console.log("CreateBannerDialog - Saving banner with data:", formData);
+    onSave(formData);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="flex flex-row items-center justify-between">
-          <DialogTitle>
-            <span className="text-[#007AFF]">Create</span> Banner
-          </DialogTitle>
-          
-          <div className="flex items-center gap-2 mr-8">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="flex items-center gap-1 h-8 text-gray-600"
-              onClick={() => router.push("/store/banner")}
-            >
-              <Store className="h-4 w-4" />
-              <span>My Banners</span>
-            </Button>
-            
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="flex items-center gap-1 h-8 text-gray-600"
-                    onClick={() => setGuideOpen(!guideOpen)}
-                  >
-                    <HelpCircle className="h-4 w-4" />
-                    <span>Guide</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-sm">
-                  <div className="space-y-2 p-2">
-                    <h4 className="font-medium">Banner Creation Guide</h4>
-                    <p className="text-sm text-gray-500">
-                      Banners appear at the top of your customer's app and can be used to promote offers, 
-                      announce news, or highlight important information.
-                    </p>
-                    <ul className="text-xs text-gray-500 list-disc pl-4 space-y-1">
-                      <li>Choose from pre-made templates or create your own</li>
-                      <li>Select a style that matches your brand</li>
-                      <li>Add an action - link to your store or show an announcement</li>
-                      <li>Target specific customer groups</li>
-                    </ul>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Create Banner</DialogTitle>
+          <DialogDescription>
+            Design a banner to promote your loyalty program to customers.
+          </DialogDescription>
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "create" | "library")}>
@@ -740,6 +724,53 @@ export function CreateBannerDialog({ open, onOpenChange, onSave }: CreateBannerD
               </div>
             </div>
             
+            {/* Color Picker - Moved here to be right below the preview */}
+            <div className="mb-6">
+              <div className="space-y-1.5">
+                <Label htmlFor="color">Banner Color</Label>
+                <div className="flex flex-col space-y-2">
+                  <div 
+                    className="h-10 w-full rounded-md border border-input flex items-center cursor-pointer overflow-hidden"
+                    onClick={() => setShowColorPicker(!showColorPicker)}
+                  >
+                    <div 
+                      className="h-full w-10 flex-shrink-0" 
+                      style={{ backgroundColor: selectedColor }}
+                    />
+                    <div className="px-3 flex-1 flex items-center justify-between">
+                      <span className="text-sm">{selectedColor}</span>
+                      <ChevronRight className="h-4 w-4 text-gray-400" />
+                    </div>
+                  </div>
+                  
+                  {showColorPicker && (
+                    <div className="relative z-10 mt-1 p-3 bg-white rounded-md border shadow-md">
+                      <HexColorPicker 
+                        color={selectedColor} 
+                        onChange={(newColor) => setSelectedColor(newColor)}
+                        style={{ width: '100%' }}
+                      />
+                      <div className="mt-2 flex justify-between items-center">
+                        <Input
+                          value={selectedColor}
+                          onChange={(e) => setSelectedColor(e.target.value)}
+                          className="w-28 h-8 text-xs"
+                        />
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="text-xs h-8"
+                          onClick={() => setShowColorPicker(false)}
+                        >
+                          Apply
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            
             {/* Form Section */}
             <div className="space-y-6">
               {/* Content Section */}
@@ -807,21 +838,6 @@ export function CreateBannerDialog({ open, onOpenChange, onSave }: CreateBannerD
               {/* Appearance Section */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Appearance</h3>
-                
-                <div className="grid gap-2">
-                  <Label>Color</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {colors.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        className={`h-8 w-8 rounded-full transition-all ${selectedColor === color ? 'ring-2 ring-offset-2 ring-black' : ''}`}
-                        style={{ backgroundColor: color }}
-                        onClick={() => setSelectedColor(color)}
-                      />
-                    ))}
-                  </div>
-                </div>
                 
                 <div className="flex items-center justify-between">
                   <Label htmlFor="active">Active</Label>
@@ -1031,7 +1047,7 @@ export function CreateBannerDialog({ open, onOpenChange, onSave }: CreateBannerD
                 </Select>
               </div>
               
-              <ScrollArea className="h-[500px] pr-4">
+              <ScrollArea className="h-[400px] pr-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {bannerTemplates
                     .filter(template => templateFilter === "all" || template.category === templateFilter)

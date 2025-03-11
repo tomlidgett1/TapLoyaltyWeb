@@ -3,7 +3,7 @@
 // This file exists only to satisfy Tailwind's content scanning
 // The actual onboarding functionality is in src/app/onboarding/page.tsx 
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -104,6 +104,14 @@ export function OnboardingWizard() {
     hasSetupBanner: false,
     bannerDetails: null as { name: string, type: string } | null
   })
+  
+  // Move these state declarations up here, before they're used
+  const [selectedPointsRules, setSelectedPointsRules] = useState<string[]>([])
+  const [bannerData, setBannerData] = useState<any>(null)
+  const [showBannerDialog, setShowBannerDialog] = useState(false)
+  const [showAnnouncementDesigner, setShowAnnouncementDesigner] = useState(false)
+  const [announcementData, setAnnouncementData] = useState<any>(null)
+  
   const { user } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
@@ -277,26 +285,39 @@ export function OnboardingWizard() {
   }
   
   const handleComplete = async () => {
-    if (!user?.uid) return
+    if (!user?.uid) {
+      console.error("No user ID found, cannot complete onboarding");
+      return;
+    }
+    
+    console.log("Starting handleComplete with:", {
+      selectedRewards: businessData.selectedRewards.length,
+      bannerData: bannerData ? "exists" : "null",
+      selectedPointsRules: selectedPointsRules.length,
+      announcementData: announcementData ? "exists" : "null"
+    });
     
     try {
-      setLoading(true)
+      setLoading(true);
       
       // Create a batch to handle multiple Firestore operations
-      const batch = writeBatch(db)
+      const batch = writeBatch(db);
+      console.log("Created Firestore batch");
       
       // Save onboarding data to Firestore
-      const merchantRef = doc(db, 'merchants', user.uid)
+      const merchantRef = doc(db, 'merchants', user.uid);
       batch.update(merchantRef, {
         onboardingCompleted: true,
         onboardingCompletedAt: new Date().toISOString()
-      })
+      });
+      console.log("Added merchant update to batch");
       
-      // Create the selected rewards
+      // 1) Create the selected rewards
+      console.log(`Processing ${businessData.selectedRewards.length} rewards`);
       for (const reward of businessData.selectedRewards) {
-        const rewardRef = doc(collection(db, 'merchants', user.uid, 'rewards'))
+        const rewardRef = doc(collection(db, 'merchants', user.uid, 'rewards'));
+        console.log(`Creating reward: ${reward.name} with ID: ${rewardRef.id}`);
         
-        // Format the reward data according to the required structure
         const rewardData = {
           rewardName: reward.rewardName || reward.name,
           description: reward.description,
@@ -305,40 +326,92 @@ export function OnboardingWizard() {
           rewardVisibility: 'global',
           conditions: reward.conditions || [],
           limitations: reward.limitations || [
-            {
-              type: 'customerLimit',
-              value: 1
-            },
-            {
-              type: 'totalRedemptionLimit',
-              value: 100
-            }
+            { type: 'customerLimit', value: 1 },
+            { type: 'totalRedemptionLimit', value: 100 }
           ],
           createdAt: new Date().toISOString()
-        }
+        };
         
-        batch.set(rewardRef, rewardData)
+        batch.set(rewardRef, rewardData);
+        console.log(`Added reward to batch: ${rewardRef.id}`);
+      }
+      
+      // 2) Save banner data if we have any
+      console.log("Banner data check:", bannerData);
+      if (bannerData) {
+        const bannerRef = doc(collection(db, 'merchants', user.uid, 'banners'));
+        console.log(`Creating banner with ID: ${bannerRef.id}`);
+        
+        const bannerToSave = {
+          ...bannerData,
+          createdAt: new Date().toISOString()
+        };
+        console.log("Banner data to save:", bannerToSave);
+        
+        batch.set(bannerRef, bannerToSave);
+        console.log(`Added banner to batch: ${bannerRef.id}`);
+      } else {
+        console.log("No banner data to save");
+      }
+      
+      // 3) Save each selected points rule
+      console.log(`Processing ${selectedPointsRules.length} points rules`);
+      for (const ruleId of selectedPointsRules) {
+        const ruleDocRef = doc(collection(db, 'merchants', user.uid, 'pointsRules'));
+        console.log(`Creating points rule: ${ruleId} with ID: ${ruleDocRef.id}`);
+        
+        // Get the actual rule data based on the ID
+        const ruleData = {
+          ruleName: ruleId,
+          conditions: ruleId === "morning-coffee-bonus" 
+            ? [
+                { type: "timeOfDay", startTime: "7:00:00", endTime: "10:00:00" },
+                { type: "daysOfWeek", days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"] }
+              ] 
+            : ["someCondition"],
+          pointsMultiplier: ruleId === "weekend-treat" ? 3 : 2,
+          createdAt: new Date().toISOString()
+        };
+        
+        batch.set(ruleDocRef, ruleData);
+        console.log(`Added points rule to batch: ${ruleDocRef.id}`);
+      }
+      
+      // 4) Save announcement data if we have any
+      console.log("Announcement data check:", announcementData);
+      if (announcementData) {
+        const announcementRef = doc(collection(db, 'merchants', user.uid, 'announcements'));
+        console.log(`Creating announcement with ID: ${announcementRef.id}`);
+        
+        batch.set(announcementRef, {
+          ...announcementData,
+          createdAt: new Date().toISOString()
+        });
+        console.log(`Added announcement to batch: ${announcementRef.id}`);
       }
       
       // Commit all the changes
-      await batch.commit()
+      console.log("Committing batch to Firestore...");
+      await batch.commit();
+      console.log("Batch committed successfully");
       
       toast({
         title: "Onboarding completed!",
         description: `Your account has been set up successfully with ${businessData.selectedRewards.length} rewards.`,
-      })
+      });
       
       // Redirect to dashboard
-      router.push('/dashboard')
+      console.log("Redirecting to dashboard");
+      router.push('/dashboard');
     } catch (error) {
-      console.error('Error completing onboarding:', error)
+      console.error('Error completing onboarding:', error);
       toast({
         title: "Error",
         description: "Failed to complete onboarding. Please try again.",
         variant: "destructive"
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -1140,35 +1213,57 @@ export function OnboardingWizard() {
     setShowVoucherProgramConfig(false);
   };
 
-  const [selectedPointsRules, setSelectedPointsRules] = useState<string[]>([]);
+  // Function that handles saving the banner
+  const handleSaveBanner = (data: any) => {
+    console.log("handleSaveBanner called with data:", data);
+    setBannerData(data);
+    console.log("Setting bannerData to:", data);
+    setShowBannerDialog(false);
+    
+    // Update businessData to reflect banner setup
+    setBusinessData(prev => {
+      console.log("Updating businessData with banner details");
+      const updated = {
+        ...prev,
+        hasSetupBanner: true,
+        bannerDetails: {
+          name: data.name || 'Custom Banner',
+          type: data.type || 'welcome'
+        }
+      };
+      console.log("Updated businessData:", updated);
+      return updated;
+    });
+    
+    // Show success toast
+    toast({
+      title: "Banner Created",
+      description: "Your banner has been created successfully",
+      variant: "default"
+    });
+  }
 
   // Toggler for points rules
   function handlePointsRuleToggle(ruleId: string) {
     if (selectedPointsRules.includes(ruleId)) {
-      setSelectedPointsRules((prev) => prev.filter((id) => id !== ruleId));
+      setSelectedPointsRules((prev) => prev.filter((id) => id !== ruleId))
     } else {
-      setSelectedPointsRules((prev) => [...prev, ruleId]);
+      setSelectedPointsRules((prev) => [...prev, ruleId])
+      
+      // Show success toast
+      toast({
+        title: "Rule Selected",
+        description: "Points rule has been added to your selections",
+        variant: "default"
+      })
     }
   }
 
-  // Add the states below for banner and announcement handling
-  const [showBannerDialog, setShowBannerDialog] = useState(false)
-  const [bannerData, setBannerData] = useState<any>(null)
-  const [showAnnouncementDesigner, setShowAnnouncementDesigner] = useState(false)
-  const [announcementData, setAnnouncementData] = useState<any>(null)
-
-  // Example function that handles saving the banner
-  const handleSaveBanner = (data: any) => {
-    setBannerData(data)
-    setShowBannerDialog(false)
-    // Optionally open the AnnouncementDesignerDialog here
-  }
-
-  // Example function that handles saving the announcement
-  const handleSaveAnnouncement = (newAnnouncement: any) => {
-    setAnnouncementData(newAnnouncement)
-    setShowAnnouncementDesigner(false)
-  }
+  // Add this near the top of the component
+  useEffect(() => {
+    console.log("Current bannerData state:", bannerData);
+    console.log("Current businessData state:", businessData);
+  }, [bannerData, businessData]);
 
   return (
     <div className="container max-w-[1600px] py-10">
@@ -3818,7 +3913,10 @@ export function OnboardingWizard() {
         open={showBannerDialog}
         onOpenChange={setShowBannerDialog}
         initialBannerData={bannerData}
-        onSave={(data) => handleSaveBanner(data)}
+        onSave={(data) => {
+          console.log("OnboardingWizard - Received banner data from dialog:", data);
+          handleSaveBanner(data);
+        }}
       />
 
       {/* The Announcement Designer Dialog */}

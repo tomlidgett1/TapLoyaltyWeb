@@ -43,7 +43,7 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
     if (!banners) return
     
     const processed = banners
-      .filter(banner => banner.isActive)
+      .filter(banner => banner.scheduled)
       .map(banner => {
         // Convert hours to minutes, rounding to nearest 15-min increment
         const startMinutes = banner.scheduleStartMinutes !== undefined 
@@ -86,7 +86,8 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
     // Find any banner (except the current one) that overlaps with the proposed time range
     const conflictingBanner = scheduledBanners.find(banner => 
       banner.id !== bannerId && 
-      (startMinutes < banner.scheduleEndMinutes && endMinutes > banner.scheduleStartMinutes) // Only check for overlap
+      banner.scheduled &&
+      (startMinutes < banner.scheduleEndMinutes && endMinutes > banner.scheduleStartMinutes)
     );
     
     if (conflictingBanner) {
@@ -114,34 +115,55 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
     const minuteWidth = timelineRect.width / (24 * 60); // width per minute
     const relativeX = e.clientX - timelineRect.left;
     
+    // Constrain to timeline boundaries
+    const constrainedX = Math.max(0, Math.min(timelineRect.width, relativeX));
+    
     // Convert to minutes and round to nearest 15-minute increment
-    const minutePosition = Math.max(0, Math.min(24 * 60 - 15, Math.round(relativeX / minuteWidth / 15) * 15));
+    const minutePosition = Math.round(constrainedX / minuteWidth / 15) * 15;
+    const constrainedMinutePosition = Math.max(0, Math.min(24 * 60, minutePosition));
     
     let newStartTime = draggedBanner.scheduleStartMinutes;
     let newEndTime = draggedBanner.scheduleEndMinutes;
     
     if (dragType === 'start') {
       // Don't allow start to go beyond end - 15 minutes
-      newStartTime = Math.min(minutePosition, draggedBanner.scheduleEndMinutes - 15);
+      newStartTime = Math.min(constrainedMinutePosition, draggedBanner.scheduleEndMinutes - 15);
       newEndTime = draggedBanner.scheduleEndMinutes;
     } else if (dragType === 'end') {
-      // Don't allow end to go before start + 15 minutes
+      // Don't allow end to go before start + 15 minutes or beyond 24 hours
       newStartTime = draggedBanner.scheduleStartMinutes;
-      newEndTime = Math.max(minutePosition + 15, draggedBanner.scheduleStartMinutes + 15);
+      newEndTime = Math.max(constrainedMinutePosition, draggedBanner.scheduleStartMinutes + 15);
+      newEndTime = Math.min(newEndTime, 24 * 60); // Constrain to 24 hours unless extending past midnight
     } else if (dragType === 'move') {
       // Move the entire banner while maintaining its duration
       const duration = draggedBanner.scheduleEndMinutes - draggedBanner.scheduleStartMinutes;
-      newStartTime = Math.min(minutePosition, 24 * 60 - duration);
+      
+      // Ensure the banner stays within the timeline
+      newStartTime = Math.min(Math.max(0, constrainedMinutePosition), 24 * 60 - duration);
       newEndTime = newStartTime + duration;
+      
+      // Double-check that end time doesn't exceed 24 hours
+      if (newEndTime > 24 * 60) {
+        newEndTime = 24 * 60;
+        newStartTime = newEndTime - duration;
+      }
     }
     
     // Check for conflicts with the proposed new times
     const hasConflict = checkForConflicts(draggedBanner.id, newStartTime, newEndTime);
     
-    // Only update the times if there's no conflict
-    if (!hasConflict) {
-      setDraggedStartTime(newStartTime);
-      setDraggedEndTime(newEndTime);
+    // Always update the dragged times for visual feedback, even if there's a conflict
+    setDraggedStartTime(newStartTime);
+    setDraggedEndTime(newEndTime);
+    
+    // Update the banner element directly for smoother dragging
+    const bannerElement = document.getElementById(`banner-${draggedBanner.id}`);
+    if (bannerElement) {
+      const startPercent = (newStartTime / (24 * 60)) * 100;
+      const widthPercent = ((newEndTime - newStartTime) / (24 * 60)) * 100;
+      
+      bannerElement.style.left = `${startPercent}%`;
+      bannerElement.style.width = `${widthPercent}%`;
     }
   };
 
@@ -276,18 +298,25 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
 
   // Calculate position and width for a banner on the timeline
   const getBannerStyle = (banner: any) => {
-    const startMinutes = draggedBanner?.id === banner.id && draggedStartTime !== null 
-      ? draggedStartTime 
-      : banner.scheduleStartMinutes
+    const isBeingDragged = isDragging && draggedBanner?.id === banner.id;
     
-    const endMinutes = draggedBanner?.id === banner.id && draggedEndTime !== null 
-      ? draggedEndTime 
-      : banner.scheduleEndMinutes
+    let startMinutes = banner.scheduleStartMinutes;
+    let endMinutes = banner.scheduleEndMinutes;
     
-    const left = `${(startMinutes / (24 * 60)) * 100}%`
-    const width = `${((endMinutes - startMinutes) / (24 * 60)) * 100}%`
+    if (isBeingDragged && draggedStartTime !== null && draggedEndTime !== null) {
+      startMinutes = draggedStartTime;
+      endMinutes = draggedEndTime;
+    }
     
-    return { left, width }
+    // Constrain values to ensure they're within the 24-hour timeline
+    startMinutes = Math.max(0, Math.min(24 * 60 - 15, startMinutes));
+    endMinutes = Math.max(startMinutes + 15, Math.min(24 * 60, endMinutes));
+    
+    // Calculate position and width as percentages
+    const left = `${(startMinutes / (24 * 60)) * 100}%`;
+    const width = `${((endMinutes - startMinutes) / (24 * 60)) * 100}%`;
+    
+    return { left, width };
   }
 
   return (
@@ -374,30 +403,44 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
             const { left, width } = getBannerStyle(banner)
             const isBeingDragged = isDragging && draggedBanner?.id === banner.id
             
+            // Calculate position and width based on time
+            const startPercent = (banner.scheduleStartMinutes / (24 * 60)) * 100;
+            const widthPercent = (banner.duration / (24 * 60)) * 100;
+            
+            // Check if banner ends at midnight (or very close to it)
+            const endsAtMidnight = Math.abs(banner.scheduleEndMinutes - 24 * 60) < 15; // Within 15 minutes of midnight
+            
             return (
               <div 
                 key={banner.id}
-                className={`absolute h-[70px] rounded-md overflow-hidden border shadow-sm transition-all ${
-                  isBeingDragged ? 'ring-2 ring-blue-500 z-20 shadow-md' : 'hover:ring-1 hover:ring-blue-300 hover:shadow-md'
-                }`}
-                style={{ 
-                  left, 
-                  width, 
+                id={`banner-${banner.id}`}
+                className={`absolute h-[60px] rounded-md overflow-hidden shadow-sm ${
+                  isBeingDragged ? 'ring-2 ring-blue-500 z-20 shadow-md' : 'hover:shadow-md'
+                } ${banner.isActive 
+                    ? 'border border-green-300 bg-gradient-to-r from-green-50 to-green-100' 
+                    : 'border border-blue-300 bg-gradient-to-r from-blue-50 to-blue-100'}`}
+                style={{
+                  left: `${startPercent}%`,
+                  width: `${widthPercent}%`,
+                  minWidth: '80px',
                   top: `${index * 80 + 10}px`,
                   cursor: isBeingDragged ? (dragType === 'move' ? 'grabbing' : 'col-resize') : 'grab',
-                  background: 'white',
                   transition: isBeingDragged ? 'none' : 'all 0.2s ease'
                 }}
               >
                 {/* Banner content */}
                 <div 
-                  className="h-full flex items-center justify-between px-2 bg-white"
+                  className="h-full flex items-center px-2"
                   onMouseDown={(e) => {
                     e.preventDefault()
                     startDrag(banner, 'move')
                   }}
                 >
-                  <div className="w-[60px] h-[50px] flex-shrink-0 overflow-hidden rounded-sm">
+                  {/* Status indicator */}
+                  <div className={`absolute left-0 top-0 bottom-0 w-1 ${banner.isActive ? 'bg-green-500' : 'bg-blue-500'}`}></div>
+                  
+                  {/* Banner preview thumbnail */}
+                  <div className="w-[50px] h-[45px] flex-shrink-0 overflow-hidden rounded-sm shadow-sm border border-gray-200">
                     <BannerPreview
                       title={banner.title}
                       description=""
@@ -414,33 +457,105 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
                       isActive={banner.isActive}
                     />
                   </div>
-                  <div className="ml-2 flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{banner.title}</p>
-                    <div className="flex items-center text-[10px] text-gray-500 mt-1">
+                  
+                  {/* Banner info */}
+                  <div className="ml-2 flex-1 min-w-0 flex flex-col justify-center">
+                    <div className="flex items-center">
+                      <p className="text-xs font-medium truncate">{banner.title}</p>
+                      {banner.isActive && (
+                        <span className="ml-1.5 flex items-center text-[9px] text-green-700 bg-green-100 px-1 py-0.5 rounded-sm">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-0.5 animate-pulse"></span>
+                          Live
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Time display */}
+                    <div className="flex items-center text-[10px] text-gray-600 mt-1">
+                      <Clock className="h-2.5 w-2.5 mr-1 text-gray-500" />
                       <span>{formatTime(banner.scheduleStartMinutes)}</span>
                       <span className="mx-1">-</span>
                       <span>{formatTime(banner.scheduleEndMinutes)}</span>
+                      
+                      {/* Show next day indicator if applicable */}
+                      {banner.endsNextDay && (
+                        <span className="ml-1 text-[8px] bg-blue-100 text-blue-700 px-1 rounded-sm">+1</span>
+                      )}
                     </div>
+                    
+                    {/* Extend past midnight button */}
+                    {endsAtMidnight && (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button 
+                            className="text-[9px] mt-1 text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-sm hover:bg-blue-100 flex items-center w-fit"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Clock className="h-2 w-2 mr-1" />
+                            Extend past midnight
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-48 p-2" onClick={(e) => e.stopPropagation()}>
+                          <p className="text-xs font-medium mb-2">Extend until:</p>
+                          <div className="grid grid-cols-2 gap-1">
+                            {[1, 2, 3, 4, 5, 6].map(hour => (
+                              <Button
+                                key={hour}
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => {
+                                  // Extend the banner to the selected hour past midnight
+                                  const newEndMinutes = hour * 60; // Convert hours to minutes
+                                  onBannerUpdate(banner.id, {
+                                    scheduleEndMinutes: newEndMinutes,
+                                    scheduleEndHour: hour,
+                                    extendedOverMidnight: true
+                                  });
+                                }}
+                              >
+                                {hour}:00 AM
+                              </Button>
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    )}
                   </div>
                 </div>
                 
-                {/* Drag handles */}
+                {/* Drag handles with improved styling */}
                 <div 
-                  className="absolute left-0 top-0 bottom-0 w-2 cursor-col-resize bg-transparent hover:bg-blue-200 opacity-50"
+                  className="absolute left-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-200 hover:opacity-70"
                   onMouseDown={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
                     startDrag(banner, 'start')
                   }}
-                />
+                >
+                  <div className="absolute left-0.5 top-1/2 -translate-y-1/2 h-8 w-0.5 bg-gray-400"></div>
+                </div>
                 <div 
-                  className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize bg-transparent hover:bg-blue-200 opacity-50"
+                  className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-200 hover:opacity-70"
                   onMouseDown={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
                     startDrag(banner, 'end')
                   }}
-                />
+                >
+                  <div className="absolute right-0.5 top-1/2 -translate-y-1/2 h-8 w-0.5 bg-gray-400"></div>
+                </div>
+                
+                {/* Time indicator during drag */}
+                {isBeingDragged && (
+                  <div className="absolute -top-6 left-0 right-0 text-center">
+                    <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-t-md shadow-md">
+                      {dragType === 'start' ? formatTime(draggedStartTime || banner.scheduleStartMinutes) : 
+                       dragType === 'end' ? formatTime(draggedEndTime || banner.scheduleEndMinutes) :
+                       `${formatTime(draggedStartTime || banner.scheduleStartMinutes)} - ${formatTime(draggedEndTime || banner.scheduleEndMinutes)}`}
+                    </span>
+                  </div>
+                )}
               </div>
             )
           })}

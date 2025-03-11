@@ -1,7 +1,7 @@
 "use client"
 
 import { Home, Users, CreditCard, Settings, BarChart2, Gift, User, HelpCircle, Info, PlusCircle, 
-  BadgeCheck, Bell, ChevronsUpDown, LogOut, Sparkles, MessageCircle, LifeBuoy, Search, Store, Blocks, Library, Link as LinkIcon } from "lucide-react"
+  BadgeCheck, Bell, ChevronsUpDown, LogOut, Sparkles, MessageCircle, LifeBuoy, Search, Store, Blocks, Library, Link as LinkIcon, Mail } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -36,6 +36,7 @@ import { useMerchant } from '@/hooks/use-merchant'
 import { useAuth } from '@/contexts/auth-context'
 import Image from 'next/image'
 import { TapAiButton } from "@/components/tap-ai-button"
+import { Badge } from "@/components/ui/badge"
 
 const menuItems = [
   {
@@ -68,6 +69,12 @@ const menuItems = [
     title: "My Store",
     icon: Store,
     url: "/store",
+  },
+  {
+    title: "Email",
+    icon: Mail,
+    url: "/email",
+    badge: "New"
   },
   {
     title: "Integrations",

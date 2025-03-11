@@ -3,18 +3,17 @@
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
-
 import { cn } from "@/lib/utils"
 
-const Dialog = DialogPrimitive.Root
+const CustomDialog = DialogPrimitive.Root
 
-const DialogTrigger = DialogPrimitive.Trigger
+const CustomDialogTrigger = DialogPrimitive.Trigger
 
-const DialogPortal = DialogPrimitive.Portal
+const CustomDialogPortal = DialogPrimitive.Portal
 
-const DialogClose = DialogPrimitive.Close
+const CustomDialogClose = DialogPrimitive.Close
 
-const DialogOverlay = React.forwardRef<
+const CustomDialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
@@ -27,14 +26,14 @@ const DialogOverlay = React.forwardRef<
     {...props}
   />
 ))
-DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
+CustomDialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
-const DialogContent = React.forwardRef<
+const CustomDialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
+  <CustomDialogPortal>
+    <CustomDialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
@@ -42,6 +41,8 @@ const DialogContent = React.forwardRef<
         className
       )}
       {...props}
+      aria-hidden={undefined}
+      data-aria-hidden={undefined}
     >
       {children}
       <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
@@ -49,11 +50,11 @@ const DialogContent = React.forwardRef<
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
-  </DialogPortal>
+  </CustomDialogPortal>
 ))
-DialogContent.displayName = DialogPrimitive.Content.displayName
+CustomDialogContent.displayName = DialogPrimitive.Content.displayName
 
-const DialogHeader = ({
+const CustomDialogHeader = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
@@ -65,9 +66,9 @@ const DialogHeader = ({
     {...props}
   />
 )
-DialogHeader.displayName = "DialogHeader"
+CustomDialogHeader.displayName = "CustomDialogHeader"
 
-const DialogFooter = ({
+const CustomDialogFooter = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
@@ -79,9 +80,9 @@ const DialogFooter = ({
     {...props}
   />
 )
-DialogFooter.displayName = "DialogFooter"
+CustomDialogFooter.displayName = "CustomDialogFooter"
 
-const DialogTitle = React.forwardRef<
+const CustomDialogTitle = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
 >(({ className, ...props }, ref) => (
@@ -94,9 +95,9 @@ const DialogTitle = React.forwardRef<
     {...props}
   />
 ))
-DialogTitle.displayName = DialogPrimitive.Title.displayName
+CustomDialogTitle.displayName = DialogPrimitive.Title.displayName
 
-const DialogDescription = React.forwardRef<
+const CustomDialogDescription = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
 >(({ className, ...props }, ref) => (
@@ -106,17 +107,17 @@ const DialogDescription = React.forwardRef<
     {...props}
   />
 ))
-DialogDescription.displayName = DialogPrimitive.Description.displayName
+CustomDialogDescription.displayName = DialogPrimitive.Description.displayName
 
 export {
-  Dialog,
-  DialogPortal,
-  DialogOverlay,
-  DialogClose,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogFooter,
-  DialogTitle,
-  DialogDescription,
-}
+  CustomDialog,
+  CustomDialogPortal,
+  CustomDialogOverlay,
+  CustomDialogClose,
+  CustomDialogTrigger,
+  CustomDialogContent,
+  CustomDialogHeader,
+  CustomDialogFooter,
+  CustomDialogTitle,
+  CustomDialogDescription,
+} 

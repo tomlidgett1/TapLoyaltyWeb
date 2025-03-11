@@ -177,49 +177,51 @@ export function BannerPreview({
   }
 
   return (
-    <div
-      className={`relative rounded-xl overflow-hidden p-4 ${getTextColor()}`}
+    <div 
+      className={`w-full rounded-md overflow-hidden shadow-sm`}
       style={{
-        background: getBackground(),
-        opacity: isActive ? 1 : 0.6,
+        backgroundColor: styleType === BannerStyle.LIGHT ? 'white' : color,
+        color: styleType === BannerStyle.LIGHT ? 'black' : 'white',
       }}
     >
-      <div className="flex">
-        <div className="flex-1 z-10">
-          <div className="text-xs font-medium px-2 py-1 rounded-md bg-black/10 inline-block mb-1">
-            {merchantName || "MerchantName"}
-          </div>
-          <h3 className="text-lg font-bold mb-1">
-            {title || "Banner Title"}
-          </h3>
-          <p
-            className={`text-sm ${
-              styleType === BannerStyle.DARK ? "text-gray-100" : "text-gray-600"
-            }`}
-          >
-            {description || "Banner description text will appear here."}
-          </p>
-          {buttonText && (
-            <button
-              className={`mt-2 text-sm font-medium ${getButtonColor()}`}
-              style={{
-                color: styleType === BannerStyle.DARK ? "white" : color || "black",
-              }}
+      <div className="p-3">
+        <div className="flex">
+          <div className="flex-1 z-10">
+            <div className="text-xs font-medium px-2 py-1 rounded-md bg-black/10 inline-block mb-1">
+              {merchantName || "MerchantName"}
+            </div>
+            <h3 className="text-lg font-bold mb-1">
+              {title || "Banner Title"}
+            </h3>
+            <p
+              className={`text-sm ${
+                styleType === BannerStyle.DARK ? "text-gray-100" : "text-gray-600"
+              }`}
             >
-              {buttonText} →
-            </button>
-          )}
+              {description || "Banner description text will appear here."}
+            </p>
+            {buttonText && (
+              <button
+                className={`mt-2 text-sm font-medium ${getButtonColor()}`}
+                style={{
+                  color: styleType === BannerStyle.DARK ? "white" : color || "black",
+                }}
+              >
+                {buttonText} →
+              </button>
+            )}
+          </div>
+          <div className="absolute top-0 right-0 opacity-20">
+            <Icon size={100} color={styleType === BannerStyle.DARK ? "white" : color || "#333"} />
+          </div>
         </div>
-        <div className="absolute top-0 right-0 opacity-20">
-          <Icon size={100} color={styleType === BannerStyle.DARK ? "white" : color || "#333"} />
-        </div>
+        {visibilityType === BannerVisibility.NEW && (
+          <div className="absolute bottom-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
+            <UserPlus className="h-3 w-3 mr-1" />
+            <span>New Customers</span>
+          </div>
+        )}
       </div>
-      {visibilityType === BannerVisibility.NEW && (
-        <div className="absolute bottom-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
-          <UserPlus className="h-3 w-3 mr-1" />
-          <span>New Customers</span>
-        </div>
-      )}
     </div>
   )
 } 

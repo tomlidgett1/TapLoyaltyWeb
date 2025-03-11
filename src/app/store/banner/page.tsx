@@ -29,8 +29,8 @@ import {
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { Calendar, Clock } from "lucide-react"
-import { Filter, Download, Search, MoreHorizontal, Eye, Image as ImageIcon, Plus, Edit, Trash2 } from "lucide-react"
+import { Calendar, Clock, Store, Gift, Sparkles, Users, UserPlus, ChevronLeft, ChevronRight, AlertCircle, CheckCircle, XCircle, BarChart, PieChart, Activity, Bell, Library, Plus, Search, Edit, Check, Image as ImageIcon } from "lucide-react"
+import { Filter, Download, MoreHorizontal, Eye, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { useAuth } from "@/contexts/auth-context"
@@ -202,38 +202,118 @@ export default function BannerPage() {
     }))
   }
 
+  // Update handleToggleActive to set isActive to false when activating
+
   const handleToggleActive = async (bannerId: string, newActiveState: boolean) => {
     try {
       if (!user?.uid) return;
       
-      const bannerRef = doc(db, 'merchants', user.uid, 'banners', bannerId);
-      
-      // If activating, also set scheduled=true
+      // If activating, check for schedule conflicts and auto-resolve if needed
       if (newActiveState) {
+        const bannerToActivate = banners.find(b => b.id === bannerId);
+        
+        if (!bannerToActivate) {
+          throw new Error("Banner not found");
+        }
+        
+        // Get the start and end minutes for the banner being activated
+        let startMinutes = bannerToActivate.scheduleStartMinutes !== undefined 
+          ? bannerToActivate.scheduleStartMinutes 
+          : (bannerToActivate.scheduleStartHour !== undefined ? bannerToActivate.scheduleStartHour * 60 : 0);
+        
+        let endMinutes = bannerToActivate.scheduleEndMinutes !== undefined 
+          ? bannerToActivate.scheduleEndMinutes 
+          : (bannerToActivate.scheduleEndHour !== undefined ? bannerToActivate.scheduleEndHour * 60 : 24 * 60);
+        
+        // Check for conflicts with other active and scheduled banners
+        const activeScheduledBanners = banners.filter(banner => 
+          banner.id !== bannerId && 
+          banner.isActive && 
+          banner.scheduled
+        );
+        
+        // If there are conflicts, find a free time slot
+        const hasConflict = activeScheduledBanners.some(banner => 
+          startMinutes < (banner.scheduleEndMinutes || banner.scheduleEndHour * 60 || 24 * 60) && 
+          endMinutes > (banner.scheduleStartMinutes || banner.scheduleStartHour * 60 || 0)
+        );
+        
+        if (hasConflict) {
+          // Find a free time slot (minimum 2 hours)
+          const minSlotSize = 120; // 2 hours in minutes
+          const freeSlot = findFreeTimeSlot(activeScheduledBanners, minSlotSize);
+          
+          if (freeSlot) {
+            // Use the free slot
+            startMinutes = freeSlot.start;
+            endMinutes = freeSlot.end;
+            
+            // Show toast about automatic scheduling
+            toast({
+              title: "Schedule Adjusted",
+              description: `Banner schedule was automatically adjusted to ${formatTime(startMinutes)} - ${formatTime(endMinutes)} to avoid conflicts.`,
+            });
+          } else {
+            // No free slot found
+            toast({
+              title: "Schedule Conflict",
+              description: "No available time slot found. Please deactivate another banner or manually adjust schedules.",
+              variant: "destructive"
+            });
+            return; // Exit without activating
+          }
+        }
+        
+        const bannerRef = doc(db, 'merchants', user.uid, 'banners', bannerId);
+        
+        // Store time values as strings in 24-hour format (HH:MM)
+        const startTimeString = `${Math.floor(startMinutes / 60).toString().padStart(2, '0')}:${(startMinutes % 60).toString().padStart(2, '0')}`;
+        const endTimeString = `${Math.floor(endMinutes / 60).toString().padStart(2, '0')}:${(endMinutes % 60).toString().padStart(2, '0')}`;
+        
+        // Update with new schedule if it was adjusted
         await updateDoc(bannerRef, {
-          isActive: true,
+          isActive: false, // Set to false when activating, as requested
           scheduled: true,
+          scheduleStartMinutes: startMinutes,
+          scheduleEndMinutes: endMinutes,
+          scheduleStartHour: Math.floor(startMinutes / 60),
+          scheduleEndHour: Math.ceil(endMinutes / 60),
+          startTime: startTimeString,
+          endTime: endTimeString,
           updatedAt: new Date()
         });
+        
+        // Update local state
+        setBanners(prev => prev.map(banner => 
+          banner.id === bannerId 
+            ? {
+                ...banner, 
+                isActive: false, // Set to false when activating, as requested
+                scheduled: true,
+                scheduleStartMinutes: startMinutes,
+                scheduleEndMinutes: endMinutes,
+                scheduleStartHour: Math.floor(startMinutes / 60),
+                scheduleEndHour: Math.ceil(endMinutes / 60),
+                startTime: startTimeString,
+                endTime: endTimeString
+              } 
+            : banner
+        ));
       } else {
         // If deactivating, just update isActive
+        const bannerRef = doc(db, 'merchants', user.uid, 'banners', bannerId);
         await updateDoc(bannerRef, {
-          isActive: false,
+          isActive: false, // Keep as false when deactivating
           updatedAt: new Date()
         });
+        
+        // Update local state
+        setBanners(prev => prev.map(banner => 
+          banner.id === bannerId 
+            ? {...banner, isActive: false} // Keep as false when deactivating
+            : banner
+        ));
       }
-      
-      // Update local state
-      setBanners(prev => prev.map(banner => 
-        banner.id === bannerId 
-          ? {
-              ...banner, 
-              isActive: newActiveState,
-              // Also update scheduled in local state if activating
-              ...(newActiveState ? { scheduled: true } : {})
-            } 
-          : banner
-      ));
       
       toast({
         title: newActiveState ? "Banner activated" : "Banner deactivated",
@@ -249,11 +329,89 @@ export default function BannerPage() {
     }
   };
 
+  // Helper function to find a free time slot
+  const findFreeTimeSlot = (activeScheduledBanners: any[], minSlotSize: number) => {
+    // If no active banners, return the whole day
+    if (activeScheduledBanners.length === 0) {
+      return { start: 0, end: 24 * 60 };
+    }
+    
+    // Get all occupied time slots
+    const occupiedSlots = activeScheduledBanners.map(banner => ({
+      start: banner.scheduleStartMinutes !== undefined 
+        ? banner.scheduleStartMinutes 
+        : (banner.scheduleStartHour !== undefined ? banner.scheduleStartHour * 60 : 0),
+      end: banner.scheduleEndMinutes !== undefined 
+        ? banner.scheduleEndMinutes 
+        : (banner.scheduleEndHour !== undefined ? banner.scheduleEndHour * 60 : 24 * 60)
+    })).sort((a, b) => a.start - b.start);
+    
+    // Find gaps between occupied slots
+    let previousEnd = 0;
+    
+    for (const slot of occupiedSlots) {
+      const gapSize = slot.start - previousEnd;
+      
+      // If gap is big enough, use it
+      if (gapSize >= minSlotSize) {
+        return { start: previousEnd, end: slot.start };
+      }
+      
+      previousEnd = Math.max(previousEnd, slot.end);
+    }
+    
+    // Check if there's space after the last banner
+    if (24 * 60 - previousEnd >= minSlotSize) {
+      return { start: previousEnd, end: 24 * 60 };
+    }
+    
+    // No suitable gap found
+    return null;
+  };
+
   const handleBannerScheduleUpdate = async (bannerId: string, updates: any) => {
     try {
       if (!user?.uid) return;
       
       const bannerRef = doc(db, 'merchants', user.uid, 'banners', bannerId);
+      
+      // If we're setting scheduled to false, also set isActive to false
+      if (updates.scheduled === false) {
+        updates.isActive = false;
+      }
+      
+      // Handle banners extending past midnight
+      if (updates.extendedOverMidnight) {
+        // For UI display, we'll use scheduleEndMinutes > 24*60
+        // But for time string representation, we'll wrap to next day
+        const startMinutes = updates.scheduleStartMinutes ?? 
+          banners.find(b => b.id === bannerId)?.scheduleStartMinutes ?? 0;
+        
+        const endMinutes = updates.scheduleEndMinutes ?? 
+          banners.find(b => b.id === bannerId)?.scheduleEndMinutes ?? 0;
+        
+        // Store time values as strings in 24-hour format (HH:MM)
+        updates.startTime = `${Math.floor(startMinutes / 60).toString().padStart(2, '0')}:${(startMinutes % 60).toString().padStart(2, '0')}`;
+        
+        // For end time, wrap to next day format if needed
+        const adjustedEndMinutes = endMinutes % (24 * 60);
+        updates.endTime = `${Math.floor(adjustedEndMinutes / 60).toString().padStart(2, '0')}:${(adjustedEndMinutes % 60).toString().padStart(2, '0')}`;
+        updates.endsNextDay = true;
+      }
+      // Regular schedule time updates
+      else if (updates.scheduleStartMinutes !== undefined || updates.scheduleEndMinutes !== undefined) {
+        const banner = banners.find(b => b.id === bannerId);
+        if (!banner) return;
+        
+        const startMinutes = updates.scheduleStartMinutes ?? banner.scheduleStartMinutes ?? 0;
+        const endMinutes = updates.scheduleEndMinutes ?? banner.scheduleEndMinutes ?? 24 * 60;
+        
+        // Store time values as strings in 24-hour format (HH:MM)
+        updates.startTime = `${Math.floor(startMinutes / 60).toString().padStart(2, '0')}:${(startMinutes % 60).toString().padStart(2, '0')}`;
+        updates.endTime = `${Math.floor(endMinutes / 60).toString().padStart(2, '0')}:${(endMinutes % 60).toString().padStart(2, '0')}`;
+        updates.endsNextDay = false;
+      }
+      
       await updateDoc(bannerRef, {
         ...updates,
         updatedAt: new Date()
@@ -266,15 +424,18 @@ export default function BannerPage() {
           : banner
       ));
       
-      return Promise.resolve();
+      toast({
+        title: updates.extendedOverMidnight 
+          ? "Banner extended past midnight successfully."
+          : "Banner schedule has been updated successfully."
+      });
     } catch (error) {
-      console.error("Error updating banner schedule:", error);
+      console.error("Error updating banner:", error);
       toast({
         title: "Error",
-        description: "Failed to update banner schedule. Please try again.",
+        description: "Failed to update banner. Please try again.",
         variant: "destructive"
       });
-      return Promise.reject(error);
     }
   };
 
@@ -322,20 +483,20 @@ export default function BannerPage() {
       <Tabs defaultValue="all" className="w-full">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
-            <TabsList className="whitespace-nowrap">
-              <TabsTrigger value="all" className="flex items-center gap-2">
-                <ImageIcon className="h-4 w-4" />
-                All Banners
-              </TabsTrigger>
+          <TabsList className="whitespace-nowrap">
+            <TabsTrigger value="all" className="flex items-center gap-2">
+              <ImageIcon className="h-4 w-4" />
+              All Banners
+            </TabsTrigger>
               <TabsTrigger value="active" className="flex items-center gap-2">
-                <Eye className="h-4 w-4" />
+              <Eye className="h-4 w-4" />
                 Active
               </TabsTrigger>
               <TabsTrigger value="inactive" className="flex items-center gap-2">
                 <Eye className="h-4 w-4 opacity-50" />
                 Inactive
-              </TabsTrigger>
-            </TabsList>
+            </TabsTrigger>
+          </TabsList>
             
             {/* Vertical divider */}
             <div className="h-8 w-px bg-gray-200 mx-2"></div>
@@ -447,13 +608,13 @@ export default function BannerPage() {
           ) : filteredBanners.length === 0 ? (
             <div className="h-24 flex flex-col items-center justify-center space-y-2">
               <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                <Bell className="h-6 w-6 text-muted-foreground" />
               </div>
               <h3 className="text-lg font-medium">No banners found</h3>
               <p className="text-sm text-muted-foreground">
                 {searchQuery
                   ? "Try adjusting your search query"
-                  : "No banner records available"}
+                  : "Create your first banner to get started"}
               </p>
               <Button
                 variant="default"
@@ -461,82 +622,68 @@ export default function BannerPage() {
                 onClick={() => router.push("/store/banner/create")}
               >
                 <Plus className="h-4 w-4" />
-                Create Your First Banner
+                Create Banner
               </Button>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-6">
               {filteredBanners.map((banner) => (
-                <div key={banner.id} className="group relative bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition-all">
+                <div 
+                  key={banner.id} 
+                  className="group relative bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition-all"
+                >
                   <div className="flex flex-col md:flex-row">
-                    {/* Banner Preview - Takes 1/3 of the space */}
-                    <div className="w-full md:w-1/3 h-[180px] relative overflow-hidden flex items-center justify-center">
-                      <div className="w-full max-w-[320px] px-2">
-                        <BannerPreview
-                          title={banner.title}
-                          description={banner.description}
-                          buttonText={banner.buttonText}
-                          color={banner.color ?? "#0ea5e9"}
-                          styleType={
-                            banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
-                            banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
-                            banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
-                            BannerStyle.LIGHT
-                          }
-                          merchantName={banner.merchantName ?? "My Store"}
-                          visibilityType={BannerVisibility.ALL}
-                          isActive={banner.isActive}
-                        />
+                    {/* Banner Preview - Left Side */}
+                    <div className="w-full md:w-1/3 relative overflow-hidden">
+                      {/* Status Badge */}
+                      <div className="absolute top-3 left-3 z-10 flex space-x-2">
+                        {banner.isActive && (
+                          <div className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full flex items-center">
+                            <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                            Live
+                          </div>
+                        )}
+                        {banner.scheduled && (
+                          <div className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center">
+                            <Clock className="h-3 w-3 mr-1" />
+                            Scheduled
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Banner Preview */}
+                      <div className="h-[200px] flex items-center justify-center">
+                        <div className="w-full max-w-[320px] px-2">
+                          <BannerPreview
+                            title={banner.title}
+                            description={banner.description}
+                            buttonText={banner.buttonText}
+                            color={banner.color ?? "#0ea5e9"}
+                            styleType={
+                              banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
+                              banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
+                              banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
+                              BannerStyle.LIGHT
+                            }
+                            merchantName={banner.merchantName ?? "My Store"}
+                            visibilityType={BannerVisibility.ALL}
+                            isActive={banner.isActive}
+                          />
+                        </div>
                       </div>
                     </div>
-                    
-                    {/* Banner Details - Takes 2/3 of the space */}
+
+                    {/* Banner Details - Right Side */}
                     <div className="w-full md:w-2/3 p-5">
-                      <div className="flex justify-between items-start mb-3">
+                      {/* Header with Title and Actions */}
+                      <div className="flex justify-between items-start mb-4">
                         <div>
-                          <h3 className="text-lg font-semibold">{banner.title}</h3>
-                          <p className="text-sm text-gray-500">{banner.description}</p>
+                          <h3 className="text-xl font-semibold">{banner.title}</h3>
+                          <p className="text-sm text-gray-500 mt-1">{banner.description}</p>
                         </div>
+                        
+                        {/* Action buttons */}
                         <div className="flex items-center gap-2">
-                          <Badge variant={banner.isActive ? "default" : "outline"} className={banner.isActive ? "bg-green-100 text-green-800 hover:bg-green-200" : ""}>
-                            {banner.isActive ? "Active" : "Inactive"}
-                          </Badge>
-                          <Badge variant="outline" className="capitalize">
-                            {banner.style || "Light"}
-                          </Badge>
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                        <div className="bg-gray-50 p-3 rounded-md">
-                          <p className="text-xs text-gray-500">Impressions</p>
-                          <p className="text-lg font-medium">{banner.impressions || 0}</p>
-                        </div>
-                        <div className="bg-gray-50 p-3 rounded-md">
-                          <p className="text-xs text-gray-500">Unique Viewers</p>
-                          <p className="text-lg font-medium">{banner.impressioncustomercount || 0}</p>
-                        </div>
-                        <div className="bg-gray-50 p-3 rounded-md">
-                          <p className="text-xs text-gray-500">Action</p>
-                          <p className="text-sm font-medium truncate" title={banner.bannerAction}>
-                            {banner.bannerAction === "Take to store page" ? "Store Page" : 
-                             banner.bannerAction === "Show announcement" ? "Announcement" : 
-                             banner.bannerAction || "None"}
-                          </p>
-                        </div>
-                        <div className="bg-gray-50 p-3 rounded-md">
-                          <p className="text-xs text-gray-500">Visibility</p>
-                          <p className="text-sm font-medium truncate" title={banner.visibilityType}>
-                            {banner.visibilityType || "All customers"}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex justify-between items-center">
-                        <div className="text-xs text-gray-500">
-                          Created: {formatDate(banner.createdAt)}
-                        </div>
-                        <div className="flex gap-2">
                           <Button 
                             variant="outline" 
                             size="sm" 
@@ -546,24 +693,125 @@ export default function BannerPage() {
                             <Edit className="h-3.5 w-3.5 mr-1" />
                             Edit
                           </Button>
-                          <Button 
-                            variant={banner.isActive ? "destructive" : "default"} 
-                            size="sm" 
-                            className={`h-8 ${!banner.isActive ? "bg-green-600 hover:bg-green-700" : ""}`}
-                            onClick={() => handleToggleActive(banner.id, !banner.isActive)}
-                          >
-                            {banner.isActive ? (
-                              <>
-                                <Eye className="h-3.5 w-3.5 mr-1 opacity-50" />
-                                Deactivate
-                              </>
-                            ) : (
-                              <>
-                                <Eye className="h-3.5 w-3.5 mr-1" />
-                                Activate
-                              </>
-                            )}
-                          </Button>
+                          
+                          {banner.scheduled ? (
+                            <Button 
+                              variant="outline"
+                              size="sm" 
+                              className="h-8 border-red-200 text-red-600 hover:bg-red-50"
+                              onClick={() => {
+                                handleBannerScheduleUpdate(banner.id, {
+                                  scheduled: false
+                                })
+                              }}
+                            >
+                              <Clock className="h-3.5 w-3.5 mr-1" />
+                              Remove from Schedule
+                            </Button>
+                          ) : (
+                            <Button 
+                              variant="outline"
+                              size="sm" 
+                              className="h-8"
+                              onClick={() => handleBannerScheduleUpdate(banner.id, {
+                                scheduled: true,
+                                scheduleStartMinutes: 0,
+                                scheduleEndMinutes: 24 * 60
+                              })}
+                            >
+                              <Clock className="h-3.5 w-3.5 mr-1" />
+                              Schedule
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Schedule information - only show if scheduled */}
+                      {banner.scheduled && (
+                        <div className="flex items-center gap-2 mb-4 bg-blue-50 p-3 rounded-md">
+                          <Clock className="h-5 w-5 text-blue-500" />
+                          <div>
+                            <p className="text-sm font-medium text-blue-700">
+                              {banner.scheduleStartMinutes !== undefined && banner.scheduleEndMinutes !== undefined ? (
+                                <>
+                                  Scheduled: {formatTime(banner.scheduleStartMinutes)} - {formatTime(banner.scheduleEndMinutes % (24 * 60))}
+                                  {banner.endsNextDay && <span className="ml-1 text-xs bg-blue-100 px-1 py-0.5 rounded">Next day</span>}
+                                </>
+                              ) : (
+                                "Scheduled all day"
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Metrics Section */}
+                      <div className="mt-4">
+                        <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
+                          <BarChart className="h-4 w-4 mr-1.5 text-gray-500" />
+                          Performance Metrics
+                        </h4>
+                        
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          {/* Impressions */}
+                          <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
+                            <div className="flex items-center text-xs text-gray-500 mb-1">
+                              <BarChart className="h-3 w-3 mr-1" />
+                              Impressions
+                            </div>
+                            <div className="flex items-baseline">
+                              <p className="text-lg font-semibold">{banner.impressions || 0}</p>
+                              <p className="text-xs text-gray-500 ml-1">views</p>
+                            </div>
+                          </div>
+                          
+                          {/* Unique Viewers */}
+                          <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
+                            <div className="flex items-center text-xs text-gray-500 mb-1">
+                              <Users className="h-3 w-3 mr-1" />
+                              Unique Viewers
+                            </div>
+                            <div className="flex items-baseline">
+                              <p className="text-lg font-semibold">{banner.impressioncustomercount || 0}</p>
+                              <p className="text-xs text-gray-500 ml-1">customers</p>
+                            </div>
+                          </div>
+                          
+                          {/* Action */}
+                          <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
+                            <div className="flex items-center text-xs text-gray-500 mb-1">
+                              <Activity className="h-3 w-3 mr-1" />
+                              Action
+                            </div>
+                            <p className="text-sm font-medium truncate" title={banner.bannerAction}>
+                              {banner.bannerAction === "Take to store page" ? "Store Page" : 
+                               banner.bannerAction === "Show announcement" ? "Announcement" : 
+                               banner.bannerAction || "None"}
+                            </p>
+                          </div>
+                          
+                          {/* Visibility */}
+                          <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
+                            <div className="flex items-center text-xs text-gray-500 mb-1">
+                              <UserPlus className="h-3 w-3 mr-1" />
+                              Visibility
+                            </div>
+                            <p className="text-sm font-medium truncate" title={banner.visibilityType}>
+                              {banner.visibilityType || "All customers"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Additional Info - Only Created Date */}
+                      <div className="flex flex-wrap gap-3 mt-4 text-xs text-gray-500">
+                        <div className="flex items-center">
+                          <Calendar className="h-3 w-3 mr-1" />
+                          Created: {banner.createdAt instanceof Timestamp 
+                            ? format(banner.createdAt.toDate(), 'MMM d, yyyy') 
+                            : typeof banner.createdAt === 'string' 
+                              ? banner.createdAt 
+                              : 'Unknown'}
                         </div>
                       </div>
                     </div>
@@ -579,16 +827,16 @@ export default function BannerPage() {
             <div className="h-24 flex items-center justify-center">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
             </div>
-          ) : filteredBanners.filter(banner => banner.isActive).length === 0 ? (
+          ) : filteredBanners.filter(banner => banner.scheduled).length === 0 ? (
             <div className="h-24 flex flex-col items-center justify-center space-y-2">
               <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                <Bell className="h-6 w-6 text-muted-foreground" />
               </div>
               <h3 className="text-lg font-medium">No active banners found</h3>
               <p className="text-sm text-muted-foreground">
                 {searchQuery
                   ? "Try adjusting your search query"
-                  : "You don't have any active banners"}
+                  : "Schedule banners to make them active"}
               </p>
               <Button
                 variant="default"
@@ -600,113 +848,378 @@ export default function BannerPage() {
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-6">
-              {filteredBanners
-                .filter(banner => banner.isActive)
-                .map((banner) => (
-                  <div key={banner.id} className="group relative bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition-all">
-                    <div className="flex flex-col md:flex-row">
-                      {/* Banner Preview - Takes 1/3 of the space */}
-                      <div className="w-full md:w-1/3 h-[180px] relative overflow-hidden flex items-center justify-center">
-                        <div className="w-full max-w-[320px] px-2">
-                          <BannerPreview
-                            title={banner.title}
-                            description={banner.description}
-                            buttonText={banner.buttonText}
-                            color={banner.color ?? "#0ea5e9"}
-                            styleType={
-                              banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
-                              banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
-                              banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
-                              BannerStyle.LIGHT
-                            }
-                            merchantName={banner.merchantName ?? "My Store"}
-                            visibilityType={BannerVisibility.ALL}
-                            isActive={banner.isActive}
-                          />
+            <div className="space-y-8">
+              {/* Currently Live section */}
+              <div>
+                <h3 className="text-lg font-medium mb-4 flex items-center">
+                  <Eye className="h-5 w-5 mr-2 text-green-500" />
+                  Currently Live
+                  <Badge variant="outline" className="ml-2">
+                    {filteredBanners.filter(banner => banner.scheduled && banner.isActive).length}
+                  </Badge>
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  These banners are currently visible to customers based on their schedule.
+                </p>
+                
+                <div className="grid grid-cols-1 gap-6">
+                  {filteredBanners
+                    .filter(banner => banner.scheduled && banner.isActive)
+                    .map((banner) => (
+                      <div 
+                        key={banner.id} 
+                        className="group relative bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition-all"
+                      >
+                        <div className="flex flex-col md:flex-row">
+                          {/* Banner Preview - Left Side */}
+                          <div className="w-full md:w-1/3 relative overflow-hidden">
+                            {/* Status Badge */}
+                            <div className="absolute top-3 left-3 z-10 flex space-x-2">
+                              <div className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full flex items-center">
+                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                                Live
+                              </div>
+                              <div className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center">
+                                <Clock className="h-3 w-3 mr-1" />
+                                Scheduled
+                              </div>
+                            </div>
+                            
+                            {/* Banner Preview */}
+                            <div className="h-[200px] flex items-center justify-center">
+                              <div className="w-full max-w-[320px] px-2">
+                                <BannerPreview
+                                  title={banner.title}
+                                  description={banner.description}
+                                  buttonText={banner.buttonText}
+                                  color={banner.color ?? "#0ea5e9"}
+                                  styleType={
+                                    banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
+                                    banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
+                                    banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
+                                    BannerStyle.LIGHT
+                                  }
+                                  merchantName={banner.merchantName ?? "My Store"}
+                                  visibilityType={BannerVisibility.ALL}
+                                  isActive={banner.isActive}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Banner Details - Right Side */}
+                          <div className="w-full md:w-2/3 p-5">
+                            {/* Header with Title and Actions */}
+                            <div className="flex justify-between items-start mb-4">
+                              <div>
+                                <h3 className="text-xl font-semibold">{banner.title}</h3>
+                                <p className="text-sm text-gray-500 mt-1">{banner.description}</p>
+                              </div>
+                              
+                              {/* Action buttons */}
+                              <div className="flex items-center gap-2">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="h-8"
+                                  onClick={() => router.push(`/store/banner/${banner.id}/edit`)}
+                                >
+                                  <Edit className="h-3.5 w-3.5 mr-1" />
+                                  Edit
+                                </Button>
+                                
+                                <Button 
+                                  variant="outline"
+                                  size="sm" 
+                                  className="h-8 border-red-200 text-red-600 hover:bg-red-50"
+                                  onClick={() => {
+                                    handleBannerScheduleUpdate(banner.id, {
+                                      scheduled: false
+                                    })
+                                  }}
+                                >
+                                  <Clock className="h-3.5 w-3.5 mr-1" />
+                                  Remove from Schedule
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            {/* Schedule information */}
+                            <div className="flex items-center gap-2 mb-4 bg-blue-50 p-3 rounded-md">
+                              <Clock className="h-5 w-5 text-blue-500" />
+                              <div>
+                                <p className="text-sm font-medium text-blue-700">
+                                  {banner.scheduleStartMinutes !== undefined && banner.scheduleEndMinutes !== undefined ? (
+                                    <>
+                                      Showing: {formatTime(banner.scheduleStartMinutes)} - {formatTime(banner.scheduleEndMinutes % (24 * 60))}
+                                      {banner.endsNextDay && <span className="ml-1 text-xs bg-blue-100 px-1 py-0.5 rounded">Next day</span>}
+                                    </>
+                                  ) : (
+                                    "Showing all day"
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                            
+                            {/* Metrics Section */}
+                            <div className="mt-4">
+                              <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
+                                <BarChart className="h-4 w-4 mr-1.5 text-gray-500" />
+                                Performance Metrics
+                              </h4>
+                              
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {/* Impressions */}
+                                <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
+                                  <div className="flex items-center text-xs text-gray-500 mb-1">
+                                    <BarChart className="h-3 w-3 mr-1" />
+                                    Impressions
+                                  </div>
+                                  <div className="flex items-baseline">
+                                    <p className="text-lg font-semibold">{banner.impressions || 0}</p>
+                                    <p className="text-xs text-gray-500 ml-1">views</p>
+                                  </div>
+                                </div>
+                                
+                                {/* Unique Viewers */}
+                                <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
+                                  <div className="flex items-center text-xs text-gray-500 mb-1">
+                                    <Users className="h-3 w-3 mr-1" />
+                                    Unique Viewers
+                                  </div>
+                                  <div className="flex items-baseline">
+                                    <p className="text-lg font-semibold">{banner.impressioncustomercount || 0}</p>
+                                    <p className="text-xs text-gray-500 ml-1">customers</p>
+                                  </div>
+                                </div>
+                                
+                                {/* Action */}
+                                <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
+                                  <div className="flex items-center text-xs text-gray-500 mb-1">
+                                    <Activity className="h-3 w-3 mr-1" />
+                                    Action
+                                  </div>
+                                  <p className="text-sm font-medium truncate" title={banner.bannerAction}>
+                                    {banner.bannerAction === "Take to store page" ? "Store Page" : 
+                                     banner.bannerAction === "Show announcement" ? "Announcement" : 
+                                     banner.bannerAction || "None"}
+                                  </p>
+                                </div>
+                                
+                                {/* Visibility */}
+                                <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
+                                  <div className="flex items-center text-xs text-gray-500 mb-1">
+                                    <UserPlus className="h-3 w-3 mr-1" />
+                                    Visibility
+                                  </div>
+                                  <p className="text-sm font-medium truncate" title={banner.visibilityType}>
+                                    {banner.visibilityType || "All customers"}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Additional Info - Only Created Date */}
+                            <div className="flex flex-wrap gap-3 mt-4 text-xs text-gray-500">
+                              <div className="flex items-center">
+                                <Calendar className="h-3 w-3 mr-1" />
+                                Created: {banner.createdAt instanceof Timestamp 
+                                  ? format(banner.createdAt.toDate(), 'MMM d, yyyy') 
+                                  : typeof banner.createdAt === 'string' 
+                                    ? banner.createdAt 
+                                    : 'Unknown'}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      
-                      {/* Banner Details - Takes 2/3 of the space */}
-                      <div className="w-full md:w-2/3 p-5">
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <h3 className="text-lg font-semibold">{banner.title}</h3>
-                            <p className="text-sm text-gray-500">{banner.description}</p>
+                    ))}
+                </div>
+              </div>
+              
+              {/* Scheduled for Later section */}
+              <div className="mt-8">
+                <h3 className="text-lg font-medium mb-4 flex items-center">
+                  <Clock className="h-5 w-5 mr-2 text-blue-500" />
+                  Scheduled for Later
+                  <Badge variant="outline" className="ml-2">
+                    {filteredBanners.filter(banner => banner.scheduled && !banner.isActive).length}
+                  </Badge>
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  These banners are scheduled but not currently active.
+                </p>
+                
+                <div className="grid grid-cols-1 gap-6">
+                  {filteredBanners
+                    .filter(banner => banner.scheduled && !banner.isActive)
+                    .map((banner) => (
+                      <div 
+                        key={banner.id} 
+                        className="group relative bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition-all"
+                      >
+                        <div className="flex flex-col md:flex-row">
+                          {/* Banner Preview - Left Side */}
+                          <div className="w-full md:w-1/3 relative overflow-hidden">
+                            {/* Status Badge */}
+                            <div className="absolute top-3 left-3 z-10 flex space-x-2">
+                              <div className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center">
+                                <Clock className="h-3 w-3 mr-1" />
+                                Scheduled
+                              </div>
+                            </div>
+                            
+                            {/* Banner Preview */}
+                            <div className="h-[200px] flex items-center justify-center">
+                              <div className="w-full max-w-[320px] px-2">
+                                <BannerPreview
+                                  title={banner.title}
+                                  description={banner.description}
+                                  buttonText={banner.buttonText}
+                                  color={banner.color ?? "#0ea5e9"}
+                                  styleType={
+                                    banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
+                                    banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
+                                    banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
+                                    BannerStyle.LIGHT
+                                  }
+                                  merchantName={banner.merchantName ?? "My Store"}
+                                  visibilityType={BannerVisibility.ALL}
+                                  isActive={banner.isActive}
+                                />
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={banner.isActive ? "default" : "outline"} className={banner.isActive ? "bg-green-100 text-green-800 hover:bg-green-200" : ""}>
-                              {banner.isActive ? "Active" : "Inactive"}
-                            </Badge>
-                            <Badge variant="outline" className="capitalize">
-                              {banner.style || "Light"}
-                            </Badge>
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                          <div className="bg-gray-50 p-3 rounded-md">
-                            <p className="text-xs text-gray-500">Impressions</p>
-                            <p className="text-lg font-medium">{banner.impressions || 0}</p>
-                          </div>
-                          <div className="bg-gray-50 p-3 rounded-md">
-                            <p className="text-xs text-gray-500">Unique Viewers</p>
-                            <p className="text-lg font-medium">{banner.impressioncustomercount || 0}</p>
-                          </div>
-                          <div className="bg-gray-50 p-3 rounded-md">
-                            <p className="text-xs text-gray-500">Action</p>
-                            <p className="text-sm font-medium truncate" title={banner.bannerAction}>
-                              {banner.bannerAction === "Take to store page" ? "Store Page" : 
-                               banner.bannerAction === "Show announcement" ? "Announcement" : 
-                               banner.bannerAction || "None"}
-                            </p>
-                          </div>
-                          <div className="bg-gray-50 p-3 rounded-md">
-                            <p className="text-xs text-gray-500">Visibility</p>
-                            <p className="text-sm font-medium truncate" title={banner.visibilityType}>
-                              {banner.visibilityType || "All customers"}
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div className="flex justify-between items-center">
-                          <div className="text-xs text-gray-500">
-                            Created: {formatDate(banner.createdAt)}
-                          </div>
-                          <div className="flex gap-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="h-8"
-                              onClick={() => router.push(`/store/banner/${banner.id}/edit`)}
-                            >
-                              <Edit className="h-3.5 w-3.5 mr-1" />
-                              Edit
-                            </Button>
-                            <Button 
-                              variant={banner.isActive ? "destructive" : "default"} 
-                              size="sm" 
-                              className={`h-8 ${!banner.isActive ? "bg-green-600 hover:bg-green-700" : ""}`}
-                              onClick={() => handleToggleActive(banner.id, !banner.isActive)}
-                            >
-                              {banner.isActive ? (
-                                <>
-                                  <Eye className="h-3.5 w-3.5 mr-1 opacity-50" />
-                                  Deactivate
-                                </>
-                              ) : (
-                                <>
-                                  <Eye className="h-3.5 w-3.5 mr-1" />
-                                  Activate
-                                </>
-                              )}
-                            </Button>
+
+                          {/* Banner Details - Right Side */}
+                          <div className="w-full md:w-2/3 p-5">
+                            {/* Header with Title and Actions */}
+                            <div className="flex justify-between items-start mb-4">
+                              <div>
+                                <h3 className="text-xl font-semibold">{banner.title}</h3>
+                                <p className="text-sm text-gray-500 mt-1">{banner.description}</p>
+                              </div>
+                              
+                              {/* Action buttons */}
+                              <div className="flex items-center gap-2">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="h-8"
+                                  onClick={() => router.push(`/store/banner/${banner.id}/edit`)}
+                                >
+                                  <Edit className="h-3.5 w-3.5 mr-1" />
+                                  Edit
+                                </Button>
+                                
+                                <Button 
+                                  variant="outline"
+                                  size="sm" 
+                                  className="h-8 border-red-200 text-red-600 hover:bg-red-50"
+                                  onClick={() => {
+                                    handleBannerScheduleUpdate(banner.id, {
+                                      scheduled: false
+                                    })
+                                  }}
+                                >
+                                  <Clock className="h-3.5 w-3.5 mr-1" />
+                                  Remove from Schedule
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            {/* Schedule information */}
+                            <div className="flex items-center gap-2 mb-4 bg-blue-50 p-3 rounded-md">
+                              <Clock className="h-5 w-5 text-blue-500" />
+                              <div>
+                                <p className="text-sm font-medium text-blue-700">
+                                  {banner.scheduleStartMinutes !== undefined && banner.scheduleEndMinutes !== undefined ? (
+                                    <>
+                                      Scheduled: {formatTime(banner.scheduleStartMinutes)} - {formatTime(banner.scheduleEndMinutes % (24 * 60))}
+                                      {banner.endsNextDay && <span className="ml-1 text-xs bg-blue-100 px-1 py-0.5 rounded">Next day</span>}
+                                    </>
+                                  ) : (
+                                    "Scheduled all day"
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                            
+                            {/* Metrics Section */}
+                            <div className="mt-4">
+                              <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
+                                <BarChart className="h-4 w-4 mr-1.5 text-gray-500" />
+                                Performance Metrics
+                              </h4>
+                              
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {/* Impressions */}
+                                <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
+                                  <div className="flex items-center text-xs text-gray-500 mb-1">
+                                    <BarChart className="h-3 w-3 mr-1" />
+                                    Impressions
+                                  </div>
+                                  <div className="flex items-baseline">
+                                    <p className="text-lg font-semibold">{banner.impressions || 0}</p>
+                                    <p className="text-xs text-gray-500 ml-1">views</p>
+                                  </div>
+                                </div>
+                                
+                                {/* Unique Viewers */}
+                                <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
+                                  <div className="flex items-center text-xs text-gray-500 mb-1">
+                                    <Users className="h-3 w-3 mr-1" />
+                                    Unique Viewers
+                                  </div>
+                                  <div className="flex items-baseline">
+                                    <p className="text-lg font-semibold">{banner.impressioncustomercount || 0}</p>
+                                    <p className="text-xs text-gray-500 ml-1">customers</p>
+                                  </div>
+                                </div>
+                                
+                                {/* Action */}
+                                <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
+                                  <div className="flex items-center text-xs text-gray-500 mb-1">
+                                    <Activity className="h-3 w-3 mr-1" />
+                                    Action
+                                  </div>
+                                  <p className="text-sm font-medium truncate" title={banner.bannerAction}>
+                                    {banner.bannerAction === "Take to store page" ? "Store Page" : 
+                                     banner.bannerAction === "Show announcement" ? "Announcement" : 
+                                     banner.bannerAction || "None"}
+                                  </p>
+                                </div>
+                                
+                                {/* Visibility */}
+                                <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
+                                  <div className="flex items-center text-xs text-gray-500 mb-1">
+                                    <UserPlus className="h-3 w-3 mr-1" />
+                                    Visibility
+                                  </div>
+                                  <p className="text-sm font-medium truncate" title={banner.visibilityType}>
+                                    {banner.visibilityType || "All customers"}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Additional Info - Only Created Date */}
+                            <div className="flex flex-wrap gap-3 mt-4 text-xs text-gray-500">
+                              <div className="flex items-center">
+                                <Calendar className="h-3 w-3 mr-1" />
+                                Created: {banner.createdAt instanceof Timestamp 
+                                  ? format(banner.createdAt.toDate(), 'MMM d, yyyy') 
+                                  : typeof banner.createdAt === 'string' 
+                                    ? banner.createdAt 
+                                    : 'Unknown'}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    ))}
+                </div>
+              </div>
             </div>
           )}
         </TabsContent>
@@ -716,152 +1229,248 @@ export default function BannerPage() {
             <div className="h-24 flex items-center justify-center">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
             </div>
-          ) : filteredBanners.filter(banner => !banner.isActive).length === 0 ? (
+          ) : filteredBanners.filter(banner => !banner.scheduled).length === 0 ? (
             <div className="h-24 flex flex-col items-center justify-center space-y-2">
               <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                <Bell className="h-6 w-6 text-muted-foreground" />
               </div>
-              <h3 className="text-lg font-medium">No inactive banners found</h3>
+              <h3 className="text-lg font-medium">No inactive banners</h3>
               <p className="text-sm text-muted-foreground">
                 {searchQuery
                   ? "Try adjusting your search query"
-                  : "You don't have any inactive banners"}
+                  : "All your banners are currently scheduled"}
               </p>
+              <Button
+                variant="default"
+                className="mt-2 gap-2"
+                onClick={() => router.push("/store/banner/create")}
+              >
+                <Plus className="h-4 w-4" />
+                Create Banner
+              </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-6">
-              {filteredBanners
-                .filter(banner => !banner.isActive)
-                .map((banner) => (
-                  <div key={banner.id} className="group relative bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition-all">
-                    <div className="flex flex-col md:flex-row">
-                      {/* Banner Preview - Takes 1/3 of the space */}
-                      <div className="w-full md:w-1/3 h-[180px] relative overflow-hidden flex items-center justify-center">
-                        <div className="w-full max-w-[320px] px-2">
-                          <BannerPreview
-                            title={banner.title}
-                            description={banner.description}
-                            buttonText={banner.buttonText}
-                            color={banner.color ?? "#0ea5e9"}
-                            styleType={
-                              banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
-                              banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
-                              banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
-                              BannerStyle.LIGHT
-                            }
-                            merchantName={banner.merchantName ?? "My Store"}
-                            visibilityType={BannerVisibility.ALL}
-                            isActive={banner.isActive}
-                          />
+            <div className="space-y-8">
+              {/* Unscheduled Banners */}
+              <div>
+                <h3 className="text-lg font-medium mb-4 flex items-center">
+                  <XCircle className="h-5 w-5 mr-2 text-gray-500" />
+                  Unscheduled Banners
+                  <Badge variant="outline" className="ml-2">
+                    {filteredBanners.filter(banner => !banner.scheduled).length}
+                  </Badge>
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  These banners are not scheduled. Schedule them to make them available for display.
+                </p>
+                
+                <div className="grid grid-cols-1 gap-6">
+                  {filteredBanners
+                    .filter(banner => !banner.scheduled)
+                    .map((banner) => (
+                      <div 
+                        key={banner.id} 
+                        className="group relative bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition-all"
+                      >
+                        <div className="flex flex-col md:flex-row">
+                          {/* Banner Preview - Left Side */}
+                          <div className="w-full md:w-1/3 relative overflow-hidden">
+                            {/* Status Badge */}
+                            <div className="absolute top-3 left-3 z-10 flex space-x-2">
+                              <div className="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded-full flex items-center">
+                                <XCircle className="h-3 w-3 mr-1" />
+                                Unscheduled
+                              </div>
+                            </div>
+                            
+                            {/* Banner Preview */}
+                            <div className="h-[200px] flex items-center justify-center">
+                              <div className="w-full max-w-[320px] px-2">
+                                <BannerPreview
+                                  title={banner.title}
+                                  description={banner.description}
+                                  buttonText={banner.buttonText}
+                                  color={banner.color ?? "#0ea5e9"}
+                                  styleType={
+                                    banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
+                                    banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
+                                    banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
+                                    BannerStyle.LIGHT
+                                  }
+                                  merchantName={banner.merchantName ?? "My Store"}
+                                  visibilityType={BannerVisibility.ALL}
+                                  isActive={banner.isActive}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Banner Details - Right Side */}
+                          <div className="w-full md:w-2/3 p-5">
+                            {/* Header with Title and Actions */}
+                            <div className="flex justify-between items-start mb-4">
+                              <div>
+                                <h3 className="text-xl font-semibold">{banner.title}</h3>
+                                <p className="text-sm text-gray-500 mt-1">{banner.description}</p>
+                              </div>
+                              
+                              {/* Action buttons */}
+                              <div className="flex items-center gap-2">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="h-8"
+                                  onClick={() => router.push(`/store/banner/${banner.id}/edit`)}
+                                >
+                                  <Edit className="h-3.5 w-3.5 mr-1" />
+                                  Edit
+                                </Button>
+                                
+                                <Button 
+                                  variant="outline"
+                                  size="sm" 
+                                  className="h-8"
+                                  onClick={() => handleBannerScheduleUpdate(banner.id, {
+                                    scheduled: true,
+                                    scheduleStartMinutes: 0,
+                                    scheduleEndMinutes: 24 * 60
+                                  })}
+                                >
+                                  <Clock className="h-3.5 w-3.5 mr-1" />
+                                  Schedule
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            {/* Metrics Section */}
+                            <div className="mt-4">
+                              <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
+                                <BarChart className="h-4 w-4 mr-1.5 text-gray-500" />
+                                Performance Metrics
+                              </h4>
+                              
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {/* Impressions */}
+                                <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
+                                  <div className="flex items-center text-xs text-gray-500 mb-1">
+                                    <BarChart className="h-3 w-3 mr-1" />
+                                    Impressions
+                                  </div>
+                                  <div className="flex items-baseline">
+                                    <p className="text-lg font-semibold">{banner.impressions || 0}</p>
+                                    <p className="text-xs text-gray-500 ml-1">views</p>
+                                  </div>
+                                </div>
+                                
+                                {/* Unique Viewers */}
+                                <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
+                                  <div className="flex items-center text-xs text-gray-500 mb-1">
+                                    <Users className="h-3 w-3 mr-1" />
+                                    Unique Viewers
+                                  </div>
+                                  <div className="flex items-baseline">
+                                    <p className="text-lg font-semibold">{banner.impressioncustomercount || 0}</p>
+                                    <p className="text-xs text-gray-500 ml-1">customers</p>
+                                  </div>
+                                </div>
+                                
+                                {/* Action */}
+                                <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
+                                  <div className="flex items-center text-xs text-gray-500 mb-1">
+                                    <Activity className="h-3 w-3 mr-1" />
+                                    Action
+                                  </div>
+                                  <p className="text-sm font-medium truncate" title={banner.bannerAction}>
+                                    {banner.bannerAction === "Take to store page" ? "Store Page" : 
+                                     banner.bannerAction === "Show announcement" ? "Announcement" : 
+                                     banner.bannerAction || "None"}
+                                  </p>
+                                </div>
+                                
+                                {/* Visibility */}
+                                <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
+                                  <div className="flex items-center text-xs text-gray-500 mb-1">
+                                    <UserPlus className="h-3 w-3 mr-1" />
+                                    Visibility
+                                  </div>
+                                  <p className="text-sm font-medium truncate" title={banner.visibilityType}>
+                                    {banner.visibilityType || "All customers"}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Additional Info - Only Created Date */}
+                            <div className="flex flex-wrap gap-3 mt-4 text-xs text-gray-500">
+                              <div className="flex items-center">
+                                <Calendar className="h-3 w-3 mr-1" />
+                                Created: {banner.createdAt instanceof Timestamp 
+                                  ? format(banner.createdAt.toDate(), 'MMM d, yyyy') 
+                                  : typeof banner.createdAt === 'string' 
+                                    ? banner.createdAt 
+                                    : 'Unknown'}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      
-                      {/* Banner Details - Takes 2/3 of the space */}
-                      <div className="w-full md:w-2/3 p-5">
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <h3 className="text-lg font-semibold">{banner.title}</h3>
-                            <p className="text-sm text-gray-500">{banner.description}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={banner.isActive ? "default" : "outline"} className={banner.isActive ? "bg-green-100 text-green-800 hover:bg-green-200" : ""}>
-                              {banner.isActive ? "Active" : "Inactive"}
-                            </Badge>
-                            <Badge variant="outline" className="capitalize">
-                              {banner.style || "Light"}
-                            </Badge>
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                          <div className="bg-gray-50 p-3 rounded-md">
-                            <p className="text-xs text-gray-500">Impressions</p>
-                            <p className="text-lg font-medium">{banner.impressions || 0}</p>
-                          </div>
-                          <div className="bg-gray-50 p-3 rounded-md">
-                            <p className="text-xs text-gray-500">Unique Viewers</p>
-                            <p className="text-lg font-medium">{banner.impressioncustomercount || 0}</p>
-                          </div>
-                          <div className="bg-gray-50 p-3 rounded-md">
-                            <p className="text-xs text-gray-500">Action</p>
-                            <p className="text-sm font-medium truncate" title={banner.bannerAction}>
-                              {banner.bannerAction === "Take to store page" ? "Store Page" : 
-                               banner.bannerAction === "Show announcement" ? "Announcement" : 
-                               banner.bannerAction || "None"}
-                            </p>
-                          </div>
-                          <div className="bg-gray-50 p-3 rounded-md">
-                            <p className="text-xs text-gray-500">Visibility</p>
-                            <p className="text-sm font-medium truncate" title={banner.visibilityType}>
-                              {banner.visibilityType || "All customers"}
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div className="flex justify-between items-center">
-                          <div className="text-xs text-gray-500">
-                            Created: {formatDate(banner.createdAt)}
-                          </div>
-                          <div className="flex gap-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="h-8"
-                              onClick={() => router.push(`/store/banner/${banner.id}/edit`)}
-                            >
-                              <Edit className="h-3.5 w-3.5 mr-1" />
-                              Edit
-                            </Button>
-                            <Button 
-                              variant={banner.isActive ? "destructive" : "default"} 
-                              size="sm" 
-                              className={`h-8 ${!banner.isActive ? "bg-green-600 hover:bg-green-700" : ""}`}
-                              onClick={() => handleToggleActive(banner.id, !banner.isActive)}
-                            >
-                              {banner.isActive ? (
-                                <>
-                                  <Eye className="h-3.5 w-3.5 mr-1 opacity-50" />
-                                  Deactivate
-                                </>
-                              ) : (
-                                <>
-                                  <Eye className="h-3.5 w-3.5 mr-1" />
-                                  Activate
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                    ))}
+                </div>
+              </div>
             </div>
           )}
         </TabsContent>
 
         <TabsContent value="schedule">
-          <div className="space-y-6">
+          <div className="space-y-8">
+            {/* Activation Notice */}
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex items-start">
+              <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5 mr-3 flex-shrink-0" />
+              <div>
+                <h4 className="font-medium text-blue-700 mb-1">Banner Activation Notice</h4>
+                <p className="text-sm text-blue-600">
+                  Scheduled banners may take up to 5 minutes to activate and appear on the customer app.
+                </p>
+              </div>
+            </div>
+            
+            {/* Banner Scheduler Component */}
             <BannerScheduler 
               banners={banners} 
               onBannerUpdate={handleBannerScheduleUpdate} 
             />
             
-            <div className="bg-white rounded-xl shadow-sm border p-5">
-              <h3 className="text-lg font-medium mb-4">Scheduled Banners</h3>
+            {/* Banner Library Section */}
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <div className="flex justify-between items-center mb-5">
+                <h3 className="text-lg font-medium flex items-center">
+                  <Library className="h-5 w-5 mr-2 text-gray-500" />
+                  Banner Library
+                </h3>
+                
+                <Input
+                  placeholder="Search banners..."
+                  className="max-w-xs"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  prefix={<Search className="h-4 w-4 text-gray-400" />}
+                />
+              </div>
               
               {loading ? (
                 <div className="h-24 flex items-center justify-center">
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
                 </div>
-              ) : filteredBanners.filter(banner => banner.isActive).length === 0 ? (
+              ) : filteredBanners.length === 0 ? (
                 <div className="h-24 flex flex-col items-center justify-center space-y-2">
                   <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                    <Clock className="h-6 w-6 text-muted-foreground" />
+                    <Bell className="h-6 w-6 text-muted-foreground" />
                   </div>
-                  <h3 className="text-lg font-medium">No active banners to schedule</h3>
+                  <h3 className="text-lg font-medium">No banners found</h3>
                   <p className="text-sm text-muted-foreground">
-                    Activate banners first to schedule them
+                    {searchQuery
+                      ? "Try adjusting your search query"
+                      : "Create your first banner to get started"}
                   </p>
                   <Button
                     variant="default"
@@ -873,58 +1482,88 @@ export default function BannerPage() {
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {filteredBanners
-                    .filter(banner => banner.isActive)
-                    .map((banner) => (
-                      <div key={banner.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="w-[40px] h-[40px] overflow-hidden rounded">
-                            <BannerPreview
-                              title={banner.title}
-                              description=""
-                              buttonText=""
-                              color={banner.color ?? "#0ea5e9"}
-                              styleType={
-                                banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
-                                banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
-                                banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
-                                BannerStyle.LIGHT
-                              }
-                              merchantName=""
-                              visibilityType={BannerVisibility.ALL}
-                              isActive={banner.isActive}
-                            />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredBanners.map((banner) => (
+                    <div 
+                      key={banner.id} 
+                      className="group relative bg-white rounded-lg shadow-sm border overflow-hidden hover:shadow-md transition-all"
+                    >
+                      {/* Status Badge */}
+                      <div className="absolute top-2 right-2 z-10">
+                        {banner.scheduled && (
+                          <div className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center">
+                            <Clock className="h-3 w-3 mr-1" />
+                            Scheduled
                           </div>
-                          <div>
-                            <h4 className="font-medium">{banner.title}</h4>
-                            <p className="text-sm text-gray-500">
-                              {banner.scheduleStartMinutes !== undefined && banner.scheduleEndMinutes !== undefined ? (
-                                <>
-                                  Scheduled: {formatTime(banner.scheduleStartMinutes)} - {formatTime(banner.scheduleEndMinutes)}
-                                </>
-                              ) : (
-                                "Showing all day"
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => {
-                            handleBannerScheduleUpdate(banner.id, {
-                              scheduleStartMinutes: 0,
-                              scheduleEndMinutes: 24 * 60,
-                              scheduleStartHour: 0,
-                              scheduleEndHour: 24
-                            })
-                          }}
-                        >
-                          Reset Schedule
-                        </Button>
+                        )}
                       </div>
-                    ))}
+                      
+                      {/* Banner Preview */}
+                      <div className="h-[140px] flex items-center justify-center p-3">
+                        <div className="w-full max-w-[280px] mx-auto">
+                          <BannerPreview
+                            title={banner.title}
+                            description={banner.description}
+                            buttonText={banner.buttonText}
+                            color={banner.color ?? "#0ea5e9"}
+                            styleType={
+                              banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
+                              banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
+                              banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
+                              BannerStyle.LIGHT
+                            }
+                            merchantName={banner.merchantName ?? "My Store"}
+                            visibilityType={BannerVisibility.ALL}
+                            isActive={banner.isActive}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Banner Info */}
+                      <div className="p-4 border-t">
+                        <h4 className="font-medium text-sm mb-1 truncate" title={banner.title}>
+                          {banner.title}
+                        </h4>
+                        <p className="text-xs text-gray-500 mb-3 line-clamp-2" title={banner.description}>
+                          {banner.description}
+                        </p>
+                        
+                        <div className="flex justify-between items-center">
+                          {banner.scheduled ? (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8 w-full border-red-200 text-red-600 hover:bg-red-50"
+                              onClick={() => handleBannerScheduleUpdate(banner.id, {
+                                scheduled: false
+                              })}
+                            >
+                              <span className="flex items-center">
+                                <Clock className="h-3.5 w-3.5 mr-1" />
+                                Remove from Schedule
+                              </span>
+                            </Button>
+                          ) : (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8 w-full"
+                              onClick={() => handleBannerScheduleUpdate(banner.id, {
+                                scheduled: true,
+                                scheduleStartMinutes: 0,
+                                scheduleEndMinutes: 24 * 60
+                              })}
+                            >
+                              <span className="flex items-center">
+                                <Plus className="h-3.5 w-3.5 mr-1" />
+                                Add to Schedule
+                              </span>
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

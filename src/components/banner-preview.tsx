@@ -139,25 +139,20 @@ export function BannerPreview({
   // Helper function(s) to get styling from style type:
   function getBackground() {
     if (styleType === BannerStyle.DARK && color) {
-      console.log("Using dark style with color:", color, "hex:", colorHex);
       return `linear-gradient(
         135deg, 
         ${hexToRgba(colorHex, 0.8)}, 
         ${hexToRgba(darkenColor(colorHex, 20), 0.9)}
       )`
     } else if (styleType === BannerStyle.DARK) {
-      console.log("Using dark style without color");
       return "#333" // fallback if no color
     } else if (styleType === BannerStyle.GLASS && color) {
-      console.log("Using glass style with color:", color, "hex:", colorHex);
       // Glass effect with user color
       return hexToRgba(colorHex, 0.2)
     } else if (styleType === BannerStyle.GLASS) {
-      console.log("Using glass style without color");
       return "rgba(255, 255, 255, 0.4)"
     }
     // LIGHT or default
-    console.log("Using light style with color:", color, "hex:", colorHex);
     return colorHex || "#F5F5F5"
   }
 
@@ -178,10 +173,13 @@ export function BannerPreview({
 
   return (
     <div 
-      className={`w-full rounded-md overflow-hidden shadow-sm`}
+      className="w-full rounded-md overflow-hidden shadow-sm"
       style={{
         backgroundColor: styleType === BannerStyle.LIGHT ? 'white' : color,
         color: styleType === BannerStyle.LIGHT ? 'black' : 'white',
+        minWidth: '350px',
+        maxWidth: '800px',
+        margin: '0 auto',
       }}
     >
       <div className="p-3">

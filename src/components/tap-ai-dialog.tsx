@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Sparkles, Send, Plus, Settings, MessageSquare, ChevronDown, ChevronUp, HelpCircle, CheckCircle, Edit, MoreHorizontal, Pencil, Trash2, Gift, Repeat, Sparkles as SparklesIcon, DollarSign, Calendar, Clock, Users, Award, History, Timer, Wallet, BadgeCheck, CalendarRange, UserCheck, Ban, Mic, MicOff, Eye, Coffee, PanelLeftClose, PanelLeftOpen, Loader2 } from "lucide-react"
+import { Sparkles, Send, Plus, Settings, MessageSquare, ChevronDown, ChevronUp, HelpCircle, CheckCircle, Edit, MoreHorizontal, Pencil, Trash2, Gift, Repeat, Sparkles as SparklesIcon, DollarSign, Calendar, Clock, Users, Award, History, Timer, Wallet, BadgeCheck, CalendarRange, UserCheck, Ban, Mic, MicOff, Eye, Coffee, PanelLeftClose, PanelLeftOpen, Loader2, Copy } from "lucide-react"
 import { getAIResponse } from "@/lib/openai"
 import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
@@ -52,6 +52,7 @@ import { Label } from "@/components/ui/label"
 import { format } from "date-fns"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
+import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banner-preview"
 
 interface Conversation {
   id: string
@@ -137,7 +138,15 @@ const debugJsonParsing = (content: string) => {
   }
 };
 
-// Replace the existing parseMessageContent function with this improved version
+// Add this function after your other helper functions (like parseMessageContent)
+const isBannerData = (data: any): boolean => {
+  return data && 
+    typeof data === 'object' && 
+    data.bannerAction !== undefined && 
+    data.title !== undefined;
+};
+
+// Update the parseMessageContent function to detect banner data
 const parseMessageContent = (content: string) => {
   // First log the content for debugging
   console.log("Parsing content:", content);
@@ -155,9 +164,14 @@ const parseMessageContent = (content: string) => {
       try {
         const jsonString = match[1].trim();
         const parsed = JSON.parse(jsonString);
-        if (parsed && typeof parsed === 'object' && parsed.rewardName) {
+        if (parsed && typeof parsed === 'object') {
+          // Check if it's a reward or a banner
+          if (parsed.rewardName) {
+            console.log("Found valid reward object in code block:", parsed.rewardName);
+          } else if (isBannerData(parsed)) {
+            console.log("Found valid banner object in code block:", parsed.title);
+          }
           jsonObjects.push(parsed);
-          console.log("Found valid reward object in code block:", parsed.rewardName);
         }
       } catch (e) {
         console.error("Failed to parse JSON from code block:", e);
@@ -190,9 +204,15 @@ const parseMessageContent = (content: string) => {
   for (const match of matches) {
     try {
       const parsed = JSON.parse(match[0]);
-      if (parsed && typeof parsed === 'object' && parsed.rewardName) {
-        jsonObjects.push(parsed);
-        console.log("Found valid reward object:", parsed.rewardName);
+      if (parsed && typeof parsed === 'object') {
+        // Check if it's a reward or a banner
+        if (parsed.rewardName) {
+          console.log("Found valid reward object:", parsed.rewardName);
+          jsonObjects.push(parsed);
+        } else if (isBannerData(parsed)) {
+          console.log("Found valid banner object:", parsed.title);
+          jsonObjects.push(parsed);
+        }
       }
     } catch (e) {
       // Ignore parsing errors
@@ -459,6 +479,103 @@ const RewardCard = ({ reward }: { reward: any }) => {
               <Gift className="h-3 w-3 mr-1" />
               Use This Reward
             </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Update the BannerCard component to ensure consistent width
+const BannerCard = ({ banner }: { banner: any }) => {
+  const { toast } = useToast();
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  // Map visibility type string to enum
+  const getVisibilityType = (visibilityString: string) => {
+    if (visibilityString?.toLowerCase().includes('new')) {
+      return BannerVisibility.NEW;
+    }
+    return BannerVisibility.ALL;
+  };
+  
+  // Map style string to enum
+  const getStyleType = (styleString: string) => {
+    if (styleString?.toLowerCase() === 'dark') {
+      return BannerStyle.DARK;
+    } else if (styleString?.toLowerCase() === 'glass') {
+      return BannerStyle.GLASS;
+    }
+    return BannerStyle.LIGHT;
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden w-full">
+      {/* Header - Clickable to expand/collapse */}
+      <div 
+        className="cursor-pointer transition-colors hover:bg-gray-50"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="relative w-full" style={{ maxWidth: '100%' }}>
+          <BannerPreview
+            title={banner.title}
+            description={banner.description}
+            buttonText={banner.buttonText}
+            color={banner.color}
+            styleType={getStyleType(banner.style)}
+            merchantName={banner.merchantName}
+            visibilityType={getVisibilityType(banner.visibilityType)}
+            isActive={banner.isActive}
+          />
+          
+          <div className="absolute top-2 right-2 z-10">
+            {isExpanded ? (
+              <ChevronUp className="h-4 w-4 text-gray-400" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-gray-400" />
+            )}
+          </div>
+        </div>
+      </div>
+      
+      {/* Expandable content */}
+      {isExpanded && (
+        <div className="p-4 bg-gray-50 border-t border-gray-100">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="font-medium text-sm">Banner Action:</div>
+              <div className="text-sm">{banner.bannerAction}</div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <div className="font-medium text-sm">Visibility:</div>
+              <div className="text-sm">{banner.visibilityType || "All customers"}</div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <div className="font-medium text-sm">Status:</div>
+              <div className="text-sm">{banner.isActive ? "Active" : "Inactive"}</div>
+            </div>
+            
+            <div className="flex justify-end mt-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                className="text-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Copy banner data to clipboard
+                  navigator.clipboard.writeText(JSON.stringify(banner, null, 2));
+                  toast({
+                    title: "Banner data copied",
+                    description: "The banner data has been copied to your clipboard.",
+                  });
+                }}
+              >
+                <Copy className="h-3 w-3 mr-1" />
+                Copy JSON
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -1100,9 +1217,21 @@ function MessageContent({
                   </div>
                 )}
                 <div className="space-y-4">
-                  {extractedJson.jsonObjects.map((reward, idx) => (
-                    <RewardCard key={idx} reward={reward} />
-                  ))}
+                  {extractedJson.jsonObjects.map((reward, idx) => {
+                    // Determine if it's a reward or banner
+                    if (reward.rewardName) {
+                      return <RewardCard key={idx} reward={reward} />;
+                    } else if (isBannerData(reward)) {
+                      return <BannerCard key={idx} banner={reward} />;
+                    } else {
+                      // Fallback for other JSON objects
+                      return (
+                        <div key={idx} className="bg-gray-200 text-gray-900 p-3 rounded-lg">
+                          <pre className="text-xs overflow-auto">{JSON.stringify(reward, null, 2)}</pre>
+                        </div>
+                      );
+                    }
+                  })}
                 </div>
               </>
             );
@@ -1126,9 +1255,21 @@ function MessageContent({
                   </div>
                 )}
                 <div className="space-y-4">
-                  {rewards.map((reward, idx) => (
-                    <RewardCard key={idx} reward={reward} />
-                  ))}
+                  {rewards.map((reward, idx) => {
+                    // Determine if it's a reward or banner
+                    if (reward.rewardName) {
+                      return <RewardCard key={idx} reward={reward} />;
+                    } else if (isBannerData(reward)) {
+                      return <BannerCard key={idx} banner={reward} />;
+                    } else {
+                      // Fallback for other JSON objects
+                      return (
+                        <div key={idx} className="bg-gray-200 text-gray-900 p-3 rounded-lg">
+                          <pre className="text-xs overflow-auto">{JSON.stringify(reward, null, 2)}</pre>
+                        </div>
+                      );
+                    }
+                  })}
                 </div>
               </>
             );
@@ -2533,12 +2674,33 @@ export function TapAiDialog({
 
                             {parsedContent.multipleJson ? (
                               <div className="space-y-4">
-                                {parsedContent.jsonObjects.map((reward, idx) => (
-                                  <RewardCard key={idx} reward={reward} />
-                                ))}
+                                {parsedContent.jsonObjects.map((jsonObj, idx) => {
+                                  // Determine if it's a reward or banner
+                                  if (jsonObj.rewardName) {
+                                    return <RewardCard key={idx} reward={jsonObj} />;
+                                  } else if (isBannerData(jsonObj)) {
+                                    return <BannerCard key={idx} banner={jsonObj} />;
+                                  } else {
+                                    // Fallback for other JSON objects
+                                    return (
+                                      <div key={idx} className="bg-gray-200 text-gray-900 p-3 rounded-lg">
+                                        <pre className="text-xs overflow-auto">{JSON.stringify(jsonObj, null, 2)}</pre>
+                                      </div>
+                                    );
+                                  }
+                                })}
                               </div>
                             ) : (
-                              <RewardCard reward={parsedContent.jsonData} />
+                              // Single JSON object
+                              parsedContent.jsonData.rewardName ? (
+                                <RewardCard reward={parsedContent.jsonData} />
+                              ) : isBannerData(parsedContent.jsonData) ? (
+                                <BannerCard banner={parsedContent.jsonData} />
+                              ) : (
+                                <div className="bg-gray-200 text-gray-900 p-3 rounded-lg">
+                                  <pre className="text-xs overflow-auto">{JSON.stringify(parsedContent.jsonData, null, 2)}</pre>
+                                </div>
+                              )
                             )}
 
                             {parsedContent.afterJson && (

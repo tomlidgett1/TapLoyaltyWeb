@@ -380,41 +380,125 @@ export function CreateBannerDialog({
   onOpenChange,
   initialBannerData,
   onSave
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  initialBannerData?: any; // Make sure this is optional
-  onSave: (data: any) => void;
-}) {
-  console.log("CreateBannerDialog - Received initialBannerData:", initialBannerData);
-  
-  const { user } = useAuth()
+}: CreateBannerDialogProps) {
   const { toast } = useToast()
+  const { user } = useAuth()
   const router = useRouter()
   
-  // Initialize form data with initialBannerData or defaults
-  const [formData, setFormData] = useState(initialBannerData || {
-    name: "Welcome Banner",
-    type: "welcome",
-    // other default properties
-  });
+  // Debug the incoming initialBannerData
+  useEffect(() => {
+    console.log("CreateBannerDialog received initialBannerData:", initialBannerData);
+  }, [initialBannerData]);
   
-  // Form State
+  // State for form fields
+  const [activeTab, setActiveTab] = useState('design')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [buttonText, setButtonText] = useState('Explore')
-  const [selectedColor, setSelectedColor] = useState('#007AFF') // default blue
-  const [selectedStyle, setSelectedStyle] = useState(BannerStyle.LIGHT)
+  const [buttonText, setButtonText] = useState('')
+  const [color, setColor] = useState('#007AFF')
+  const [style, setStyle] = useState(BannerStyle.DARK)
+  const [bannerAction, setBannerAction] = useState(BannerAction.STORE_REDIRECT)
   const [visibilityType, setVisibilityType] = useState(BannerVisibility.ALL)
   const [isActive, setIsActive] = useState(true)
-  const [bannerAction, setBannerAction] = useState(BannerAction.STORE_REDIRECT)
+  const [showColorPicker, setShowColorPicker] = useState(false)
+  const [announcement, setAnnouncement] = useState<any>(null)
+  const [showAnnouncementDesigner, setShowAnnouncementDesigner] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [merchantName, setMerchantName] = useState('')
+  
+  // Sync selectedColor and selectedStyle with color and style
+  const [selectedColor, setSelectedColor] = useState('#007AFF')
+  const [selectedStyle, setSelectedStyle] = useState(BannerStyle.DARK)
+  
+  // Update selectedColor and selectedStyle when color and style change
+  useEffect(() => {
+    setSelectedColor(color);
+  }, [color]);
+  
+  useEffect(() => {
+    setSelectedStyle(style);
+  }, [style]);
+  
+  // Initialize form with initialBannerData if provided
+  useEffect(() => {
+    if (initialBannerData) {
+      console.log("Initializing form with data:", initialBannerData);
+      setTitle(initialBannerData.title || '')
+      setDescription(initialBannerData.description || '')
+      setButtonText(initialBannerData.buttonText || '')
+      setColor(initialBannerData.color || '#007AFF')
+      const styleToUse = initialBannerData.style === BannerStyle.LIGHT 
+        ? BannerStyle.DARK 
+        : (initialBannerData.style || BannerStyle.DARK)
+      setStyle(styleToUse)
+      setBannerAction(initialBannerData.bannerAction || BannerAction.STORE_REDIRECT)
+      setVisibilityType(initialBannerData.visibilityType || BannerVisibility.ALL)
+      setIsActive(initialBannerData.isActive !== undefined ? initialBannerData.isActive : true)
+      setAnnouncement(initialBannerData.announcement || null)
+    }
+  }, [initialBannerData, open]);
+  
+  // Fetch merchant name on component mount
+  useEffect(() => {
+    const fetchMerchantName = async () => {
+      if (user?.uid) {
+        try {
+          const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
+          if (merchantDoc.exists()) {
+            const data = merchantDoc.data()
+            const name = data.merchantName || data.businessName || data.storeName || data.name || 'Your Store'
+            setMerchantName(name)
+          }
+        } catch (error) {
+          console.error("Error fetching merchant name:", error)
+        }
+      }
+    }
+    
+    fetchMerchantName()
+  }, [user])
+  
+  // Reset form when dialog opens/closes
+  useEffect(() => {
+    if (!open) {
+      // Reset form after dialog closes
+      setTimeout(() => {
+        if (!initialBannerData) {
+          setTitle('')
+          setDescription('')
+          setButtonText('')
+          setColor('#007AFF')
+          setStyle(BannerStyle.DARK)
+          setBannerAction(BannerAction.STORE_REDIRECT)
+          setVisibilityType(BannerVisibility.ALL)
+          setIsActive(true)
+          setAnnouncement(null)
+        }
+        setActiveTab('design')
+        setSaving(false)
+      }, 300)
+    } else if (open && initialBannerData) {
+      // When opening with initialBannerData, make sure form is populated
+      console.log("Dialog opened with initialBannerData:", initialBannerData);
+      setTitle(initialBannerData.title || '')
+      setDescription(initialBannerData.description || '')
+      setButtonText(initialBannerData.buttonText || '')
+      setColor(initialBannerData.color || '#007AFF')
+      const styleToUse = initialBannerData.style === BannerStyle.LIGHT 
+        ? BannerStyle.DARK 
+        : (initialBannerData.style || BannerStyle.DARK)
+      setStyle(styleToUse)
+      setBannerAction(initialBannerData.bannerAction || BannerAction.STORE_REDIRECT)
+      setVisibilityType(initialBannerData.visibilityType || BannerVisibility.ALL)
+      setIsActive(initialBannerData.isActive !== undefined ? initialBannerData.isActive : true)
+      setAnnouncement(initialBannerData.announcement || null)
+    }
+  }, [open, initialBannerData])
+  
+  // Form State
   const [loading, setLoading] = useState(false)
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([])
   const [showCustomerPicker, setShowCustomerPicker] = useState(false)
-  const [showAnnouncementDesigner, setShowAnnouncementDesigner] = useState(false)
-  const [announcement, setAnnouncement] = useState<any>(null)
-  const [merchantName, setMerchantName] = useState("Your Business")
-  const [showColorPicker, setShowColorPicker] = useState(false)
   
   // Options arrays
   const buttonOptions = ['Explore', 'Redeem', 'Learn More', 'View Offer', 'Shop Now']
@@ -433,7 +517,7 @@ export function CreateBannerDialog({
   ]
 
   // For preview carousel
-  const stylesArray = [BannerStyle.LIGHT, BannerStyle.DARK, BannerStyle.GLASS]
+  const stylesArray = [BannerStyle.DARK, BannerStyle.GLASS]
   const [carouselIndex, setCarouselIndex] = useState(0)
 
   // Update the preview style when cycling
@@ -463,37 +547,11 @@ export function CreateBannerDialog({
     return hex
   }
 
-  // Add this new state for the active tab
-  const [activeTab, setActiveTab] = useState<"create" | "library">("create")
-  
   // Add this new state for filtering templates
   const [templateFilter, setTemplateFilter] = useState<string>("all")
 
   // First, add a new state to track if the guide is open
   const [guideOpen, setGuideOpen] = useState(false);
-
-  // Add this effect to fetch the merchant name when the dialog opens
-  useEffect(() => {
-    const fetchMerchantName = async () => {
-      if (!user?.uid) return
-      
-      try {
-        const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
-        if (merchantDoc.exists()) {
-          const merchantData = merchantDoc.data()
-          if (merchantData.merchantName) {
-            setMerchantName(merchantData.merchantName)
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching merchant name:", error)
-      }
-    }
-    
-    if (open) {
-      fetchMerchantName()
-    }
-  }, [open, user?.uid])
 
   // Add this function to apply a template
   const applyTemplate = (template: typeof bannerTemplates[0]) => {
@@ -501,8 +559,11 @@ export function CreateBannerDialog({
     setDescription(template.description)
     setButtonText(template.buttonText)
     setSelectedColor(template.color)
-    setSelectedStyle(template.style)
-    setCarouselIndex(stylesArray.indexOf(template.style))
+    const styleToUse = template.style === BannerStyle.LIGHT 
+      ? BannerStyle.DARK 
+      : template.style
+    setSelectedStyle(styleToUse)
+    setCarouselIndex(stylesArray.indexOf(styleToUse))
     
     // Switch to create tab to show the customization options
     setActiveTab("create")
@@ -629,6 +690,12 @@ export function CreateBannerDialog({
     onSave(formData);
   };
 
+  // Update the color picker handler
+  const handleColorChange = (newColor: string) => {
+    setSelectedColor(newColor);
+    setColor(newColor); // Make sure both state variables are updated
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -655,29 +722,8 @@ export function CreateBannerDialog({
             {/* Preview Section */}
             <div className="mb-6">
               <h3 className="text-lg font-medium mb-2">Preview</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="flex flex-col">
-                  <div 
-                    className={`cursor-pointer transition-all rounded-xl overflow-hidden ${selectedStyle === BannerStyle.LIGHT ? 'ring-2 ring-primary' : 'opacity-70 hover:opacity-100'}`}
-                    onClick={() => {
-                      setSelectedStyle(BannerStyle.LIGHT)
-                      setCarouselIndex(stylesArray.indexOf(BannerStyle.LIGHT))
-                    }}
-                  >
-                    <BannerPreview
-                      title={title}
-                      description={description}
-                      buttonText={buttonText}
-                      color={selectedColor}
-                      styleType={BannerStyle.LIGHT}
-                      merchantName={merchantName}
-                      visibilityType={visibilityType}
-                      isActive={isActive}
-                    />
-                  </div>
-                  <p className="text-center text-sm mt-2 font-medium">Light</p>
-                </div>
-                
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Dark Preview */}
                 <div className="flex flex-col">
                   <div 
                     className={`cursor-pointer transition-all rounded-xl overflow-hidden ${selectedStyle === BannerStyle.DARK ? 'ring-2 ring-primary' : 'opacity-70 hover:opacity-100'}`}
@@ -700,6 +746,7 @@ export function CreateBannerDialog({
                   <p className="text-center text-sm mt-2 font-medium">Dark</p>
                 </div>
                 
+                {/* Glass Preview */}
                 <div className="flex flex-col">
                   <div 
                     className={`cursor-pointer transition-all rounded-xl overflow-hidden ${selectedStyle === BannerStyle.GLASS ? 'ring-2 ring-primary' : 'opacity-70 hover:opacity-100'}`}
@@ -728,45 +775,20 @@ export function CreateBannerDialog({
             <div className="mb-6">
               <div className="space-y-1.5">
                 <Label htmlFor="color">Banner Color</Label>
-                <div className="flex flex-col space-y-2">
-                  <div 
-                    className="h-10 w-full rounded-md border border-input flex items-center cursor-pointer overflow-hidden"
-                    onClick={() => setShowColorPicker(!showColorPicker)}
-                  >
-                    <div 
-                      className="h-full w-10 flex-shrink-0" 
-                      style={{ backgroundColor: selectedColor }}
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {colors.map((c) => (
+                    <div
+                      key={c}
+                      className={`h-6 w-6 rounded-full cursor-pointer transition-all ${
+                        selectedColor === c ? 'ring-2 ring-offset-2 ring-blue-500 scale-110' : ''
+                      }`}
+                      style={{ backgroundColor: c }}
+                      onClick={() => {
+                        setSelectedColor(c);
+                        setColor(c); // Make sure both state variables are updated
+                      }}
                     />
-                    <div className="px-3 flex-1 flex items-center justify-between">
-                      <span className="text-sm">{selectedColor}</span>
-                      <ChevronRight className="h-4 w-4 text-gray-400" />
-                    </div>
-                  </div>
-                  
-                  {showColorPicker && (
-                    <div className="relative z-10 mt-1 p-3 bg-white rounded-md border shadow-md">
-                      <HexColorPicker 
-                        color={selectedColor} 
-                        onChange={(newColor) => setSelectedColor(newColor)}
-                        style={{ width: '100%' }}
-                      />
-                      <div className="mt-2 flex justify-between items-center">
-                        <Input
-                          value={selectedColor}
-                          onChange={(e) => setSelectedColor(e.target.value)}
-                          className="w-28 h-8 text-xs"
-                        />
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          className="text-xs h-8"
-                          onClick={() => setShowColorPicker(false)}
-                        >
-                          Apply
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                  ))}
                 </div>
               </div>
             </div>

@@ -53,6 +53,7 @@ import { format } from "date-fns"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banner-preview"
+import { CreateBannerDialog } from "@/components/create-banner-dialog"
 
 interface Conversation {
   id: string
@@ -146,96 +147,103 @@ const isBannerData = (data: any): boolean => {
     data.title !== undefined;
 };
 
-// Update the parseMessageContent function to detect banner data
+// Update the parseMessageContent function to be more robust with error handling
 const parseMessageContent = (content: string) => {
   // First log the content for debugging
   console.log("Parsing content:", content);
   
-  // Check for JSON in code blocks (```json ... ```)
-  const codeBlockRegex = /```json\s*([\s\S]*?)\s*```/g;
-  const codeBlockMatches = Array.from(content.matchAll(codeBlockRegex));
-  
-  if (codeBlockMatches.length > 0) {
-    console.log("Found JSON code blocks:", codeBlockMatches.length);
+  try {
+    // Check for JSON in code blocks (```json ... ```)
+    const codeBlockRegex = /```json\s*([\s\S]*?)\s*```/g;
+    const codeBlockMatches = Array.from(content.matchAll(codeBlockRegex));
+    
+    if (codeBlockMatches.length > 0) {
+      console.log("Found JSON code blocks:", codeBlockMatches.length);
+      const jsonObjects = [];
+      
+      // Extract JSON from each code block
+      for (const match of codeBlockMatches) {
+        try {
+          const jsonString = match[1].trim();
+          const parsed = JSON.parse(jsonString);
+          if (parsed && typeof parsed === 'object') {
+            // Check if it's a reward or a banner
+            if (parsed.rewardName) {
+              console.log("Found valid reward object in code block:", parsed.rewardName);
+            } else if (isBannerData(parsed)) {
+              console.log("Found valid banner object in code block:", parsed.title);
+            }
+            jsonObjects.push(parsed);
+          }
+        } catch (e) {
+          console.error("Failed to parse JSON from code block:", e);
+        }
+      }
+      
+      if (jsonObjects.length > 0) {
+        // Split content by code blocks to get text before and after
+        const parts = content.split(/```json[\s\S]*?```/);
+        const beforeJson = parts[0].trim();
+        const afterJson = parts.slice(1).join('').trim();
+        
+        return {
+          hasJson: true,
+          beforeJson: beforeJson,
+          jsonData: jsonObjects[0], // For backward compatibility
+          jsonObjects: jsonObjects,
+          multipleJson: jsonObjects.length > 1,
+          afterJson: afterJson
+        };
+      }
+    }
+    
+    // If no code blocks with JSON, try the old method with regex
+    const jsonRegex = /\{[\s\S]*?\}/g;
+    const matches = Array.from(content.matchAll(jsonRegex));
+    
     const jsonObjects = [];
     
-    // Extract JSON from each code block
-    for (const match of codeBlockMatches) {
+    for (const match of matches) {
       try {
-        const jsonString = match[1].trim();
-        const parsed = JSON.parse(jsonString);
+        const parsed = JSON.parse(match[0]);
         if (parsed && typeof parsed === 'object') {
           // Check if it's a reward or a banner
           if (parsed.rewardName) {
-            console.log("Found valid reward object in code block:", parsed.rewardName);
+            console.log("Found valid reward object:", parsed.rewardName);
+            jsonObjects.push(parsed);
           } else if (isBannerData(parsed)) {
-            console.log("Found valid banner object in code block:", parsed.title);
+            console.log("Found valid banner object:", parsed.title);
+            jsonObjects.push(parsed);
           }
-          jsonObjects.push(parsed);
         }
       } catch (e) {
-        console.error("Failed to parse JSON from code block:", e);
+        // Ignore parsing errors
+        console.log("Failed to parse potential JSON:", e.message);
       }
     }
     
     if (jsonObjects.length > 0) {
-      // Split content by code blocks to get text before and after
-      const parts = content.split(/```json[\s\S]*?```/);
-      const beforeJson = parts[0].trim();
-      const afterJson = parts.slice(1).join('').trim();
+      // Get text before and after all JSON objects
+      let cleanedContent = content;
+      for (const match of matches) {
+        cleanedContent = cleanedContent.replace(match[0], '');
+      }
+      cleanedContent = cleanedContent.trim();
       
       return {
         hasJson: true,
-        beforeJson: beforeJson,
+        beforeJson: cleanedContent,
         jsonData: jsonObjects[0], // For backward compatibility
         jsonObjects: jsonObjects,
-        multipleJson: jsonObjects.length > 1,
-        afterJson: afterJson
+        multipleJson: jsonObjects.length > 1
       };
     }
+  } catch (error) {
+    console.error("Error in parseMessageContent:", error);
+    // Return a fallback object if anything goes wrong
   }
   
-  // If no code blocks with JSON, try the old method with regex
-  const jsonRegex = /\{[\s\S]*?\}/g;
-  const matches = Array.from(content.matchAll(jsonRegex));
-  
-  const jsonObjects = [];
-  
-  for (const match of matches) {
-    try {
-      const parsed = JSON.parse(match[0]);
-      if (parsed && typeof parsed === 'object') {
-        // Check if it's a reward or a banner
-        if (parsed.rewardName) {
-          console.log("Found valid reward object:", parsed.rewardName);
-          jsonObjects.push(parsed);
-        } else if (isBannerData(parsed)) {
-          console.log("Found valid banner object:", parsed.title);
-          jsonObjects.push(parsed);
-        }
-      }
-    } catch (e) {
-      // Ignore parsing errors
-    }
-  }
-  
-  if (jsonObjects.length > 0) {
-    // Get text before and after all JSON objects
-    let cleanedContent = content;
-    for (const match of matches) {
-      cleanedContent = cleanedContent.replace(match[0], '');
-    }
-    cleanedContent = cleanedContent.trim();
-    
-    return {
-      hasJson: true,
-      beforeJson: cleanedContent,
-      jsonData: jsonObjects[0], // For backward compatibility
-      jsonObjects: jsonObjects,
-      multipleJson: jsonObjects.length > 1
-    };
-  }
-  
+  // Default return if no JSON found or if there was an error
   return {
     hasJson: false,
     content
@@ -486,10 +494,39 @@ const RewardCard = ({ reward }: { reward: any }) => {
   );
 };
 
-// Update the BannerCard component to ensure consistent width
+// Update the BannerCard component to display banners left-aligned
 const BannerCard = ({ banner }: { banner: any }) => {
   const { toast } = useToast();
   const [isExpanded, setIsExpanded] = useState(false);
+  const { user } = useAuth();
+  const [merchantName, setMerchantName] = useState<string>("");
+  const [createBannerOpen, setCreateBannerOpen] = useState(false);
+  
+  // Debug banner data on mount
+  useEffect(() => {
+    console.log("BannerCard mounted with data:", JSON.stringify(banner, null, 2));
+  }, []);
+  
+  // Fetch merchant name on component mount
+  useEffect(() => {
+    const fetchMerchantName = async () => {
+      if (user?.uid) {
+        try {
+          const merchantDoc = await getDoc(doc(db, 'merchants', user.uid));
+          if (merchantDoc.exists()) {
+            const data = merchantDoc.data();
+            // Specifically use merchantName field first, then fall back to other fields
+            const name = data.merchantName || data.businessName || data.storeName || data.name || 'Your Store';
+            setMerchantName(name);
+          }
+        } catch (error) {
+          console.error("Error fetching merchant name:", error);
+        }
+      }
+    };
+    
+    fetchMerchantName();
+  }, [user]);
   
   // Map visibility type string to enum
   const getVisibilityType = (visibilityString: string) => {
@@ -509,38 +546,75 @@ const BannerCard = ({ banner }: { banner: any }) => {
     return BannerStyle.LIGHT;
   };
 
+  // Log banner data for debugging
+  useEffect(() => {
+    if (createBannerOpen) {
+      console.log("Dialog opened with banner data:", JSON.stringify(banner, null, 2));
+    }
+  }, [createBannerOpen, banner]);
+  
+  // Create a deep copy of the banner data for the dialog
+  const getBannerDataForDialog = () => {
+    try {
+      // Create a deep copy to avoid reference issues
+      const bannerCopy = JSON.parse(JSON.stringify(banner));
+      console.log("Prepared banner data for dialog:", bannerCopy);
+      return bannerCopy;
+    } catch (error) {
+      console.error("Error preparing banner data:", error);
+      // Return a minimal valid object if parsing fails
+      return {
+        title: banner?.title || "Banner Title",
+        description: banner?.description || "Banner Description",
+        color: banner?.color || "#007AFF",
+        style: banner?.style || "light",
+        bannerAction: banner?.bannerAction || "Take to store page",
+        visibilityType: banner?.visibilityType || "All customers",
+        isActive: banner?.isActive !== undefined ? banner.isActive : true
+      };
+    }
+  };
+
+  // Handle opening the dialog
+  const handleOpenDialog = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    console.log("Opening banner dialog with raw data:", banner);
+    console.log("Banner data type:", typeof banner);
+    console.log("Banner data keys:", Object.keys(banner));
+    setCreateBannerOpen(true);
+  };
+
+  // Handle saving the banner
+  const handleSaveBanner = (bannerData: any) => {
+    console.log("Banner saved with data:", bannerData);
+    toast({
+      title: "Banner saved",
+      description: "Your banner has been saved successfully.",
+    });
+    setCreateBannerOpen(false);
+  };
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden w-full">
-      {/* Header - Clickable to expand/collapse */}
-      <div 
-        className="cursor-pointer transition-colors hover:bg-gray-50"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <div className="relative w-full" style={{ maxWidth: '100%' }}>
+    <div className="mb-4">
+      {/* Banner Preview */}
+      <div className="w-full" onClick={() => setIsExpanded(!isExpanded)}>
+        <div className="relative" style={{ width: "350px", maxWidth: "100%" }}>
           <BannerPreview
             title={banner.title}
             description={banner.description}
             buttonText={banner.buttonText}
             color={banner.color}
             styleType={getStyleType(banner.style)}
-            merchantName={banner.merchantName}
+            merchantName={merchantName || banner.merchantName || "Your Store"}
             visibilityType={getVisibilityType(banner.visibilityType)}
             isActive={banner.isActive}
           />
-          
-          <div className="absolute top-2 right-2 z-10">
-            {isExpanded ? (
-              <ChevronUp className="h-4 w-4 text-gray-400" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-gray-400" />
-            )}
-          </div>
         </div>
       </div>
       
-      {/* Expandable content */}
+      {/* Expandable content - appears below the banner when clicked */}
       {isExpanded && (
-        <div className="p-4 bg-gray-50 border-t border-gray-100">
+        <div className="mt-2 p-4 bg-gray-50 rounded-lg border border-gray-100" style={{ width: "350px", maxWidth: "100%" }}>
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <div className="font-medium text-sm">Banner Action:</div>
@@ -557,7 +631,7 @@ const BannerCard = ({ banner }: { banner: any }) => {
               <div className="text-sm">{banner.isActive ? "Active" : "Inactive"}</div>
             </div>
             
-            <div className="flex justify-end mt-2">
+            <div className="flex justify-end gap-2 mt-2">
               <Button 
                 variant="outline" 
                 size="sm"
@@ -575,9 +649,31 @@ const BannerCard = ({ banner }: { banner: any }) => {
                 <Copy className="h-3 w-3 mr-1" />
                 Copy JSON
               </Button>
+              
+              <Button 
+                size="sm"
+                className="bg-[#007AFF] hover:bg-[#0066CC] text-white text-xs"
+                onClick={handleOpenDialog}
+              >
+                <Sparkles className="h-3 w-3 mr-1" />
+                Create Banner
+              </Button>
             </div>
           </div>
         </div>
+      )}
+      
+      {/* CreateBannerDialog component */}
+      {createBannerOpen && (
+        <CreateBannerDialog
+          open={createBannerOpen}
+          onOpenChange={(open) => {
+            console.log("Dialog open state changing to:", open);
+            setCreateBannerOpen(open);
+          }}
+          initialBannerData={getBannerDataForDialog()}
+          onSave={handleSaveBanner}
+        />
       )}
     </div>
   );

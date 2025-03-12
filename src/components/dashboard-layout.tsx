@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
+import { TapAiButtonStandalone } from "@/components/tap-ai-button-standalone"
 
 interface Notification {
   id: string
@@ -126,15 +127,19 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         {/* Top Header */}
         <header className="h-16 border-b border-gray-100 flex items-center justify-between px-6">
           <div className="flex items-center gap-4">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="gap-2 text-[#007AFF] border-[#007AFF] hover:bg-blue-50"
-              onClick={() => router.push('/onboarding')}
+            <TapAiButtonStandalone 
+              variant="default"
+              size="sm"
+              className="h-9 gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white"
             >
               <Sparkles className="h-4 w-4" />
-              Onboarding Wizard
-            </Button>
+              <span>
+                <span className="font-bold">TAP</span>AI
+              </span>
+              <kbd className="ml-1 inline-flex h-5 select-none items-center gap-1 rounded border border-white/30 bg-blue-600 px-1.5 font-mono text-[10px] font-medium text-white">
+                <span className="text-xs">⌘</span>I
+              </kbd>
+            </TapAiButtonStandalone>
           </div>
           
           <div className="flex items-center gap-4">

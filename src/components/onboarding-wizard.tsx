@@ -11,8 +11,8 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
-import { db } from "@/lib/firebase"
-import { doc, updateDoc, writeBatch, collection, Timestamp } from "firebase/firestore"
+import { db, functions } from "@/lib/firebase"
+import { doc, updateDoc, writeBatch, collection, Timestamp, setDoc, getDocs, getDoc } from "firebase/firestore"
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { ArrowRight, CheckCircle, Coffee, Gift, Store, Users, Upload, Sparkles, Award, BarChart, Image, Utensils, Percent, Cake, Wine, UtensilsCrossed, Check, X, ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Ban, Calendar, ChevronLeft, Clock, Package, Plus, DollarSign } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -23,6 +23,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
 import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { AnnouncementDesignerDialog } from "@/components/announcement-designer-dialog"
+import { httpsCallable } from "firebase/functions"
 
 // Helper function to format a UNIX timestamp (in seconds) into hh:mm AM/PM
 function formatTimestamp(seconds: number) {
@@ -86,6 +87,17 @@ type BusinessData = {
   } | null
   selectedIndustry: string
 }
+
+// Add this debugging helper function
+const logObjectDetails = (obj, label) => {
+  console.log(`=== ${label} ===`);
+  console.log(`Type: ${typeof obj}`);
+  console.log(`Is null/undefined: ${obj === null || obj === undefined}`);
+  if (obj) {
+    console.log(`Keys: ${Object.keys(obj).join(', ')}`);
+    console.log(`Full object:`, JSON.stringify(obj, null, 2));
+  }
+};
 
 export function OnboardingWizard() {
   const [step, setStep] = useState(1)
@@ -182,9 +194,39 @@ export function OnboardingWizard() {
           }
         }
       } else if (wizardStep === 3) {
-        // From Program Selection to Confirmation
+        // From Program Selection directly to next main step (skip confirmation)
         if (selectedProgramType) {
-          setWizardStep(4)
+          // Add the selected rewards to the businessData
+          const individualReward = {
+            id: `${selectedIndustry}-individual`,
+            name: wizardSelectedRewards[0] || "Free Reward",
+            type: 'individual',
+            industry: selectedIndustry,
+            isNewCustomer: wizardSelectedRewards.some(r => r.includes('welcome')),
+            pointsCost: 0,
+            description: `Reward for customers`,
+            rewardName: wizardSelectedRewards[0] || "Free Reward"
+          };
+          
+          const programReward = {
+            id: `${selectedIndustry}-program`,
+            name: selectedProgramType || "Loyalty Program",
+            type: 'program',
+            industry: selectedIndustry,
+            isNewCustomer: false,
+            pointsCost: 0,
+            description: `Loyalty program with multiple rewards`,
+            rewardName: selectedProgramType || "Loyalty Program"
+          };
+          
+          setBusinessData(prev => ({
+            ...prev,
+            selectedRewards: [...prev.selectedRewards, individualReward, programReward],
+            hasSetupReward: true
+          }));
+          
+          // Move to the next main step
+          setStep(step + 1)
           return
         } else {
           toast({
@@ -194,40 +236,6 @@ export function OnboardingWizard() {
           })
           return
         }
-      } else if (wizardStep === 4) {
-        // From Confirmation to next main step
-        // Add the selected rewards to the businessData
-        const individualReward = {
-          id: `${selectedIndustry}-individual`,
-          name: wizardSelectedRewards[0] || "Free Reward",
-          type: 'individual',
-          industry: selectedIndustry,
-          isNewCustomer: wizardSelectedRewards.some(r => r.includes('welcome')),
-          pointsCost: 0,
-          description: `Reward for customers`,
-          rewardName: wizardSelectedRewards[0] || "Free Reward"
-        };
-        
-        const programReward = {
-          id: `${selectedIndustry}-program`,
-          name: selectedProgramType || "Loyalty Program",
-          type: 'program',
-          industry: selectedIndustry,
-          isNewCustomer: false,
-          pointsCost: 0,
-          description: `Loyalty program with multiple rewards`,
-          rewardName: selectedProgramType || "Loyalty Program"
-        };
-        
-        setBusinessData(prev => ({
-          ...prev,
-          selectedRewards: [...prev.selectedRewards, individualReward, programReward],
-          hasSetupReward: true
-        }));
-        
-        // Move to the next main step
-        setStep(step + 1)
-        return
       }
     }
     
@@ -290,19 +298,11 @@ export function OnboardingWizard() {
       return;
     }
     
-    console.log("Starting handleComplete with:", {
-      selectedRewards: businessData.selectedRewards.length,
-      bannerData: bannerData ? "exists" : "null",
-      selectedPointsRules: selectedPointsRules.length,
-      announcementData: announcementData ? "exists" : "null"
-    });
-    
     try {
       setLoading(true);
       
       // Create a batch to handle multiple Firestore operations
       const batch = writeBatch(db);
-      console.log("Created Firestore batch");
       
       // Save onboarding data to Firestore
       const merchantRef = doc(db, 'merchants', user.uid);
@@ -310,14 +310,12 @@ export function OnboardingWizard() {
         onboardingCompleted: true,
         onboardingCompletedAt: new Date().toISOString()
       });
-      console.log("Added merchant update to batch");
       
       // 1) Create the selected rewards
-      console.log(`Processing ${businessData.selectedRewards.length} rewards`);
       for (const reward of businessData.selectedRewards) {
         const rewardRef = doc(collection(db, 'merchants', user.uid, 'rewards'));
-        console.log(`Creating reward: ${reward.name} with ID: ${rewardRef.id}`);
         
+        // Prepare the reward data with all required fields
         const rewardData = {
           rewardName: reward.rewardName || reward.name,
           description: reward.description,
@@ -329,36 +327,112 @@ export function OnboardingWizard() {
             { type: 'customerLimit', value: 1 },
             { type: 'totalRedemptionLimit', value: 100 }
           ],
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          status: 'active',
+          merchantId: user.uid,
+          updatedAt: new Date().toISOString(),
+          minSpend: 0,
+          reason: '',
+          customers: [],
+          redemptionCount: 0,
+          uniqueCustomersCount: 0,
+          lastRedeemedAt: null,
+          uniqueCustomerIds: []
         };
+        
+        // If this is a program-type reward, add program-specific fields
+        if (reward.type === 'program' && reward.programtype) {
+          rewardData.programtype = reward.programtype;
+          
+          // If this is a coffee program, add coffee-specific configuration
+          if (reward.programtype === 'coffee' && reward.coffeeConfig) {
+            rewardData.coffeeConfig = reward.coffeeConfig;
+          }
+        }
         
         batch.set(rewardRef, rewardData);
-        console.log(`Added reward to batch: ${rewardRef.id}`);
       }
       
-      // 2) Save banner data if we have any
-      console.log("Banner data check:", bannerData);
+      // Handle banner and announcement separately
+      const handleSaveBannerAndAnnouncement = async () => {
+        console.log("======== BANNER DB SAVE START ========");
+        
+        if (!bannerData) {
+          console.log("No banner data to save");
+          return null;
+        }
+        
+        logObjectDetails(bannerData, "BANNER DATA FOR FIRESTORE");
+        
+        try {
+          // 1. First create banner reference
+          const bannerRef = doc(collection(db, 'merchants', user.uid, 'banners'));
+          console.log(`BANNER REF: merchants/${user.uid}/banners/${bannerRef.id}`);
+          
+          // Create clean banner data without announcement
+          const { announcement, ...cleanBannerData } = bannerData;
+          const bannerToSave = {
+            ...cleanBannerData,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            merchantId: user.uid
+          };
+          
+          console.log("CLEAN BANNER DATA (without announcement):", JSON.stringify(bannerToSave, null, 2));
+          
+          // 2. Save the banner document
+          await setDoc(bannerRef, bannerToSave);
+          console.log(`Banner saved with ID: ${bannerRef.id}`);
+          
+          // 3. Then check and save announcement as a subcollection
+          if (announcementData) {
+            console.log("ANNOUNCEMENT DATA FOUND FOR SUBCOLLECTION");
+            logObjectDetails(announcementData, "ANNOUNCEMENT DATA");
+            
+            // Create announcement reference
+            const announcementRef = doc(collection(db, 'merchants', user.uid, 'banners', bannerRef.id, 'announcements'));
+            console.log(`SAVING TO PATH: merchants/${user.uid}/banners/${bannerRef.id}/announcements/${announcementRef.id}`);
+            
+            // Prepare announcement data
+            const announcementToSave = {
+              ...announcementData,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              merchantId: user.uid,
+              id: announcementRef.id,
+              bannerId: bannerRef.id
+            };
+            
+            console.log("PREPARED ANNOUNCEMENT DATA:", JSON.stringify(announcementToSave, null, 2));
+            
+            // Save the announcement to the subcollection
+            await setDoc(announcementRef, announcementToSave);
+            console.log(`Announcement saved with ID: ${announcementRef.id}`);
+          }
+          
+          return bannerRef.id;
+        } catch (error) {
+          console.error("ERROR SAVING BANNER/ANNOUNCEMENT:", error);
+          throw error;
+        }
+      };
+      
+      let bannerId = null;
       if (bannerData) {
-        const bannerRef = doc(collection(db, 'merchants', user.uid, 'banners'));
-        console.log(`Creating banner with ID: ${bannerRef.id}`);
-        
-        const bannerToSave = {
-          ...bannerData,
-          createdAt: new Date().toISOString()
-        };
-        console.log("Banner data to save:", bannerToSave);
-        
-        batch.set(bannerRef, bannerToSave);
-        console.log(`Added banner to batch: ${bannerRef.id}`);
+        try {
+          bannerId = await handleSaveBannerAndAnnouncement();
+          console.log('Banner and announcement saved with ID:', bannerId);
+        } catch (error) {
+          console.error('Failed to save banner and announcement:', error);
+        }
       } else {
-        console.log("No banner data to save");
+        // Continue with the rest of your batch operations
+        // ...
       }
       
       // 3) Save each selected points rule
-      console.log(`Processing ${selectedPointsRules.length} points rules`);
       for (const ruleId of selectedPointsRules) {
         const ruleDocRef = doc(collection(db, 'merchants', user.uid, 'pointsRules'));
-        console.log(`Creating points rule: ${ruleId} with ID: ${ruleDocRef.id}`);
         
         // Get the actual rule data based on the ID
         const ruleData = {
@@ -370,30 +444,95 @@ export function OnboardingWizard() {
               ] 
             : ["someCondition"],
           pointsMultiplier: ruleId === "weekend-treat" ? 3 : 2,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          isActive: true,
+          merchantId: user.uid
         };
         
         batch.set(ruleDocRef, ruleData);
-        console.log(`Added points rule to batch: ${ruleDocRef.id}`);
       }
       
-      // 4) Save announcement data if we have any
-      console.log("Announcement data check:", announcementData);
-      if (announcementData) {
-        const announcementRef = doc(collection(db, 'merchants', user.uid, 'announcements'));
-        console.log(`Creating announcement with ID: ${announcementRef.id}`);
+      // 4) Handle coffee program creation separately if needed
+      let coffeeRewardId = null;
+
+      // Log all rewards to see what we're working with
+      console.log('All selected rewards:', businessData.selectedRewards);
+
+      // Look specifically for coffee program - check for 'Traditional Coffee Program' by name or coffee programtype
+      const coffeeProgram = businessData.selectedRewards.find(r => 
+        r.name === 'Traditional Coffee Program' || 
+        r.rewardName === 'Traditional Coffee Program' || 
+        r.programtype === 'coffee'
+      );
+
+      console.log('Traditional Coffee Program found:', coffeeProgram);
+
+      if (coffeeProgram) {
+        console.log('Found coffee program:', coffeeProgram);
         
-        batch.set(announcementRef, {
-          ...announcementData,
-          createdAt: new Date().toISOString()
-        });
-        console.log(`Added announcement to batch: ${announcementRef.id}`);
+        try {
+          console.log('Committing batch before coffee program creation');
+          // First commit the batch to ensure all other data is saved
+          await batch.commit();
+          console.log('Batch committed successfully');
+          
+          // Get coffee configuration - either from the coffeeConfig property or from state
+          const coffeeConfig = coffeeProgram.coffeeConfig || coffeeProgram;
+          console.log('Using coffee config:', coffeeConfig);
+          
+          // Validate that functions object exists
+          if (!functions) {
+            console.error('Firebase functions object is undefined or null');
+            throw new Error('Firebase functions not available');
+          }
+          
+          console.log('Preparing to call cloud function "coffeeprogram"');
+          // Then call the cloud function to create the coffee program
+          const coffeeprogramFunc = httpsCallable(functions, 'coffeeprogram');
+          
+          // Prepare data for the function call
+          const data = {
+            merchantId: user.uid,
+            pin: coffeeConfig.pin || '1234',  // Use default if missing
+            firstCoffeeBeforeTransaction: 
+              (coffeeConfig.freeRewardTiming === 'before') || false,
+            frequency: parseInt(coffeeConfig.frequency?.toString() || '5'),
+            levels: parseInt(coffeeConfig.levels?.toString() || '10')
+          };
+          
+          console.log('Calling coffee program function with data:', JSON.stringify(data, null, 2));
+          
+          // Show a loading toast while the function is being called
+          toast({
+            title: "Creating Coffee Program",
+            description: "Please wait while we set up your coffee loyalty program...",
+          });
+          
+          const result = await coffeeprogramFunc(data);
+          console.log('Coffee program function call completed with result:', result);
+          
+          // Show success message
+          toast({
+            title: "Coffee Program Created",
+            description: "Your coffee loyalty program has been set up successfully.",
+          });
+        } catch (error: any) {
+          // Detailed error logging
+          console.error('Error creating coffee program:', error);
+          console.error('Error message:', error.message);
+          
+          toast({
+            title: "Coffee Program Error",
+            description: `Failed to create coffee program: ${error.message || 'Unknown error'}`,
+            variant: "destructive"
+          });
+        }
+      } else {
+        console.log('No Traditional Coffee Program found, committing batch normally');
+        // If no coffee program, just commit the batch
+        await batch.commit();
       }
-      
-      // Commit all the changes
-      console.log("Committing batch to Firestore...");
-      await batch.commit();
-      console.log("Batch committed successfully");
       
       toast({
         title: "Onboarding completed!",
@@ -401,7 +540,6 @@ export function OnboardingWizard() {
       });
       
       // Redirect to dashboard
-      console.log("Redirecting to dashboard");
       router.push('/dashboard');
     } catch (error) {
       console.error('Error completing onboarding:', error);
@@ -937,65 +1075,35 @@ export function OnboardingWizard() {
 
   // Update the saveCoffeeProgram function to mark the program as configured
   const saveCoffeeProgram = () => {
-    // Validate PIN code
-    if (coffeeProgram.pin.length !== 4 || isNaN(Number(coffeeProgram.pin))) {
-      toast({
-        title: "Invalid PIN",
-        description: "Please enter a 4-digit PIN code",
-        variant: "destructive"
+    // Find the coffee program in the rewards
+    const coffeeReward = businessData.selectedRewards.find(r => r.programtype === 'coffee');
+    
+    // Update the coffee program with the configuration
+    setBusinessData(prev => {
+      const updatedRewards = prev.selectedRewards.map(r => {
+        if (r.programtype === 'coffee') {
+          return {
+            ...r,
+            coffeeConfig: coffeeProgram
+          };
+        }
+        return r;
       });
-      return;
-    }
+      
+      return {
+        ...prev,
+        selectedRewards: updatedRewards
+      };
+    });
     
-    // Find the selected coffee program type
-    const isTraditionalCoffeeProgram = wizardSelectedRewards.includes('traditional-coffee-program');
-    
-    if (!isTraditionalCoffeeProgram) {
-      toast({
-        title: "Error",
-        description: "No coffee program selected",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    // Create the coffee program reward with configuration
-    const coffeeReward = {
-      id: 'traditional-coffee-program',
-      name: 'Traditional Coffee Program',
-      type: 'program',
-      industry: selectedIndustry,
-      isNewCustomer: false,
-      pointsCost: 0,
-      description: 'Buy X coffees, get 1 free (stamp card style)',
-      coffeeConfig: {
-        pin: coffeeProgram.pin,
-        freeRewardTiming: coffeeProgram.freeRewardTiming,
-        frequency: parseInt(coffeeProgram.frequency),
-        levels: parseInt(coffeeProgram.levels)
-      }
-    };
-    
-    // Update business data
-    setBusinessData(prev => ({
-      ...prev,
-      selectedRewards: [...prev.selectedRewards.filter(r => 
-        r.id !== 'traditional-coffee-program'
-      ), coffeeReward]
-    }));
-    
-    // Mark the coffee program as configured
-    setCoffeeProgramConfigured(true);
+    // Set the selected program type
+    setSelectedProgramType('coffee');
     
     // Close the configuration dialog
     setShowCoffeeProgramConfig(false);
     
-    // Show success toast
-    toast({
-      title: "Coffee Program Configured",
-      description: "Your coffee program has been configured successfully",
-      variant: "default"
-    });
+    // Do NOT automatically advance to the next step
+    // setWizardStep(4); - Remove this line
   };
 
   // In the review step (Step 4), add a function to handle coffee program configuration
@@ -1091,70 +1199,32 @@ export function OnboardingWizard() {
 
   // Add a function to save voucher program configuration
   const saveVoucherProgram = () => {
-    // Validate inputs
-    if (!voucherProgram.name.trim()) {
-      toast({
-        title: "Invalid Name",
-        description: "Please enter a name for the voucher program",
-        variant: "destructive"
+    // Update the voucher program with the configuration
+    setBusinessData(prev => {
+      const updatedRewards = prev.selectedRewards.map(r => {
+        if (r.programtype === 'voucher') {
+          return {
+            ...r,
+            voucherConfig: voucherProgram
+          };
+        }
+        return r;
       });
-      return;
-    }
+      
+      return {
+        ...prev,
+        selectedRewards: updatedRewards
+      };
+    });
     
-    if (isNaN(Number(voucherProgram.totalSpendRequired)) || Number(voucherProgram.totalSpendRequired) <= 0) {
-      toast({
-        title: "Invalid Spend Amount",
-        description: "Please enter a valid total spend amount",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    if (isNaN(Number(voucherProgram.voucherAmount)) || Number(voucherProgram.voucherAmount) <= 0) {
-      toast({
-        title: "Invalid Voucher Amount",
-        description: "Please enter a valid voucher amount",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    // Create the voucher program reward with configuration
-    const voucherReward = {
-      id: 'standard-voucher-program',
-      name: voucherProgram.name,
-      type: 'program',
-      industry: selectedIndustry,
-      isNewCustomer: false,
-      pointsCost: 0,
-      description: voucherProgram.description,
-      voucherConfig: {
-        totalSpendRequired: Number(voucherProgram.totalSpendRequired),
-        voucherAmount: Number(voucherProgram.voucherAmount),
-        voucherType: voucherProgram.voucherType
-      }
-    };
-    
-    // Update business data
-    setBusinessData(prev => ({
-      ...prev,
-      selectedRewards: [...prev.selectedRewards.filter(r => 
-        r.id !== 'standard-voucher-program'
-      ), voucherReward]
-    }));
-    
-    // Mark the voucher program as configured
-    setVoucherProgramConfigured(true);
+    // Set the selected program type
+    setSelectedProgramType('voucher');
     
     // Close the configuration dialog
     setShowVoucherProgramConfig(false);
     
-    // Show success toast
-    toast({
-      title: "Voucher Program Configured",
-      description: "Your voucher program has been configured successfully",
-      variant: "default"
-    });
+    // Do NOT automatically advance to the next step
+    // setWizardStep(4); - Remove this line
   };
 
   // Add a function to handle removing the voucher program configuration
@@ -1214,34 +1284,40 @@ export function OnboardingWizard() {
   };
 
   // Function that handles saving the banner
-  const handleSaveBanner = (data: any) => {
-    console.log("handleSaveBanner called with data:", data);
-    setBannerData(data);
-    console.log("Setting bannerData to:", data);
-    setShowBannerDialog(false);
+  const handleSaveBanner = (data) => {
+    console.log("======== BANNER SAVE START ========");
+    logObjectDetails(data, "RECEIVED BANNER DATA");
     
-    // Update businessData to reflect banner setup
+    // Store the raw banner data
+    setBannerData(data);
+    
+    // Check for announcement in the banner data (note: singular "announcement", not plural)
+    if (data.announcement) {
+      console.log("Banner has an announcement");
+      logObjectDetails(data.announcement, "BANNER ANNOUNCEMENT");
+      
+      // Store the announcement data
+      setAnnouncementData(data.announcement);
+    } else {
+      console.log("NO ANNOUNCEMENT found in banner data");
+    }
+    
+    // Update the business data
     setBusinessData(prev => {
-      console.log("Updating businessData with banner details");
       const updated = {
         ...prev,
         hasSetupBanner: true,
         bannerDetails: {
-          name: data.name || 'Custom Banner',
-          type: data.type || 'welcome'
+          name: data.title || 'Banner',
+          type: data.style || 'standard'
         }
       };
-      console.log("Updated businessData:", updated);
+      console.log("UPDATED BUSINESS DATA:", updated);
       return updated;
     });
     
-    // Show success toast
-    toast({
-      title: "Banner Created",
-      description: "Your banner has been created successfully",
-      variant: "default"
-    });
-  }
+    console.log("======== BANNER SAVE COMPLETE ========");
+  };
 
   // Toggler for points rules
   function handlePointsRuleToggle(ruleId: string) {
@@ -1820,7 +1896,7 @@ export function OnboardingWizard() {
                                 return (
                                 <div>
                                     {/* New customer rewards - displayed in a grid */}
-                                    <div className="grid md:grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 gap-4">
                                       {currentRewards.map((reward) => (
                                         <div key={reward.id} className="border border-gray-200 rounded-md overflow-hidden bg-white">
                                           {/* Header section - always visible */}
@@ -2187,7 +2263,7 @@ export function OnboardingWizard() {
                                 return (
                                   <div className="space-y-4">
                                     {/* Rewards grid */}
-                                    <div className="grid md:grid-cols-2 gap-4">
+                                    <div className="grid md:grid-cols-1 gap-4">
                                       {currentRewards.map((reward) => (
                                         <div key={reward.id} className="border border-gray-200 rounded-md overflow-hidden bg-white">
                                           {/* Header section - always visible */}
@@ -2489,7 +2565,7 @@ export function OnboardingWizard() {
                                 return (
                                   <div className="space-y-4">
                                     {/* Loyal customer rewards - displayed in a grid */}
-                                    <div className="grid md:grid-cols-2 gap-4">
+                                    <div className="grid md:grid-cols-1 gap-4">
                                       {currentRewards.map((reward) => (
                                         <div key={reward.id} className="border border-gray-200 rounded-md overflow-hidden bg-white">
                                           {/* Header section - always visible */}
@@ -2711,7 +2787,7 @@ export function OnboardingWizard() {
                                     </div>
                                   </div>
                                   
-                                  <div className="mt-4 flex justify-between">
+                                  <div className="mt-4 flex justify-start">
                             <Button 
                                       variant="outline"
                                       className="text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600"
@@ -2720,14 +2796,7 @@ export function OnboardingWizard() {
                                       Remove Configuration
                             </Button>
                                     
-                                    <Button 
-                                      className="bg-green-600 hover:bg-green-700 text-white"
-                                      onClick={() => {
-                                        setWizardStep(4); // Move to the next step
-                                      }}
-                                    >
-                                      Continue
-                                    </Button>
+                                    {/* "Continue" button removed */}
                                   </div>
                                 </div>
                               )}
@@ -2800,7 +2869,7 @@ export function OnboardingWizard() {
                                     </div>
                                   </div>
                                   
-                                  <div className="mt-4 flex justify-between">
+                                  <div className="mt-4 flex justify-start">
                                     <Button 
                                       variant="outline"
                                       className="text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600"
@@ -2809,15 +2878,8 @@ export function OnboardingWizard() {
                                       Remove Configuration
                                     </Button>
                                     
-                                    <Button 
-                                      className="bg-green-600 hover:bg-green-700 text-white"
-                                      onClick={() => {
-                                        setWizardStep(4); // Move to the next step
-                                      }}
-                                    >
-                                      Continue
-                            </Button>
-                          </div>
+                                    {/* "Continue" button removed */}
+                                  </div>
                                 </div>
                       )}
                             </div>
@@ -3914,7 +3976,15 @@ export function OnboardingWizard() {
         onOpenChange={setShowBannerDialog}
         initialBannerData={bannerData}
         onSave={(data) => {
-          console.log("OnboardingWizard - Received banner data from dialog:", data);
+          console.log("======== CREATE BANNER DIALOG RETURNED DATA ========");
+          console.log("Full data object:", JSON.stringify(data, null, 2));
+          console.log(`Has announcements property: ${data.hasOwnProperty('announcements')}`);
+          if (data.announcements) {
+            console.log(`Announcements count: ${data.announcements.length}`);
+            data.announcements.forEach((ann, i) => 
+              console.log(`Announcement ${i}:`, JSON.stringify(ann, null, 2))
+            );
+          }
           handleSaveBanner(data);
         }}
       />

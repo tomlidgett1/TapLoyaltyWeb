@@ -122,6 +122,11 @@ const navItems = [
     title: "Settings",
     href: "/dashboard/settings",
     icon: Settings
+  },
+  {
+    title: "Onboarding Wizard",
+    href: "/onboarding",
+    icon: Sparkles,
   }
 ]
 
@@ -334,14 +339,6 @@ export function SideNav() {
           })}
         </ul>
       </nav>
-      
-      {/* TapAI button above profile section */}
-      <div className="px-2 pb-2">
-        <TapAiButton 
-          variant="default" 
-          className="w-full justify-start text-sm font-medium bg-[#007AFF] hover:bg-[#0066CC] text-white shadow-sm"
-        />
-      </div>
       
       {/* Profile section at bottom */}
       <div className="mt-auto border-t pt-4 pb-4">

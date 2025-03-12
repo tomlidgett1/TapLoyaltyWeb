@@ -27,7 +27,12 @@ export function TapAiButtonStandalone({
         onClick={() => setOpen(true)}
       >
         <Sparkles className="mr-2 h-4 w-4" />
-        TapAI
+        <span>
+          <span className="font-bold">Tap</span>AI
+        </span>
+        <kbd className="ml-1 inline-flex h-5 select-none items-center gap-1 rounded border border-white/30 bg-blue-600 px-1.5 font-mono text-[10px] font-medium text-white">
+          <span className="text-xs">⌘</span>I
+        </kbd>
       </Button>
       <TapAiDialog 
         open={open} 

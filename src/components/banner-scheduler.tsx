@@ -320,7 +320,7 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border p-5 mb-6">
+    <div className="bg-white rounded-lg border p-4">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold">Banner Schedule</h3>
         <div className="flex items-center gap-2">
@@ -364,7 +364,7 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
       {/* Timeline grid */}
       <div 
         ref={timelineRef}
-        className="relative h-[300px] border-b border-t border-gray-100 mb-4"
+        className="relative h-[300px] border-b border-t border-gray-100"
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
@@ -438,25 +438,6 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
                 >
                   {/* Status indicator */}
                   <div className={`absolute left-0 top-0 bottom-0 w-1 ${banner.isActive ? 'bg-green-500' : 'bg-blue-500'}`}></div>
-                  
-                  {/* Banner preview thumbnail */}
-                  <div className="w-[50px] h-[45px] flex-shrink-0 overflow-hidden rounded-sm shadow-sm border border-gray-200">
-                    <BannerPreview
-                      title={banner.title}
-                      description=""
-                      buttonText=""
-                      color={banner.color ?? "#0ea5e9"}
-                      styleType={
-                        banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
-                        banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
-                        banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
-                        BannerStyle.LIGHT
-                      }
-                      merchantName=""
-                      visibilityType={BannerVisibility.ALL}
-                      isActive={banner.isActive}
-                    />
-                  </div>
                   
                   {/* Banner info */}
                   <div className="ml-2 flex-1 min-w-0 flex flex-col justify-center">
@@ -560,33 +541,6 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
             )
           })}
         </div>
-      </div>
-      
-      {/* Time navigation */}
-      <div className="flex justify-between items-center">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => setCurrentHour(prev => (prev - 1 + 24) % 24)}
-        >
-          <ChevronLeft className="h-4 w-4 mr-1" />
-          Previous Hour
-        </Button>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => setCurrentHour(new Date().getHours())}
-        >
-          Current Time
-        </Button>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => setCurrentHour(prev => (prev + 1) % 24)}
-        >
-          Next Hour
-          <ChevronRight className="h-4 w-4 ml-1" />
-        </Button>
       </div>
       
       {/* Add conflict warning if needed */}

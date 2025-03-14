@@ -2,7 +2,7 @@
 
 import { SideNav } from "@/components/side-nav"
 import { usePathname } from "next/navigation"
-import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles } from "lucide-react"
+import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useState, useEffect } from "react"
@@ -28,6 +28,27 @@ interface Notification {
   type: "info" | "success" | "warning" | "error"
 }
 
+interface RewardConfig {
+  id: string
+  name: string
+  type: string
+  industry: string
+  isNewCustomer: boolean
+  pointsCost: number
+  description: string
+  rewardName?: string
+  conditions?: any[]
+  limitations?: any[]
+  programtype?: string
+  voucherAmount?: number
+  coffeeConfig?: {
+    pin: string
+    freeRewardTiming: 'before' | 'after'
+    frequency: number
+    levels: number
+  }
+}
+
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [searchQuery, setSearchQuery] = useState("")
@@ -35,7 +56,16 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [unreadCount, setUnreadCount] = useState(0)
   const router = useRouter()
   
+  const [selectedRewards, setSelectedRewards] = useState<RewardConfig[]>([])
+  const [showRewardDetails, setShowRewardDetails] = useState(false)
+  
+  // Add state for onboarding detection
+  const [isOnboarding, setIsOnboarding] = useState(false)
+  
   useEffect(() => {
+    // Check if current path is onboarding
+    setIsOnboarding(pathname?.includes('/onboarding') || false)
+    
     // Mock notifications data
     const mockNotifications: Notification[] = [
       {
@@ -74,7 +104,40 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     
     setNotifications(mockNotifications)
     setUnreadCount(mockNotifications.filter(n => !n.read).length)
-  }, [])
+    
+    // Mock selected rewards data
+    const mockSelectedRewards: RewardConfig[] = [
+      {
+        id: "cafe-program",
+        name: "Traditional Coffee Program",
+        type: "program",
+        industry: "cafe",
+        isNewCustomer: false,
+        pointsCost: 0,
+        description: "Loyalty program with multiple rewards",
+        rewardName: "Traditional Coffee Program",
+        programtype: "coffee",
+        coffeeConfig: {
+          pin: "1234",
+          freeRewardTiming: "after",
+          frequency: 5,
+          levels: 10
+        }
+      },
+      {
+        id: "cafe-individual",
+        name: "Free Coffee",
+        type: "individual",
+        industry: "cafe",
+        isNewCustomer: true,
+        pointsCost: 100,
+        description: "Reward for loyal customers",
+        rewardName: "Free Coffee"
+      }
+    ]
+    
+    setSelectedRewards(mockSelectedRewards)
+  }, [pathname])
 
   const markAsRead = (id: string) => {
     setNotifications(prev => 
@@ -113,13 +176,100 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   
   // Function to get the current page title based on pathname
   const getPageTitle = () => {
-    const path = pathname.split('/')[1]
+    const path = pathname?.split('/')[1]
     if (!path) return 'Dashboard'
     
     // Convert path to title case (e.g., "store" -> "Store")
     return path.charAt(0).toUpperCase() + path.slice(1)
   }
 
+  if (!pathname) {
+    return null; // or a loading state
+  }
+
+  // Special layout for onboarding pages
+  if (isOnboarding) {
+    return (
+      <div className="flex h-screen overflow-hidden">
+        {/* Left sidebar for progress steps */}
+        <div className="w-72 border-r border-gray-100 bg-white p-6">
+          <div className="flex flex-col h-full">
+            <div className="mb-8">
+              <h3 className="text-lg font-medium">Your details</h3>
+              <p className="text-sm text-gray-500">Complete all steps to get started</p>
+            </div>
+            
+            <div className="space-y-1 flex-1">
+              {/* Steps with vertical connector line */}
+              <div className="relative ml-3 space-y-8 pl-6 before:absolute before:left-0 before:top-1 before:h-full before:border-l-2 before:border-gray-200">
+                {/* Step 1 */}
+                <div className="relative -left-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-6 rounded-full bg-blue-500 text-white flex items-center justify-center">
+                      <span className="text-xs">1</span>
+                    </div>
+                    <p className="text-sm font-medium text-blue-500">Your details</p>
+                  </div>
+                  <p className="mt-1 ml-8 text-xs text-gray-500">Provide an email and password</p>
+                </div>
+                
+                {/* Step 2 */}
+                <div className="relative -left-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-6 rounded-full border-2 border-gray-300 text-gray-400 flex items-center justify-center">
+                      <span className="text-xs">2</span>
+                    </div>
+                    <p className="text-sm font-medium text-gray-500">Verify your email</p>
+                  </div>
+                  <p className="mt-1 ml-8 text-xs text-gray-500">Enter your verification code</p>
+                </div>
+                
+                {/* Step 3 */}
+                <div className="relative -left-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-6 rounded-full border-2 border-gray-300 text-gray-400 flex items-center justify-center">
+                      <span className="text-xs">3</span>
+                    </div>
+                    <p className="text-sm font-medium text-gray-500">Invite your team</p>
+                  </div>
+                  <p className="mt-1 ml-8 text-xs text-gray-500">Start collaborating with your team</p>
+                </div>
+                
+                {/* Step 4 */}
+                <div className="relative -left-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-6 rounded-full border-2 border-gray-300 text-gray-400 flex items-center justify-center">
+                      <span className="text-xs">4</span>
+                    </div>
+                    <p className="text-sm font-medium text-gray-500">Welcome to Untitled!</p>
+                  </div>
+                  <p className="mt-1 ml-8 text-xs text-gray-500">Get up and running in 3 minutes</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-auto pt-6">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start" 
+                onClick={() => router.push('/dashboard')}
+              >
+                <ChevronDown className="h-4 w-4 mr-2 rotate-90" />
+                Back to home
+              </Button>
+            </div>
+          </div>
+        </div>
+        
+        {/* Main content - wider for onboarding */}
+        <div className="flex-1 overflow-auto">
+          {children}
+        </div>
+      </div>
+    )
+  }
+
+  // Regular layout for non-onboarding pages
   return (
     <div className="flex h-screen overflow-hidden">
       <SideNav />
@@ -140,6 +290,83 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <span className="text-xs">⌘</span>I
               </kbd>
             </TapAiButtonStandalone>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9 gap-2">
+                  <Award className="h-4 w-4" />
+                  Rewards
+                  <ChevronDown className="h-4 w-4 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-80">
+                <div className="flex items-center justify-between px-4 py-2 border-b">
+                  <h3 className="font-medium">Your Reward Programs</h3>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 text-xs rounded-md"
+                    onClick={() => router.push('/rewards')}
+                  >
+                    View All
+                  </Button>
+                </div>
+                <div className="max-h-[400px] overflow-y-auto">
+                  {selectedRewards.length === 0 ? (
+                    <div className="py-6 text-center">
+                      <Gift className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">No rewards configured yet</p>
+                    </div>
+                  ) : (
+                    selectedRewards.map((reward) => (
+                      <div 
+                        key={reward.id} 
+                        className="px-4 py-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors cursor-pointer"
+                        onClick={() => setShowRewardDetails(true)}
+                      >
+                        <div className="flex gap-3">
+                          <div className={cn(
+                            "h-8 w-8 rounded-md flex items-center justify-center flex-shrink-0",
+                            reward.type === "program" ? "bg-amber-100" : "bg-blue-100"
+                          )}>
+                            {reward.type === "program" ? (
+                              <Gift className="h-4 w-4 text-amber-600" />
+                            ) : (
+                              <Award className="h-4 w-4 text-blue-600" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-start">
+                              <h4 className="text-sm font-medium">{reward.name}</h4>
+                              <Badge variant={reward.type === "program" ? "outline" : "secondary"} className="text-xs">
+                                {reward.type === "program" ? "Program" : "Individual"}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {reward.description}
+                            </p>
+                            {reward.type === "program" && reward.programtype === "coffee" && (
+                              <div className="mt-2 text-xs">
+                                <div className="flex items-center gap-1 text-amber-700">
+                                  <span className="font-medium">Coffee Program:</span>
+                                  <span>{reward.coffeeConfig?.frequency || 5} coffees for 1 free</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="justify-center" asChild>
+                  <a href="/rewards/create" className="w-full text-center cursor-pointer">
+                    Create new reward
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           
           <div className="flex items-center gap-4">

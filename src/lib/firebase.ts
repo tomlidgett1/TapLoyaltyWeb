@@ -1,7 +1,7 @@
 import { initializeApp, getApp, getApps } from "firebase/app"
 import { getAuth } from "firebase/auth"
-import { getFirestore } from "firebase/firestore"
-import { getFunctions, connectFunctionsEmulator } from 'firebase/functions'
+import { getFirestore, Firestore } from "firebase/firestore"
+import { getFunctions, connectFunctionsEmulator, Functions } from 'firebase/functions'
 import { getStorage } from "firebase/storage"
 
 const firebaseConfig = {
@@ -40,7 +40,7 @@ try {
 }
 
 // Initialize Firebase services with logging
-let auth, db, functions, storage;
+let auth, db: Firestore, functions: Functions, storage;
 
 try {
   console.log('Initializing Firebase Auth');

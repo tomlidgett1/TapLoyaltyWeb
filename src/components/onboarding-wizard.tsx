@@ -14,7 +14,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { db, functions } from "@/lib/firebase"
 import { doc, updateDoc, writeBatch, collection, Timestamp, setDoc, getDocs, getDoc } from "firebase/firestore"
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { ArrowRight, CheckCircle, Coffee, Gift, Store, Users, Upload, Sparkles, Award, BarChart, Image, Utensils, Percent, Cake, Wine, UtensilsCrossed, Check, X, ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Ban, Calendar, ChevronLeft, Clock, Package, Plus, DollarSign } from "lucide-react"
+import { ArrowRight, CheckCircle, Coffee, Gift, Store, Users, Upload, Sparkles, Award, BarChart, Image, Utensils, Percent, Cake, Wine, UtensilsCrossed, Check, X, ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Ban, Calendar, ChevronLeft, Clock, Package, Plus, DollarSign, HelpCircle, Crown, ArrowUp } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
@@ -24,6 +24,9 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { AnnouncementDesignerDialog } from "@/components/announcement-designer-dialog"
 import { httpsCallable } from "firebase/functions"
+// Import the new component
+import { CoffeeProgramDisplay } from "@/components/coffee-program-display"
+import { Badge } from "@/components/ui/badge"
 
 // Helper function to format a UNIX timestamp (in seconds) into hh:mm AM/PM
 function formatTimestamp(seconds: number) {
@@ -43,7 +46,9 @@ function formatTimestamp(seconds: number) {
  * If parsing fails, returns the original string.
  */
 function formatShortAmPm(dateString: string) {
-  const date = new Date(dateString);
+  // Remove " at " so JavaScript can parse the date
+  const sanitized = dateString.replace(" at ", " ");
+  const date = new Date(sanitized);
   if (isNaN(date.getTime())) {
     return dateString; // fallback if parsing fails
   }
@@ -57,64 +62,242 @@ function formatShortAmPm(dateString: string) {
     : `${hours}:${minutes.toString().padStart(2, '0')}${ampm}`;
 }
 
-// Update the businessData type to include selectedRules and add missing properties to selectedRewards
-type BusinessData = {
-  hasSetupReward: boolean
-  selectedRewards: {
-    id: string
-    name: string
-    type: string
-    industry: string
-    isNewCustomer: boolean
-    pointsCost: number
-    description: string
-    rewardName?: string
-    conditions?: any[]
-    limitations?: any[]
-    programtype?: string
-    voucherAmount?: number
-    coffeeConfig?: {
-      pin: string
-      freeRewardTiming: 'before' | 'after'
-      frequency: number
-      levels: number
-    }
-  }[]
-  hasSetupBanner: boolean
-  bannerDetails: {
-    name: string
-    type: string
-  } | null
-  selectedIndustry: string
+// Define interfaces for your reward types
+interface BaseReward {
+  id: string;
+  name: string;
+  type: string;
+  industry: string;
+  isNewCustomer: boolean;
+  pointsCost: number;
+  description: string;
+  rewardName?: string;
+  conditions?: any[];
+  limitations?: Limitation[];
+  programtype?: string;
+  coffeeConfig?: CoffeeConfig;
+  voucherAmount?: number;
 }
 
-// Add this debugging helper function
-const logObjectDetails = (obj, label) => {
+interface Limitation {
+  type: string;
+  value: number | string[] | Period;
+}
+
+interface Period {
+  startDate: string;
+  endDate: string;
+}
+
+interface TimeOfDay {
+  startTime: string;
+  endTime: string;
+}
+
+interface CoffeeConfig {
+  pin: string;
+  freeRewardTiming: "before" | "after";
+  frequency: number;
+  levels: number;
+}
+
+// Add this debugging helper function with proper types
+const logObjectDetails = (obj: any, label: string) => {
   console.log(`=== ${label} ===`);
   console.log(`Type: ${typeof obj}`);
   console.log(`Is null/undefined: ${obj === null || obj === undefined}`);
-  if (obj) {
-    console.log(`Keys: ${Object.keys(obj).join(', ')}`);
-    console.log(`Full object:`, JSON.stringify(obj, null, 2));
-  }
+  // Add more debugging info as needed
 };
+
+// Update your businessData state type
+interface BusinessData {
+  hasSetupReward: boolean;
+  selectedRewards: BaseReward[];
+  hasSetupBanner: boolean;
+  bannerDetails: { name: string, type: string } | null;
+  pointsRuleDetails?: { name: string };
+}
+
+/**
+ * A new card component specifically for points rules:
+ */
+function PointsRuleCard({
+  id,
+  name,
+  description,
+  icon: Icon,
+  conditions,
+  pointsmultiplier,
+  isSelected,
+  onSelect,
+}: {
+  id: string
+  name: string
+  description: string
+  icon: LucideIcon
+  conditions: { type: string; [key: string]: any }[]
+  pointsmultiplier?: number
+  isSelected: boolean
+  onSelect: () => void
+}) {
+  // Basic expand/collapse state if you need it:
+  const [expanded, setExpanded] = useState(false)
+
+  // Convert numeric multiplier to something like "1.5x"
+  const multiplierLabel =
+    pointsmultiplier && pointsmultiplier > 1
+      ? `${pointsmultiplier}x`
+      : (pointsmultiplier === 1 ? '1x' : null)
+
+  return (
+    <div
+      className={`border rounded-lg overflow-hidden bg-white transition-all ${
+        isSelected ? 'ring-2 ring-blue-500 border-blue-500' : 'border-gray-200'
+      }`}
+    >
+      {/* Main clickable header */}
+      <div
+        className={`flex items-start gap-3 p-4 cursor-pointer transition-all ${
+          isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+        }`}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+          <Icon className="h-5 w-5 text-blue-600" />
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center justify-between">
+            {/* Rule name + multiplier */}
+            <div className="flex items-center gap-2">
+              <h3 className="font-medium text-gray-900">{name}</h3>
+              {/* Show "Points Rule" badge on the same line */}
+              <Badge
+                variant="outline"
+                className="text-[10px] text-blue-600 border-blue-400 cursor-default"
+              >
+                Points Rule
+              </Badge>
+              {multiplierLabel && (
+                <Badge 
+                  variant="secondary" 
+                  className="text-[10px]"
+                >
+                  {multiplierLabel}
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {isSelected && (
+                <span className="text-sm text-blue-600 flex items-center gap-1">
+                  <Check className="h-4 w-4" />
+                  Selected
+                </span>
+              )}
+              <ChevronDown
+                className={`h-5 w-5 text-gray-500 transition-transform ${
+                  expanded ? 'rotate-180' : ''
+                }`}
+              />
+            </div>
+          </div>
+          <p className="text-sm text-gray-500 mt-1">{description}</p>
+        </div>
+      </div>
+
+      {/* Collapsible details section */}
+      {expanded && (
+        <div className="border-t border-gray-200 bg-gray-50 p-4">
+          <div className="space-y-4">
+            {/* We show "Conditions" here */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-3">Conditions:</h4>
+              {conditions.length === 0 ? (
+                <div className="text-sm text-gray-500 italic">No conditions</div>
+               ) : (
+                <div className="space-y-3">
+                  {conditions.map((cond, i) => {
+                    if (cond.type === 'timeOfDay') {
+                      // Here we only show the short time (e.g. '7am') 
+                      const startLabel = formatShortAmPm(cond.startTime || '')
+                      const endLabel = formatShortAmPm(cond.endTime || '')
+                      return (
+                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
+                          <Clock className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <div>
+                            <span className="font-medium text-sm text-gray-700">Time Window:</span>
+                            <span className="text-sm text-gray-600 ml-1">{startLabel} - {endLabel}</span>
+                          </div>
+                        </div>
+                      )
+                    } else if (cond.type === 'minimumSpend') {
+                      return (
+                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
+                          <DollarSign className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <div>
+                            <span className="font-medium text-sm text-gray-700">Minimum Spend:</span>
+                            <span className="text-sm text-gray-600 ml-1">${cond.amount}</span>
+                          </div>
+                        </div>
+                      )
+                    } else if (cond.type === 'daysOfWeek') {
+                      return (
+                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
+                          <Calendar className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <div>
+                            <span className="font-medium text-sm text-gray-700">Days:</span>
+                            <span className="text-sm text-gray-600 ml-1">{cond.days.join(', ')}</span>
+                          </div>
+                        </div>
+                      )
+                    }
+                    // show others if needed
+                    return (
+                      <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
+                        <HelpCircle className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                        <div className="text-sm text-gray-700">
+                          {cond.type}: {JSON.stringify(cond)}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+               )}
+            </div>
+
+            {/* "Select" button at bottom */}
+            <div className="pt-2">
+              <Button
+                size="sm"
+                variant={isSelected ? 'outline' : 'default'}
+                className={
+                  isSelected
+                    ? 'border-blue-600 text-blue-600 hover:bg-blue-50'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onSelect()
+                }}
+              >
+                {isSelected ? 'Remove Selection' : 'Select Rule'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function OnboardingWizard() {
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [businessData, setBusinessData] = useState({
     hasSetupReward: false,
-    selectedRewards: [] as {
-      id: string,
-      name: string,
-      type: string,
-      industry: string,
-      isNewCustomer: boolean,
-      pointsCost: number,
-      description: string
-    }[],
+    selectedRewards: [] as BaseReward[],
     hasSetupBanner: false,
-    bannerDetails: null as { name: string, type: string } | null
+    bannerDetails: null as { name: string, type: string } | null,
+    pointsRuleDetails: undefined
   })
   
   // Move these state declarations up here, before they're used
@@ -139,58 +322,58 @@ export function OnboardingWizard() {
       if (wizardStep === 1) {
         // From Industry Selection to Reward Selection
         if (selectedIndustry) {
-          setWizardStep(2)
-          setCustomerCategoryStep('new') // Start with new customers
-          return
+          setWizardStep(2);
+          setCustomerCategoryStep('new'); // Start with new customers
+          return;
         } else {
           toast({
             title: "Please select an industry",
             description: "You need to select your business type to continue.",
             variant: "destructive"
-          })
-          return
+          });
+          return;
         }
       } else if (wizardStep === 2) {
         // From Reward Selection to next category or Program Selection
         if (customerCategoryStep === 'new') {
           // Check if at least one reward is selected for new customers
           if (wizardSelectedRewards.filter(r => r.includes('new-')).length > 0) {
-            setCustomerCategoryStep('existing')
-            return
+            setCustomerCategoryStep('existing');
+            return;
           } else {
             toast({
               title: "Please select a reward",
               description: "You need to select at least one reward for new customers.",
               variant: "destructive"
-            })
-            return
+            });
+            return;
           }
         } else if (customerCategoryStep === 'existing') {
           // Check if at least one reward is selected for existing customers
           if (wizardSelectedRewards.filter(r => r.includes('existing-')).length > 0) {
-            setCustomerCategoryStep('loyal')
-            return
+            setCustomerCategoryStep('loyal');
+            return;
           } else {
             toast({
               title: "Please select a reward",
               description: "You need to select at least one reward for existing customers.",
               variant: "destructive"
-            })
-            return
+            });
+            return;
           }
         } else if (customerCategoryStep === 'loyal') {
           // Check if at least one reward is selected for loyal customers
           if (wizardSelectedRewards.filter(r => r.includes('loyal-')).length > 0) {
-            setWizardStep(3) // Move to program selection
-            setCustomerCategoryStep(null)
-            return
+            setWizardStep(3); // Move to program selection
+            setCustomerCategoryStep(null);
+            return;
           } else {
             toast({
               title: "Please select a reward",
               description: "You need to select at least one reward for loyal customers.",
               variant: "destructive"
-            })
-            return
+            });
+            return;
           }
         }
       } else if (wizardStep === 3) {
@@ -226,26 +409,26 @@ export function OnboardingWizard() {
           }));
           
           // Move to the next main step
-          setStep(step + 1)
-          return
+          setStep(step + 1);
+          return;
         } else {
           toast({
             title: "Please select a program type",
             description: "You need to select a reward program to continue.",
             variant: "destructive"
-          })
-          return
+          });
+          return;
         }
       }
     }
     
     // For other main steps, just move to the next step
     if (step < totalSteps) {
-      setStep(step + 1)
+      setStep(step + 1);
     } else {
-      handleComplete()
+      handleComplete();
     }
-  }
+  };
   
   const handleBack = () => {
     // If we're in Step 1 (Create First Reward)
@@ -568,336 +751,15 @@ export function OnboardingWizard() {
     }
   };
 
-  const handleRewardSelection = (rewardId: string, type: 'individual' | 'program') => {
-    // Generate a unique ID using a timestamp and a random string
-    const uniqueId = `${selectedIndustry}-${type}-${rewardId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-    
-    // Define the base reward details with the required JSON structure
-    const rewardDetails = {
-      id: uniqueId,
-      name: '',
-      type,
-      industry: selectedIndustry,
-      isNewCustomer: false,
-      rewardName: '',
-      description: '',
-      isActive: true,
-      pointsCost: 0,
-      rewardVisibility: 'global',
-      conditions: [] as any[],
-      limitations: [
-        {
-          type: 'customerLimit',
-          value: 1
-        },
-        {
-          type: 'totalRedemptionLimit',
-          value: 100
-        }
-      ]
-    }
-    
-    // Set the specific details based on the reward ID and type
-    switch (rewardId) {
-      case 'cafe-coffee':
-        if (type === 'individual') {
-          rewardDetails.name = 'Free Coffee';
-          rewardDetails.rewardName = 'Free Coffee';
-          rewardDetails.pointsCost = 150;
-          rewardDetails.description = 'Enjoy a free coffee of your choice after earning enough points.';
-          
-          // Add conditions for individual reward
-          rewardDetails.conditions = [
-            {
-              type: 'minimumTransactions',
-              value: 10
-            }
-          ];
-          
-          // Add limitations (already has the required ones)
-          rewardDetails.limitations.push({
-            type: 'activePeriod',
-            value: {
-              startDate: new Date().toISOString().split('T')[0],
-              endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
-            } as any // Type assertion to avoid type error
-          });
+  const handleRewardSelection = (rewardId: string) => {
+    setWizardSelectedRewards(prev => {
+      if (prev.includes(rewardId)) {
+        return prev.filter(id => id !== rewardId);
         } else {
-          rewardDetails.name = 'Coffee Lovers Program';
-          rewardDetails.rewardName = 'Coffee Lovers Program';
-          rewardDetails.pointsCost = 500;
-          rewardDetails.description = 'A program with coffee-related rewards at different point levels';
-          rewardDetails.programtype = 'tiered';
-        }
-        break;
-        
-      case 'cafe-pastry':
-        if (type === 'individual') {
-          rewardDetails.name = 'Free Pastry';
-          rewardDetails.rewardName = 'Free Pastry';
-          rewardDetails.pointsCost = 200;
-          rewardDetails.description = 'Redeem for a free pastry of your choice after spending $50.';
-          
-          // Add conditions for individual reward
-          rewardDetails.conditions = [
-            {
-              type: 'minimumSpend',
-              amount: 50
-            }
-          ];
-          
-          // Add limitations (already has the required ones)
-          rewardDetails.limitations.push({
-            type: 'daysOfWeek',
-            value: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-          });
-        } else {
-          rewardDetails.name = 'Sweet Treats Program';
-          rewardDetails.rewardName = 'Sweet Treats Program';
-          rewardDetails.pointsCost = 600;
-          rewardDetails.description = 'A program with pastry and dessert rewards at different tiers';
-          rewardDetails.programtype = 'tiered';
-        }
-        break;
-        
-      case 'cafe-new':
-        if (type === 'individual') {
-          rewardDetails.name = 'New Customer Welcome Reward';
-          rewardDetails.rewardName = 'New Customer Welcome Reward';
-          rewardDetails.isNewCustomer = true;
-          rewardDetails.pointsCost = 0;
-          rewardDetails.description = 'Special offer for first-time customers with no purchase required.';
-          
-          // For new customer rewards, set maximumTransactions to 0 and no other conditions
-          rewardDetails.conditions = [{
-            type: 'maximumTransactions',
-            value: 0
-          }];
-          
-          // Add limitations (already has the required ones)
-          rewardDetails.limitations.push({
-            type: 'activePeriod',
-            value: {
-              startDate: new Date().toISOString().split('T')[0],
-              endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
-            }
-          });
-        } else {
-          rewardDetails.name = 'New Customer Welcome Program';
-          rewardDetails.rewardName = 'New Customer Welcome Program';
-          rewardDetails.isNewCustomer = true;
-          rewardDetails.pointsCost = 0;
-          rewardDetails.description = 'Special perks for new customers on their first visit';
-          rewardDetails.programtype = 'welcome';
-        }
-        break;
-        
-      case 'retail-discount':
-        if (type === 'individual') {
-          rewardDetails.name = '15% Discount';
-          rewardDetails.rewardName = '15% Discount';
-          rewardDetails.pointsCost = 300;
-          rewardDetails.description = 'Get 15% off your next purchase after earning enough points.';
-          rewardDetails.voucherAmount = 15.0; // Percentage discount
-          
-          rewardDetails.conditions = [
-            {
-              type: 'minimumPointsBalance',
-              value: 300
-            }
-          ];
-          
-          // Add limitations (already has the required ones)
-          rewardDetails.limitations.push({
-            type: 'activePeriod',
-            value: {
-              startDate: new Date().toISOString().split('T')[0],
-              endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
-            }
-          });
-        } else {
-          rewardDetails.name = 'Tiered Discount Program';
-          rewardDetails.rewardName = 'Tiered Discount Program';
-          rewardDetails.pointsCost = 800;
-          rewardDetails.description = 'A program with increasing discounts at different point thresholds';
-          rewardDetails.programtype = 'tiered';
-        }
-        break;
-        
-      case 'retail-first-time':
-        if (type === 'individual') {
-          rewardDetails.name = 'First-Time Shopper Discount';
-          rewardDetails.rewardName = 'First-Time Shopper Discount';
-          rewardDetails.isNewCustomer = true;
-          rewardDetails.pointsCost = 0;
-          rewardDetails.description = 'Special 10% discount for new customers on their first visit.';
-          rewardDetails.voucherAmount = 10.0; // Percentage discount
-          
-          // For new customer rewards, set maximumTransactions to 0 and no other conditions
-          rewardDetails.conditions = [{
-            type: 'maximumTransactions',
-            value: 0
-          }];
-          
-          // Add limitations (already has the required ones)
-          rewardDetails.limitations.push({
-            type: 'activePeriod',
-            value: {
-              startDate: new Date().toISOString().split('T')[0],
-              endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
-            }
-          });
-        } else {
-          rewardDetails.name = 'First-Time Shopper Program';
-          rewardDetails.rewardName = 'First-Time Shopper Program';
-          rewardDetails.isNewCustomer = true;
-          rewardDetails.pointsCost = 0;
-          rewardDetails.description = 'A program with special offers for first-time shoppers';
-          rewardDetails.programtype = 'welcome';
-        }
-        break;
-        
-      case 'retail-vip':
-        if (type === 'individual') {
-          rewardDetails.name = 'Free Gift';
-          rewardDetails.rewardName = 'Free Gift';
-          rewardDetails.pointsCost = 300;
-          rewardDetails.description = 'Receive a free gift with your next purchase after earning enough points.';
-          
-          rewardDetails.conditions = [
-            {
-              type: 'minimumPointsBalance',
-              value: 300
-            }
-          ];
-          
-          // Add limitations (already has the required ones)
-          rewardDetails.limitations.push({
-            type: 'activePeriod',
-            value: {
-              startDate: new Date().toISOString().split('T')[0],
-              endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
-            }
-          });
-        } else {
-          rewardDetails.name = 'VIP Rewards Program';
-          rewardDetails.rewardName = 'VIP Rewards Program';
-          rewardDetails.pointsCost = 750;
-          rewardDetails.description = 'A program with exclusive gifts and perks for loyal customers';
-          rewardDetails.programtype = 'vip';
-        }
-        break;
-        
-      case 'restaurant-appetizer':
-        if (type === 'individual') {
-          rewardDetails.name = 'Free Appetizer';
-          rewardDetails.rewardName = 'Free Appetizer';
-          rewardDetails.pointsCost = 250;
-          rewardDetails.description = 'Enjoy a free appetizer after your 5th visit.';
-          
-          rewardDetails.conditions = [
-            {
-              type: 'visitNumber',
-              number: 5
-            }
-          ];
-          
-          // Add limitations (already has the required ones)
-          rewardDetails.limitations.push({
-            type: 'daysOfWeek',
-            value: ['Monday', 'Tuesday', 'Wednesday', 'Thursday']
-          });
-        } else {
-          rewardDetails.name = 'Dining Rewards Program';
-          rewardDetails.rewardName = 'Dining Rewards Program';
-          rewardDetails.pointsCost = 700;
-          rewardDetails.description = 'A program with appetizers, desserts, and entrees at different levels';
-          rewardDetails.programtype = 'tiered';
-        }
-        break;
-        
-      case 'restaurant-drink':
-        if (type === 'individual') {
-          rewardDetails.name = 'Free Drink';
-          rewardDetails.rewardName = 'Free Drink';
-          rewardDetails.pointsCost = 200;
-          rewardDetails.description = 'Redeem for a free drink after spending $100.';
-          
-          rewardDetails.conditions = [
-            {
-              type: 'minimumSpend',
-              amount: 100
-            }
-          ];
-          
-          // Add limitations (already has the required ones)
-          rewardDetails.limitations.push({
-            type: 'timeOfDay',
-            value: {
-              startTime: '16:00',
-              endTime: '19:00'
-            }
-          });
-        } else {
-          rewardDetails.name = 'Beverage Rewards Program';
-          rewardDetails.rewardName = 'Beverage Rewards Program';
-          rewardDetails.pointsCost = 600;
-          rewardDetails.description = 'A program with different drink rewards at various point levels';
-          rewardDetails.programtype = 'tiered';
-        }
-        break;
-        
-      case 'restaurant-first-time':
-        if (type === 'individual') {
-          rewardDetails.name = 'First-Time Diner Special';
-          rewardDetails.rewardName = 'First-Time Diner Special';
-          rewardDetails.isNewCustomer = true;
-          rewardDetails.pointsCost = 0;
-          rewardDetails.description = 'Complimentary dessert or appetizer for first-time diners.';
-          
-          // For new customer rewards, set maximumTransactions to 0 and no other conditions
-          rewardDetails.conditions = [{
-            type: 'maximumTransactions',
-            value: 0
-          }];
-          
-          // Add limitations (already has the required ones)
-          rewardDetails.limitations.push({
-            type: 'activePeriod',
-            value: {
-              startDate: new Date().toISOString().split('T')[0],
-              endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
-            }
-          });
-        } else {
-          rewardDetails.name = 'First-Time Diner Program';
-          rewardDetails.rewardName = 'First-Time Diner Program';
-          rewardDetails.isNewCustomer = true;
-          rewardDetails.pointsCost = 0;
-          rewardDetails.description = 'A program with special perks for customers on their first visit';
-          rewardDetails.programtype = 'welcome';
-        }
-        break;
-    }
-    
-    // Check if this reward is already selected
-    const isAlreadySelected = businessData.selectedRewards.some(reward => reward.id === uniqueId)
-    
-    if (isAlreadySelected) {
-      // Remove it if already selected
-      setBusinessData(prev => ({
-        ...prev,
-        selectedRewards: prev.selectedRewards.filter(reward => reward.id !== uniqueId)
-      }))
-    } else {
-      // Add it if not already selected
-      setBusinessData(prev => ({
-        ...prev,
-        selectedRewards: [...prev.selectedRewards, rewardDetails],
-        hasSetupReward: true
-      }))
-    }
-  }
+        return [...prev, rewardId];
+      }
+    });
+  };
 
   // First, add a state to track which reward's JSON is being viewed
   const [viewingJsonFor, setViewingJsonFor] = useState<string | null>(null)
@@ -922,9 +784,15 @@ export function OnboardingWizard() {
   const [selectedProgramType, setSelectedProgramType] = useState<string | null>(null)
 
   // Add this function to handle industry selection and move to next wizard step
-  const handleIndustrySelection = (industry: string) => {
-    setSelectedIndustry(industry)
-    setWizardStep(2) // Move to individual reward selection
+  const handleIndustrySelect = (industry: string) => {
+    console.log(`Selected industry: ${industry}`);
+    setSelectedIndustry(industry);
+    
+    // Update business data with the selected industry
+    setBusinessData(prev => ({
+      ...prev,
+      industry: industry
+    }));
   }
 
   // Add this state to track selected rewards in the wizard
@@ -1073,18 +941,22 @@ export function OnboardingWizard() {
   // First, let's add a state to track if the coffee program has been configured
   const [coffeeProgramConfigured, setCoffeeProgramConfigured] = useState(false);
 
-  // Update the saveCoffeeProgram function to mark the program as configured
+  // Update the saveCoffeeProgram function to set coffeeProgramConfigured to true
+
   const saveCoffeeProgram = () => {
-    // Find the coffee program in the rewards
-    const coffeeReward = businessData.selectedRewards.find(r => r.programtype === 'coffee');
-    
-    // Update the coffee program with the configuration
+    // Update the business data with the coffee program configuration
     setBusinessData(prev => {
       const updatedRewards = prev.selectedRewards.map(r => {
-        if (r.programtype === 'coffee') {
+        if (r.programtype === 'coffee' || r.name === 'Traditional Coffee Program') {
           return {
             ...r,
-            coffeeConfig: coffeeProgram
+            programtype: 'coffee',
+            coffeeConfig: {
+              pin: coffeeProgram.pin,
+              freeRewardTiming: coffeeProgram.freeRewardTiming,
+              frequency: parseInt(coffeeProgram.frequency.toString()),
+              levels: parseInt(coffeeProgram.levels.toString())
+            }
           };
         }
         return r;
@@ -1096,15 +968,19 @@ export function OnboardingWizard() {
       };
     });
     
-    // Set the selected program type
-    setSelectedProgramType('coffee');
+    // Set the coffee program as configured
+    setCoffeeProgramConfigured(true);
     
     // Close the configuration dialog
     setShowCoffeeProgramConfig(false);
     
-    // Do NOT automatically advance to the next step
-    // setWizardStep(4); - Remove this line
-  };
+    // Show a success toast
+    toast({
+      title: "Coffee Program Configured",
+      description: "Your coffee loyalty program has been set up successfully.",
+      variant: "default"
+    });
+  }
 
   // In the review step (Step 4), add a function to handle coffee program configuration
   const handleCoffeeProgramConfig = () => {
@@ -1284,7 +1160,7 @@ export function OnboardingWizard() {
   };
 
   // Function that handles saving the banner
-  const handleSaveBanner = (data) => {
+  const handleSaveBanner = (data: any) => {
     console.log("======== BANNER SAVE START ========");
     logObjectDetails(data, "RECEIVED BANNER DATA");
     
@@ -1341,6 +1217,279 @@ export function OnboardingWizard() {
     console.log("Current businessData state:", businessData);
   }, [bannerData, businessData]);
 
+  // Add the missing handleSaveAnnouncement function
+  const handleSaveAnnouncement = (newAnnouncement: any) => {
+    console.log("Saving announcement:", newAnnouncement);
+    setAnnouncementData(newAnnouncement);
+    setShowAnnouncementDesigner(false);
+    // Additional logic as needed
+  };
+
+  // First, add this state to track which reward's details are expanded
+  const [expandedRewardId, setExpandedRewardId] = useState<string | null>(null);
+
+  // Add this helper function to format the reward card
+  const RewardCard = ({ 
+    id, 
+    name, 
+    description, 
+    icon: Icon,
+    conditions,
+    limitations,
+    isSelected,
+    onSelect,
+    pointsmultiplier
+  }: {
+    id: string;
+    name: string;
+    description: string;
+    icon: LucideIcon;
+    conditions: { type: string; [key: string]: any }[];
+    limitations: { type: string; value: any }[];
+    isSelected: boolean;
+    onSelect: () => void;
+    pointsmultiplier?: number;
+  }) => {
+    const isExpanded = expandedRewardId === id;
+
+    // Helper: Convert numeric multiplier to a simple "2x" string.
+    const multiplierLabel = pointsmultiplier && pointsmultiplier > 1
+      ? `${pointsmultiplier}x`
+      : null
+
+    return (
+      <div
+        className={`border rounded-lg overflow-hidden bg-white transition-all ${
+        isSelected ? 'ring-2 ring-green-500 border-green-500' : 'border-gray-200'
+        }`}
+      >
+        {/* Show a small points-rule badge at the top if we're on Step 2 */}
+        {step === 2 && (
+          <div className="px-4 pt-4">
+            <Badge
+              variant="outline"
+              className="text-[10px] text-blue-600 border-blue-400 cursor-default"
+            >
+              Points Rule
+            </Badge>
+          </div>
+        )}
+
+        <div 
+          className={`flex items-start gap-3 p-4 cursor-pointer transition-all ${
+            isSelected ? 'bg-green-50' : 'hover:bg-gray-50'
+          }`}
+          onClick={() => setExpandedRewardId(isExpanded ? null : id)}
+        >
+          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+            <Icon className="h-5 w-5 text-blue-600" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center justify-between">
+              {/* Display the rule name plus multiplier ("2x") if it exists */}
+              <div className="flex items-center gap-2">
+              <h3 className="font-medium text-gray-900">{name}</h3>
+                {multiplierLabel && (
+                  <Badge variant="secondary" className="text-[10px]">
+                    {multiplierLabel}
+                  </Badge>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {isSelected && (
+                  <span className="text-sm text-green-600 flex items-center gap-1">
+                    <Check className="h-4 w-4" />
+                    Selected
+                  </span>
+                )}
+                <ChevronDown 
+                  className={`h-5 w-5 text-gray-500 transition-transform ${
+                    isExpanded ? 'rotate-180' : ''
+                  }`}
+                />
+              </div>
+            </div>
+            <p className="text-sm text-gray-500 mt-1">{description}</p>
+          </div>
+        </div>
+
+        {/* Collapsible details section */}
+        <div className={`border-t border-gray-200 ${isExpanded ? '' : 'hidden'}`}>
+          <div className="p-4 bg-gray-50 space-y-4">
+            {/* Conditions */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-3">Conditions:</h4>
+              {conditions.length === 0 ? (
+                <div className="text-sm text-gray-500 italic">No conditions</div>
+               ) : (
+                <div className="space-y-3">
+                  {conditions.map((cond, i) => {
+                    if (cond.type === 'timeOfDay') {
+                      const startLabel = formatShortAmPm(cond.startTime || '')
+                      const endLabel = formatShortAmPm(cond.endTime || '')
+                      return (
+                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
+                          <Clock className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <div>
+                            <span className="font-medium text-sm text-gray-700">Time Window:</span>
+                            <span className="text-sm text-gray-600 ml-1">{startLabel} - {endLabel}</span>
+                          </div>
+                        </div>
+                      )
+                    } else if (cond.type === 'minimumSpend') {
+                      return (
+                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
+                          <DollarSign className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <div>
+                            <span className="font-medium text-sm text-gray-700">Minimum Spend:</span>
+                            <span className="text-sm text-gray-600 ml-1">${cond.amount || cond.value}</span>
+                          </div>
+                        </div>
+                      )
+                    } else if (cond.type === 'daysOfWeek') {
+                      const days = cond.days || (Array.isArray(cond.value) ? cond.value : []);
+                      return (
+                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
+                          <Calendar className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <div>
+                            <span className="font-medium text-sm text-gray-700">Days:</span>
+                            <span className="text-sm text-gray-600 ml-1">{days.join(', ')}</span>
+                          </div>
+                        </div>
+                      )
+                    } else if (cond.type === 'maximumTransactions' || cond.type === 'minimumTransactions') {
+                      return (
+                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
+                          <Package className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <div>
+                            <span className="font-medium text-sm text-gray-700">{cond.type === 'maximumTransactions' ? 'Maximum' : 'Minimum'} Transactions:</span>
+                            <span className="text-sm text-gray-600 ml-1">{cond.value}</span>
+                          </div>
+                        </div>
+                      )
+                    } else if (cond.type === 'totalLifetimeSpend') {
+                      return (
+                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
+                          <DollarSign className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <div>
+                            <span className="font-medium text-sm text-gray-700">Total Lifetime Spend:</span>
+                            <span className="text-sm text-gray-600 ml-1">${cond.value}</span>
+                          </div>
+                        </div>
+                      )
+                    } else if (cond.type === 'minimumLifetimeSpend') {
+                      return (
+                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
+                          <DollarSign className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <div>
+                            <span className="font-medium text-sm text-gray-700">Minimum Lifetime Spend:</span>
+                            <span className="text-sm text-gray-600 ml-1">${cond.value}</span>
+                          </div>
+                        </div>
+                      )
+                    } else if (cond.type === 'daysOfWeek') {
+                      return (
+                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
+                          <Calendar className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <div>
+                            <span className="font-medium text-sm text-gray-700">Days:</span>
+                            <span className="text-sm text-gray-600 ml-1">{cond.days.join(', ')}</span>
+                          </div>
+                        </div>
+                      )
+                    }
+                    // Default case for any other condition types
+                    return (
+                      <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
+                        <HelpCircle className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                        <div className="text-sm text-gray-700">
+                          <span className="font-medium">{cond.type}:</span> {JSON.stringify(cond.value || cond)}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+               )}
+            </div>
+ 
+            {/* Limitations - using the same nice formatting */}
+            {limitations && limitations.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-3">Limitations:</h4>
+                <div className="space-y-3">
+                  {limitations.map((limitation, i) => (
+                    <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
+                      {limitation.type === 'customerLimit' ? (
+                        <>
+                          <Users className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <div>
+                            <span className="font-medium text-sm text-gray-700">Customer Limit:</span>
+                            <span className="text-sm text-gray-600 ml-1">{limitation.value} per customer</span>
+                          </div>
+                        </>
+                      ) : limitation.type === 'totalRedemptionLimit' ? (
+                        <>
+                          <Ban className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <div>
+                            <span className="font-medium text-sm text-gray-700">Total Limit:</span>
+                            <span className="text-sm text-gray-600 ml-1">{limitation.value} redemptions</span>
+                          </div>
+                        </>
+                      ) : limitation.type === 'daysOfWeek' ? (
+                        <>
+                          <Calendar className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <div>
+                            <span className="font-medium text-sm text-gray-700">Days:</span>
+                            <span className="text-sm text-gray-600 ml-1">
+                              {Array.isArray(limitation.value) 
+                                ? limitation.value.join(', ') 
+                                : limitation.value}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <HelpCircle className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <div>
+                            <span className="font-medium text-sm text-gray-700">{limitation.type}:</span>
+                            <span className="text-sm text-gray-600 ml-1">{JSON.stringify(limitation.value)}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+ 
+            {/* Select button below limitations */}
+            <div className="pt-2">
+              <Button
+                size="sm"
+                variant={isSelected ? "outline" : "default"}
+                className={isSelected 
+                  ? "border-red-500 text-red-500 hover:bg-red-50" 
+                  : "bg-green-600 hover:bg-green-700 text-white"
+                }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect();
+                }}
+              >
+                {isSelected ? (
+                  "Remove Selection"
+                ) : (
+                  "Select Reward"
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="container max-w-[1600px] py-10">
       {/* Exit button */}
@@ -1354,34 +1503,200 @@ export function OnboardingWizard() {
         <X className="h-4 w-4" />
       </Button>
       
-      {/* Welcome title section - centered above the grid */}
-      <div className="mb-8 text-center">
-        <h1 className="text-2xl font-bold mb-1">Welcome to <span className="text-[#007AFF]">Tap Loyalty</span></h1>
-        <p className="text-sm text-gray-500">Let's set up your loyalty program in just a few steps</p>
+      {/* Grid layout */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 relative">
+        {/* Progress bar - only show when not on intro page */}
+        {hasViewedIntro && (
+          <div className="md:col-span-3 md:order-first">
+            <div className="fixed top-0 left-0 bottom-0 w-[320px] bg-white overflow-y-auto border-r border-gray-200 shadow-sm">
+              {/* Branding header */}
+              <div className="bg-[#007AFF] text-white p-5 pb-8">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+                    <Sparkles className="h-5 w-5 text-white" />
+                  </div>
+                  <h2 className="text-xl font-semibold">Tap Loyalty</h2>
+                </div>
+                <p className="text-sm text-white/80">Business Onboarding</p>
       </div>
       
-      {/* Grid layout */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-        {/* Empty column for left spacing */}
-        <div className="hidden md:block md:col-span-2">
-          {/* This creates space on the left */}
+              {/* Progress content with negative margin to overlap with header */}
+              <div className="px-5 pt-0 pb-5 -mt-4">
+                <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-600">Progress</span>
+                    <span className="text-sm font-medium text-[#007AFF]">Step {step} of {totalSteps}</span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-[#007AFF] rounded-full transition-all duration-300"
+                      style={{ width: `${(step / totalSteps) * 100}%` }}
+                    />
+                  </div>
       </div>
+                
+                <h3 className="text-lg font-medium mb-4 text-gray-800">Your Setup Progress</h3>
+                
+                <div className="space-y-6">
+                  {/* Reward creation status */}
+                  <div className="flex items-start gap-3">
+                    <div className={`h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      step === 1 ? "bg-[#007AFF] text-white" :
+                      step > 1 ? "bg-green-100 text-green-600" :
+                      "bg-gray-100 text-gray-400"
+                    }`}>
+                      {step > 1 ? (
+                        <Check className="h-5 w-5" />
+                      ) : (
+                        <Gift className="h-5 w-5" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className={`text-base font-medium ${
+                        step >= 1 ? "text-gray-900" : "text-gray-500"
+                      }`}>
+                        Create Rewards
+                      </p>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Set up rewards for your customers to earn
+                      </p>
+                      {businessData.selectedRewards.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          {businessData.selectedRewards.map((reward) => (
+                            <div key={reward.id} className="flex items-center gap-2 bg-gray-50 p-2 rounded-md border border-gray-200">
+                              <span className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0"></span>
+                              <p className="text-xs text-gray-600 truncate">{reward.name}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Points rule status */}
+                  <div className="flex items-start gap-3">
+                    <div className={`h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      step === 2 ? "bg-[#007AFF] text-white" :
+                      step > 2 ? "bg-green-100 text-green-600" :
+                      "bg-gray-100 text-gray-400"
+                    }`}>
+                      {step > 2 ? (
+                        <Check className="h-5 w-5" />
+                      ) : (
+                        <BarChart className="h-5 w-5" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className={`text-base font-medium ${
+                        step >= 2 ? "text-gray-900" : "text-gray-500"
+                      }`}>
+                        Set Up Points Rules
+                      </p>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Define how customers earn points
+                      </p>
+                      {selectedPointsRules.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          {selectedPointsRules.map((rule) => (
+                            <div key={rule} className="flex items-center gap-2 bg-gray-50 p-2 rounded-md border border-gray-200">
+                              <span className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0"></span>
+                              <p className="text-xs text-gray-600 truncate">{rule.replace(/-/g, ' ')}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Banner status */}
+                  <div className="flex items-start gap-3">
+                    <div className={`h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      step === 3 ? "bg-[#007AFF] text-white" :
+                      step > 3 ? "bg-green-100 text-green-600" :
+                      "bg-gray-100 text-gray-400"
+                    }`}>
+                      {step > 3 ? (
+                        <Check className="h-5 w-5" />
+                      ) : (
+                        <Image className="h-5 w-5" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className={`text-base font-medium ${
+                        step >= 3 ? "text-gray-900" : "text-gray-500"
+                      }`}>
+                        Create Homepage Banner
+                      </p>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Design a banner to promote your program
+                      </p>
+                      {businessData.bannerDetails && (
+                        <div className="mt-3 bg-gray-50 p-2 rounded-md border border-gray-200">
+                          <p className="text-xs text-gray-600">
+                            {businessData.bannerDetails.name} ({businessData.bannerDetails.type})
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Add a help section at the bottom */}
+                <div className="mt-12 pt-6 border-t border-gray-200">
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <h4 className="text-sm font-medium flex items-center gap-2 mb-2">
+                      <HelpCircle className="h-4 w-4 text-[#007AFF]" />
+                      Need help?
+                    </h4>
+                    <p className="text-xs text-gray-600 mb-3">
+                      Our setup guide can help you make the most of your loyalty program.
+                    </p>
+                    <Button variant="outline" size="sm" className="w-full text-[#007AFF] border-[#007AFF]/30 hover:bg-[#007AFF]/10">
+                      View Setup Guide
+                    </Button>
+                  </div>
+                  
+                  <div className="mt-6 text-center">
+                    <p className="text-xs text-gray-500">© 2023 Tap Loyalty</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* This empty div takes up space in the grid to push main content */}
+            <div className="w-[320px]"></div>
+          </div>
+        )}
 
         {/* Main setup module - centered */}
-        <div className={hasViewedIntro ? "md:col-span-7" : "md:col-span-8"}>
-          <Card className="border-gray-200 shadow-sm">
+        <div className={hasViewedIntro 
+          ? "md:col-span-9 w-full" 
+          : "md:col-span-12 w-full"
+        }>
+          {/* Welcome title section - centered above the setup module */}
+          <div className="mb-8 text-center">
+            <h1 className="text-2xl font-bold mb-1">Welcome to <span className="text-[#007AFF]">Tap Loyalty</span></h1>
+            <p className="text-sm text-gray-500">Let's set up your loyalty program in just a few steps</p>
+          </div>
+          
+          <Card className="border-gray-200 shadow-sm w-full">
             <CardHeader className="py-3 px-4 border-b">
               {hasViewedIntro && (
                 <div className="flex items-center w-full">
                   {/* Title section - only show when not on intro page */}
                   <div className="flex-1">
                     <CardTitle className="text-lg">
-                      {step === 1 && "Reward Setup"}
+                      {step === 1 && wizardStep === 1 && "Select Your Business Type"}
+                      {step === 1 && wizardStep === 2 && "Select Rewards"}
+                      {step === 1 && wizardStep === 3 && "Select a Loyalty Program"}
                       {step === 2 && "Points Rules"}
                       {step === 3 && "Marketing Banner"}
               </CardTitle>
                     <CardDescription className="text-xs">
-                      {step === 1 && "Set up your loyalty program rewards"}
+                      {step === 1 && wizardStep === 1 && "Choose your industry to get personalized reward suggestions"}
+                      {step === 1 && wizardStep === 2 && customerCategoryStep === 'new' && "Choose rewards for new customers"}
+                      {step === 1 && wizardStep === 2 && customerCategoryStep === 'existing' && "Choose rewards for existing customers"}
+                      {step === 1 && wizardStep === 2 && customerCategoryStep === 'loyal' && "Choose rewards for loyal customers"}
+                      {step === 1 && wizardStep === 3 && "Choose a program type that best fits your business"}
                       {step === 2 && "Define how customers earn points"}
                       {step === 3 && "Create a banner to promote your program"}
               </CardDescription>
@@ -1593,1950 +1908,599 @@ export function OnboardingWizard() {
               {/* Original reward creation content - only show after intro */}
               {step === 1 && hasViewedIntro && (
                 <div className="space-y-6">
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                        <Gift className="h-5 w-5 text-[#007AFF]" />
-                      </div>
-                            <div>
-                        <h3 className="text-base font-medium">Create Your First Reward</h3>
-                        <p className="text-xs text-gray-500">
-                          Rewards are what customers can redeem with their points
-                        </p>
-                            </div>
-                          </div>
-                    
-                    {/* Wizard Step 1: Industry Selection */}
+                  {/* Industry Selection - wizardStep 1 */}
                     {wizardStep === 1 && (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-medium text-lg">Step 1: Select Your Industry</h4>
-                    </div>
-                    
-                        <p className="text-sm text-gray-600 mb-2">
-                          Choose the industry that best matches your business
-                        </p>
-                        
-                        <div className="space-y-3">
-                          <div 
-                            className={`flex items-center gap-3 p-4 bg-white rounded-md border ${
-                              selectedIndustry === 'cafe' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
-                            } cursor-pointer transition-colors`}
-                            onClick={() => setSelectedIndustry('cafe')}
-                          >
-                            <Coffee className="h-6 w-6 text-amber-500" />
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Café / Coffee Shop */}
+                        <div 
+                          className={`flex items-start gap-3 p-4 rounded-lg cursor-pointer transition-all ${
+                            selectedIndustry === 'cafe' 
+                              ? 'bg-blue-50 ring-2 ring-blue-500' 
+                              : 'bg-white border border-gray-200 hover:border-blue-200'
+                          }`}
+                          onClick={() => handleIndustrySelect('cafe')}
+                        >
+                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                            <Coffee className="h-5 w-5 text-blue-600" />
+                          </div>
                             <div className="flex-1">
-                              <h5 className="font-medium">Café</h5>
-                              <p className="text-sm text-gray-500">Coffee shops, bakeries, and casual eateries</p>
+                            <h3 className="font-medium text-gray-900">Café / Coffee Shop</h3>
+                            <p className="text-sm text-gray-500 mt-1">Coffee, pastries, light meals</p>
                           </div>
                             {selectedIndustry === 'cafe' && (
-                              <CheckCircle className="h-5 w-5 text-green-600" />
+                            <Check className="h-5 w-5 text-blue-500 ml-auto" />
                             )}
                         </div>
                         
+                        {/* Restaurant */}
                         <div 
-                            className={`flex items-center gap-3 p-4 bg-white rounded-md border ${
-                              selectedIndustry === 'restaurant' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
-                            } cursor-pointer transition-colors`}
-                            onClick={() => setSelectedIndustry('restaurant')}
-                          >
-                            <Utensils className="h-6 w-6 text-red-500" />
+                          className={`flex items-start gap-3 p-4 rounded-lg cursor-pointer transition-all ${
+                            selectedIndustry === 'restaurant' 
+                              ? 'bg-blue-50 ring-2 ring-blue-500' 
+                              : 'bg-white border border-gray-200 hover:border-blue-200'
+                          }`}
+                          onClick={() => handleIndustrySelect('restaurant')}
+                        >
+                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                            <Utensils className="h-5 w-5 text-blue-600" />
+                          </div>
                             <div className="flex-1">
-                              <h5 className="font-medium">Restaurant</h5>
-                              <p className="text-sm text-gray-500">Full-service restaurants and dining establishments</p>
+                            <h3 className="font-medium text-gray-900">Restaurant</h3>
+                            <p className="text-sm text-gray-500 mt-1">Dining, food service</p>
                           </div>
                             {selectedIndustry === 'restaurant' && (
-                              <CheckCircle className="h-5 w-5 text-green-600" />
+                            <Check className="h-5 w-5 text-blue-500 ml-auto" />
                             )}
                         </div>
                         
+                        {/* Retail */}
                         <div 
-                            className={`flex items-center gap-3 p-4 bg-white rounded-md border ${
-                              selectedIndustry === 'retail' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
-                            } cursor-pointer transition-colors`}
-                            onClick={() => setSelectedIndustry('retail')}
-                          >
-                            <Store className="h-6 w-6 text-blue-500" />
+                          className={`flex items-start gap-3 p-4 rounded-lg cursor-pointer transition-all ${
+                            selectedIndustry === 'retail' 
+                              ? 'bg-blue-50 ring-2 ring-blue-500' 
+                              : 'bg-white border border-gray-200 hover:border-blue-200'
+                          }`}
+                          onClick={() => handleIndustrySelect('retail')}
+                        >
+                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                            <Package className="h-5 w-5 text-blue-600" />
+                          </div>
                             <div className="flex-1">
-                              <h5 className="font-medium">Retail</h5>
-                              <p className="text-sm text-gray-500">Shops, boutiques, and retail stores</p>
+                            <h3 className="font-medium text-gray-900">Retail</h3>
+                            <p className="text-sm text-gray-500 mt-1">Shops, stores, merchandise</p>
                           </div>
                             {selectedIndustry === 'retail' && (
-                              <CheckCircle className="h-5 w-5 text-green-600" />
+                            <Check className="h-5 w-5 text-blue-500 ml-auto" />
                             )}
                       </div>
                     </div>
                     
-                        <div className="mt-4 p-3 bg-blue-50 rounded-md border border-blue-100">
-                          <p className="text-sm text-blue-700">
-                            <span className="font-medium">Selected: </span>
-                            {selectedIndustry ? (
-                              <span className="capitalize">{selectedIndustry}</span>
-                            ) : (
-                              "None"
-                            )}
-                          </p>
-                    </div>
-                      </div>
+                      <div className="flex justify-between pt-6 mt-6 border-t border-gray-200">
+                        <Button variant="outline" onClick={handleBack}>
+                          Back
+                        </Button>
+                                    <Button 
+                          onClick={handleNext}
+                          disabled={!selectedIndustry}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          Continue
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                                </Button>
+                            </div>
+                    </>
                     )}
                     
-                    {/* Wizard Step 2: Individual Reward Selection */}
+                  {/* Reward Selection - wizardStep 2 */}
                     {wizardStep === 2 && (
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-medium text-lg">
-                            {customerCategoryStep === 'new' && "Step 2.1: New Customer Rewards"}
-                            {customerCategoryStep === 'existing' && "Step 2.2: Existing Customer Rewards"}
-                            {customerCategoryStep === 'loyal' && "Step 2.3: Loyal Customer Rewards"}
-                          </h4>
-                        </div>
-                        
-                        <p className="text-sm text-gray-600 mb-2">
-                          {customerCategoryStep === 'new' && "Select rewards for first-time visitors"}
-                          {customerCategoryStep === 'existing' && "Select rewards for regular customers"}
-                          {customerCategoryStep === 'loyal' && "Select rewards for your most valuable customers"}
-                        </p>
-                        
-                        {/* Progress indicator */}
-                        <div className="flex items-center justify-center space-x-2 mb-4">
-                          <div className={`h-2.5 w-2.5 rounded-full ${customerCategoryStep === 'new' ? 'bg-blue-600' : 'bg-gray-300'}`}></div>
-                          <div className={`h-2.5 w-2.5 rounded-full ${customerCategoryStep === 'existing' ? 'bg-blue-600' : 'bg-gray-300'}`}></div>
-                          <div className={`h-2.5 w-2.5 rounded-full ${customerCategoryStep === 'loyal' ? 'bg-blue-600' : 'bg-gray-300'}`}></div>
-                              </div>
-                        
-                        {/* Show selected rewards for the current category */}
-                        {wizardSelectedRewards.filter(r => 
-                          (customerCategoryStep === 'new' && r.includes('new-')) ||
-                          (customerCategoryStep === 'existing' && r.includes('existing-')) ||
-                          (customerCategoryStep === 'loyal' && r.includes('loyal-'))
-                        ).length > 0 && (
-                          <div className="mb-4 p-3 bg-blue-50 rounded-md border border-blue-100">
-                            <h5 className="text-sm font-medium text-blue-800 mb-2">Selected Rewards:</h5>
-                            <div className="flex flex-wrap gap-2">
-                              {wizardSelectedRewards
-                                .filter(r => 
-                                  (customerCategoryStep === 'new' && r.includes('new-')) ||
-                                  (customerCategoryStep === 'existing' && r.includes('existing-')) ||
-                                  (customerCategoryStep === 'loyal' && r.includes('loyal-'))
-                                )
-                                .map(reward => (
-                                  <div key={reward} className="flex items-center gap-1 bg-white px-2 py-1 rounded-md border border-blue-200">
-                                    <span className="text-xs">{reward.replace(/^(new|existing|loyal)-/, '')}</span>
-                                    <Button 
-                                      variant="ghost" 
-                                      size="icon" 
-                                      className="h-4 w-4 rounded-full"
-                                      onClick={() => removeSelectedReward(reward)}
-                                    >
-                                      <X className="h-3 w-3" />
-                                </Button>
-                            </div>
-                                ))
-                              }
-                            </div>
-                          </div>
-                        )}
-                            
-                              <div className="space-y-3">
-                          {/* Show rewards based on the current customer category */}
-                          {customerCategoryStep === 'new' && (
-                            <>
-                              {/* All new customer rewards data */}
-                              {(() => {
-                                // Define all rewards in one array
-                                const allNewCustomerRewards = [
-                                  // Original rewards
-                                  {
-                                    id: 'new-welcome-coffee',
-                                    icon: <Coffee className="h-6 w-6 text-green-500" />,
-                                    title: 'Welcome Coffee',
-                                    description: 'Enjoy a complimentary welcome coffee on your first visit! We\'re thrilled to have you!',
-                                    redemptionLimit: 1000
-                                  },
-                                  {
-                                    id: 'new-bogo',
-                                    icon: <Coffee className="h-6 w-6 text-amber-500" />,
-                                    title: 'Buy One Get One',
-                                    description: 'Purchase any coffee and get a second coffee absolutely free! Treat a friend or just indulge yourself.',
-                                    redemptionLimit: 1000
-                                  },
-                                  {
-                                    id: 'new-free-pastry',
-                                    icon: <Cake className="h-6 w-6 text-pink-500" />,
-                                    title: 'Free Pastry',
-                                    description: 'Buy any drink and enjoy a free pastry! A perfect pairing to brighten your day.',
-                                    redemptionLimit: 1000
-                                  },
-                                  {
-                                    id: 'new-loyalty-card',
-                                    icon: <Award className="h-6 w-6 text-blue-500" />,
-                                    title: 'Coffee Loyalty Card',
-                                    description: 'Receive a loyalty card on your first visit. Buy 5 coffees and get the 6th one free!',
-                                    redemptionLimit: 1000
-                                  },
-                                  // New rewards
-                                  {
-                                    id: 'new-welcome-drink',
-                                    icon: <Coffee className="h-6 w-6 text-purple-500" />,
-                                    title: 'Welcome Drink',
-                                    description: 'Enjoy a complimentary drink on your first visit! We\'re excited to serve you.',
-                                    redemptionLimit: 1000
-                                  },
-                                  {
-                                    id: 'new-newcomer-pastry',
-                                    icon: <Cake className="h-6 w-6 text-orange-500" />,
-                                    title: 'Newcomer Pastry',
-                                    description: 'Get a free pastry with your first purchase. A sweet welcome to our café!',
-                                    redemptionLimit: 900
-                                  },
-                                  {
-                                    id: 'new-first-visit-discount',
-                                    icon: <Percent className="h-6 w-6 text-green-500" />,
-                                    title: 'First Visit Discount',
-                                    description: 'Enjoy 15% off on your first visit. We\'re delighted to have you here!',
-                                    redemptionLimit: 950
-                                  },
-                                  {
-                                    id: 'new-complimentary-coffee',
-                                    icon: <Coffee className="h-6 w-6 text-brown-500" />,
-                                    title: 'Complimentary Coffee',
-                                    description: 'Receive a free coffee with your first food purchase. Welcome to a world of delightful beverages!',
-                                    redemptionLimit: 850
-                                  },
-                                  {
-                                    id: 'new-newbies-choice',
-                                    icon: <Gift className="h-6 w-6 text-indigo-500" />,
-                                    title: 'Newbie\'s Choice',
-                                    description: 'Choose a free add-on with your first drink. Welcome to the community!',
-                                    redemptionLimit: 800
-                                  },
-                                  {
-                                    id: 'new-try-us-out',
-                                    icon: <Gift className="h-6 w-6 text-yellow-500" />,
-                                    title: 'Try Us Out',
-                                    description: 'Receive a $5 voucher towards your next purchase after your first visit.',
-                                    redemptionLimit: 700
-                                  },
-                                  {
-                                    id: 'new-first-timers-brunch',
-                                    icon: <Utensils className="h-6 w-6 text-amber-500" />,
-                                    title: 'First Timer\'s Brunch',
-                                    description: 'Enjoy a free brunch item on your first morning visit. A warm start to your day!',
-                                    redemptionLimit: 650
-                                  },
-                                  {
-                                    id: 'new-welcome-muffin',
-                                    icon: <Cake className="h-6 w-6 text-pink-500" />,
-                                    title: 'Welcome Muffin',
-                                    description: 'Get a free muffin on us for trying out our cafe! Perfect with your first coffee.',
-                                    redemptionLimit: 700
-                                  },
-                                  {
-                                    id: 'new-starter-pack',
-                                    icon: <Package className="h-6 w-6 text-blue-500" />,
-                                    title: 'Starter Pack',
-                                    description: 'Enjoy a bundle deal exclusively for new customers. Get more on your first visit!',
-                                    redemptionLimit: 950
-                                  },
-                                  {
-                                    id: 'new-exclusive-first-sip',
-                                    icon: <Coffee className="h-6 w-6 text-purple-500" />,
-                                    title: 'Exclusive First Sip',
-                                    description: 'Receive an exclusive drink on your first visit, crafted just for newcomers!',
-                                    redemptionLimit: 600
-                                  },
-                                  {
-                                    id: 'new-partner-welcome-gift',
-                                    icon: <Users className="h-6 w-6 text-green-500" />,
-                                    title: 'Partner Welcome Gift',
-                                    description: 'Bring a friend on your first visit and enjoy a 2-for-1 offer on any beverage.',
-                                    redemptionLimit: 900
-                                  },
-                                  {
-                                    id: 'new-welcome-plate',
-                                    icon: <Utensils className="h-6 w-6 text-orange-500" />,
-                                    title: 'Welcome Plate',
-                                    description: 'Get a free appetizer on your first dinner visit. Discover what we offer!',
-                                    redemptionLimit: 700
-                                  },
-                                  {
-                                    id: 'new-first-visit-gift-card',
-                                    icon: <Gift className="h-6 w-6 text-red-500" />,
-                                    title: 'First Visit Gift Card',
-                                    description: 'Receive a $10 gift card towards your next purchase after your first visit.',
-                                    redemptionLimit: 800
-                                  },
-                                  // Add a coffee program reward to the list
-                                  {
-                                    id: 'coffee-lovers-program',
-                                    icon: <Coffee className="h-6 w-6 text-brown-500" />,
-                                    title: 'Coffee Lovers Program',
-                                    description: 'Create a buy-X-get-1-free coffee loyalty program for your customers',
-                                    redemptionLimit: 1000,
-                                    specialCondition: 'Configurable frequency and rewards'
-                                  },
-                                  {
-                                    id: 'new-coffee-lovers-program',
-                                    icon: <Coffee className="h-6 w-6 text-brown-500" />,
-                                    title: 'Coffee Lovers Program',
-                                    description: 'Create a buy-X-get-1-free coffee loyalty program for your new customers',
-                                    redemptionLimit: 1000,
-                                    specialCondition: 'Configurable frequency and rewards'
-                                  }
-                                ];
-                                
-                                // Calculate total pages for new customer rewards
-                                const totalNewCustomerPages = Math.ceil(allNewCustomerRewards.length / rewardsPerPage);
-                                
-                                // Get current page rewards
-                                const indexOfLastReward = currentNewCustomerPage * rewardsPerPage;
-                                const indexOfFirstReward = indexOfLastReward - rewardsPerPage;
-                                const currentRewards = allNewCustomerRewards.slice(indexOfFirstReward, indexOfLastReward);
-                                
-                                return (
-                                <div>
-                                    {/* New customer rewards - displayed in a grid */}
-                                    <div className="grid grid-cols-1 gap-4">
-                                      {currentRewards.map((reward) => (
-                                        <div key={reward.id} className="border border-gray-200 rounded-md overflow-hidden bg-white">
-                                          {/* Header section - always visible */}
-                                          <div 
-                                            className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
-                                              expandedRewardDetails === reward.id ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
-                                            }`}
-                                            onClick={() => toggleRewardDetails(reward.id)}
-                                          >
-                                            {reward.icon}
-                                            <div className="flex-1">
-                                              <h5 className="font-medium">{reward.title}</h5>
-                                              <p className="text-sm text-gray-500">
-                                                {reward.description}
-                                              </p>
-                                            </div>
-                                            <div>
-                                              {expandedRewardDetails === reward.id ? (
-                                                <ChevronUp className="h-5 w-5 text-gray-400" />
-                                              ) : (
-                                                <ChevronDown className="h-5 w-5 text-gray-400" />
-                                              )}
-                                            </div>
-                                </div>
-                                
-                                          {/* Expanded details section */}
-                                          {expandedRewardDetails === reward.id && (
-                                            <div className="p-4 border-t border-gray-200 bg-gray-50">
-                                              <div className="space-y-4">
-                                                {/* Conditions */}
-                                <div>
-                                                  <h6 className="text-sm font-medium mb-2 flex items-center">
-                                                    <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
-                                                    Conditions
-                                                  </h6>
-                                                  <div className="bg-white p-3 rounded border border-gray-200">
-                                                    <ul className="text-sm space-y-2">
-                                                      <li className="flex items-start gap-2">
-                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                          <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                        </div>
-                                                        <span>First visit only</span>
-                                                      </li>
-                                                      <li className="flex items-start gap-2">
-                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                          <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                        </div>
-                                                        <span>0 points cost</span>
-                                                      </li>
-                                  </ul>
-                                                  </div>
-                                </div>
-                                
-                                                {/* Limitations */}
-                                <div>
-                                                  <h6 className="text-sm font-medium mb-2 flex items-center">
-                                                    <Ban className="h-4 w-4 text-amber-600 mr-1" />
-                                                    Limitations
-                                                  </h6>
-                                                  <div className="bg-white p-3 rounded border border-gray-200">
-                                                    <ul className="text-sm space-y-2">
-                                                      <li className="flex items-start gap-2">
-                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                        </div>
-                                                        <span>Limited to 1 per customer</span>
-                                                      </li>
-                                                      <li className="flex items-start gap-2">
-                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                        </div>
-                                                        <span>Total redemption limit: {reward.redemptionLimit}</span>
-                                                      </li>
-                                                    </ul>
-                                                  </div>
-                                </div>
-                                
-                                                <Button 
-                                                  className={`w-full ${
-                                                    wizardSelectedRewards.includes(reward.id) 
-                                                      ? "bg-green-600 hover:bg-green-700" 
-                                                      : "bg-[#007AFF] hover:bg-[#0066CC]"
-                                                  } text-white`}
-                                                  onClick={() => handleRewardTypeSelection(reward.id)}
-                                                >
-                                                  {wizardSelectedRewards.includes(reward.id) 
-                                                    ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
-                                                    : "Select This Reward"
-                                                  }
-                                                </Button>
-                                </div>
-                                            </div>
-                                          )}
-                                        </div>
-                                      ))}
-                              </div>
-                              
-                                    {/* Pagination controls for new customer rewards */}
-                                    {totalNewCustomerPages > 1 && (
-                                      <div className="flex justify-center items-center gap-2 mt-6">
-                                <Button 
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => handleNewCustomerPageChange(currentNewCustomerPage - 1)}
-                                          disabled={currentNewCustomerPage === 1}
-                                          className="h-8 w-8 p-0"
-                                        >
-                                          <ChevronLeft className="h-4 w-4" />
-                                </Button>
-                                        
-                                        <div className="flex items-center gap-1">
-                                          {Array.from({ length: totalNewCustomerPages }).map((_, i) => (
-                                            <Button
-                                              key={i}
-                                              variant={currentNewCustomerPage === i + 1 ? "default" : "outline"}
-                                              size="sm"
-                                              onClick={() => handleNewCustomerPageChange(i + 1)}
-                                              className={`h-8 w-8 p-0 ${
-                                                currentNewCustomerPage === i + 1 ? "bg-[#007AFF]" : ""
-                                              }`}
-                                            >
-                                              {i + 1}
-                                            </Button>
-                                          ))}
-                                        </div>
-                                
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                          onClick={() => handleNewCustomerPageChange(currentNewCustomerPage + 1)}
-                                          disabled={currentNewCustomerPage === totalNewCustomerPages}
-                                          className="h-8 w-8 p-0"
-                                >
-                                          <ChevronRight className="h-4 w-4" />
-                                </Button>
-                              </div>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-                            </>
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* New customer rewards */}
+                        {customerCategoryStep === 'new' && (
+                          <>
+                            <RewardCard
+                              id="new-welcome-latte"
+                              name="Welcome Latte"
+                              description="Free coffee for first-time customers"
+                              icon={Coffee}
+                              conditions={[{ type: 'maximumTransactions', value: 1 }]}
+                              limitations={[
+                                { type: 'customerLimit', value: 1 },
+                                { type: 'totalRedemptionLimit', value: 500 }
+                              ]}
+                              isSelected={wizardSelectedRewards.includes('new-welcome-latte')}
+                              onSelect={() => handleRewardSelection('new-welcome-latte')}
+                            />
+
+                            {/* Add the new reward here */}
+                            <RewardCard
+                              id="new-customer-discount"
+                              name="New Customer Discount"
+                              description="20% off your first purchase"
+                              icon={Percent}
+                              conditions={[{ type: 'maximumTransactions', value: 1 }]}
+                              limitations={[
+                                { type: 'customerLimit', value: 1 },
+                                { type: 'totalRedemptionLimit', value: 300 }
+                              ]}
+                              isSelected={wizardSelectedRewards.includes('new-customer-discount')}
+                              onSelect={() => handleRewardSelection('new-customer-discount')}
+                            />
+
+                            {/* Free Snack with Drink */}
+                            <RewardCard
+                              id="new-free-snack"
+                              name="Free Snack with Drink"
+                              description="Complimentary snack with any drink purchase"
+                              icon={UtensilsCrossed}
+                              conditions={[{ type: 'maximumTransactions', value: 1 }]}
+                              limitations={[
+                                { type: 'customerLimit', value: 1 },
+                                { type: 'totalRedemptionLimit', value: 400 }
+                              ]}
+                              isSelected={wizardSelectedRewards.includes('new-free-snack')}
+                              onSelect={() => handleRewardSelection('new-free-snack')}
+                            />
+
+                            {/* First Visit Coffee Combo */}
+                            <RewardCard
+                              id="new-coffee-combo"
+                              name="First Visit Coffee Combo"
+                              description="Special price on coffee and pastry combo"
+                              icon={Coffee}
+                              conditions={[{ type: 'maximumTransactions', value: 1 }]}
+                              limitations={[
+                                { type: 'customerLimit', value: 1 },
+                                { type: 'totalRedemptionLimit', value: 300 }
+                              ]}
+                              isSelected={wizardSelectedRewards.includes('new-coffee-combo')}
+                              onSelect={() => handleRewardSelection('new-coffee-combo')}
+                            />
+
+                            {/* Charming Morning Mug */}
+                            <RewardCard
+                              id="new-morning-mug"
+                              name="Charming Morning Mug"
+                              description="Free mug gift on your first morning visit"
+                              icon={Gift}
+                              conditions={[{ type: 'maximumTransactions', value: 1 }]}
+                              limitations={[
+                                { type: 'customerLimit', value: 1 },
+                                { type: 'totalRedemptionLimit', value: 200 }
+                              ]}
+                              isSelected={wizardSelectedRewards.includes('new-morning-mug')}
+                              onSelect={() => handleRewardSelection('new-morning-mug')}
+                            />
+
+                            {/* Referral Bonus */}
+                            <RewardCard
+                              id="new-referral-bonus"
+                              name="Referral Bonus for Newcomers"
+                              description="10% off when you bring a friend"
+                              icon={Users}
+                              conditions={[{ type: 'maximumTransactions', value: 1 }]}
+                              limitations={[
+                                { type: 'customerLimit', value: 1 },
+                                { type: 'totalRedemptionLimit', value: 100 }
+                              ]}
+                              isSelected={wizardSelectedRewards.includes('new-referral-bonus')}
+                              onSelect={() => handleRewardSelection('new-referral-bonus')}
+                            />
+                          </>
                           )}
                           
+                        {/* Existing customer rewards */}
                           {customerCategoryStep === 'existing' && (
                             <>
-                              {/* All existing customer rewards data */}
-                              {(() => {
-                                // Define all rewards in one array
-                                const allRewards = [
-                                  // First page rewards (original 5)
-                                  {
-                                    id: 'existing-loyalty-coffee',
-                                    icon: <Coffee className="h-6 w-6 text-blue-500" />,
-                                    title: 'Loyalty Coffee',
-                                    description: 'Enjoy a free coffee for being a loyal customer! Thank you for choosing us.',
-                                    redemptionLimit: 500
-                                  },
-                                  {
-                                    id: 'existing-birthday-treat',
-                                    icon: <Cake className="h-6 w-6 text-pink-500" />,
-                                    title: 'Birthday Treat',
-                                    description: 'Celebrate your birthday with a complimentary pastry! Enjoy a sweet treat on your special day.',
-                                    redemptionLimit: 200,
-                                    specialCondition: true
-                                  },
-                                  {
-                                    id: 'existing-coffee-club',
-                                    icon: <Users className="h-6 w-6 text-purple-500" />,
-                                    title: 'Coffee Club',
-                                    description: 'Join our Coffee Club and receive 20% off your next purchase! Sign up for exclusive offers.',
-                                    redemptionLimit: 300
-                                  },
-                                  {
-                                    id: 'existing-refer-friend',
-                                    icon: <Gift className="h-6 w-6 text-green-500" />,
-                                    title: 'Refer a Friend',
-                                    description: 'Refer a friend and receive a $5 voucher for your next purchase! Share the love of coffee.',
-                                    redemptionLimit: 400
-                                  },
-                                  {
-                                    id: 'existing-weekend-special',
-                                    icon: <Calendar className="h-6 w-6 text-amber-500" />,
-                                    title: 'Weekend Special',
-                                    description: 'Enjoy a 15% discount on all coffee purchases every weekend! A treat to brighten your days.',
-                                    redemptionLimit: 300
-                                  },
-                                  {
-                                    id: 'existing-midweek-bonus',
-                                    icon: <Cake className="h-6 w-6 text-orange-500" />,
-                                    title: 'Midweek Bonus',
-                                    description: 'Enjoy a complimentary muffin with any coffee purchase every Wednesday! A midweek treat just for you.',
-                                    redemptionLimit: 300
-                                  },
-                                  // Second page rewards (new rewards)
-                                  {
-                                    id: 'existing-double-points',
-                                    icon: <Award className="h-6 w-6 text-yellow-500" />,
-                                    title: 'Double Points Day',
-                                    description: 'Earn double points on all purchases every Friday! Boost your rewards and enjoy more perks.',
-                                    redemptionLimit: 400
-                                  },
-                                  {
-                                    id: 'existing-exclusive-blend',
-                                    icon: <Coffee className="h-6 w-6 text-red-500" />,
-                                    title: 'Exclusive Blend Access',
-                                    description: 'Be the first to try our exclusive blend coffee! Enjoy a free cup with your next purchase.',
-                                    redemptionLimit: 250
-                                  },
-                                  {
-                                    id: 'existing-free-upgrade',
-                                    icon: <ArrowRight className="h-6 w-6 text-blue-500" />,
-                                    title: 'Free Upgrade',
-                                    description: 'Upgrade your regular coffee to a large for free! Your coffee, your way.',
-                                    redemptionLimit: 300
-                                  },
-                                  {
-                                    id: 'existing-holiday-special',
-                                    icon: <Gift className="h-6 w-6 text-red-500" />,
-                                    title: 'Holiday Special',
-                                    description: 'Celebrate the holidays with a 15% discount on your total bill! Cheers to festive moments.',
-                                    redemptionLimit: 300
-                                  },
-                                  {
-                                    id: 'existing-weekend-brunch',
-                                    icon: <Utensils className="h-6 w-6 text-green-500" />,
-                                    title: 'Weekend Brunch Offer',
-                                    description: 'Enjoy a 20% discount on our brunch menu every weekend! Perfect for a leisurely meal.',
-                                    redemptionLimit: 350
-                                  },
-                                  // Additional rewards
-                                  {
-                                    id: 'existing-early-bird',
-                                    icon: <Coffee className="h-6 w-6 text-yellow-500" />,
-                                    title: 'Early Bird Special',
-                                    description: 'Get a 20% discount on any purchase before 10 AM.',
-                                    redemptionLimit: 300,
-                                    pointsCost: 5,
-                                    specialCondition: 'Minimum 3 transactions required',
-                                    specialLimitation: 'Available 7:00 AM - 10:00 AM only'
-                                  },
-                                  {
-                                    id: 'existing-weekend-brunch',
-                                    icon: <Utensils className="h-6 w-6 text-green-500" />,
-                                    title: 'Weekend Brunch Deal',
-                                    description: 'Enjoy 25% off our brunch menu on weekends.',
-                                    redemptionLimit: 500,
-                                    pointsCost: 10,
-                                    specialLimitation: 'Available Saturday and Sunday only'
-                                  },
-                                  {
-                                    id: 'existing-afternoon-tea',
-                                    icon: <Coffee className="h-6 w-6 text-purple-500" />,
-                                    title: 'Afternoon Tea Time',
-                                    description: 'Buy one tea, get one free every weekday afternoon.',
-                                    redemptionLimit: 400,
-                                    pointsCost: 8,
-                                    specialCondition: 'Minimum lifetime spend of $50',
-                                    specialLimitation: 'Available 2:00 PM - 5:00 PM only'
-                                  },
-                                  {
-                                    id: 'existing-loyalty-bonus',
-                                    icon: <Coffee className="h-6 w-6 text-blue-500" />,
-                                    title: 'Loyalty Bonus Coffee',
-                                    description: 'Enjoy a free coffee for every $100 spent.',
-                                    redemptionLimit: 700,
-                                    pointsCost: 12,
-                                    specialCondition: 'Total lifetime spend of $100',
-                                    customerLimit: 3
-                                  },
-                                  {
-                                    id: 'existing-midweek-motivator',
-                                    icon: <Calendar className="h-6 w-6 text-green-500" />,
-                                    title: 'Midweek Motivator',
-                                    description: 'Get 15% off all purchases on Wednesdays.',
-                                    redemptionLimit: 500,
-                                    pointsCost: 10,
-                                    customerLimit: 2,
-                                    specialLimitation: 'Available on Wednesdays only'
-                                  },
-                                  {
-                                    id: 'existing-seasonal-sips',
-                                    icon: <Coffee className="h-6 w-6 text-red-500" />,
-                                    title: 'Seasonal Sips',
-                                    description: 'Receive a complimentary seasonal drink with any purchase.',
-                                    redemptionLimit: 600,
-                                    pointsCost: 15,
-                                    specialCondition: '30 days since last visit'
-                                  },
-                                  {
-                                    id: 'existing-bring-friend',
-                                    icon: <Users className="h-6 w-6 text-indigo-500" />,
-                                    title: 'Bring a Friend',
-                                    description: 'Bring a friend and enjoy a 2-for-1 deal on any drink.',
-                                    redemptionLimit: 350,
-                                    pointsCost: 20,
-                                    specialCondition: 'Minimum 5 transactions required',
-                                    customerLimit: 2
-                                  },
-                                  {
-                                    id: 'existing-happy-hour',
-                                    icon: <Clock className="h-6 w-6 text-amber-500" />,
-                                    title: 'Happy Hour Savers',
-                                    description: '50% off all beverages during happy hour.',
-                                    redemptionLimit: 400,
-                                    pointsCost: 7,
-                                    specialLimitation: 'Available 4:00 PM - 6:00 PM only'
-                                  },
-                                  {
-                                    id: 'existing-exclusive-event',
-                                    icon: <Calendar className="h-6 w-6 text-purple-500" />,
-                                    title: 'Exclusive Event Access',
-                                    description: 'Access to invitation-only tasting events.',
-                                    redemptionLimit: 100,
-                                    pointsCost: 0,
-                                    specialCondition: 'Gold membership level required'
-                                  },
-                                  {
-                                    id: 'existing-anniversary',
-                                    icon: <Cake className="h-6 w-6 text-pink-500" />,
-                                    title: 'Anniversary Treat',
-                                    description: 'Celebrate your membership anniversary with a free dessert.',
-                                    redemptionLimit: 150,
-                                    pointsCost: 0,
-                                    specialCondition: '1 year since joining'
-                                  },
-                                  {
-                                    id: 'existing-coffee-bundle',
-                                    icon: <Package className="h-6 w-6 text-brown-500" />,
-                                    title: 'Coffee Lovers\' Bundle',
-                                    description: 'Get a special bundle price on three coffees.',
-                                    redemptionLimit: 250,
-                                    pointsCost: 30,
-                                    specialCondition: 'Minimum points balance of 100',
-                                    customerLimit: 2
-                                  },
-                                  {
-                                    id: 'existing-voucher-surprise',
-                                    icon: <Gift className="h-6 w-6 text-green-500" />,
-                                    title: 'Voucher Surprise',
-                                    description: 'Get a surprise voucher after every 10th visit.',
-                                    redemptionLimit: 500,
-                                    pointsCost: 0,
-                                    specialCondition: 'Minimum 10 transactions required',
-                                    customerLimit: 3
-                                  },
-                                  {
-                                    id: 'existing-coffee-lovers-program',
-                                    icon: <Coffee className="h-6 w-6 text-brown-500" />,
-                                    title: 'Coffee Lovers Program',
-                                    description: 'Create a buy-X-get-1-free coffee loyalty program for your regular customers',
-                                    redemptionLimit: 1000,
-                                    specialCondition: 'Configurable frequency and rewards'
-                                  }
-                                ];
-                                
-                                // Calculate total pages
-                                const totalPages = Math.ceil(allRewards.length / rewardsPerPage);
-                                
-                                // Get current page rewards
-                                const indexOfLastReward = currentRewardPage * rewardsPerPage;
-                                const indexOfFirstReward = indexOfLastReward - rewardsPerPage;
-                                const currentRewards = allRewards.slice(indexOfFirstReward, indexOfLastReward);
-                                
-                                return (
-                                  <div className="space-y-4">
-                                    {/* Rewards grid */}
-                                    <div className="grid md:grid-cols-1 gap-4">
-                                      {currentRewards.map((reward) => (
-                                        <div key={reward.id} className="border border-gray-200 rounded-md overflow-hidden bg-white">
-                                          {/* Header section - always visible */}
-                                          <div 
-                                            className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
-                                              expandedRewardDetails === reward.id ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
-                                            }`}
-                                            onClick={() => toggleRewardDetails(reward.id)}
-                                          >
-                                            {reward.icon}
-                              <div className="flex-1">
-                                              <h5 className="font-medium">{reward.title}</h5>
-                                <p className="text-sm text-gray-500">
-                                                {reward.description}
-                                </p>
-                              </div>
-                                            {expandedRewardDetails === reward.id ? (
-                                              <ChevronUp className="h-5 w-5 text-gray-400" />
-                                            ) : (
-                                              <ChevronDown className="h-5 w-5 text-gray-400" />
-                                            )}
-                            </div>
-                            
-                                          {/* Expanded details section - only visible when expanded */}
-                                          {expandedRewardDetails === reward.id && (
-                                            <div className="p-4 border-t border-gray-200 bg-gray-50">
-                                              <div className="space-y-4">
-                                                {/* Conditions */}
-                              <div>
-                                                  <h6 className="text-sm font-medium mb-2 flex items-center">
-                                                    <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
-                                                    Conditions
-                                                  </h6>
-                                                  <div className="bg-white p-3 rounded border border-gray-200">
-                                                    <ul className="text-sm space-y-2">
-                                                      {reward.specialCondition ? (
-                                                        <li className="flex items-start gap-2">
-                                                          <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                            <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                              </div>
-                                                          <span>{reward.specialCondition}</span>
-                                                        </li>
-                                                      ) : reward.id === 'existing-birthday-treat' ? (
-                                                        <li className="flex items-start gap-2">
-                                                          <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                            <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                          </div>
-                                                          <span>Customer must be a member for at least 30 days</span>
-                                                        </li>
-                                                      ) : (
-                                                        <li className="flex items-start gap-2">
-                                                          <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                            <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                          </div>
-                                                          <span>Minimum 1 transaction required</span>
-                                                        </li>
-                                                      )}
-                                                      <li className="flex items-start gap-2">
-                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                          <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                        </div>
-                                                        <span>{reward.pointsCost ? `${reward.pointsCost} points cost` : '0 points cost'}</span>
-                                                      </li>
-                                                    </ul>
-                                                  </div>
-                                                </div>
-                                                
-                                                {/* Limitations */}
-                                                <div>
-                                                  <h6 className="text-sm font-medium mb-2 flex items-center">
-                                                    <Ban className="h-4 w-4 text-amber-600 mr-1" />
-                                                    Limitations
-                                                  </h6>
-                                                  <div className="bg-white p-3 rounded border border-gray-200">
-                                                    <ul className="text-sm space-y-2">
-                                                      <li className="flex items-start gap-2">
-                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                        </div>
-                                                        <span>Limited to {reward.customerLimit || 1} per customer</span>
-                                                      </li>
-                                                      {reward.specialLimitation && (
-                                                        <li className="flex items-start gap-2">
-                                                          <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                          </div>
-                                                          <span>{reward.specialLimitation}</span>
-                                                        </li>
-                                                      )}
-                                                      <li className="flex items-start gap-2">
-                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                        </div>
-                                                        <span>Total redemption limit: {reward.redemptionLimit}</span>
-                                                      </li>
-                                                    </ul>
-                                                  </div>
-                                                </div>
-                                                
-                                <Button 
-                                                  className={`w-full ${
-                                                    wizardSelectedRewards.includes(reward.id) 
-                                                      ? "bg-green-600 hover:bg-green-700" 
-                                                      : "bg-[#007AFF] hover:bg-[#0066CC]"
-                                                  } text-white`}
-                                                  onClick={() => handleRewardTypeSelection(reward.id)}
-                                                >
-                                                  {wizardSelectedRewards.includes(reward.id) 
-                                                    ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
-                                                    : "Select This Reward"
-                                                  }
-                                </Button>
-                                              </div>
-                                            </div>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                    
-                                    {/* Pagination controls */}
-                                    {totalPages > 1 && (
-                                      <div className="flex justify-center items-center gap-2 mt-6">
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                          onClick={() => handleRewardPageChange(currentRewardPage - 1)}
-                                          disabled={currentRewardPage === 1}
-                                          className="h-8 w-8 p-0"
-                                >
-                                          <ChevronLeft className="h-4 w-4" />
-                                </Button>
-                                        
-                                        <div className="flex items-center gap-1">
-                                          {Array.from({ length: totalPages }).map((_, i) => (
-                                            <Button
-                                              key={i}
-                                              variant={currentRewardPage === i + 1 ? "default" : "outline"}
-                                              size="sm"
-                                              onClick={() => handleRewardPageChange(i + 1)}
-                                              className={`h-8 w-8 p-0 ${
-                                                currentRewardPage === i + 1 ? "bg-[#007AFF]" : ""
-                                              }`}
-                                            >
-                                              {i + 1}
-                                            </Button>
-                                          ))}
-                              </div>
-                                        
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => handleRewardPageChange(currentRewardPage + 1)}
-                                          disabled={currentRewardPage === totalPages}
-                                          className="h-8 w-8 p-0"
-                                        >
-                                          <ChevronRight className="h-4 w-4" />
-                                </Button>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })()}
+                            {/* Taste Tester Invitation */}
+                            <RewardCard
+                              id="existing-taste-tester"
+                              name="Taste Tester Invitation"
+                              description="Receive an invitation to be a taste tester for new menu items. Your feedback is valuable!"
+                              icon={UtensilsCrossed}
+                              conditions={[{ type: 'totalLifetimeSpend', value: 300 }]}
+                              limitations={[
+                                { type: 'customerLimit', value: 1 },
+                                { type: 'totalRedemptionLimit', value: 150 }
+                              ]}
+                              isSelected={wizardSelectedRewards.includes('existing-taste-tester')}
+                              onSelect={() => handleRewardSelection('existing-taste-tester')}
+                            />
+
+                            {/* End of Month Surprise */}
+                            <RewardCard
+                              id="existing-month-surprise"
+                              name="End of Month Surprise"
+                              description="Enjoy a surprise treat with your last purchase of the month, just to brighten your day!"
+                              icon={Gift}
+                              conditions={[]}
+                              limitations={[
+                                { type: 'customerLimit', value: 1 },
+                                { type: 'totalRedemptionLimit', value: 300 }
+                              ]}
+                              isSelected={wizardSelectedRewards.includes('existing-month-surprise')}
+                              onSelect={() => handleRewardSelection('existing-month-surprise')}
+                            />
+
+                            {/* Weekly Special Discount */}
+                            <RewardCard
+                              id="existing-weekly-special"
+                              name="Weekly Special Discount"
+                              description="Enjoy a 15% discount on one item every Tuesday as a thank you for your loyalty!"
+                              icon={Calendar}
+                              conditions={[]}
+                              limitations={[
+                                { type: 'customerLimit', value: 1 },
+                                { type: 'totalRedemptionLimit', value: 400 },
+                                { type: 'daysOfWeek', value: ['Tuesday'] }
+                              ]}
+                              isSelected={wizardSelectedRewards.includes('existing-weekly-special')}
+                              onSelect={() => handleRewardSelection('existing-weekly-special')}
+                            />
+
+                            {/* Bring a Friend Bonus */}
+                            <RewardCard
+                              id="existing-bring-friend"
+                              name="Bring a Friend Bonus"
+                              description="Bring a friend and both receive a 10% discount on your purchases! Share the joy of coffee."
+                              icon={Users}
+                              conditions={[]}
+                              limitations={[
+                                { type: 'customerLimit', value: 1 },
+                                { type: 'totalRedemptionLimit', value: 300 }
+                              ]}
+                              isSelected={wizardSelectedRewards.includes('existing-bring-friend')}
+                              onSelect={() => handleRewardSelection('existing-bring-friend')}
+                            />
+
+                            {/* Coffee of the Month */}
+                            <RewardCard
+                              id="existing-coffee-month"
+                              name="Coffee of the Month"
+                              description="Get a special coffee offer every month just for our loyal customers!"
+                              icon={Coffee}
+                              conditions={[
+                                { type: 'minimumLifetimeSpend', value: 150 }
+                              ]}
+                              limitations={[
+                                { type: 'customerLimit', value: 1 },
+                                { type: 'totalRedemptionLimit', value: 250 }
+                              ]}
+                              isSelected={wizardSelectedRewards.includes('existing-coffee-month')}
+                              onSelect={() => handleRewardSelection('existing-coffee-month')}
+                            />
+
+                            {/* Free Upgrade */}
+                            <RewardCard
+                              id="existing-free-upgrade"
+                              name="Free Upgrade on Your Choice"
+                              description="Enjoy a free upgrade on your next drink—get that large latte for the price of a regular!"
+                              icon={ArrowUp}
+                              conditions={[
+                                { type: 'minimumTransactions', value: 1 }
+                              ]}
+                              limitations={[
+                                { type: 'customerLimit', value: 1 },
+                                { type: 'totalRedemptionLimit', value: 500 }
+                              ]}
+                              isSelected={wizardSelectedRewards.includes('existing-free-upgrade')}
+                              onSelect={() => handleRewardSelection('existing-free-upgrade')}
+                            />
                         </>
                       )}
                       
+                        {/* Loyal customer rewards */}
                           {customerCategoryStep === 'loyal' && (
                             <>
-                              {/* All loyal customer rewards data */}
-                              {(() => {
-                                // Define all rewards in one array
-                                const allLoyalCustomerRewards = [
-                                  // Original rewards
-                                  {
-                                    id: 'loyal-points-multiplier',
-                                    icon: <Award className="h-6 w-6 text-amber-500" />,
-                                    title: 'Points Multiplier',
-                                    description: 'Earn double points on all purchases',
-                                    redemptionLimit: 1000,
-                                    specialCondition: 'Minimum 10 transactions required'
-                                  },
-                                  {
-                                    id: 'loyal-vip',
-                                    icon: <Award className="h-6 w-6 text-purple-500" />,
-                                    title: 'VIP Experience',
-                                    description: 'Special perks for your most loyal customers',
-                                    redemptionLimit: 500,
-                                    specialCondition: 'Minimum 20 transactions required'
-                                  },
-                                  // New rewards
-                                  {
-                                    id: 'loyal-free-beverage',
-                                    icon: <Coffee className="h-6 w-6 text-blue-500" />,
-                                    title: 'VIP Free Beverage',
-                                    description: 'As a loyal member, enjoy a complimentary beverage of your choice every month.',
-                                    redemptionLimit: 200,
-                                    specialCondition: 'Total lifetime spend of $500',
-                                    customerLimit: 12
-                                  },
-                                  {
-                                    id: 'loyal-lunch',
-                                    icon: <Utensils className="h-6 w-6 text-green-500" />,
-                                    title: 'Loyalty Lunch',
-                                    description: 'Enjoy a free lunch meal with every 10th visit. Thank you for being a part of our family!',
-                                    redemptionLimit: 300,
-                                    specialCondition: 'Minimum 10 transactions required',
-                                    customerLimit: 3
-                                  },
-                                  {
-                                    id: 'loyal-vip-event',
-                                    icon: <Calendar className="h-6 w-6 text-purple-500" />,
-                                    title: 'Exclusive VIP Event',
-                                    description: 'Access to exclusive VIP events throughout the year. Join us for special tastings and gatherings.',
-                                    redemptionLimit: 100,
-                                    specialCondition: 'Platinum membership level required',
-                                    customerLimit: 3
-                                  },
-                                  {
-                                    id: 'loyal-weekly-coffee',
-                                    icon: <Coffee className="h-6 w-6 text-brown-500" />,
-                                    title: 'Complimentary Weekly Coffee',
-                                    description: 'Receive one free coffee every week as a thank you for your continued support.',
-                                    redemptionLimit: 500,
-                                    specialCondition: 'Member for at least 1 year',
-                                    customerLimit: 52
-                                  },
-                                  {
-                                    id: 'loyal-milestone-dining',
-                                    icon: <Utensils className="h-6 w-6 text-amber-500" />,
-                                    title: 'Milestone Dining Experience',
-                                    description: 'Celebrate your loyalty with a dining experience for two on us after reaching 50 visits.',
-                                    redemptionLimit: 50,
-                                    specialCondition: 'Minimum 50 transactions required',
-                                    customerLimit: 1
-                                  },
-                                  {
-                                    id: 'loyal-anniversary',
-                                    icon: <Gift className="h-6 w-6 text-red-500" />,
-                                    title: 'Anniversary Special',
-                                    description: 'Enjoy a special gift on your loyalty anniversary, perfect to celebrate the time with us.',
-                                    redemptionLimit: 300,
-                                    specialCondition: 'Minimum lifetime spend of $1,000',
-                                    customerLimit: 1
-                                  },
-                                  {
-                                    id: 'loyal-birthday-bash',
-                                    icon: <Cake className="h-6 w-6 text-pink-500" />,
-                                    title: 'VIP Birthday Bash',
-                                    description: 'Celebrate your birthday with us — receive a cake and a drink for you and your guests.',
-                                    redemptionLimit: 150,
-                                    specialCondition: 'Gold membership level required',
-                                    customerLimit: 1
-                                  },
-                                  {
-                                    id: 'loyal-coffee-subscription',
-                                    icon: <Package className="h-6 w-6 text-blue-500" />,
-                                    title: 'Exclusive Coffee Subscription',
-                                    description: 'Subscribe to our exclusive coffee shipment – free monthly bags delivered to your door.',
-                                    redemptionLimit: 200,
-                                    specialCondition: 'Minimum points balance of 300',
-                                    customerLimit: 6,
-                                    pointsCost: 75
-                                  },
-                                  {
-                                    id: 'loyal-coffee-experience',
-                                    icon: <Coffee className="h-6 w-6 text-green-500" />,
-                                    title: 'Ultimate Coffee Experience',
-                                    description: 'Join us behind the scenes for a coffee-making masterclass. Perfect for true enthusiasts.',
-                                    redemptionLimit: 100,
-                                    specialCondition: 'Total lifetime spend of $1,500',
-                                    customerLimit: 1
-                                  },
-                                  {
-                                    id: 'loyal-customer-recognition',
-                                    icon: <Award className="h-6 w-6 text-yellow-500" />,
-                                    title: 'Loyal Customer Recognition',
-                                    description: 'Get recognized on our Wall of Fame and enjoy a dedicated week\'s worth of free snacks.',
-                                    redemptionLimit: 50,
-                                    specialCondition: 'Minimum 100 transactions required',
-                                    customerLimit: 1
-                                  },
-                                  {
-                                    id: 'loyal-coffee-lovers-program',
-                                    icon: <Coffee className="h-6 w-6 text-brown-500" />,
-                                    title: 'Coffee Lovers Program',
-                                    description: 'Create a premium buy-X-get-1-free coffee loyalty program for your most loyal customers',
-                                    redemptionLimit: 1000,
-                                    specialCondition: 'Configurable frequency and rewards'
-                                  }
-                                ];
-                                
-                                // Calculate total pages for loyal customer rewards
-                                const totalLoyalCustomerPages = Math.ceil(allLoyalCustomerRewards.length / rewardsPerPage);
-                                
-                                // Get current page rewards
-                                const indexOfLastReward = currentLoyalCustomerPage * rewardsPerPage;
-                                const indexOfFirstReward = indexOfLastReward - rewardsPerPage;
-                                const currentRewards = allLoyalCustomerRewards.slice(indexOfFirstReward, indexOfLastReward);
-                                
-                                return (
-                                  <div className="space-y-4">
-                                    {/* Loyal customer rewards - displayed in a grid */}
-                                    <div className="grid md:grid-cols-1 gap-4">
-                                      {currentRewards.map((reward) => (
-                                        <div key={reward.id} className="border border-gray-200 rounded-md overflow-hidden bg-white">
-                                          {/* Header section - always visible */}
-                                          <div 
-                                            className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
-                                              expandedRewardDetails === reward.id ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
-                                            }`}
-                                            onClick={() => toggleRewardDetails(reward.id)}
-                                          >
-                                            {reward.icon}
-                            <div className="flex-1">
-                                              <h5 className="font-medium">{reward.title}</h5>
-                              <p className="text-sm text-gray-500">
-                                                {reward.description}
-                              </p>
-                            </div>
-                                            <div>
-                                              {expandedRewardDetails === reward.id ? (
-                                                <ChevronUp className="h-5 w-5 text-gray-400" />
-                                              ) : (
-                                                <ChevronDown className="h-5 w-5 text-gray-400" />
-                                              )}
-                                            </div>
-                                          </div>
+                            <RewardCard
+                              id="loyal-vip-discount"
+                              name="VIP Discount"
+                              description="20% off for VIP members"
+                              icon={Award}
+                              conditions={[{ type: 'maximumTransactions', value: 1 }]}
+                              limitations={[
+                                { type: 'customerLimit', value: 1 },
+                                { type: 'totalRedemptionLimit', value: 500 }
+                              ]}
+                              isSelected={wizardSelectedRewards.includes('loyal-vip-discount')}
+                              onSelect={() => handleRewardSelection('loyal-vip-discount')}
+                            />
                                           
-                                          {/* Expanded details section */}
-                                          {expandedRewardDetails === reward.id && (
-                                            <div className="p-4 border-t border-gray-200 bg-gray-50">
-                                              <div className="space-y-4">
-                                                {/* Conditions */}
-                                                <div>
-                                                  <h6 className="text-sm font-medium mb-2 flex items-center">
-                                                    <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
-                                                    Conditions
-                                                  </h6>
-                                                  <div className="bg-white p-3 rounded border border-gray-200">
-                                                    <ul className="text-sm space-y-2">
-                                                      <li className="flex items-start gap-2">
-                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                          <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                        </div>
-                                                        <span>{reward.specialCondition}</span>
-                                                      </li>
-                                                      <li className="flex items-start gap-2">
-                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                          <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                                                        </div>
-                                                        <span>{reward.pointsCost ? `${reward.pointsCost} points cost` : '0 points cost'}</span>
-                                                      </li>
-                                                    </ul>
-                                                  </div>
-                                                </div>
-                                                
-                                                {/* Limitations */}
-                                                <div>
-                                                  <h6 className="text-sm font-medium mb-2 flex items-center">
-                                                    <Ban className="h-4 w-4 text-amber-600 mr-1" />
-                                                    Limitations
-                                                  </h6>
-                                                  <div className="bg-white p-3 rounded border border-gray-200">
-                                                    <ul className="text-sm space-y-2">
-                                                      <li className="flex items-start gap-2">
-                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                        </div>
-                                                        <span>Limited to {reward.customerLimit || 1} per customer</span>
-                                                      </li>
-                                                      <li className="flex items-start gap-2">
-                                                        <div className="h-5 w-5 flex-shrink-0 flex items-center justify-center">
-                                                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                                        </div>
-                                                        <span>Total redemption limit: {reward.redemptionLimit}</span>
-                                                      </li>
-                                                    </ul>
-                                                  </div>
-                                                </div>
-                                                
-                            <Button 
-                                                  className={`w-full ${
-                                                    wizardSelectedRewards.includes(reward.id) 
-                                                      ? "bg-green-600 hover:bg-green-700" 
-                                                      : "bg-[#007AFF] hover:bg-[#0066CC]"
-                                                  } text-white`}
-                                                  onClick={() => handleRewardTypeSelection(reward.id)}
-                                                >
-                                                  {wizardSelectedRewards.includes(reward.id) 
-                                                    ? <span className="flex items-center justify-center gap-1"><Check className="h-4 w-4" /> Selected</span>
-                                                    : "Select This Reward"
-                                                  }
-                            </Button>
-                          </div>
-                            </div>
-                                          )}
-                                        </div>
-                                      ))}
+                            <RewardCard
+                              id="loyal-exclusive-access"
+                              name="Exclusive Access"
+                              description="Early access to new products"
+                              icon={Sparkles}
+                              conditions={[{ type: 'maximumTransactions', value: 1 }]}
+                              limitations={[
+                                { type: 'customerLimit', value: 1 },
+                                { type: 'totalRedemptionLimit', value: 300 }
+                              ]}
+                              isSelected={wizardSelectedRewards.includes('loyal-exclusive-access')}
+                              onSelect={() => handleRewardSelection('loyal-exclusive-access')}
+                            />
+                          </>
+                        )}
                                     </div>
                                     
-                                    {/* Pagination controls for loyal customer rewards */}
-                                    {totalLoyalCustomerPages > 1 && (
-                                      <div className="flex justify-center items-center gap-2 mt-6">
-                            <Button 
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => handleLoyalCustomerPageChange(currentLoyalCustomerPage - 1)}
-                                          disabled={currentLoyalCustomerPage === 1}
-                                          className="h-8 w-8 p-0"
-                                        >
-                                          <ChevronLeft className="h-4 w-4" />
+                      <div className="flex justify-between pt-6 mt-6 border-t border-gray-200">
+                        <Button variant="outline" onClick={handleBack}>
+                          Back
                             </Button>
-                                        
-                                        <div className="flex items-center gap-1">
-                                          {Array.from({ length: totalLoyalCustomerPages }).map((_, i) => (
                                             <Button
-                                              key={i}
-                                              variant={currentLoyalCustomerPage === i + 1 ? "default" : "outline"}
-                                              size="sm"
-                                              onClick={() => handleLoyalCustomerPageChange(i + 1)}
-                                              className={`h-8 w-8 p-0 ${
-                                                currentLoyalCustomerPage === i + 1 ? "bg-[#007AFF]" : ""
-                                              }`}
-                                            >
-                                              {i + 1}
+                          onClick={handleNext}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          Continue
+                          <ArrowRight className="ml-2 h-4 w-4" />
                                             </Button>
-                                          ))}
                             </div>
-                                        
-                            <Button 
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => handleLoyalCustomerPageChange(currentLoyalCustomerPage + 1)}
-                                          disabled={currentLoyalCustomerPage === totalLoyalCustomerPages}
-                                          className="h-8 w-8 p-0"
-                                        >
-                                          <ChevronRight className="h-4 w-4" />
-                            </Button>
-                          </div>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Wizard Step 3: Program Selection */}
+                    </>
+                  )}
+                  
+                  {/* Program Selection - wizardStep 3 */}
                     {wizardStep === 3 && (
-                      <div className="space-y-6">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-medium text-lg">Step 3: Choose a Reward Program</h4>
-                        </div>
-                        
-                        <p className="text-gray-600">Now, select a program that offers multiple rewards at different levels</p>
-                        
-                        <div className="space-y-4">
-                          {/* Traditional Coffee Program */}
-                          <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                            <div className="p-4">
-                              <div className="flex items-center gap-3">
-                                <div className="h-12 w-12 rounded-full bg-brown-100 flex items-center justify-center text-brown-600">
-                                  <Coffee className="h-6 w-6" />
+                    <>
+                      {/* Single container with dropdown for coffee program */}
+                      <div className="mt-4">
+                        {/* Coffee Program Button */}
+                        <div className="border rounded-lg overflow-hidden bg-white">
+                          <div 
+                            className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50"
+                            onClick={() => setShowCoffeeProgramConfig(!showCoffeeProgramConfig)}
+                          >
+                            <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                            <Coffee className="h-5 w-5 text-blue-600" />
                                 </div>
-                            <div className="flex-1">
-                                  <h5 className="font-medium">Traditional Coffee Program</h5>
-                                  <p className="text-sm text-gray-500">Buy X coffees, get 1 free (stamp card style)</p>
+                              <div>
+                            <h3 className="font-medium text-gray-900">Coffee Program</h3>
+                                <p className="text-sm text-gray-500">Buy X coffees, get one free!</p>
                             </div>
-                                {coffeeProgramConfigured ? (
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium text-green-600 flex items-center">
-                                      <CheckCircle className="h-4 w-4 mr-1" /> Configured
-                                    </span>
-                            <Button 
-                                      variant="outline" 
-                                      size="sm"
-                                      onClick={() => setShowCoffeeProgramConfig(true)}
-                                    >
-                                      Edit
-                            </Button>
-                                  </div>
-                                ) : (
-                                  <Button 
-                                    className="bg-[#007AFF] hover:bg-[#0066CC] text-white"
-                                    onClick={() => {
-                                      setWizardSelectedRewards(prev => 
-                                        prev.includes('traditional-coffee-program') 
-                                          ? prev 
-                                          : [...prev, 'traditional-coffee-program']
-                                      );
-                                      setShowCoffeeProgramConfig(true);
-                                    }}
-                                  >
-                                    Configure
-                                  </Button>
-                                )}
+                            </div>
+                            <ChevronDown 
+                              className={`h-5 w-5 text-gray-500 transition-transform ${
+                                showCoffeeProgramConfig ? 'rotate-180' : ''
+                              }`}
+                            />
                           </div>
                           
-                              {coffeeProgramConfigured && (
-                                <div className="mt-4 pt-4 border-t border-gray-200">
-                                  <h6 className="text-sm font-medium mb-2">Configuration Details</h6>
-                                  <div className="grid grid-cols-2 gap-3 text-sm">
-                                    <div>
-                                      <span className="text-gray-500">PIN Code:</span>
-                                      <span className="ml-2 font-medium">{coffeeProgram.pin}</span>
-                            </div>
-                                    <div>
-                                      <span className="text-gray-500">First Free Coffee:</span>
-                                      <span className="ml-2 font-medium">
-                                        {coffeeProgram.freeRewardTiming === 'before' ? 'Before first transaction' : 'After first transaction'}
-                                      </span>
-                                    </div>
-                                    <div>
-                                      <span className="text-gray-500">Frequency:</span>
-                                      <span className="ml-2 font-medium">Every {coffeeProgram.frequency} transactions</span>
-                                    </div>
-                                    <div>
-                                      <span className="text-gray-500">Number of Rewards:</span>
-                                      <span className="ml-2 font-medium">{coffeeProgram.levels}</span>
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="mt-4 flex justify-start">
-                            <Button 
-                                      variant="outline"
-                                      className="text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600"
-                                      onClick={handleRemoveCoffeeConfig}
-                                    >
-                                      Remove Configuration
-                            </Button>
-                                    
-                                    {/* "Continue" button removed */}
-                                  </div>
+                          {/* Configuration section - shown when expanded */}
+                          {showCoffeeProgramConfig && (
+                            <div className="border-t border-gray-200 bg-gray-50 p-4">
+                              <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                  <Label htmlFor="coffee-pin">PIN Code</Label>
+                                  <Input 
+                                    id="coffee-pin" 
+                                    value={coffeeProgram.pin} 
+                                    onChange={(e) => setCoffeeProgram({...coffeeProgram, pin: e.target.value})}
+                                    className="mt-1"
+                                    placeholder="1234"
+                                  />
                                 </div>
-                              )}
-                            </div>
-                          </div>
-                          {/* Standard Voucher Program */}
-                          <div className="border border-gray-200 rounded-lg overflow-hidden bg-white mt-4">
-                            <div className="p-4">
-                              <div className="flex items-center gap-3">
-                                <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center text-green-600">
-                                  <Percent className="h-6 w-6" />
-                                </div>
-                            <div className="flex-1">
-                                  <h5 className="font-medium">Standard Voucher Program</h5>
-                                  <p className="text-sm text-gray-500">Reward customers with vouchers based on their spending</p>
-                            </div>
-                                {voucherProgramConfigured ? (
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium text-green-600 flex items-center">
-                                      <CheckCircle className="h-4 w-4 mr-1" /> Configured
-                                    </span>
-                            <Button 
-                                      variant="outline" 
-                                      size="sm"
-                                      onClick={() => setShowVoucherProgramConfig(true)}
-                                    >
-                                      Edit
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <Button 
-                                    className="bg-[#007AFF] hover:bg-[#0066CC] text-white"
-                                    onClick={() => {
-                                      setWizardSelectedRewards(prev => 
-                                        prev.includes('standard-voucher-program') 
-                                          ? prev 
-                                          : [...prev, 'standard-voucher-program']
-                                      );
-                                      setShowVoucherProgramConfig(true);
-                                    }}
+                                
+                                <div>
+                                  <Label>First Free Coffee</Label>
+                                  <RadioGroup 
+                                    value={coffeeProgram.freeRewardTiming}
+                                    onValueChange={(value) => setCoffeeProgram({
+                                      ...coffeeProgram, 
+                                      freeRewardTiming: value as 'before' | 'after'
+                                    })}
+                                    className="mt-1"
                                   >
-                                    Configure
-                                  </Button>
-                                )}
+                                    <div className="flex items-center space-x-2">
+                                      <RadioGroupItem value="before" id="before" />
+                                      <Label htmlFor="before">Before first transaction</Label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                      <RadioGroupItem value="after" id="after" />
+                                      <Label htmlFor="after">After first transaction</Label>
+                                    </div>
+                                  </RadioGroup>
+                                </div>
                               </div>
                               
-                              {voucherProgramConfigured && (
-                                <div className="mt-4 pt-4 border-t border-gray-200">
-                                  <h6 className="text-sm font-medium mb-2">Configuration Details</h6>
-                                  <div className="grid grid-cols-2 gap-3 text-sm">
-                                    <div>
-                                      <span className="text-gray-500">Program Name:</span>
-                                      <span className="ml-2 font-medium">{voucherProgram.name}</span>
-                                    </div>
-                                    <div>
-                                      <span className="text-gray-500">Spend Required:</span>
-                                      <span className="ml-2 font-medium">${voucherProgram.totalSpendRequired}</span>
-                                    </div>
-                                    <div>
-                                      <span className="text-gray-500">Voucher Value:</span>
-                                      <span className="ml-2 font-medium">
-                                        {voucherProgram.voucherType === 'percent' ? 
-                                          `${voucherProgram.voucherAmount}%` : 
-                                          `$${voucherProgram.voucherAmount}`}
-                                </span>
-                                    </div>
-                                    <div>
-                                      <span className="text-gray-500">Description:</span>
-                                      <span className="ml-2 font-medium">{voucherProgram.description}</span>
+                              <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                  <Label htmlFor="frequency">Frequency</Label>
+                                  <Input 
+                                    id="frequency" 
+                                    type="number"
+                                    value={coffeeProgram.frequency} 
+                                    onChange={(e) => setCoffeeProgram({
+                                      ...coffeeProgram, 
+                                      frequency: e.target.value
+                                    })}
+                                    className="mt-1"
+                                    placeholder="5"
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor="levels">Number of Rewards</Label>
+                                  <Input 
+                                    id="levels" 
+                                    type="number"
+                                    value={coffeeProgram.levels} 
+                                    onChange={(e) => setCoffeeProgram({
+                                      ...coffeeProgram, 
+                                      levels: e.target.value
+                                    })}
+                                    className="mt-1"
+                                    placeholder="10"
+                                  />
+                                </div>
+                              </div>
+                              
+                              <div className="flex justify-end">
+                                <Button 
+                                  variant="default"
+                                  className="bg-blue-600 hover:bg-blue-700"
+                                  onClick={() => {
+                                    // Save coffee program configuration
+                                    setCoffeeProgramConfigured(true);
+                                    setShowCoffeeProgramConfig(false);
+                                    toast({
+                                      title: "Coffee Program Configured",
+                                      description: "Your coffee program has been set up successfully.",
+                                    });
+                                  }}
+                                >
+                                  Save Configuration
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Show configured program details if configured */}
+                          {coffeeProgramConfigured && !showCoffeeProgramConfig && (
+                            <div className="border-t border-gray-200 p-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <h4 className="text-sm font-medium text-gray-700">Configuration Details</h4>
+                                <div className="flex items-center text-green-600">
+                                  <Check className="h-4 w-4 mr-1" />
+                                  <span className="text-sm font-medium">Configured</span>
+                                </div>
+                          </div>
+                          
+                              <div className="grid grid-cols-2 gap-y-2 text-sm">
+                                <div>
+                                  <span className="text-gray-500">PIN Code:</span>
+                                  <span className="ml-2 font-medium">{coffeeProgram.pin}</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">First Free Coffee:</span>
+                                  <span className="ml-2 font-medium">
+                                    {coffeeProgram.freeRewardTiming === 'before' ? 'Before first transaction' : 'After first transaction'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Frequency:</span>
+                                  <span className="ml-2 font-medium">Every {coffeeProgram.frequency} transactions</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Number of Rewards:</span>
+                                  <span className="ml-2 font-medium">{coffeeProgram.levels}</span>
+                                </div>
+                              </div>
+                              
+                              {/* Add Remove Configuration button */}
+                              <div className="mt-4 flex justify-end">
+                                <Button 
+                                  variant="outline" 
+                                  className="text-red-500 border-red-200 hover:bg-red-50"
+                                  onClick={() => {
+                                    setCoffeeProgramConfigured(false);
+                                    toast({
+                                      title: "Configuration Removed",
+                                      description: "Coffee program configuration has been removed.",
+                                      variant: "destructive"
+                                    });
+                                  }}
+                                >
+                                  Remove Configuration
+                                </Button>
+                                </div>
+                            </div>
+                          )}
                                     </div>
                                   </div>
                                   
-                                  <div className="mt-4 flex justify-start">
-                                    <Button 
-                                      variant="outline"
-                                      className="text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600"
-                                      onClick={handleRemoveVoucherConfig}
-                                    >
-                                      Remove Configuration
+                      <div className="flex justify-end pt-6 mt-6 border-t border-gray-200">
+                        <Button variant="outline" onClick={handleBack}>
+                          Back
                                     </Button>
-                                    
-                                    {/* "Continue" button removed */}
-                                  </div>
-                                </div>
-                      )}
-                            </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-                    {/* Wizard Step 4: Confirmation */}
-                    {wizardStep === 4 && (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-medium text-lg">Step 4: Review Your Selections</h4>
-                        </div>
-                        
-                        <div className="bg-green-50 border border-green-200 rounded-md p-4">
-                          <h5 className="font-medium flex items-center text-green-700">
-                            <CheckCircle className="h-5 w-5 mr-2 text-green-600" />
-                            Great choices! Here's what you've selected:
-                          </h5>
-                          
-                          <div className="mt-4 space-y-3">
-                            <div className="bg-white p-3 rounded-md border border-gray-200">
-                              <p className="font-medium">Industry</p>
-                              <p className="text-sm text-gray-600">{selectedIndustry}</p>
-                            </div>
-                            
-                            <div className="bg-white p-3 rounded-md border border-gray-200">
-                              <p className="font-medium">Individual Reward</p>
-                              <p className="text-sm text-gray-600">{selectedRewardType}</p>
-                            </div>
-                            
-                            <div className="bg-white p-3 rounded-md border border-gray-200">
-                              <p className="font-medium">Reward Program</p>
-                              <p className="text-sm text-gray-600">{selectedProgramType}</p>
-                            </div>
-                          </div>
-                          
                             <Button 
-                            className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white"
-                            onClick={() => {
-                              // Add the selected rewards to the businessData
-                              const individualReward = {
-                                id: `${selectedIndustry}-individual`,
-                                name: wizardSelectedRewards[0] || "Free Reward",
-                                type: 'individual',
-                                industry: selectedIndustry,
-                                isNewCustomer: wizardSelectedRewards.some(r => r.includes('welcome')),
-                                pointsCost: 0,
-                                description: `Reward for customers`,
-                                rewardName: wizardSelectedRewards[0] || "Free Reward"
-                              };
-                              
-                              const programReward = {
-                                id: `${selectedIndustry}-program`,
-                                name: selectedProgramType || "Loyalty Program",
-                                type: 'program',
-                                industry: selectedIndustry,
-                                isNewCustomer: false,
-                                pointsCost: 0,
-                                description: `Loyalty program with multiple rewards`,
-                                rewardName: selectedProgramType || "Loyalty Program"
-                              };
-                              
-                              setBusinessData(prev => ({
-                                ...prev,
-                                selectedRewards: [...prev.selectedRewards, individualReward, programReward],
-                                hasSetupReward: true
-                              }));
-                              
-                              // Move to the next main step
-                              setStep(step + 1)
-                            }}
-                          >
-                            Confirm Selections & Continue
+                          onClick={() => {
+                            // Force advance to next step regardless of coffee program configuration
+                            if (step < totalSteps) {
+                              // Move directly to the next main step
+                              setStep(step + 1);
+                            } else {
+                              // Or complete the wizard if this is the last step
+                              handleComplete();
+                            }
+                          }}
+                          className="bg-blue-600 hover:bg-blue-700 ml-2"
+                        >
+                          Continue
+                          <ArrowRight className="ml-2 h-4 w-4" />
                             </Button>
                           </div>
-                      </div>
+                    </>
                       )}
-                  </div>
                 </div>
               )}
 
               {/* Step 2: Set up Points Rules - Changing to Reward Categories */}
               {step === 2 && (
-                <div className="space-y-6">
-                  <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                        <BarChart className="h-6 w-6 text-[#007AFF]" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-medium">Set Up Points Rules</h3>
-                        <p className="text-sm text-gray-500">Add predefined rules to reward your customers.</p>
-                      </div>
-                    </div>
-                    
-                    {/* NEW RULES WITH UPDATED DATE FORMATS */}
-                    <div className="space-y-6">
-                      {/* Morning Coffee Bonus */}
-                        <Collapsible className="bg-white p-4 rounded-lg border border-gray-200">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-yellow-100 flex items-center justify-center">
-                              <Coffee className="h-5 w-5 text-yellow-600" />
-                              </div>
-                              <div>
-                                <h4 className="font-medium">Morning Coffee Bonus</h4>
-                              <p className="text-sm text-gray-500">
-                                Earn 1.5x points in the morning on weekdays.
-                              </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {selectedPointsRules.includes("morning-coffee-bonus")
-                                ? (
-                                  <Button
-                                    onClick={() => handlePointsRuleToggle("morning-coffee-bonus")}
-                                    size="sm"
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                                  >
-                                    <Check className="h-4 w-4 mr-1" />
-                                    Selected
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    onClick={() => handlePointsRuleToggle("morning-coffee-bonus")}
-                                    size="sm"
-                                    className="bg-slate-200 hover:bg-slate-300 text-black"
-                                  >
-                                    Select
-                                  </Button>
-                                )
-                              }
-                              <CollapsibleTrigger
-                                className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
-                              >
-                                <ChevronDown className="h-5 w-5 text-gray-500"/>
-                              </CollapsibleTrigger>
-                            </div>
-                          </div>
-                          <CollapsibleContent className="pt-4 mt-3 border-t border-gray-100">
-                            <div className="space-y-4">
-                              <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <h5 className="text-sm font-medium mb-1 flex items-center">
-                                      <Clock className="h-4 w-4 mr-1 text-blue-500" />
-                                    Time Range
-                                    </h5>
-                                  <p className="text-xs text-gray-600">7am to 10am</p>
-                                  </div>
-                                  <div>
-                                    <h5 className="text-sm font-medium mb-1 flex items-center">
-                                      <Calendar className="h-4 w-4 mr-1 text-blue-500" />
-                                    Days of Week
-                                    </h5>
-                                  <p className="text-xs text-gray-600">Monday, Tuesday, Wednesday, Thursday, Friday</p>
-                                  </div>
-                                  <div>
-                                    <h5 className="text-sm font-medium mb-1 flex items-center">
-                                      <Award className="h-4 w-4 mr-1 text-blue-500" />
-                                      Points Multiplier
-                                    </h5>
-                                    <p className="text-xs text-gray-600">1.5x points</p>
-                                  </div>
-                                  </div>
-                                </div>
-                              <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                                <h5 className="text-sm font-medium mb-2">JSON Configuration</h5>
-                              <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">{`{
-  "name": "Morning Coffee Bonus",
-  "pointsmultiplier": 1.5,
-  "conditions": [
-    {
-      "type": "timeOfDay",
-      "startTime": "7:00:00",
-      "endTime": "10:00:00"
-    },
-    {
-      "type": "daysOfWeek",
-      "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
-    }
-  ],
-  "merchantId": "cafe123",
-  "createdAt": "December 11, 2024 at 4:00:00 PM UTC+11"
-}`}</pre>
-                              </div>
-                              <div className="flex justify-end gap-2">
-                              <Button variant="outline" size="sm">Edit Rule</Button>
-                              <Button variant="outline" size="sm" className="text-red-500 border-red-200 hover:bg-red-50">
-                                Delete
-                                </Button>
-                            </div>
-                          </div>
-                        </CollapsibleContent>
-                      </Collapsible>
-
-                      {/* Lunchtime Special */}
-                      <Collapsible className="bg-white p-4 rounded-lg border border-gray-200">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-                              <Utensils className="h-5 w-5 text-green-600" />
-                            </div>
-                            <div>
-                              <h4 className="font-medium">Lunchtime Special</h4>
-                              <p className="text-sm text-gray-500">
-                                Earn 2x points at midday with a minimum spend of $10.
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {selectedPointsRules.includes("lunchtime-special")
-                              ? (
-                                <Button
-                                  onClick={() => handlePointsRuleToggle("lunchtime-special")}
-                                  size="sm"
-                                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                                >
-                                  <Check className="h-4 w-4 mr-1" />
-                                  Selected
-                                </Button>
-                              ) : (
-                                <Button
-                                  onClick={() => handlePointsRuleToggle("lunchtime-special")}
-                                  size="sm"
-                                  className="bg-slate-200 hover:bg-slate-300 text-black"
-                                >
-                                  Select
-                                </Button>
-                              )
-                            }
-                            <CollapsibleTrigger
-                              className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
-                            >
-                              <ChevronDown className="h-5 w-5 text-gray-500"/>
-                            </CollapsibleTrigger>
-                          </div>
-                        </div>
-                        <CollapsibleContent className="pt-4 mt-3 border-t border-gray-100">
-                          <div className="space-y-4">
-                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <h5 className="text-sm font-medium mb-1 flex items-center">
-                                    <Clock className="h-4 w-4 mr-1 text-blue-500" />
-                                    Time Range
-                                  </h5>
-                                  <p className="text-xs text-gray-600">12pm to 3pm</p>
-                                </div>
-                                <div>
-                                  <h5 className="text-sm font-medium mb-1 flex items-center">
-                                    <DollarSign className="h-4 w-4 mr-1 text-blue-500" />
-                                    Minimum Spend
-                                  </h5>
-                                  <p className="text-xs text-gray-600">$10.00</p>
-                                </div>
-                                <div>
-                                  <h5 className="text-sm font-medium mb-1 flex items-center">
-                                    <Award className="h-4 w-4 mr-1 text-blue-500" />
-                                    Points Multiplier
-                                  </h5>
-                                  <p className="text-xs text-gray-600">2x points</p>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                              <h5 className="text-sm font-medium mb-2">JSON Configuration</h5>
-                              <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">{`{
-  "name": "Lunchtime Special",
-  "pointsmultiplier": 2,
-  "conditions": [
-    {
-      "type": "timeOfDay",
-      "startTime": "12:00:00",
-      "endTime": "15:00:00"
-    },
-    {
-      "type": "minimumSpend",
-      "amount": 10.0
-    }
-  ],
-  "merchantId": "cafe123",
-  "createdAt": "December 11, 2024 at 4:00:00 PM UTC+11"
-}`}</pre>
-                            </div>
-                            <div className="flex justify-end gap-2">
-                              <Button variant="outline" size="sm">Edit Rule</Button>
-                                <Button variant="outline" size="sm" className="text-red-500 border-red-200 hover:bg-red-50">
-                                  Delete
-                                </Button>
-                              </div>
-                            </div>
-                          </CollapsibleContent>
-                        </Collapsible>
-                        
-                      {/* Weekend Treat */}
-                      <Collapsible className="bg-white p-4 rounded-lg border border-gray-200">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-pink-100 flex items-center justify-center">
-                              <Calendar className="h-5 w-5 text-pink-600" />
-                            </div>
-                            <div>
-                              <h4 className="font-medium">Weekend Treat</h4>
-                              <p className="text-sm text-gray-500">
-                                Earn 3x points on weekend days.
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {selectedPointsRules.includes("weekend-treat")
-                              ? (
-                                <Button
-                                  onClick={() => handlePointsRuleToggle("weekend-treat")}
-                                  size="sm"
-                                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                                >
-                                  <Check className="h-4 w-4 mr-1" />
-                                  Selected
-                                </Button>
-                              ) : (
-                                <Button
-                                  onClick={() => handlePointsRuleToggle("weekend-treat")}
-                                  size="sm"
-                                  className="bg-slate-200 hover:bg-slate-300 text-black"
-                                >
-                                  Select
-                                </Button>
-                              )
-                            }
-                            <CollapsibleTrigger
-                              className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
-                            >
-                              <ChevronDown className="h-5 w-5 text-gray-500"/>
-                            </CollapsibleTrigger>
-                          </div>
-                        </div>
-                        <CollapsibleContent className="pt-4 mt-3 border-t border-gray-100">
-                          <div className="space-y-4">
-                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <h5 className="text-sm font-medium mb-1 flex items-center">
-                                    <Calendar className="h-4 w-4 mr-1 text-blue-500" />
-                                    Days of Week
-                                  </h5>
-                                  <p className="text-xs text-gray-600">Saturday, Sunday</p>
-                                </div>
-                                <div>
-                                  <h5 className="text-sm font-medium mb-1 flex items-center">
-                                    <Award className="h-4 w-4 mr-1 text-blue-500" />
-                                    Points Multiplier
-                                  </h5>
-                                  <p className="text-xs text-gray-600">3x points</p>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                              <h5 className="text-sm font-medium mb-2">JSON Configuration</h5>
-                              <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">{`{
-  "name": "Weekend Treat",
-  "pointsmultiplier": 3,
-  "conditions": [
-    {
-      "type": "daysOfWeek",
-      "days": ["Saturday", "Sunday"]
-    }
-  ],
-  "merchantId": "cafe123",
-  "createdAt": "December 11, 2024 at 4:00:00 PM UTC+11"
-}`}</pre>
-                            </div>
-                            <div className="flex justify-end gap-2">
-                              <Button variant="outline" size="sm">Edit Rule</Button>
-                              <Button variant="outline" size="sm" className="text-red-500 border-red-200 hover:bg-red-50">
-                                Delete
-                                </Button>
-                              </div>
-                            </div>
-                        </CollapsibleContent>
-                      </Collapsible>
-
-                      {/* Happy Hour Delight */}
-                      <Collapsible className="bg-white p-4 rounded-lg border border-gray-200">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
-                              <Clock className="h-5 w-5 text-purple-600" />
-                          </div>
-                            <div>
-                              <h4 className="font-medium">Happy Hour Delight</h4>
-                              <p className="text-sm text-gray-500">
-                                Earn 2.5x points during a limited time window.
-                              </p>
-                        </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {selectedPointsRules.includes("happy-hour-delight")
-                              ? (
-                                <Button
-                                  onClick={() => handlePointsRuleToggle("happy-hour-delight")}
-                                  size="sm"
-                                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                                >
-                                  <Check className="h-4 w-4 mr-1" />
-                                  Selected
-                                </Button>
-                              ) : (
-                                <Button
-                                  onClick={() => handlePointsRuleToggle("happy-hour-delight")}
-                                  size="sm"
-                                  className="bg-slate-200 hover:bg-slate-300 text-black"
-                                >
-                                  Select
-                                </Button>
-                              )
-                            }
-                            <CollapsibleTrigger
-                              className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
-                            >
-                              <ChevronDown className="h-5 w-5 text-gray-500"/>
-                            </CollapsibleTrigger>
-                          </div>
-                        </div>
-                        <CollapsibleContent className="pt-4 mt-3 border-t border-gray-100">
-                          <div className="space-y-4">
-                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <h5 className="text-sm font-medium mb-1 flex items-center">
-                                    <Clock className="h-4 w-4 mr-1 text-blue-500" />
-                                    Time Range
-                                  </h5>
-                                  <p className="text-xs text-gray-600">5pm to 8pm</p>
-                                </div>
-                                <div>
-                                  <h5 className="text-sm font-medium mb-1 flex items-center">
-                                    <Award className="h-4 w-4 mr-1 text-blue-500" />
-                                    Points Multiplier
-                                  </h5>
-                                  <p className="text-xs text-gray-600">2.5x points</p>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                              <h5 className="text-sm font-medium mb-2">JSON Configuration</h5>
-                              <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">{`{
-  "name": "Happy Hour Delight",
-  "pointsmultiplier": 2.5,
-  "conditions": [
-    {
-      "type": "timeOfDay",
-      "startTime": "17:00:00",
-      "endTime": "20:00:00"
-    }
-  ],
-  "merchantId": "cafe123",
-  "createdAt": "December 11, 2024 at 4:00:00 PM UTC+11"
-}`}</pre>
-                            </div>
-                            <div className="flex justify-end gap-2">
-                              <Button variant="outline" size="sm">Edit Rule</Button>
-                              <Button variant="outline" size="sm" className="text-red-500 border-red-200 hover:bg-red-50">
-                                Delete
-                              </Button>
-                            </div>
-                          </div>
-                        </CollapsibleContent>
-                      </Collapsible>
-
-                      {/* Big Spender Bonus */}
-                      <Collapsible className="bg-white p-4 rounded-lg border border-gray-200">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center">
-                              <DollarSign className="h-5 w-5 text-amber-600" />
-                            </div>
-                            <div>
-                              <h4 className="font-medium">Big Spender Bonus</h4>
-                              <p className="text-sm text-gray-500">
-                                Earn 5x points when customers spend over $30 in a single visit.
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {selectedPointsRules.includes("big-spender-bonus")
-                              ? (
-                                <Button
-                                  onClick={() => handlePointsRuleToggle("big-spender-bonus")}
-                                  size="sm"
-                                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                                >
-                                  <Check className="h-4 w-4 mr-1" />
-                                  Selected
-                                </Button>
-                              ) : (
-                                <Button
-                                  onClick={() => handlePointsRuleToggle("big-spender-bonus")}
-                                  size="sm"
-                                  className="bg-slate-200 hover:bg-slate-300 text-black"
-                                >
-                                  Select
-                                </Button>
-                              )
-                            }
-                            <CollapsibleTrigger
-                              className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
-                            >
-                              <ChevronDown className="h-5 w-5 text-gray-500"/>
-                            </CollapsibleTrigger>
-                          </div>
-                        </div>
-                        <CollapsibleContent className="pt-4 mt-3 border-t border-gray-100">
-                          <div className="space-y-4">
-                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <h5 className="text-sm font-medium mb-1 flex items-center">
-                                    <DollarSign className="h-4 w-4 mr-1 text-blue-500" />
-                                    Minimum Spend
-                                  </h5>
-                                  <p className="text-xs text-gray-600">$30.00</p>
-                                </div>
-                                <div>
-                                  <h5 className="text-sm font-medium mb-1 flex items-center">
-                                    <Award className="h-4 w-4 mr-1 text-blue-500" />
-                                    Points Multiplier
-                                  </h5>
-                                  <p className="text-xs text-gray-600">5x points</p>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                              <h5 className="text-sm font-medium mb-2">JSON Configuration</h5>
-                              <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">{`{
-  "name": "Big Spender Bonus",
-  "pointsmultiplier": 5,
-  "conditions": [
-    {
-      "type": "minimumSpend",
-      "amount": 30.0
-    }
-  ],
-  "merchantId": "cafe123",
-  "createdAt": "December 11, 2024 at 4:00:00 PM UTC+11"
-}`}</pre>
-                            </div>
-                            <div className="flex justify-end gap-2">
-                              <Button variant="outline" size="sm">Edit Rule</Button>
-                              <Button variant="outline" size="sm" className="text-red-500 border-red-200 hover:bg-red-50">
-                                Delete
-                            </Button>
-                          </div>
-                        </div>
-                        </CollapsibleContent>
-                      </Collapsible>
-
-                      {/* Monday Recovery */}
-                      <Collapsible className="bg-white p-4 rounded-lg border border-gray-200">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                              <Calendar className="h-5 w-5 text-indigo-600" />
-                      </div>
-                            <div>
-                              <h4 className="font-medium">Monday Recovery</h4>
-                              <p className="text-sm text-gray-500">
-                                Earn 2x points on Mondays with a minimum spend of $5.
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {selectedPointsRules.includes("monday-recovery")
-                              ? (
-                                <Button
-                                  onClick={() => handlePointsRuleToggle("monday-recovery")}
-                                  size="sm"
-                                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                                >
-                                  <Check className="h-4 w-4 mr-1" />
-                                  Selected
-                                </Button>
-                              ) : (
-                                <Button
-                                  onClick={() => handlePointsRuleToggle("monday-recovery")}
-                                  size="sm"
-                                  className="bg-slate-200 hover:bg-slate-300 text-black"
-                                >
-                                  Select
-                                </Button>
-                              )
-                            }
-                            <CollapsibleTrigger
-                              className="rounded-full h-8 w-8 inline-flex items-center justify-center hover:bg-gray-100"
-                            >
-                              <ChevronDown className="h-5 w-5 text-gray-500"/>
-                            </CollapsibleTrigger>
-                          </div>
-                        </div>
-                        <CollapsibleContent className="pt-4 mt-3 border-t border-gray-100">
-                          <div className="space-y-4">
-                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <h5 className="text-sm font-medium mb-1 flex items-center">
-                                    <Calendar className="h-4 w-4 mr-1 text-blue-500" />
-                                    Days of Week
-                                  </h5>
-                                  <p className="text-xs text-gray-600">Monday</p>
-                                </div>
-                                <div>
-                                  <h5 className="text-sm font-medium mb-1 flex items-center">
-                                    <DollarSign className="h-4 w-4 mr-1 text-blue-500" />
-                                    Minimum Spend
-                                  </h5>
-                                  <p className="text-xs text-gray-600">$5.00</p>
-                                </div>
-                                <div>
-                                  <h5 className="text-sm font-medium mb-1 flex items-center">
-                                    <Award className="h-4 w-4 mr-1 text-blue-500" />
-                                    Points Multiplier
-                                  </h5>
-                                  <p className="text-xs text-gray-600">2x points</p>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                              <h5 className="text-sm font-medium mb-2">JSON Configuration</h5>
-                              <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">{`{
-  "name": "Monday Recovery",
-  "pointsmultiplier": 2,
-  "conditions": [
-    {
-      "type": "daysOfWeek",
-      "days": ["Monday"]
-    },
-    {
-      "type": "minimumSpend",
-      "amount": 5.0
-    }
-  ],
-  "merchantId": "cafe123",
-  "createdAt": "December 11, 2024 at 4:00:00 PM UTC+11"
-}`}</pre>
-                            </div>
-                            <div className="flex justify-end gap-2">
-                              <Button variant="outline" size="sm">Edit Rule</Button>
-                              <Button variant="outline" size="sm" className="text-red-500 border-red-200 hover:bg-red-50">
-                                Delete
-                              </Button>
-                            </div>
-                          </div>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    </div>
+                <div className="mt-4">
+                  {/* Here we use PointsRuleCard, not RewardCard */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[
+                      {
+                        id: "morning-coffee-perk",
+                        name: "Morning Coffee Perk",
+                        description: "1.5x points in the morning hours, if you spend at least $4, on weekdays.",
+                        icon: Coffee,
+                        pointsmultiplier: 1.5,
+                        conditions: [
+                          {
+                            type: "timeOfDay",
+                            startTime: "December 11, 2024 at 7:00:00 AM UTC+11",
+                            endTime: "December 11, 2024 at 10:00:00 AM UTC+11"
+                          },
+                          {
+                            type: "minimumSpend",
+                            amount: 4.0
+                          },
+                          {
+                            type: "daysOfWeek",
+                            days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+                          }
+                        ],
+                        merchantId: "abc123",
+                        createdAt: "December 10, 2024 at 6:00:00 PM UTC+11",
+                      },
+                      {
+                        id: "lunchtime-loyalty-boost",
+                        name: "Lunchtime Loyalty Boost",
+                        description: "2x points at lunchtime if you spend at least $10, on M/W/F.",
+                        icon: Coffee, // or whichever icon you prefer, e.g., Utensils or Gift
+                        pointsmultiplier: 2,
+                        conditions: [
+                          {
+                            type: "timeOfDay",
+                            startTime: "December 11, 2024 at 12:00:00 PM UTC+11",
+                            endTime: "December 11, 2024 at 2:00:00 PM UTC+11"
+                          },
+                          {
+                            type: "minimumSpend",
+                            amount: 10.0
+                          },
+                          {
+                            type: "daysOfWeek",
+                            days: ["Monday", "Wednesday", "Friday"]
+                          }
+                        ],
+                        merchantId: "abc123",
+                        createdAt: "December 10, 2024 at 6:30:00 PM UTC+11",
+                      }
+                    ].map((rule) => (
+                      <PointsRuleCard
+                        key={rule.id}
+                        id={rule.id}
+                        name={rule.name}
+                        description={rule.description}
+                        icon={rule.icon}
+                        conditions={rule.conditions || []}
+                        pointsmultiplier={rule.pointsmultiplier}
+                        isSelected={selectedPointsRules.includes(rule.id)}
+                        onSelect={() => handlePointsRuleToggle(rule.id)}
+                      />
+                    ))}
                   </div>
                 </div>
               )}
@@ -3544,6 +2508,38 @@ export function OnboardingWizard() {
               {/* Step 3: Create Homepage Banner */}
               {step === 3 && (
                 <div className="space-y-6">
+                  {/* Moved the "Customize Banner" button above the container */}
+                  <div className="flex justify-end">
+                    {bannerData ? (
+                      <div className="flex items-center gap-2 text-green-600">
+                        <CheckCircle className="h-5 w-5" />
+                        <span className="text-sm font-medium">Selected!</span>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowBannerDialog(true)
+                          // Possibly pre-fill bannerData with a "Promotional Banner" template
+                        }}
+                      >
+                        Create Banner
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* A nicer introduction about creating banners */}
+                  <div className="bg-white p-4 rounded-md border border-gray-200">
+                    <h2 className="text-lg font-medium text-gray-900 mb-2">
+                      Create an Engaging Homepage Banner
+                    </h2>
+                    <p className="text-sm text-gray-600">
+                      Make a memorable first impression by adding a visually appealing banner 
+                      that highlights your loyalty program, seasonal offers, or key promotions. 
+                      This is a great way to capture attention and encourage customers to take action.
+                    </p>
+                  </div>
+
                   <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
                     <div className="flex items-center gap-4 mb-4">
                       <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
@@ -3605,27 +2601,6 @@ export function OnboardingWizard() {
                           </Button>
                         )}
                       </div>
-                      
-                      {/* Optionally, show a quick link to the Announcement designer */}
-                      <div className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200 mt-4">
-                        <div>
-                          <h4 className="font-medium">Optional Announcement</h4>
-                          <p className="text-sm text-gray-500">Attach an announcement to your banner</p>
-                        </div>
-                        {announcementData ? (
-                          <div className="flex items-center gap-2 text-green-600">
-                            <CheckCircle className="h-5 w-5" />
-                            <span className="text-sm font-medium">Selected!</span>
-                          </div>
-                        ) : (
-                          <Button 
-                            onClick={() => setShowAnnouncementDesigner(true)}
-                            variant="default"
-                          >
-                            Create Announcement
-                          </Button>
-                        )}
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -3633,117 +2608,6 @@ export function OnboardingWizard() {
             </CardContent>
           </Card>
         </div>
-        
-        {/* Progress bar - only show when not on intro page */}
-        {hasViewedIntro && (
-          <div className="md:col-span-3">
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5 sticky top-6">
-            <h3 className="text-lg font-medium mb-4">Your Setup Progress</h3>
-            
-              {/* Add step indicator at the top */}
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-600">Progress</span>
-                  <span className="text-sm font-medium text-[#007AFF]">Step {step} of {totalSteps}</span>
-                </div>
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-[#007AFF] rounded-full transition-all duration-300"
-                    style={{ width: `${(step / totalSteps) * 100}%` }}
-                    />
-                  </div>
-              </div>
-              
-              <div className="space-y-3">
-              {/* Reward creation status */}
-              <div className="flex items-center gap-3">
-                <div className={`h-6 w-6 rounded-full flex items-center justify-center ${
-                    step === 1 ? "bg-[#007AFF] text-white" :
-                    step > 1 ? "bg-green-100 text-green-600" :
-                    "bg-gray-100 text-gray-400"
-                }`}>
-                    {step > 1 ? (
-                      <Check className="h-4 w-4" />
-                  ) : (
-                      <span className="text-xs">1</span>
-                  )}
-                </div>
-                <div className="flex-1">
-                    <p className={`text-sm ${
-                      step >= 1 ? "text-gray-900" : "text-gray-500"
-                    }`}>
-                      Create Rewards
-                  </p>
-                  {businessData.selectedRewards.length > 0 && (
-                    <div className="mt-1 space-y-1">
-                      {businessData.selectedRewards.map((reward) => (
-                        <div key={reward.id} className="flex items-center gap-1">
-                          <span className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0"></span>
-                          <p className="text-xs text-gray-600 truncate">{reward.name}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* Points rule status */}
-              <div className="flex items-center gap-3">
-                <div className={`h-6 w-6 rounded-full flex items-center justify-center ${
-                    step === 2 ? "bg-[#007AFF] text-white" :
-                    step > 2 ? "bg-green-100 text-green-600" :
-                    "bg-gray-100 text-gray-400"
-                }`}>
-                    {step > 2 ? (
-                      <Check className="h-4 w-4" />
-                  ) : (
-                      <span className="text-xs">2</span>
-                  )}
-                </div>
-                <div className="flex-1">
-                    <p className={`text-sm ${
-                      step >= 2 ? "text-gray-900" : "text-gray-500"
-                    }`}>
-                    Set Up Points Rules
-                  </p>
-                  {businessData.pointsRuleDetails && (
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {businessData.pointsRuleDetails.name}
-                    </p>
-                  )}
-                </div>
-              </div>
-              
-              {/* Banner status */}
-              <div className="flex items-center gap-3">
-                <div className={`h-6 w-6 rounded-full flex items-center justify-center ${
-                    step === 3 ? "bg-[#007AFF] text-white" :
-                    step > 3 ? "bg-green-100 text-green-600" :
-                    "bg-gray-100 text-gray-400"
-                }`}>
-                    {step > 3 ? (
-                      <Check className="h-4 w-4" />
-                  ) : (
-                      <span className="text-xs">3</span>
-                  )}
-                </div>
-                <div className="flex-1">
-                    <p className={`text-sm ${
-                      step >= 3 ? "text-gray-900" : "text-gray-500"
-                    }`}>
-                    Create Homepage Banner
-                  </p>
-                  {businessData.bannerDetails && (
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {businessData.bannerDetails.name}
-                    </p>
-                  )}
-                </div>
-              </div>
-              </div>
-            </div>
-          </div>
-        )}
             </div>
             
       {/* Add the exit confirmation dialog */}

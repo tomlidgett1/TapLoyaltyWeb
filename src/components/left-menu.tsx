@@ -26,7 +26,10 @@ export default function LeftMenu() {
   return (
     <div className="w-64 bg-white shadow-md h-full">
       <div className="p-4">
-        <h2 className="text-xl font-bold mb-6">Tap Loyalty</h2>
+        <h2 className="text-xl mb-6">
+          <span className="font-bold">Tap</span>{" "}
+          <span className="font-normal">Loyalty</span>
+        </h2>
         <nav>
           <ul className="space-y-2">
             {menuItems.map((item) => (

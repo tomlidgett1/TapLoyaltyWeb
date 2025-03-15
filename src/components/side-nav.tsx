@@ -241,7 +241,12 @@ export function SideNav() {
   return (
     <div className="w-64 border-r h-screen flex-shrink-0 bg-white flex flex-col">
       <div className="h-16 border-b flex items-center px-4">
-        <span className="text-xl font-bold">
+        <img
+          src="/hand1.png"
+          alt="Tap Loyalty Logo"
+          className="w-6.2 h-7 mr-2 object-cover rounded"
+        />
+        <span className="text-xl font-semibold">
           <span className="text-[#007AFF] font-extrabold">Tap</span>
           {' '}
           <span>Loyalty</span>

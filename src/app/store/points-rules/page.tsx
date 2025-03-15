@@ -38,7 +38,8 @@ import {
   ChevronUp,
   Tag,
   DollarSign,
-  Users
+  Users,
+  ListFilter
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -48,7 +49,7 @@ import { db } from "@/lib/firebase"
 import { collection, getDocs, query, doc, updateDoc, deleteDoc } from "firebase/firestore"
 
 // Types
-type RuleCategory = "all" | "purchase" | "referral" | "engagement"
+type RuleCategory = "all" | "active" | "inactive"
 type SortField = "name" | "type" | "points" | "usageCount" | "createdAt"
 type SortDirection = "asc" | "desc"
 
@@ -176,7 +177,8 @@ export default function PointsRulesPage() {
     // Filter by category
     const matchesCategory = 
       ruleCategory === "all" || 
-      rule.type === ruleCategory
+      (ruleCategory === "active" && rule.status === "active") ||
+      (ruleCategory === "inactive" && rule.status === "inactive")
     
     return matchesSearch && matchesCategory
   }).sort((a, b) => {
@@ -317,10 +319,18 @@ export default function PointsRulesPage() {
         <Tabs defaultValue="all" onValueChange={(value) => setRuleCategory(value as RuleCategory)}>
           <div className="flex items-center justify-between mb-4">
             <TabsList className="h-9 rounded-md">
-              <TabsTrigger value="all">All Rules</TabsTrigger>
-              <TabsTrigger value="purchase">Purchase</TabsTrigger>
-              <TabsTrigger value="referral">Referral</TabsTrigger>
-              <TabsTrigger value="engagement">Engagement</TabsTrigger>
+              <TabsTrigger value="all" className="flex items-center gap-1.5">
+                <ListFilter className="h-4 w-4" />
+                All Rules
+              </TabsTrigger>
+              <TabsTrigger value="active" className="flex items-center gap-1.5">
+                <Zap className="h-4 w-4" />
+                Active
+              </TabsTrigger>
+              <TabsTrigger value="inactive" className="flex items-center gap-1.5">
+                <Clock className="h-4 w-4" />
+                Inactive
+              </TabsTrigger>
             </TabsList>
             
             <div className="relative">

@@ -406,20 +406,20 @@ function RewardCard({
       {/* Collapsible details section */}
       {expanded && (
         <div className="border-t border-gray-200 bg-gray-50 p-4">
-          <div className="space-y-4">
-            {/* Conditions section */}
+          <div className="space-y-5">
+            {/* Conditions section - improved styling */}
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Conditions:</h4>
+              <h4 className="text-sm font-medium text-gray-700 mb-3">Conditions:</h4>
               {conditions.length === 0 ? (
                 <div className="text-sm text-gray-500 italic">No conditions</div>
               ) : (
                 <div className="space-y-2">
                   {conditions.map((cond, i) => (
-                    <div key={i} className="flex items-start gap-2">
+                    <div key={i} className="flex items-start gap-2 bg-white p-3 rounded-md border border-gray-100 shadow-sm">
                       <div className="h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
                         <Check className="h-3 w-3 text-blue-600" />
                       </div>
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-gray-700 font-medium">
                         {formatCondition(cond)}
                       </p>
                     </div>
@@ -428,19 +428,19 @@ function RewardCard({
               )}
             </div>
 
-            {/* Limitations section */}
+            {/* Limitations section - improved styling */}
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Limitations:</h4>
+              <h4 className="text-sm font-medium text-gray-700 mb-3">Limitations:</h4>
               {limitations.length === 0 ? (
                 <div className="text-sm text-gray-500 italic">No limitations</div>
               ) : (
                 <div className="space-y-2">
                   {limitations.map((limit, i) => (
-                    <div key={i} className="flex items-start gap-2">
+                    <div key={i} className="flex items-start gap-2 bg-white p-3 rounded-md border border-gray-100 shadow-sm">
                       <div className="h-5 w-5 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
                         <Ban className="h-3 w-3 text-red-600" />
                       </div>
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-gray-700 font-medium">
                         {formatLimitation(limit)}
                       </p>
                     </div>
@@ -457,7 +457,10 @@ function RewardCard({
         <Button
           variant={isSelected ? "default" : "outline"}
           size="sm"
-          className="w-full"
+          className={isSelected ? 
+            "w-full bg-green-600 hover:bg-green-700 text-white" : 
+            "w-full"
+          }
           onClick={(e) => {
             e.stopPropagation();
             onSelect();
@@ -526,9 +529,10 @@ export function OnboardingWizard() {
   const [customerCategoryStep, setCustomerCategoryStep] = useState<'new' | 'existing' | 'loyal' | null>(null)
   
   const handleNext = () => {
-    // If we're in Step 1 (About Tap Loyalty), just move to step 2
     if (step === 1) {
+      // When moving from About Tap Loyalty to Rewards, reset wizard sub-steps
       setStep(2);
+      setWizardStep(1); // Reset to first sub-step (business type selection)
       return;
     }
     
@@ -647,6 +651,13 @@ export function OnboardingWizard() {
   };
   
   const handleBack = () => {
+    if (step === 2 && wizardStep === 1) {
+      // When going back from business type to About Tap Loyalty
+      setStep(1);
+      setMiniWizardStep('intro'); // Reset to first mini-wizard step
+      return;
+    }
+    
     // If we're in Step 1 (Create First Reward)
     if (step === 1) {
       // Handle the wizard sub-steps
@@ -699,9 +710,15 @@ export function OnboardingWizard() {
     
     try {
       setLoading(true);
+      console.log("=== STARTING ONBOARDING COMPLETION PROCESS ===");
+      console.log("User ID:", user.uid);
+      console.log("Selected rewards:", businessData.selectedRewards);
+      console.log("Coffee program configured:", coffeeProgramConfigured);
+      console.log("Coffee program settings:", coffeeProgram);
       
       // Create a batch to handle multiple Firestore operations
       const batch = writeBatch(db);
+      console.log("Created Firestore batch");
       
       // Save onboarding data to Firestore
       const merchantRef = doc(db, 'merchants', user.uid);
@@ -709,14 +726,17 @@ export function OnboardingWizard() {
         onboardingCompleted: true,
         onboardingCompletedAt: new Date().toISOString()
       });
+      console.log("Added merchant update to batch");
       
       // 1) Create the selected rewards
+      console.log(`Processing ${businessData.selectedRewards.length} rewards...`);
       for (const reward of businessData.selectedRewards) {
         const rewardRef = doc(collection(db, 'merchants', user.uid, 'rewards'));
+        console.log(`Creating reward with ID: ${rewardRef.id}, name: ${reward.name}`);
         
         // Prepare the reward data with all required fields
         const rewardData = {
-          rewardName: reward.rewardName || reward.name,
+          rewardName: reward.name || reward.rewardName,
           description: reward.description,
           isActive: true,
           pointsCost: reward.pointsCost,
@@ -741,15 +761,19 @@ export function OnboardingWizard() {
         
         // If this is a program-type reward, add program-specific fields
         if (reward.type === 'program' && reward.programtype) {
+          console.log(`Adding program type: ${reward.programtype} to reward`);
           rewardData.programtype = reward.programtype;
           
           // If this is a coffee program, add coffee-specific configuration
           if (reward.programtype === 'coffee' && reward.coffeeConfig) {
+            console.log("Adding coffee config to reward:", reward.coffeeConfig);
             rewardData.coffeeConfig = reward.coffeeConfig;
           }
         }
         
+        console.log("Final reward data:", rewardData);
         batch.set(rewardRef, rewardData);
+        console.log(`Added reward ${rewardRef.id} to batch`);
       }
       
       // Handle banner and announcement separately
@@ -830,8 +854,10 @@ export function OnboardingWizard() {
       }
       
       // 3) Save each selected points rule
+      console.log(`Processing ${selectedPointsRules.length} points rules...`);
       for (const ruleId of selectedPointsRules) {
         const ruleDocRef = doc(collection(db, 'merchants', user.uid, 'pointsRules'));
+        console.log(`Creating points rule with ID: ${ruleDocRef.id}, rule: ${ruleId}`);
         
         // Get the actual rule data based on the ID
         const ruleData = {
@@ -849,58 +875,47 @@ export function OnboardingWizard() {
           merchantId: user.uid
         };
         
+        console.log("Points rule data:", ruleData);
         batch.set(ruleDocRef, ruleData);
+        console.log(`Added points rule ${ruleDocRef.id} to batch`);
       }
       
-      // 4) Handle coffee program creation separately if needed
-      let coffeeRewardId = null;
-
-      // Log all rewards to see what we're working with
-      console.log('All selected rewards:', businessData.selectedRewards);
-
-      // Look specifically for coffee program - check for 'Traditional Coffee Program' by name or coffee programtype
-      const coffeeProgram = businessData.selectedRewards.find(r => 
-        r.name === 'Traditional Coffee Program' || 
-        r.rewardName === 'Traditional Coffee Program' || 
-        r.programtype === 'coffee'
-      );
-
-      console.log('Traditional Coffee Program found:', coffeeProgram);
-
-      if (coffeeProgram) {
-        console.log('Found coffee program:', coffeeProgram);
-        
+      // First commit the batch to ensure all other data is saved
+      console.log("=== COMMITTING BATCH TO FIRESTORE ===");
+      try {
+        await batch.commit();
+        console.log("✅ Batch committed successfully");
+      } catch (batchError) {
+        console.error("❌ Error committing batch:", batchError);
+        throw batchError;
+      }
+      
+      // 4) Handle coffee program creation if configured
+      if (coffeeProgramConfigured) {
+        console.log("=== SETTING UP COFFEE PROGRAM ===");
         try {
-          console.log('Committing batch before coffee program creation');
-          // First commit the batch to ensure all other data is saved
-          await batch.commit();
-          console.log('Batch committed successfully');
-          
-          // Get coffee configuration - either from the coffeeConfig property or from state
-          const coffeeConfig = coffeeProgram.coffeeConfig || coffeeProgram;
-          console.log('Using coffee config:', coffeeConfig);
+          console.log('Coffee program configuration:', JSON.stringify(coffeeProgram, null, 2));
           
           // Validate that functions object exists
           if (!functions) {
-            console.error('Firebase functions object is undefined or null');
+            console.error('❌ Firebase functions object is undefined or null');
             throw new Error('Firebase functions not available');
           }
           
-          console.log('Preparing to call cloud function "coffeeprogram"');
-          // Then call the cloud function to create the coffee program
+          // Call the cloud function to create the coffee program
+          console.log("Preparing to call 'coffeeprogram' cloud function");
           const coffeeprogramFunc = httpsCallable(functions, 'coffeeprogram');
           
           // Prepare data for the function call
           const data = {
             merchantId: user.uid,
-            pin: coffeeConfig.pin || '1234',  // Use default if missing
-            firstCoffeeBeforeTransaction: 
-              (coffeeConfig.freeRewardTiming === 'before') || false,
-            frequency: parseInt(coffeeConfig.frequency?.toString() || '5'),
-            levels: parseInt(coffeeConfig.levels?.toString() || '10')
+            pin: coffeeProgram.pin || '1234',  // Use default if missing
+            firstCoffeeBeforeTransaction: coffeeProgram.freeRewardTiming === 'before',
+            frequency: parseInt(coffeeProgram.frequency || '5'),
+            levels: parseInt(coffeeProgram.levels || '10')
           };
           
-          console.log('Calling coffee program function with data:', JSON.stringify(data, null, 2));
+          console.log('Function call data:', JSON.stringify(data, null, 2));
           
           // Show a loading toast while the function is being called
           toast({
@@ -908,8 +923,9 @@ export function OnboardingWizard() {
             description: "Please wait while we set up your coffee loyalty program...",
           });
           
+          console.log("Calling cloud function now...");
           const result = await coffeeprogramFunc(data);
-          console.log('Coffee program function call completed with result:', result);
+          console.log('✅ Coffee program function call completed with result:', result);
           
           // Show success message
           toast({
@@ -918,8 +934,10 @@ export function OnboardingWizard() {
           });
         } catch (error: any) {
           // Detailed error logging
-          console.error('Error creating coffee program:', error);
+          console.error('❌ Error creating coffee program:', error);
+          console.error('Error code:', error.code);
           console.error('Error message:', error.message);
+          console.error('Error details:', error.details);
           
           toast({
             title: "Coffee Program Error",
@@ -928,20 +946,20 @@ export function OnboardingWizard() {
           });
         }
       } else {
-        console.log('No Traditional Coffee Program found, committing batch normally');
-        // If no coffee program, just commit the batch
-        await batch.commit();
+        console.log("No coffee program configured, skipping coffee program setup");
       }
       
+      console.log("=== ONBOARDING COMPLETION SUCCESSFUL ===");
       toast({
         title: "Onboarding completed!",
         description: `Your account has been set up successfully with ${businessData.selectedRewards.length} rewards.`,
       });
       
       // Redirect to dashboard
+      console.log("Redirecting to dashboard...");
       router.push('/dashboard');
     } catch (error) {
-      console.error('Error completing onboarding:', error);
+      console.error('❌ Error completing onboarding:', error);
       toast({
         title: "Error",
         description: "Failed to complete onboarding. Please try again.",
@@ -1069,6 +1087,52 @@ export function OnboardingWizard() {
   // Add a function to continue to the next step when ready
   const continueToNextStep = () => {
     if (wizardSelectedRewards.length > 0) {
+      // Create actual reward objects from the selected reward IDs
+      const newRewards = wizardSelectedRewards.map(rewardId => {
+        // Parse the reward ID to get type and name
+        const [customerType, rewardName] = rewardId.split('-', 2);
+        
+        return {
+          id: rewardId,
+          name: rewardName.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+          type: 'individual',
+          industry: selectedIndustry,
+          isNewCustomer: customerType === 'new',
+          pointsCost: 0,
+          description: `Reward for ${customerType} customers`,
+          rewardName: rewardName.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+        };
+      });
+      
+      // Add coffee program if configured
+      if (coffeeProgramConfigured) {
+        newRewards.push({
+          id: 'coffee-program',
+          name: 'Coffee Loyalty Program',
+          type: 'program',
+          programtype: 'coffee',
+          industry: selectedIndustry,
+          isNewCustomer: false,
+          pointsCost: 0,
+          description: 'Buy X coffees, get one free',
+          coffeeConfig: {
+            pin: coffeeProgram.pin,
+            freeRewardTiming: coffeeProgram.freeRewardTiming,
+            frequency: parseInt(coffeeProgram.frequency),
+            levels: parseInt(coffeeProgram.levels)
+          }
+        });
+      }
+      
+      // Update businessData with the new rewards
+      setBusinessData(prev => ({
+        ...prev,
+        selectedRewards: [...prev.selectedRewards, ...newRewards],
+        hasSetupReward: true
+      }));
+      
+      console.log("Added rewards to businessData:", newRewards);
+      
       setSelectedRewardType(wizardSelectedRewards.join(', '))
       setWizardStep(3)
     } else {
@@ -1166,41 +1230,42 @@ export function OnboardingWizard() {
   // Update the saveCoffeeProgram function to set coffeeProgramConfigured to true
 
   const saveCoffeeProgram = () => {
-    // Update the business data with the coffee program configuration
-    setBusinessData(prev => {
-      const updatedRewards = prev.selectedRewards.map(r => {
-        if (r.programtype === 'coffee' || r.name === 'Traditional Coffee Program') {
-          return {
-            ...r,
-            programtype: 'coffee',
-            coffeeConfig: {
-              pin: coffeeProgram.pin,
-              freeRewardTiming: coffeeProgram.freeRewardTiming,
-              frequency: parseInt(coffeeProgram.frequency.toString()),
-              levels: parseInt(coffeeProgram.levels.toString())
-            }
-          };
-        }
-        return r;
-      });
-      
-      return {
-        ...prev,
-        selectedRewards: updatedRewards
-      };
-    });
-    
-    // Set the coffee program as configured
+    // Save the coffee program configuration
     setCoffeeProgramConfigured(true);
     
-    // Close the configuration dialog
+    // Add the coffee program to businessData
+    const coffeeReward = {
+      id: 'coffee-program',
+      name: 'Coffee Loyalty Program',
+      type: 'program',
+      programtype: 'coffee',
+      industry: selectedIndustry,
+      isNewCustomer: false,
+      pointsCost: 0,
+      description: 'Buy X coffees, get one free',
+      coffeeConfig: {
+        pin: coffeeProgram.pin,
+        freeRewardTiming: coffeeProgram.freeRewardTiming,
+        frequency: parseInt(coffeeProgram.frequency),
+        levels: parseInt(coffeeProgram.levels)
+      }
+    };
+    
+    setBusinessData(prev => ({
+      ...prev,
+      selectedRewards: [...prev.selectedRewards, coffeeReward],
+      hasSetupReward: true
+    }));
+    
+    console.log("Added coffee program to businessData:", coffeeReward);
+    
+    // Close the dialog
     setShowCoffeeProgramConfig(false);
     
-    // Show a success toast
+    // Show success toast
     toast({
       title: "Coffee Program Configured",
-      description: "Your coffee loyalty program has been set up successfully.",
-      variant: "default"
+      description: "Your coffee program has been set up successfully.",
     });
   }
 
@@ -1450,6 +1515,215 @@ export function OnboardingWizard() {
   // First, add this state to track which reward's details are expanded
   const [expandedRewardId, setExpandedRewardId] = useState<string | null>(null);
 
+  // Add this state for the mini-wizard
+  const [miniWizardStep, setMiniWizardStep] = useState('intro');
+
+  // Add this function to ensure rewards are added before completion
+  const handleFinalStep = () => {
+    // Check if we have any selected rewards in the wizard
+    if (wizardSelectedRewards.length > 0 && businessData.selectedRewards.length === 0) {
+      console.log("Adding final rewards before completion...");
+      
+      // Create reward objects from selected IDs
+      const finalRewards = wizardSelectedRewards.map(rewardId => {
+        // Parse the reward ID to get type and name
+        const [customerType, rewardName] = rewardId.split('-', 2);
+        
+        return {
+          id: rewardId,
+          name: rewardName.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+          type: 'individual',
+          industry: selectedIndustry,
+          isNewCustomer: customerType === 'new',
+          pointsCost: 0,
+          description: `Reward for ${customerType} customers`,
+          rewardName: rewardName.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+          conditions: [],
+          limitations: [
+            { type: 'customerLimit', value: 1 },
+            { type: 'totalRedemptionLimit', value: 100 }
+          ]
+        };
+      });
+      
+      // Add coffee program if configured
+      if (coffeeProgramConfigured) {
+        finalRewards.push({
+          id: 'coffee-program',
+          name: 'Coffee Loyalty Program',
+          type: 'program',
+          programtype: 'coffee',
+          industry: selectedIndustry,
+          isNewCustomer: false,
+          pointsCost: 0,
+          description: 'Buy X coffees, get one free',
+          coffeeConfig: {
+            pin: coffeeProgram.pin || '1234',
+            freeRewardTiming: coffeeProgram.freeRewardTiming || 'after',
+            frequency: parseInt(coffeeProgram.frequency || '5'),
+            levels: parseInt(coffeeProgram.levels || '10')
+          },
+          conditions: [],
+          limitations: []
+        });
+      }
+      
+      // Update businessData with the final rewards
+      setBusinessData(prev => {
+        const updatedData = {
+          ...prev,
+          selectedRewards: [...finalRewards],
+          hasSetupReward: true
+        };
+        console.log("Updated businessData with rewards:", updatedData);
+        return updatedData;
+      });
+      
+      // Wait a moment for state to update before proceeding
+      setTimeout(() => {
+        handleComplete();
+      }, 100);
+    } else {
+      // If we already have rewards or none were selected, proceed normally
+      handleComplete();
+    }
+  };
+
+  // Add this function to directly save rewards when moving between customer categories
+  const handleCustomerCategoryNext = () => {
+    // First, save the current category's rewards
+    if (customerCategoryStep === 'new') {
+      // Get all selected rewards for new customers
+      const newCustomerRewards = wizardSelectedRewards
+        .filter(id => id.startsWith('new-'))
+        .map(rewardId => {
+          const rewardName = rewardId.split('-').slice(1).join('-');
+          return {
+            id: rewardId,
+            name: rewardName.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+            type: 'individual',
+            industry: selectedIndustry,
+            isNewCustomer: true,
+            pointsCost: 0,
+            description: 'Reward for new customers',
+            rewardName: rewardName.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+            conditions: [],
+            limitations: [
+              { type: 'customerLimit', value: 1 },
+              { type: 'totalRedemptionLimit', value: 100 }
+            ]
+          };
+        });
+      
+      console.log("Saving new customer rewards:", newCustomerRewards);
+      
+      // Add these rewards to businessData
+      setBusinessData(prev => ({
+        ...prev,
+        selectedRewards: [...prev.selectedRewards, ...newCustomerRewards],
+        hasSetupReward: true
+      }));
+      
+      // Move to existing customers
+      setCustomerCategoryStep('existing');
+    } 
+    else if (customerCategoryStep === 'existing') {
+      // Get all selected rewards for existing customers
+      const existingCustomerRewards = wizardSelectedRewards
+        .filter(id => id.startsWith('existing-'))
+        .map(rewardId => {
+          const rewardName = rewardId.split('-').slice(1).join('-');
+          return {
+            id: rewardId,
+            name: rewardName.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+            type: 'individual',
+            industry: selectedIndustry,
+            isNewCustomer: false,
+            pointsCost: 0,
+            description: 'Reward for existing customers',
+            rewardName: rewardName.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+            conditions: [],
+            limitations: [
+              { type: 'customerLimit', value: 1 },
+              { type: 'totalRedemptionLimit', value: 100 }
+            ]
+          };
+        });
+      
+      console.log("Saving existing customer rewards:", existingCustomerRewards);
+      
+      // Add these rewards to businessData
+      setBusinessData(prev => ({
+        ...prev,
+        selectedRewards: [...prev.selectedRewards, ...existingCustomerRewards],
+        hasSetupReward: true
+      }));
+      
+      // Move to loyal customers
+      setCustomerCategoryStep('loyal');
+    }
+    else if (customerCategoryStep === 'loyal') {
+      // Get all selected rewards for loyal customers
+      const loyalCustomerRewards = wizardSelectedRewards
+        .filter(id => id.startsWith('loyal-'))
+        .map(rewardId => {
+          const rewardName = rewardId.split('-').slice(1).join('-');
+          return {
+            id: rewardId,
+            name: rewardName.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+            type: 'individual',
+            industry: selectedIndustry,
+            isNewCustomer: false,
+            pointsCost: 0,
+            description: 'Reward for loyal customers',
+            rewardName: rewardName.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+            conditions: [],
+            limitations: [
+              { type: 'customerLimit', value: 1 },
+              { type: 'totalRedemptionLimit', value: 100 }
+            ]
+          };
+        });
+      
+      console.log("Saving loyal customer rewards:", loyalCustomerRewards);
+      
+      // Add these rewards to businessData
+      setBusinessData(prev => ({
+        ...prev,
+        selectedRewards: [...prev.selectedRewards, ...loyalCustomerRewards],
+        hasSetupReward: true
+      }));
+      
+      // Move to program selection
+      setWizardStep(3);
+      setCustomerCategoryStep(null);
+    }
+  };
+
+  // Add this function to handle the business type selection
+  const handleBusinessTypeNext = () => {
+    if (selectedIndustry) {
+      // Move to the customer category selection
+      setWizardStep(2);
+      setCustomerCategoryStep('new');
+    } else {
+      toast({
+        title: "Please select a business type",
+        description: "You need to select your business type to continue.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Add this function to handle the points rules navigation
+  const handlePointsRulesNext = () => {
+    // Save the selected points rules if needed
+    console.log("Moving from points rules to banner step");
+    
+    // Move to the banner step
+    setStep(4);
+  };
+
   return (
     <div className="container max-w-[1600px] py-10">
       {/* Exit button */}
@@ -1470,12 +1744,15 @@ export function OnboardingWizard() {
           <div className="md:col-span-3 md:order-first">
             <div className="fixed top-0 left-0 bottom-0 w-[320px] bg-gray-50 overflow-y-auto border-r border-gray-100 shadow-sm">
               {/* Simplified branding header */}
-              <div className="bg-[#007AFF] text-white p-4">
+              <div className="bg-gray-50 text-gray-800 p-4 border-b border-gray-200">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-6 w-6 text-white" />
-                  <h2 className="text-xl font-medium">Tap Loyalty</h2>
+                  {/* Logo image */}
+                  <img src="/logo.png" alt="Logo" className="h-6 w-6 rounded" />
+                  <h2 className="text-xl font-medium">
+                    <span className="font-bold text-[#007AFF]">Tap</span> Loyalty
+                  </h2>
                 </div>
-                <p className="text-sm text-white/80 mt-1">Business Onboarding</p>
+                <p className="text-sm text-gray-500 mt-1">Business Onboarding</p>
               </div>
               
               {/* Progress content */}
@@ -1639,224 +1916,312 @@ export function OnboardingWizard() {
         }>
           {/* Welcome title section - centered above the setup module */}
           <div className="mb-8 text-center">
-            <h1 className="text-2xl font-bold mb-1">Welcome to <span className="text-[#007AFF]">Tap Loyalty</span></h1>
-            <p className="text-sm text-gray-500">Let's set up your loyalty program in just a few steps</p>
+            <h1 className="text-2xl mb-1">
+              <span className="font-bold text-[#007AFF]">Let's</span> <span className="text-black">Get Started</span>
+            </h1>
+            <p className="text-sm text-gray-500">Build your loyalty program in just a few simple steps</p>
           </div>
           
           <Card className="border-gray-200 shadow-sm w-full">
-            <CardHeader className="py-3 px-4 border-b">
-              {hasViewedIntro && (
-                <div className="flex items-center w-full">
-                  {/* Title section - only show when not on intro page */}
-                  <div className="flex-1">
-                    <CardTitle className="text-lg">
-                      {step === 1 && "About Tap Loyalty"}
-                      {step === 2 && wizardStep === 1 && "Select Your Business Type"}
-                      {step === 2 && wizardStep === 2 && "Select Rewards"}
-                      {step === 2 && wizardStep === 3 && "Select a Loyalty Program"}
-                      {step === 3 && "Points Rules"}
-                      {step === 4 && "Marketing Banner"}
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">
+                {step === 1 && "About Tap Loyalty"}
+                {step === 2 && wizardStep === 1 && "Select Your Business Type"}
+                {step === 2 && wizardStep === 2 && "Select Rewards"}
+                {step === 2 && wizardStep === 3 && "Select a Loyalty Program"}
+                {step === 3 && "Points Rules"}
+                {step === 4 && "Marketing Banner"}
               </CardTitle>
-                    <CardDescription className="text-xs">
-                      {step === 1 && "Learn how our loyalty platform works for your business"}
-                      {step === 2 && wizardStep === 1 && "Choose your industry to get personalized reward suggestions"}
-                      {step === 2 && wizardStep === 2 && customerCategoryStep === 'new' && "Choose rewards for new customers"}
-                      {step === 2 && wizardStep === 2 && customerCategoryStep === 'existing' && "Choose rewards for existing customers"}
-                      {step === 2 && wizardStep === 2 && customerCategoryStep === 'loyal' && "Choose rewards for loyal customers"}
-                      {step === 2 && wizardStep === 3 && "Choose a program type that best fits your business"}
-                      {step === 3 && "Define how customers earn points"}
-                      {step === 4 && "Create a banner to promote your program"}
+              <CardDescription className="text-xs">
+                {step === 1 && "Learn how our loyalty platform works for your business"}
+                {step === 2 && wizardStep === 1 && "Choose your industry to get personalized reward suggestions"}
+                {step === 2 && wizardStep === 2 && customerCategoryStep === 'new' && "Choose rewards for new customers"}
+                {step === 2 && wizardStep === 2 && customerCategoryStep === 'existing' && "Choose rewards for existing customers"}
+                {step === 2 && wizardStep === 2 && customerCategoryStep === 'loyal' && "Choose rewards for loyal customers"}
+                {step === 2 && wizardStep === 3 && "Choose a program type that best fits your business"}
+                {step === 3 && "Define how customers earn points"}
+                {step === 4 && "Create a banner to promote your program"}
               </CardDescription>
-                  </div>
-                  
-                  {/* Navigation buttons */}
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {(step > 1 || (step === 1 && hasViewedIntro)) ? (
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          // If we're in a sub-step of the wizard (like 2.2)
-                          if (step === 1 && hasViewedIntro && wizardStep > 1) {
-                            // Go back to the previous wizard step
-                            setWizardStep(wizardStep - 1);
-                          } 
-                          // If we're on the first wizard step but after intro
-                          else if (step === 1 && hasViewedIntro && wizardStep === 1) {
-                            // Go back to intro
-                            setHasViewedIntro(false);
-                          }
-                          // Otherwise use the normal step navigation
-                          else {
-                            handleBack();
-                          }
-                        }}
-                      >
-                        Back
-                      </Button>
-                    ) : (
-                      <div>{/* Empty div to maintain the flex layout */}</div>
-                    )}
-                    
-                    <Button 
-                      onClick={handleNext}
-                      disabled={loading}
-                      className="bg-[#007AFF] hover:bg-[#0066CC]"
-                    >
-                      {loading ? (
-                        <div className="flex items-center gap-2">
-                          <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          Processing...
-                        </div>
-                      ) : step === totalSteps ? (
-                        <>Complete Setup</>
-                      ) : (
-                        <>Next <ArrowRight className="ml-2 h-4 w-4" /></>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              )}
             </CardHeader>
             
             <CardContent className="pt-6 space-y-4">
-              {/* Step 1: About Tap Loyalty */}
+              {/* Step 1: About Tap Loyalty - Mini Wizard */}
               {step === 1 && (
-                <div className="space-y-8">
-                  <div className="bg-gradient-to-br from-blue-50 to-white p-6 rounded-lg border border-blue-100">
-                    <h3 className="text-xl font-semibold mb-4 text-blue-900">
-                      Welcome to{" "}
-                      <span className="font-bold" style={{ color: '#007AFF' }}>
-                        TAP
-                      </span>{" "}
-                      Loyalty
-                    </h3>
-                    
-                    {/* Apps Section */}
-                    <div className="grid md:grid-cols-2 gap-6 mb-8">
-                      <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
-                            <Store className="h-5 w-5 text-purple-600" />
-                      </div>
-                          <h4 className="font-medium text-purple-900">Merchant App</h4>
-                        </div>
-                        <p className="text-sm text-gray-600 mb-3">
-                          Your dashboard to manage rewards, track customer engagement, and grow your business.
-                        </p>
-                        <ul className="space-y-2">
-                          {[
-                            "Create and manage rewards",
-                            "Track customer visits and points",
-                            "View analytics and insights",
-                            "Customize your loyalty program"
-                          ].map((item, i) => (
-                            <li key={i} className="flex items-start gap-2 text-sm">
-                              <CheckCircle className="h-4 w-4 text-purple-500 mt-0.5 flex-shrink-0" />
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-                            <Users className="h-5 w-5 text-green-600" />
-                          </div>
-                          <h4 className="font-medium text-green-900">Consumer App</h4>
-                        </div>
-                        <p className="text-sm text-gray-600 mb-3">
-                          Where customers discover businesses, earn points, and redeem rewards.
-                        </p>
-                        <ul className="space-y-2">
-                          {[
-                            "Earn points with every visit",
-                            "Discover local businesses",
-                            "Redeem exciting rewards",
-                            "Track points and progress"
-                          ].map((item, i) => (
-                            <li key={i} className="flex items-start gap-2 text-sm">
-                              <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                    
-                    {/* How It Works Section */}
-                    <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm mb-8">
-                      <h4 className="font-medium text-lg mb-4">How TAP Loyalty Works</h4>
-                      <div className="grid gap-6 md:grid-cols-3">
-                        <div className="text-center">
-                          <div className="h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-3">
-                            <Coffee className="h-6 w-6 text-amber-600" />
-                          </div>
-                          <h5 className="font-medium mb-2">1. Customer Visits</h5>
-                        <p className="text-sm text-gray-600">
-                            Customers visit your business and earn points through the TAP app
-                          </p>
-                        </div>
-
-                        <div className="text-center">
-                          <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-3">
-                            <Gift className="h-6 w-6 text-blue-600" />
+                <div className="space-y-6">
+                  {/* Mini-wizard navigation */}
+                  <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                    <div className="flex border-b border-gray-200">
+                      {[
+                        { id: 'intro', label: 'Introduction' },
+                        { id: 'how', label: 'How It Works' },
+                        { id: 'apps', label: 'The Apps' },
+                        { id: 'setup', label: 'Your Setup' }
+                      ].map((tab, index) => (
+                        <button
+                          key={tab.id}
+                          className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                            miniWizardStep === tab.id 
+                              ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' 
+                              : 'text-gray-600 hover:bg-gray-50'
+                          }`}
+                          onClick={() => setMiniWizardStep(tab.id)}
+                        >
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="h-5 w-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-medium">
+                              {index + 1}
                             </div>
-                          <h5 className="font-medium mb-2">2. Points Accumulate</h5>
-                          <p className="text-sm text-gray-600">
-                            Points add up based on your custom rules and visit frequency
-                          </p>
+                            <span>{tab.label}</span>
                           </div>
-                    
-                        <div className="text-center">
-                          <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
-                            <Award className="h-6 w-6 text-green-600" />
-                      </div>
-                          <h5 className="font-medium mb-2">3. Reward Redemption</h5>
-                          <p className="text-sm text-gray-600">
-                            Customers redeem points for rewards you've created
-                          </p>
-                  </div>
-                </div>
+                        </button>
+                      ))}
                     </div>
+                    
+                    {/* Mini-wizard content */}
+                    <div className="p-6">
+                      {/* Introduction */}
+                      {miniWizardStep === 'intro' && (
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                              <Sparkles className="h-5 w-5 text-blue-600" />
+                            </div>
+                            <h3 className="text-xl font-semibold text-gray-900">
+                              Welcome to <span className="text-blue-600 font-bold">Tap Loyalty</span>
+                            </h3>
+                          </div>
+                          
+                          <p className="text-gray-600">
+                            Tap Loyalty helps you build customer relationships and grow your business through a simple, 
+                            effective loyalty program that rewards your customers for their repeat business.
+                          </p>
+                          
+                          <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-blue-800">
+                            <p className="text-sm">
+                              <strong>In this onboarding process, you'll set up:</strong>
+                            </p>
+                            <ul className="mt-2 space-y-1 text-sm">
+                              <li className="flex items-center gap-2">
+                                <Check className="h-4 w-4 text-blue-600" />
+                                <span>Rewards for your customers</span>
+                              </li>
+                              <li className="flex items-center gap-2">
+                                <Check className="h-4 w-4 text-blue-600" />
+                                <span>Points earning rules</span>
+                              </li>
+                              <li className="flex items-center gap-2">
+                                <Check className="h-4 w-4 text-blue-600" />
+                                <span>Marketing banner for your app</span>
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* How It Works */}
+                      {miniWizardStep === 'how' && (
+                        <div className="space-y-6">
+                          <h3 className="text-lg font-medium text-gray-900">How Tap Loyalty Works</h3>
+                          
+                          <div className="grid gap-6 md:grid-cols-3">
+                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                              <div className="flex items-center gap-2 mb-3">
+                                <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium">1</div>
+                                <h4 className="font-medium text-gray-900">Customers Visit</h4>
+                              </div>
+                              <p className="text-sm text-gray-600">
+                                Customers visit your business and earn points through the Tap app
+                              </p>
+                            </div>
 
-                    {/* Features Overview */}
-                    <div className="space-y-4">
-                      <h4 className="font-medium text-lg">What You Can Create</h4>
-                      <div className="grid md:grid-cols-2 gap-4">
-                        {[
-                          {
-                            icon: <Gift className="h-5 w-5 text-pink-600" />,
-                            title: "Rewards",
-                            description: "Create enticing rewards that customers can redeem with their points"
-                          },
-                          {
-                            icon: <BarChart className="h-5 w-5 text-blue-600" />,
-                            title: "Points Rules",
-                            description: "Set how customers earn points with visits and purchases"
-                          },
-                          {
-                            icon: <Sparkles className="h-5 w-5 text-purple-600" />,
-                            title: "Programs",
-                            description: "Design special programs for new, existing, and loyal customers"
-                          },
-                          {
-                            icon: <Image className="h-5 w-5 text-green-600" />,
-                            title: "Marketing",
-                            description: "Create banners to promote your loyalty program"
+                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                              <div className="flex items-center gap-2 mb-3">
+                                <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium">2</div>
+                                <h4 className="font-medium text-gray-900">Points Accumulate</h4>
+                              </div>
+                              <p className="text-sm text-gray-600">
+                                Points add up based on your custom rules and visit frequency
+                              </p>
+                            </div>
+                        
+                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                              <div className="flex items-center gap-2 mb-3">
+                                <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium">3</div>
+                                <h4 className="font-medium text-gray-900">Rewards Redeemed</h4>
+                              </div>
+                              <p className="text-sm text-gray-600">
+                                Customers redeem points for rewards you've created
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                            <h4 className="font-medium text-gray-900 mb-2">Benefits for Your Business</h4>
+                            <div className="grid md:grid-cols-2 gap-3">
+                              <div className="flex items-start gap-2">
+                                <ArrowUp className="h-4 w-4 text-blue-600 mt-0.5" />
+                                <span className="text-sm text-gray-700">Increased customer retention</span>
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <ArrowUp className="h-4 w-4 text-blue-600 mt-0.5" />
+                                <span className="text-sm text-gray-700">Higher average purchase value</span>
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <ArrowUp className="h-4 w-4 text-blue-600 mt-0.5" />
+                                <span className="text-sm text-gray-700">More frequent visits</span>
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <ArrowUp className="h-4 w-4 text-blue-600 mt-0.5" />
+                                <span className="text-sm text-gray-700">Better customer insights</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* The Apps */}
+                      {miniWizardStep === 'apps' && (
+                        <div className="space-y-6">
+                          <h3 className="text-lg font-medium text-gray-900">The Tap Loyalty Apps</h3>
+                          
+                          <div className="grid md:grid-cols-2 gap-6">
+                            <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                              <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
+                                <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                  <Store className="h-5 w-5 text-blue-600" />
+                                </div>
+                                <h4 className="font-medium text-gray-900">Merchant Dashboard</h4>
+                              </div>
+                              
+                              <ul className="space-y-3">
+                                {[
+                                  "Create and manage rewards",
+                                  "Track customer visits and points",
+                                  "View analytics and insights",
+                                  "Customize your loyalty program"
+                                ].map((item, i) => (
+                                  <li key={i} className="flex items-start gap-2 text-sm">
+                                    <Check className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                                    <span className="text-gray-700">{item}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+
+                            <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                              <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
+                                <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                  <Users className="h-5 w-5 text-blue-600" />
+                                </div>
+                                <h4 className="font-medium text-gray-900">Customer App</h4>
+                              </div>
+                              
+                              <ul className="space-y-3">
+                                {[
+                                  "Earn points with every visit",
+                                  "Discover local businesses",
+                                  "Redeem exciting rewards",
+                                  "Track points and progress"
+                                ].map((item, i) => (
+                                  <li key={i} className="flex items-start gap-2 text-sm">
+                                    <Check className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                                    <span className="text-gray-700">{item}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Your Setup */}
+                      {miniWizardStep === 'setup' && (
+                        <div className="space-y-6">
+                          <h3 className="text-lg font-medium text-gray-900">What You'll Set Up Today</h3>
+                          
+                          <div className="space-y-4">
+                            <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg border border-gray-100">
+                              <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                <Gift className="h-4 w-4 text-blue-600" />
+                              </div>
+                              <div>
+                                <h5 className="font-medium text-gray-900 mb-1">Rewards</h5>
+                                <p className="text-sm text-gray-600">Create enticing rewards that customers can redeem with their points</p>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg border border-gray-100">
+                              <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                <BarChart className="h-4 w-4 text-blue-600" />
+                              </div>
+                              <div>
+                                <h5 className="font-medium text-gray-900 mb-1">Points Rules</h5>
+                                <p className="text-sm text-gray-600">Set how customers earn points with visits and purchases</p>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg border border-gray-100">
+                              <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                <Image className="h-4 w-4 text-blue-600" />
+                              </div>
+                              <div>
+                                <h5 className="font-medium text-gray-900 mb-1">Marketing Banner</h5>
+                                <p className="text-sm text-gray-600">Create a banner to promote your loyalty program to customers</p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                            <p className="text-sm text-blue-800">
+                              <strong>Ready to get started?</strong> Click "Continue" below to begin setting up your loyalty program.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Mini-wizard navigation buttons */}
+                    <div className="flex justify-between items-center border-t border-gray-200 p-4 bg-gray-50">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => {
+                          const steps = ['intro', 'how', 'apps', 'setup'];
+                          const currentIndex = steps.indexOf(miniWizardStep);
+                          if (currentIndex > 0) {
+                            setMiniWizardStep(steps[currentIndex - 1]);
                           }
-                        ].map((feature, i) => (
-                          <div key={i} className="flex items-start gap-3 p-4 bg-white rounded-lg border border-gray-200">
-                            <div className="h-8 w-8 rounded-full bg-gray-50 flex items-center justify-center flex-shrink-0">
-                              {feature.icon}
-                      </div>
-                            <div>
-                              <h5 className="font-medium mb-1">{feature.title}</h5>
-                              <p className="text-sm text-gray-600">{feature.description}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                        }}
+                        disabled={miniWizardStep === 'intro'}
+                      >
+                        <ChevronLeft className="mr-2 h-4 w-4" />
+                        Previous
+                      </Button>
+                      
+                      {miniWizardStep === 'setup' ? (
+                        <Button 
+                          onClick={() => {
+                            setStep(2);
+                            setWizardStep(1); // Explicitly set to business type selection
+                          }}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          Continue to Setup
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <Button 
+                          onClick={() => {
+                            const steps = ['intro', 'how', 'apps', 'setup'];
+                            const currentIndex = steps.indexOf(miniWizardStep);
+                            if (currentIndex < steps.length - 1) {
+                              setMiniWizardStep(steps[currentIndex + 1]);
+                            }
+                          }}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          Next
+                          <ChevronRight className="ml-2 h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1938,7 +2303,7 @@ export function OnboardingWizard() {
                           Back
                         </Button>
                                     <Button 
-                          onClick={handleNext}
+                          onClick={handleBusinessTypeNext}
                           disabled={!selectedIndustry}
                           className="bg-blue-600 hover:bg-blue-700"
                         >
@@ -2186,7 +2551,7 @@ export function OnboardingWizard() {
                           Back
                             </Button>
                                             <Button
-                          onClick={handleNext}
+                          onClick={handleCustomerCategoryNext}
                           className="bg-blue-600 hover:bg-blue-700"
                         >
                           Continue
@@ -2460,6 +2825,20 @@ export function OnboardingWizard() {
                       />
                     ))}
                   </div>
+                  
+                  {/* Add bottom navigation */}
+                  <div className="flex justify-between pt-6 mt-6 border-t border-gray-200">
+                    <Button variant="outline" onClick={handleBack}>
+                      Back
+                    </Button>
+                    <Button 
+                      onClick={handlePointsRulesNext}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      Continue
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -2577,6 +2956,20 @@ export function OnboardingWizard() {
                         </div>
                       </div>
                     </div>
+                  </div>
+                  
+                  {/* Add bottom navigation if it doesn't exist */}
+                  <div className="flex justify-between pt-6 mt-6 border-t border-gray-200">
+                    <Button variant="outline" onClick={handleBack}>
+                      Back
+                    </Button>
+                    <Button 
+                      onClick={handleFinalStep}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      Complete Setup
+                      <Check className="ml-2 h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               )}

@@ -114,8 +114,9 @@ export function MerchantSidebar() {
                 <path fill="#000000" d="M39.570312 9.8125L34.875 12.621094C36.550781 14.15625 37.855469 15.914062 38.921875 17.820312C39.996094 19.730469 40.828125 21.777344 41.5625 23.898438L46.277344 21.078125C45.542969 18.933594 44.714844 16.867188 43.648438 14.964844C42.578125 13.0625 41.269531 11.316406 39.570312 9.8125Z" />
                 {/* Add the rest of your SVG paths here */}
               </svg>
-              <h2 className="text-lg font-semibold tracking-tight">
-                Tap Loyalty
+              <h2 className="text-lg tracking-tight">
+                <span className="font-semibold">Tap</span>{" "}
+                <span className="font-normal">Loyalty</span>
               </h2>
             </div>
           </div>

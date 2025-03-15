@@ -57,6 +57,7 @@ import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { SortField, SortDirection, CustomerCohort } from "@/lib/types"
+import { PageTransition } from "@/components/page-transition"
 
 export default function CustomersPage() {
   const router = useRouter()
@@ -198,367 +199,369 @@ export default function CustomersPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Customers</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Manage and track your customer base
-            </p>
+    <PageTransition>
+      <div className="p-4 md:p-6 max-w-7xl mx-auto">
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Customers</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Manage and track your customer base
+              </p>
+            </div>
+            
+            <Button 
+              className="h-9 gap-2 rounded-md"
+              onClick={() => router.push('/customers/invite')}
+            >
+              <Users className="h-4 w-4" />
+              Invite Customers
+            </Button>
           </div>
           
-          <Button 
-            className="h-9 gap-2 rounded-md"
-            onClick={() => router.push('/customers/invite')}
-          >
-            <Users className="h-4 w-4" />
-            Invite Customers
-          </Button>
-        </div>
-        
-        <Tabs defaultValue="all" onValueChange={(value) => setCohort(value as CustomerCohort)}>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-            <TabsList className="h-9 rounded-md">
-              <TabsTrigger value="all">All Customers</TabsTrigger>
-              <TabsTrigger value="active">Active</TabsTrigger>
-              <TabsTrigger value="at-risk">At Risk</TabsTrigger>
-              <TabsTrigger value="dormant">Dormant</TabsTrigger>
-            </TabsList>
-            
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  type="search" 
-                  placeholder="Search customers..." 
-                  className="pl-9 h-9 w-[250px] rounded-md"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
+          <Tabs defaultValue="all" onValueChange={(value) => setCohort(value as CustomerCohort)}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+              <TabsList className="h-9 rounded-md">
+                <TabsTrigger value="all">All Customers</TabsTrigger>
+                <TabsTrigger value="active">Active</TabsTrigger>
+                <TabsTrigger value="at-risk">At Risk</TabsTrigger>
+                <TabsTrigger value="dormant">Dormant</TabsTrigger>
+              </TabsList>
               
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="h-9 gap-2 rounded-md">
-                    <ArrowUpDown className="h-4 w-4" />
-                    Sort
-                    {sortField !== 'lastTransactionDate' && (
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        ({sortField.replace(/([A-Z])/g, ' $1').toLowerCase()})
-                      </span>
-                    )}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 rounded-md">
-                  <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuRadioGroup 
-                    value={`${sortField}-${sortDirection}`}
-                    onValueChange={(value) => {
-                      const [field, direction] = value.split('-')
-                      setSortField(field as SortField)
-                      setSortDirection(direction as SortDirection)
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    type="search" 
+                    placeholder="Search customers..." 
+                    className="pl-9 h-9 w-[250px] rounded-md"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </div>
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="h-9 gap-2 rounded-md">
+                      <ArrowUpDown className="h-4 w-4" />
+                      Sort
+                      {sortField !== 'lastTransactionDate' && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          ({sortField.replace(/([A-Z])/g, ' $1').toLowerCase()})
+                        </span>
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56 rounded-md">
+                    <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuRadioGroup 
+                      value={`${sortField}-${sortDirection}`}
+                      onValueChange={(value) => {
+                        const [field, direction] = value.split('-')
+                        setSortField(field as SortField)
+                        setSortDirection(direction as SortDirection)
+                      }}
+                    >
+                      <DropdownMenuRadioItem value="fullName-asc" className="flex items-center">
+                        <AlignStartHorizontal className="mr-2 h-4 w-4" />
+                        Name (A to Z)
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="fullName-desc" className="flex items-center">
+                        <AlignEndHorizontal className="mr-2 h-4 w-4" />
+                        Name (Z to A)
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuRadioItem value="lastTransactionDate-desc" className="flex items-center">
+                        <Clock className="mr-2 h-4 w-4" />
+                        Most Recent Visit
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="lastTransactionDate-asc" className="flex items-center">
+                        <Clock className="mr-2 h-4 w-4" />
+                        Oldest Visit
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuRadioItem value="totalLifetimeSpend-desc" className="flex items-center">
+                        <DollarSign className="mr-2 h-4 w-4" />
+                        Highest Spend
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="totalLifetimeSpend-asc" className="flex items-center">
+                        <DollarSign className="mr-2 h-4 w-4" />
+                        Lowest Spend
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuRadioItem value="lifetimeTransactionCount-desc" className="flex items-center">
+                        <ShoppingCart className="mr-2 h-4 w-4" />
+                        Most Transactions
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="lifetimeTransactionCount-asc" className="flex items-center">
+                        <ShoppingCart className="mr-2 h-4 w-4" />
+                        Least Transactions
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuRadioItem value="pointsBalance-desc" className="flex items-center">
+                        <Award className="mr-2 h-4 w-4" />
+                        Highest Points
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="pointsBalance-asc" className="flex items-center">
+                        <Award className="mr-2 h-4 w-4" />
+                        Lowest Points
+                      </DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="h-9 gap-2 rounded-md">
+                      <Filter className="h-4 w-4" />
+                      Filter
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56 rounded-md">
+                    <DropdownMenuLabel>Customer Cohorts</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuRadioGroup value={cohort} onValueChange={(v) => setCohort(v as CustomerCohort)}>
+                      <DropdownMenuRadioItem value="all" className="flex items-center">
+                        <Users className="mr-2 h-4 w-4" />
+                        All Customers
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="active" className="flex items-center">
+                        <UserCheck className="mr-2 h-4 w-4" />
+                        Active (30d)
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="engaged" className="flex items-center">
+                        <BadgeCheck className="mr-2 h-4 w-4" />
+                        Engaged (90d)
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="at-risk" className="flex items-center">
+                        <UserMinus className="mr-2 h-4 w-4" />
+                        At Risk (90-180d)
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="dormant" className="flex items-center">
+                        <UserX className="mr-2 h-4 w-4" />
+                        Dormant (180d+)
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuRadioItem value="new" className="flex items-center">
+                        <UserPlus className="mr-2 h-4 w-4" />
+                        New Customers
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="loyal" className="flex items-center">
+                        <Award className="mr-2 h-4 w-4" />
+                        Loyal (10+ visits)
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="vip" className="flex items-center">
+                        <Crown className="mr-2 h-4 w-4" />
+                        VIP (Top 10%)
+                      </DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                
+                {hasActiveFilters() && (
+                  <Button 
+                    variant="ghost" 
+                    className="h-9 gap-2 rounded-md px-3 text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      setSortField('lastTransactionDate')
+                      setSortDirection('desc')
+                      setCohort('all')
+                      setSearch('')
                     }}
                   >
-                    <DropdownMenuRadioItem value="fullName-asc" className="flex items-center">
-                      <AlignStartHorizontal className="mr-2 h-4 w-4" />
-                      Name (A to Z)
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="fullName-desc" className="flex items-center">
-                      <AlignEndHorizontal className="mr-2 h-4 w-4" />
-                      Name (Z to A)
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuRadioItem value="lastTransactionDate-desc" className="flex items-center">
-                      <Clock className="mr-2 h-4 w-4" />
-                      Most Recent Visit
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="lastTransactionDate-asc" className="flex items-center">
-                      <Clock className="mr-2 h-4 w-4" />
-                      Oldest Visit
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuRadioItem value="totalLifetimeSpend-desc" className="flex items-center">
-                      <DollarSign className="mr-2 h-4 w-4" />
-                      Highest Spend
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="totalLifetimeSpend-asc" className="flex items-center">
-                      <DollarSign className="mr-2 h-4 w-4" />
-                      Lowest Spend
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuRadioItem value="lifetimeTransactionCount-desc" className="flex items-center">
-                      <ShoppingCart className="mr-2 h-4 w-4" />
-                      Most Transactions
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="lifetimeTransactionCount-asc" className="flex items-center">
-                      <ShoppingCart className="mr-2 h-4 w-4" />
-                      Least Transactions
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuRadioItem value="pointsBalance-desc" className="flex items-center">
-                      <Award className="mr-2 h-4 w-4" />
-                      Highest Points
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="pointsBalance-asc" className="flex items-center">
-                      <Award className="mr-2 h-4 w-4" />
-                      Lowest Points
-                    </DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="h-9 gap-2 rounded-md">
-                    <Filter className="h-4 w-4" />
-                    Filter
+                    <X className="h-4 w-4" />
+                    Clear
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 rounded-md">
-                  <DropdownMenuLabel>Customer Cohorts</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuRadioGroup value={cohort} onValueChange={(v) => setCohort(v as CustomerCohort)}>
-                    <DropdownMenuRadioItem value="all" className="flex items-center">
-                      <Users className="mr-2 h-4 w-4" />
-                      All Customers
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="active" className="flex items-center">
-                      <UserCheck className="mr-2 h-4 w-4" />
-                      Active (30d)
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="engaged" className="flex items-center">
-                      <BadgeCheck className="mr-2 h-4 w-4" />
-                      Engaged (90d)
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="at-risk" className="flex items-center">
-                      <UserMinus className="mr-2 h-4 w-4" />
-                      At Risk (90-180d)
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="dormant" className="flex items-center">
-                      <UserX className="mr-2 h-4 w-4" />
-                      Dormant (180d+)
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuRadioItem value="new" className="flex items-center">
-                      <UserPlus className="mr-2 h-4 w-4" />
-                      New Customers
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="loyal" className="flex items-center">
-                      <Award className="mr-2 h-4 w-4" />
-                      Loyal (10+ visits)
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="vip" className="flex items-center">
-                      <Crown className="mr-2 h-4 w-4" />
-                      VIP (Top 10%)
-                    </DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              
-              {hasActiveFilters() && (
-                <Button 
-                  variant="ghost" 
-                  className="h-9 gap-2 rounded-md px-3 text-muted-foreground hover:text-foreground"
-                  onClick={() => {
-                    setSortField('lastTransactionDate')
-                    setSortDirection('desc')
-                    setCohort('all')
-                    setSearch('')
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                  Clear
-                </Button>
-              )}
+                )}
+              </div>
             </div>
-          </div>
-          
-          {["all", "active", "at-risk", "dormant", "new", "loyal", "vip"].map((category) => (
-            <TabsContent key={category} value={category} className="mt-0">
-              <Card className="rounded-lg overflow-hidden">
-                <CardHeader className="py-4">
-                  <CardTitle>
-                    {category === "all" ? "All Customers" : 
-                     category === "active" ? "Active Customers" : 
-                     category === "at-risk" ? "At-Risk Customers" :
-                     category === "dormant" ? "Dormant Customers" :
-                     category === "new" ? "New Customers" :
-                     category === "loyal" ? "Loyal Customers" :
-                     "VIP Customers"}
-                  </CardTitle>
-                  <CardDescription>
-                    {category === "all" ? "View and manage all your customers" : 
-                     category === "active" ? "Customers who visited in the last 30 days" : 
-                     category === "at-risk" ? "Customers who haven't visited in 90-180 days" :
-                     category === "dormant" ? "Customers who haven't visited in over 180 days" :
-                     category === "new" ? "Customers who joined in the last 30 days" :
-                     category === "loyal" ? "Customers with 10+ transactions" :
-                     "Your top 10% of customers by spend"}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>
-                          <SortButton field="fullName">Customer</SortButton>
-                        </TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>
-                          <SortButton field="pointsBalance">Points</SortButton>
-                        </TableHead>
-                        <TableHead>
-                          <SortButton field="lifetimeTransactionCount">Transactions</SortButton>
-                        </TableHead>
-                        <TableHead>
-                          <SortButton field="totalLifetimeSpend">Lifetime Spend</SortButton>
-                        </TableHead>
-                        <TableHead>
-                          <SortButton field="lastTransactionDate">Last Visit</SortButton>
-                        </TableHead>
-                        <TableHead></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {loading ? (
+            
+            {["all", "active", "at-risk", "dormant", "new", "loyal", "vip"].map((category) => (
+              <TabsContent key={category} value={category} className="mt-0">
+                <Card className="rounded-lg overflow-hidden">
+                  <CardHeader className="py-4">
+                    <CardTitle>
+                      {category === "all" ? "All Customers" : 
+                       category === "active" ? "Active Customers" : 
+                       category === "at-risk" ? "At-Risk Customers" :
+                       category === "dormant" ? "Dormant Customers" :
+                       category === "new" ? "New Customers" :
+                       category === "loyal" ? "Loyal Customers" :
+                       "VIP Customers"}
+                    </CardTitle>
+                    <CardDescription>
+                      {category === "all" ? "View and manage all your customers" : 
+                       category === "active" ? "Customers who visited in the last 30 days" : 
+                       category === "at-risk" ? "Customers who haven't visited in 90-180 days" :
+                       category === "dormant" ? "Customers who haven't visited in over 180 days" :
+                       category === "new" ? "Customers who joined in the last 30 days" :
+                       category === "loyal" ? "Customers with 10+ transactions" :
+                       "Your top 10% of customers by spend"}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
                         <TableRow>
-                          <TableCell colSpan={7} className="h-24 text-center">
-                            <div className="flex justify-center">
-                              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
-                            </div>
-                          </TableCell>
+                          <TableHead>
+                            <SortButton field="fullName">Customer</SortButton>
+                          </TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>
+                            <SortButton field="pointsBalance">Points</SortButton>
+                          </TableHead>
+                          <TableHead>
+                            <SortButton field="lifetimeTransactionCount">Transactions</SortButton>
+                          </TableHead>
+                          <TableHead>
+                            <SortButton field="totalLifetimeSpend">Lifetime Spend</SortButton>
+                          </TableHead>
+                          <TableHead>
+                            <SortButton field="lastTransactionDate">Last Visit</SortButton>
+                          </TableHead>
+                          <TableHead></TableHead>
                         </TableRow>
-                      ) : filteredCustomers.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={7} className="h-24 text-center">
-                            <div className="flex flex-col items-center justify-center">
-                              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                                <Users className="h-6 w-6 text-muted-foreground" />
-                              </div>
-                              <h3 className="mt-4 text-lg font-medium">
-                                No customers found
-                              </h3>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                {search ? "Try adjusting your search query" : 
-                                 `No ${category === "all" ? "" : category + " "}customers available`}
-                              </p>
-                              {!search && (
-                                <Button 
-                                  className="mt-4 h-9 gap-2 rounded-md"
-                                  onClick={() => router.push('/customers/invite')}
-                                >
-                                  <Users className="h-4 w-4" />
-                                  Invite Customers
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredCustomers.map((customer) => (
-                          <TableRow 
-                            key={customer.customerId} 
-                            className="hover:bg-muted/50 cursor-pointer"
-                            onClick={() => router.push(`/customers/${customer.customerId}`)}
-                          >
-                            <TableCell>
-                              <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-md bg-[#007AFF]/10 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                                  {customer.profileData?.shareProfileWithMerchants && customer.profileData?.profilePictureUrl ? (
-                                    <img 
-                                      src={customer.profileData.profilePictureUrl} 
-                                      alt={customer.fullName}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : (
-                                    <User className="h-5 w-5 text-[#007AFF]" />
-                                  )}
-                                </div>
-                                <div>
-                                  <div className="font-medium">{customer.fullName}</div>
-                                  {customer.membershipTier && (
-                                    <div className="text-xs text-muted-foreground">
-                                      {customer.membershipTier}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {getCohortBadge(customer)}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                <Award className="h-4 w-4 text-blue-600" />
-                                <span>{customer.pointsBalance.toLocaleString()}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-                                <span>{customer.lifetimeTransactionCount}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                <DollarSign className="h-4 w-4 text-green-600" />
-                                <span>${customer.totalLifetimeSpend}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {formatDate(customer.lastTransactionDate)}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex justify-end">
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" className="h-8 w-8 p-0 rounded-md">
-                                      <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="rounded-md">
-                                    <DropdownMenuItem onClick={(e) => {
-                                      e.stopPropagation();
-                                      router.push(`/customers/${customer.customerId}`);
-                                    }}>
-                                      <Eye className="h-4 w-4 mr-2" />
-                                      View Details
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={(e) => {
-                                      e.stopPropagation();
-                                      router.push(`/customers/${customer.customerId}/edit`);
-                                    }}>
-                                      <Edit className="h-4 w-4 mr-2" />
-                                      Edit Customer
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem 
-                                      className="text-red-600"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        // Handle delete
-                                      }}
-                                    >
-                                      <Trash className="h-4 w-4 mr-2" />
-                                      Delete Customer
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                      </TableHeader>
+                      <TableBody>
+                        {loading ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="h-24 text-center">
+                              <div className="flex justify-center">
+                                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
                               </div>
                             </TableCell>
                           </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          ))}
-        </Tabs>
+                        ) : filteredCustomers.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="h-24 text-center">
+                              <div className="flex flex-col items-center justify-center">
+                                <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                                  <Users className="h-6 w-6 text-muted-foreground" />
+                                </div>
+                                <h3 className="mt-4 text-lg font-medium">
+                                  No customers found
+                                </h3>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  {search ? "Try adjusting your search query" : 
+                                   `No ${category === "all" ? "" : category + " "}customers available`}
+                                </p>
+                                {!search && (
+                                  <Button 
+                                    className="mt-4 h-9 gap-2 rounded-md"
+                                    onClick={() => router.push('/customers/invite')}
+                                  >
+                                    <Users className="h-4 w-4" />
+                                    Invite Customers
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredCustomers.map((customer) => (
+                            <TableRow 
+                              key={customer.customerId} 
+                              className="hover:bg-muted/50 cursor-pointer"
+                              onClick={() => router.push(`/customers/${customer.customerId}`)}
+                            >
+                              <TableCell>
+                                <div className="flex items-center gap-3">
+                                  <div className="h-10 w-10 rounded-md bg-[#007AFF]/10 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                                    {customer.profileData?.shareProfileWithMerchants && customer.profileData?.profilePictureUrl ? (
+                                      <img 
+                                        src={customer.profileData.profilePictureUrl} 
+                                        alt={customer.fullName}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    ) : (
+                                      <User className="h-5 w-5 text-[#007AFF]" />
+                                    )}
+                                  </div>
+                                  <div>
+                                    <div className="font-medium">{customer.fullName}</div>
+                                    {customer.membershipTier && (
+                                      <div className="text-xs text-muted-foreground">
+                                        {customer.membershipTier}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                {getCohortBadge(customer)}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <Award className="h-4 w-4 text-blue-600" />
+                                  <span>{customer.pointsBalance.toLocaleString()}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                                  <span>{customer.lifetimeTransactionCount}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <DollarSign className="h-4 w-4 text-green-600" />
+                                  <span>${customer.totalLifetimeSpend}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {formatDate(customer.lastTransactionDate)}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex justify-end">
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" className="h-8 w-8 p-0 rounded-md">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="rounded-md">
+                                      <DropdownMenuItem onClick={(e) => {
+                                        e.stopPropagation();
+                                        router.push(`/customers/${customer.customerId}`);
+                                      }}>
+                                        <Eye className="h-4 w-4 mr-2" />
+                                        View Details
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={(e) => {
+                                        e.stopPropagation();
+                                        router.push(`/customers/${customer.customerId}/edit`);
+                                      }}>
+                                        <Edit className="h-4 w-4 mr-2" />
+                                        Edit Customer
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem 
+                                        className="text-red-600"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          // Handle delete
+                                        }}
+                                      >
+                                        <Trash className="h-4 w-4 mr-2" />
+                                        Delete Customer
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            ))}
+          </Tabs>
+        </div>
       </div>
-    </div>
+    </PageTransition>
   )
 } 

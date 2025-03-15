@@ -39,6 +39,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { storage } from "@/lib/firebase"
 import { firebase } from "@/lib/firebase"
+import { PageTransition } from "@/components/page-transition"
 
 const SettingsPage: React.FC = () => {
   const router = useRouter()
@@ -524,41 +525,44 @@ const SettingsPage: React.FC = () => {
   // Add this state variable
   const [mockLogoUrl, setMockLogoUrl] = useState<string | null>(null);
 
-  return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage your account and preferences
-          </p>
+  if (dataLoading) {
+    return (
+      <PageTransition>
+        <div className="p-4 md:p-6 max-w-7xl mx-auto">
+          {/* Empty state instead of spinner */}
         </div>
-        
-        {/* Store Activation Toggle - Updated with better colors */}
-        <div className={`flex items-center gap-3 p-3 rounded-lg ${storeActive ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-          <div className="text-right">
-            <p className="text-sm font-medium">Store Status</p>
-            <p className={`text-xs ${storeActive ? 'text-green-600' : 'text-red-600'} font-medium`}>
-              {storeActive ? "Active & Visible" : "Inactive & Hidden"}
+      </PageTransition>
+    )
+  }
+
+  return (
+    <PageTransition>
+      <div className="p-6 max-w-7xl mx-auto space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Manage your account and preferences
             </p>
           </div>
-          <Switch 
-            checked={storeActive} 
-            onCheckedChange={toggleStoreStatus}
-            disabled={loading}
-            className={storeActive ? "data-[state=checked]:bg-green-600" : "data-[state=unchecked]:bg-red-600"}
-          />
-        </div>
-      </div>
-      
-      {dataLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading your settings...</p>
+          
+          {/* Store Activation Toggle - Updated with better colors */}
+          <div className={`flex items-center gap-3 p-3 rounded-lg ${storeActive ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+            <div className="text-right">
+              <p className="text-sm font-medium">Store Status</p>
+              <p className={`text-xs ${storeActive ? 'text-green-600' : 'text-red-600'} font-medium`}>
+                {storeActive ? "Active & Visible" : "Inactive & Hidden"}
+              </p>
+            </div>
+            <Switch 
+              checked={storeActive} 
+              onCheckedChange={toggleStoreStatus}
+              disabled={loading}
+              className={storeActive ? "data-[state=checked]:bg-green-600" : "data-[state=unchecked]:bg-red-600"}
+            />
           </div>
         </div>
-      ) : (
+        
         <Tabs defaultValue="profile" className="space-y-6">
           <TabsList className="bg-muted/60">
             <TabsTrigger value="profile" className="flex items-center gap-2">
@@ -1673,8 +1677,8 @@ const SettingsPage: React.FC = () => {
             </Card>
           </TabsContent>
         </Tabs>
-      )}
-    </div>
+      </div>
+    </PageTransition>
   )
 }
 

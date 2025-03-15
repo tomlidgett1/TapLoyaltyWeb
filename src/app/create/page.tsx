@@ -36,28 +36,28 @@ export default function CreatePage() {
       title: "Rewards",
       description: "Create rewards for your customers to redeem",
       icon: Gift,
-      iconColor: "text-purple-500",
-      bgColor: "bg-purple-50",
+      iconColor: "text-[#007AFF]",
+      bgColor: "bg-gray-50",
       items: [
         {
           title: "Individual Reward",
           description: "Create a new reward that customers can redeem with their points",
           icon: Gift,
-          iconColor: "text-purple-500",
+          iconColor: "text-[#007AFF]",
           action: () => setCreateRewardOpen(true)
         },
         {
           title: "Coffee Program",
           description: "Set up a buy-X-get-1-free coffee or loyalty program",
           icon: Coffee,
-          iconColor: "text-amber-500",
+          iconColor: "text-[#007AFF]",
           action: () => setCreateProgramOpen(true)
         },
         {
           title: "Recurring Reward",
           description: "Create rewards that repeat on a schedule",
           icon: CalendarClock,
-          iconColor: "text-indigo-500",
+          iconColor: "text-[#007AFF]",
           action: () => setCreateRecurringOpen(true)
         }
       ]
@@ -66,14 +66,14 @@ export default function CreatePage() {
       title: "Points Rules",
       description: "Set up how customers earn points",
       icon: Zap,
-      iconColor: "text-blue-500",
-      bgColor: "bg-blue-50",
+      iconColor: "text-[#007AFF]",
+      bgColor: "bg-gray-50",
       items: [
         {
           title: "Points Rule",
           description: "Set up rules for how customers earn points at your business",
           icon: Zap,
-          iconColor: "text-blue-500",
+          iconColor: "text-[#007AFF]",
           action: () => setCreateRuleOpen(true)
         }
       ]
@@ -82,21 +82,21 @@ export default function CreatePage() {
       title: "Communication",
       description: "Connect with your customers",
       icon: Bell,
-      iconColor: "text-rose-500",
-      bgColor: "bg-rose-50",
+      iconColor: "text-[#007AFF]",
+      bgColor: "bg-gray-50",
       items: [
         {
           title: "Create Banner",
           description: "Add a promotional banner to your customer-facing app",
           icon: ImagePlus,
-          iconColor: "text-green-500",
+          iconColor: "text-[#007AFF]",
           action: () => setCreateBannerOpen(true)
         },
         {
           title: "Send Broadcast",
           description: "Send a message to all or selected customers",
           icon: Bell,
-          iconColor: "text-rose-500",
+          iconColor: "text-[#007AFF]",
           action: () => setBroadcastDialogOpen(true)
         }
       ]
@@ -106,7 +106,7 @@ export default function CreatePage() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Create</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Create</h1>
         <p className="text-gray-500 mt-2">
           Create new rewards, points rules, and communication tools for your loyalty program
         </p>
@@ -116,11 +116,11 @@ export default function CreatePage() {
         {createOptions.map((section, idx) => (
           <div key={idx} className="space-y-4">
             <div className="flex items-center gap-3 mb-4">
-              <div className={cn("p-2 rounded-lg", section.bgColor)}>
-                <section.icon className={cn("h-6 w-6", section.iconColor)} />
+              <div className={cn("p-2 rounded-lg bg-gray-100")}>
+                <section.icon className="h-6 w-6 text-[#007AFF]" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold">{section.title}</h2>
+                <h2 className="text-lg font-medium">{section.title}</h2>
                 <p className="text-sm text-gray-500">{section.description}</p>
               </div>
             </div>
@@ -130,21 +130,21 @@ export default function CreatePage() {
                 <div 
                   key={i}
                   onClick={item.action}
-                  className="group relative overflow-hidden bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer"
+                  className="group relative overflow-hidden bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer hover:border-[#007AFF]/30"
                 >
-                  <div className="p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className={cn("p-2 rounded-lg bg-gray-50 group-hover:bg-opacity-80 transition-colors")}>
-                        <item.icon className={cn("h-5 w-5", item.iconColor)} />
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-1.5 rounded-lg bg-gray-50 group-hover:bg-[#007AFF]/5 transition-colors">
+                        <item.icon className="h-4 w-4 text-[#007AFF]" />
                       </div>
-                      <div className="h-8 w-8 rounded-full bg-gray-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Plus className="h-4 w-4 text-gray-500" />
+                      <div className="h-7 w-7 rounded-full bg-gray-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity group-hover:bg-[#007AFF]/10">
+                        <Plus className="h-3.5 w-3.5 text-[#007AFF]" />
                       </div>
                     </div>
-                    <h3 className="font-medium text-lg mb-1">{item.title}</h3>
-                    <p className="text-sm text-gray-500 line-clamp-2">{item.description}</p>
+                    <h3 className="font-medium text-base mb-0.5">{item.title}</h3>
+                    <p className="text-xs text-gray-500 line-clamp-2">{item.description}</p>
                   </div>
-                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-gray-200 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#007AFF] opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               ))}
             </div>

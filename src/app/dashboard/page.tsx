@@ -32,6 +32,7 @@ import { db } from "@/lib/firebase"
 import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs } from "firebase/firestore"
 import { toast } from "@/components/ui/use-toast"
 import { TapAiButton } from "@/components/tap-ai-button"
+import { PageTransition } from "@/components/page-transition"
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -151,216 +152,100 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="p-8 flex justify-center items-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
-      </div>
+      <PageTransition>
+        <div className="container mx-auto p-4">
+          <div className="max-w-7xl mx-auto space-y-8">
+            {/* Empty state instead of spinner */}
+          </div>
+        </div>
+      </PageTransition>
     )
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="max-w-7xl mx-auto space-y-8">
-        {/* Welcome Section */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Here's what's happening with your loyalty program today
-            </p>
+    <PageTransition>
+      <div className="container mx-auto p-4">
+        <div className="max-w-7xl mx-auto space-y-8">
+          {/* Welcome Section */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Here's what's happening with your loyalty program today
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <Button 
+                variant="outline" 
+                className="h-9 gap-2 rounded-md"
+                onClick={() => router.push('/store')}
+              >
+                <Gift className="h-4 w-4" />
+                <span>View My Store</span>
+              </Button>
+              
+              <Button 
+                className="h-9 gap-2 rounded-md"
+                onClick={() => router.push('/create')}
+              >
+                <PlusCircle className="h-4 w-4" />
+                <span>Create</span>
+              </Button>
+            </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            <Button 
-              variant="outline" 
-              className="h-9 gap-2 rounded-md"
-              onClick={() => router.push('/store')}
-            >
-              <Gift className="h-4 w-4" />
-              <span>View My Store</span>
-            </Button>
+          {/* Key Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <MetricCard 
+              title="Total Customers"
+              value="1,247"
+              change={12.5}
+              icon={Users}
+              color="blue"
+            />
             
-            <Button 
-              className="h-9 gap-2 rounded-md"
-              onClick={() => router.push('/create')}
-            >
-              <PlusCircle className="h-4 w-4" />
-              <span>Create</span>
-            </Button>
+            <MetricCard 
+              title="Points Issued"
+              value="45,892"
+              change={23.7}
+              icon={Zap}
+              color="amber"
+            />
+            
+            <MetricCard 
+              title="Redemption Rate"
+              value="32%"
+              change={5.2}
+              icon={Gift}
+              color="purple"
+            />
+            
+            <MetricCard 
+              title="Avg. Order Value"
+              value="$24.50"
+              change={3.8}
+              icon={ShoppingCart}
+              color="green"
+            />
           </div>
-        </div>
-        
-        {/* Key Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard 
-            title="Total Customers"
-            value="1,247"
-            change={12.5}
-            icon={Users}
-            color="blue"
-          />
           
-          <MetricCard 
-            title="Points Issued"
-            value="45,892"
-            change={23.7}
-            icon={Zap}
-            color="amber"
-          />
-          
-          <MetricCard 
-            title="Redemption Rate"
-            value="32%"
-            change={5.2}
-            icon={Gift}
-            color="purple"
-          />
-          
-          <MetricCard 
-            title="Avg. Order Value"
-            value="$24.50"
-            change={3.8}
-            icon={ShoppingCart}
-            color="green"
-          />
-        </div>
-        
-        {/* Main Content Tabs */}
-        <div className="space-y-6">
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          
-          {/* Recent Activity */}
-          <Card className="rounded-lg overflow-hidden">
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-center">
-                <CardTitle>Recent Activity</CardTitle>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-8 gap-1 rounded-md"
-                  asChild
-                >
-                  <Link href="/store/activity">
-                    <span>View all</span>
-                    <ChevronRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="p-8 flex justify-center items-center">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
-                </div>
-              ) : recentActivity.length === 0 ? (
-                <div className="p-8 text-center">
-                  <p className="text-muted-foreground">No recent activity found</p>
-                </div>
-              ) : (
-                <div className="divide-y">
-                  {recentActivity.map((activity) => (
-                    <div key={activity.id} className="p-4 hover:bg-muted/50 transition-colors">
-                      <div className="flex gap-3">
-                        <div className={cn(
-                          "h-10 w-10 rounded-md flex items-center justify-center flex-shrink-0",
-                          activity.type === "purchase" && "bg-green-100",
-                          activity.type === "redemption" && "bg-purple-100",
-                          activity.type === "signup" && "bg-blue-100",
-                          activity.type === "pointsAdjustment" && "bg-amber-100"
-                        )}>
-                          {activity.type === "purchase" && <ShoppingCart className="h-5 w-5 text-green-600" />}
-                          {activity.type === "redemption" && <Gift className="h-5 w-5 text-purple-600" />}
-                          {activity.type === "signup" && <Users className="h-5 w-5 text-blue-600" />}
-                          {activity.type === "pointsAdjustment" && <Zap className="h-5 w-5 text-amber-600" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <Link 
-                                href={`/customers/${activity.customer.id}`}
-                                className="font-medium text-sm hover:underline"
-                              >
-                                {activity.customer.name}
-                              </Link>
-                              <p className="text-sm text-muted-foreground">
-                                {activity.details}
-                              </p>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              {formatTimeAgo(activity.timestamp)}
-                            </p>
-                          </div>
-                          {activity.points && (
-                            <div className="mt-1">
-                              <Badge variant="outline" className={cn(
-                                "rounded-md",
-                                activity.type === "redemption" 
-                                  ? "bg-red-50 text-red-700 border-red-200" 
-                                  : "bg-blue-50 text-blue-700 border-blue-200"
-                              )}>
-                                {activity.type === "redemption" ? "-" : "+"}{activity.points} points
-                              </Badge>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          
-          {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Program Growth */}
-            <Card className="rounded-lg">
-              <CardHeader>
-                <CardTitle>Program Growth</CardTitle>
-                <CardDescription>Last 30 days</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <p className="text-sm font-medium">New Customers</p>
-                    <Badge variant="outline" className="rounded-md bg-green-50 text-green-700 border-green-200">
-                      <ArrowUp className="h-3 w-3 mr-1" />
-                      15%
-                    </Badge>
-                  </div>
-                  <Progress value={65} className="h-2 rounded-md" />
-                  <p className="text-xs text-muted-foreground mt-2">
-                    42 new customers this month
-                  </p>
-                </div>
-                
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <p className="text-sm font-medium">Repeat Purchase Rate</p>
-                    <Badge variant="outline" className="rounded-md bg-green-50 text-green-700 border-green-200">
-                      <ArrowUp className="h-3 w-3 mr-1" />
-                      8%
-                    </Badge>
-                  </div>
-                  <Progress value={72} className="h-2 rounded-md" />
-                  <p className="text-xs text-muted-foreground mt-2">
-                    72% of customers made repeat purchases
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+          {/* Main Content Tabs */}
+          <div className="space-y-6">
+            <h1 className="text-2xl font-bold">Dashboard</h1>
             
-            {/* Popular Rewards */}
-            <Card className="rounded-lg">
-              <CardHeader>
+            {/* Recent Activity */}
+            <Card className="rounded-lg overflow-hidden">
+              <CardHeader className="pb-2">
                 <div className="flex justify-between items-center">
-                  <CardTitle>Popular Rewards</CardTitle>
+                  <CardTitle>Recent Activity</CardTitle>
                   <Button 
                     variant="ghost" 
                     size="sm" 
                     className="h-8 gap-1 rounded-md"
                     asChild
                   >
-                    <Link href="/rewards">
+                    <Link href="/store/activity">
                       <span>View all</span>
                       <ChevronRight className="h-4 w-4" />
                     </Link>
@@ -368,68 +253,180 @@ export default function DashboardPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="divide-y">
-                  {popularRewards.map((reward) => (
-                    <Link 
-                      key={reward.id} 
-                      href={`/rewards/${reward.id}`}
-                      className="block p-4 hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex gap-3">
-                        <div className={cn(
-                          "h-10 w-10 rounded-md flex items-center justify-center flex-shrink-0",
-                          reward.type === "item" && "bg-purple-100",
-                          reward.type === "discount" && "bg-green-100",
-                          reward.type === "program" && "bg-amber-100"
-                        )}>
-                          {reward.type === "item" && <Gift className="h-5 w-5 text-purple-600" />}
-                          {reward.type === "discount" && <DollarSign className="h-5 w-5 text-green-600" />}
-                          {reward.type === "program" && <Coffee className="h-5 w-5 text-amber-600" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h3 className="font-medium text-sm">{reward.name}</h3>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {reward.pointsCost > 0 ? `${reward.pointsCost} points` : 'Punch card program'}
+                {loading ? (
+                  <div className="p-8 flex justify-center items-center">
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
+                  </div>
+                ) : recentActivity.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <p className="text-muted-foreground">No recent activity found</p>
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {recentActivity.map((activity) => (
+                      <div key={activity.id} className="p-4 hover:bg-muted/50 transition-colors">
+                        <div className="flex gap-3">
+                          <div className={cn(
+                            "h-10 w-10 rounded-md flex items-center justify-center flex-shrink-0",
+                            activity.type === "purchase" && "bg-green-100",
+                            activity.type === "redemption" && "bg-purple-100",
+                            activity.type === "signup" && "bg-blue-100",
+                            activity.type === "pointsAdjustment" && "bg-amber-100"
+                          )}>
+                            {activity.type === "purchase" && <ShoppingCart className="h-5 w-5 text-green-600" />}
+                            {activity.type === "redemption" && <Gift className="h-5 w-5 text-purple-600" />}
+                            {activity.type === "signup" && <Users className="h-5 w-5 text-blue-600" />}
+                            {activity.type === "pointsAdjustment" && <Zap className="h-5 w-5 text-amber-600" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <Link 
+                                  href={`/customers/${activity.customer.id}`}
+                                  className="font-medium text-sm hover:underline"
+                                >
+                                  {activity.customer.name}
+                                </Link>
+                                <p className="text-sm text-muted-foreground">
+                                  {activity.details}
+                                </p>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {formatTimeAgo(activity.timestamp)}
                               </p>
                             </div>
-                            <div className="text-right">
-                              <p className="font-medium text-sm">{reward.redemptionCount}</p>
-                              <p className="text-xs text-muted-foreground">redemptions</p>
-                            </div>
+                            {activity.points && (
+                              <div className="mt-1">
+                                <Badge variant="outline" className={cn(
+                                  "rounded-md",
+                                  activity.type === "redemption" 
+                                    ? "bg-red-50 text-red-700 border-red-200" 
+                                    : "bg-blue-50 text-blue-700 border-blue-200"
+                                )}>
+                                  {activity.type === "redemption" ? "-" : "+"}{activity.points} points
+                                </Badge>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
-                    </Link>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
-              <CardFooter className="border-t p-4">
-                <Button 
-                  variant="outline" 
-                  className="w-full rounded-md h-9 gap-2"
-                  onClick={() => router.push('/create')}
-                >
-                  <PlusCircle className="h-4 w-4" />
-                  Create new reward
-                </Button>
-              </CardFooter>
             </Card>
+            
+            {/* Quick Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Program Growth */}
+              <Card className="rounded-lg">
+                <CardHeader>
+                  <CardTitle>Program Growth</CardTitle>
+                  <CardDescription>Last 30 days</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <p className="text-sm font-medium">New Customers</p>
+                      <Badge variant="outline" className="rounded-md bg-green-50 text-green-700 border-green-200">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        15%
+                      </Badge>
+                    </div>
+                    <Progress value={65} className="h-2 rounded-md" />
+                    <p className="text-xs text-muted-foreground mt-2">
+                      42 new customers this month
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <p className="text-sm font-medium">Repeat Purchase Rate</p>
+                      <Badge variant="outline" className="rounded-md bg-green-50 text-green-700 border-green-200">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        8%
+                      </Badge>
+                    </div>
+                    <Progress value={72} className="h-2 rounded-md" />
+                    <p className="text-xs text-muted-foreground mt-2">
+                      72% of customers made repeat purchases
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              {/* Popular Rewards */}
+              <Card className="rounded-lg">
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <CardTitle>Popular Rewards</CardTitle>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 gap-1 rounded-md"
+                      asChild
+                    >
+                      <Link href="/rewards">
+                        <span>View all</span>
+                        <ChevronRight className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="divide-y">
+                    {popularRewards.map((reward) => (
+                      <Link 
+                        key={reward.id} 
+                        href={`/rewards/${reward.id}`}
+                        className="block p-4 hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex gap-3">
+                          <div className={cn(
+                            "h-10 w-10 rounded-md flex items-center justify-center flex-shrink-0",
+                            reward.type === "item" && "bg-purple-100",
+                            reward.type === "discount" && "bg-green-100",
+                            reward.type === "program" && "bg-amber-100"
+                          )}>
+                            {reward.type === "item" && <Gift className="h-5 w-5 text-purple-600" />}
+                            {reward.type === "discount" && <DollarSign className="h-5 w-5 text-green-600" />}
+                            {reward.type === "program" && <Coffee className="h-5 w-5 text-amber-600" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h3 className="font-medium text-sm">{reward.name}</h3>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {reward.pointsCost > 0 ? `${reward.pointsCost} points` : 'Punch card program'}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-medium text-sm">{reward.redemptionCount}</p>
+                                <p className="text-xs text-muted-foreground">redemptions</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </CardContent>
+                <CardFooter className="border-t p-4">
+                  <Button 
+                    variant="outline" 
+                    className="w-full rounded-md h-9 gap-2"
+                    onClick={() => router.push('/create')}
+                  >
+                    <PlusCircle className="h-4 w-4" />
+                    Create new reward
+                  </Button>
+                </CardFooter>
+              </Card>
+            </div>
           </div>
         </div>
       </div>
-      <div className="mt-4 p-4 bg-gray-100 rounded-md">
-        <h3 className="font-semibold">Developer Tools</h3>
-        <p className="text-sm text-gray-600 mb-2">Troubleshooting utilities for developers</p>
-        <Link 
-          href="/api-key-test" 
-          className="text-blue-500 hover:text-blue-700 text-sm"
-        >
-          API Key Test Page
-        </Link>
-      </div>
-    </div>
+    </PageTransition>
   )
 }
 

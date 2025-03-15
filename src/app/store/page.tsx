@@ -44,6 +44,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { format, formatDistanceToNow } from "date-fns"
 import Link from "next/link"
 import { toast } from "@/components/ui/use-toast"
+import { PageTransition } from "@/components/page-transition"
 
 interface StoreItem {
   id: string
@@ -171,255 +172,257 @@ export default function StorePage() {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Store</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Manage your rewards and points rules
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Button 
-              onClick={() => router.push('/create')}
-              className="h-9 gap-2 rounded-md"
-            >
-              <Plus className="h-4 w-4" />
-              Create
-            </Button>
-          </div>
-        </div>
-        
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search..."
-                className="pl-8 h-9 rounded-md w-full"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+    <PageTransition>
+      <div className="p-4 md:p-6 max-w-7xl mx-auto">
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Store</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Manage your rewards and points rules
+              </p>
             </div>
             
             <div className="flex items-center gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="h-9 gap-2 rounded-md">
-                    <Filter className="h-4 w-4" />
-                    <span>Filter</span>
-                    <ChevronDown className="h-4 w-4 ml-1" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 rounded-md">
-                  <DropdownMenuItem onClick={() => setItemType('all')}>
-                    All Items
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setItemType('reward')}>
-                    Rewards Only
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setItemType('rule')}>
-                    Rules Only
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="h-9 gap-2 rounded-md">
-                    <ArrowUpDown className="h-4 w-4" />
-                    <span>Sort</span>
-                    <ChevronDown className="h-4 w-4 ml-1" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 rounded-md">
-                  <DropdownMenuItem onClick={() => setSortBy('newest')}>
-                    Newest First
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSortBy('oldest')}>
-                    Oldest First
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSortBy('name')}>
-                    Name (A-Z)
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button 
+                onClick={() => router.push('/create')}
+                className="h-9 gap-2 rounded-md"
+              >
+                <Plus className="h-4 w-4" />
+                Create
+              </Button>
             </div>
           </div>
           
-          <Tabs defaultValue="grid" className="w-full">
-            <div className="flex items-center justify-between">
-              <TabsList className="h-9 rounded-md">
-                <TabsTrigger value="grid" className="rounded-sm">Grid</TabsTrigger>
-                <TabsTrigger value="list" className="rounded-sm">List</TabsTrigger>
-              </TabsList>
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search..."
+                  className="pl-8 h-9 rounded-md w-full"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
               
-              <div className="text-sm text-muted-foreground">
-                {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
+              <div className="flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="h-9 gap-2 rounded-md">
+                      <Filter className="h-4 w-4" />
+                      <span>Filter</span>
+                      <ChevronDown className="h-4 w-4 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 rounded-md">
+                    <DropdownMenuItem onClick={() => setItemType('all')}>
+                      All Items
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setItemType('reward')}>
+                      Rewards Only
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setItemType('rule')}>
+                      Rules Only
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="h-9 gap-2 rounded-md">
+                      <ArrowUpDown className="h-4 w-4" />
+                      <span>Sort</span>
+                      <ChevronDown className="h-4 w-4 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 rounded-md">
+                    <DropdownMenuItem onClick={() => setSortBy('newest')}>
+                      Newest First
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSortBy('oldest')}>
+                      Oldest First
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSortBy('name')}>
+                      Name (A-Z)
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
             
-            <div className="mt-4">
-              {loading ? (
-                <div className="flex items-center justify-center h-64">
-                  <div className="text-center">
-                    <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
-                    <p className="mt-2 text-sm text-muted-foreground">Loading items...</p>
-                  </div>
+            <Tabs defaultValue="grid" className="w-full">
+              <div className="flex items-center justify-between">
+                <TabsList className="h-9 rounded-md">
+                  <TabsTrigger value="grid" className="rounded-sm">Grid</TabsTrigger>
+                  <TabsTrigger value="list" className="rounded-sm">List</TabsTrigger>
+                </TabsList>
+                
+                <div className="text-sm text-muted-foreground">
+                  {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
                 </div>
-              ) : (
-                <>
-                  {filteredItems.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-64 border border-dashed rounded-lg">
-                      <div className="text-center">
-                        <p className="text-muted-foreground mb-4">No items found</p>
-                        <Button 
-                          onClick={() => router.push('/create')}
-                          className="h-9 gap-2 rounded-md"
-                        >
-                          <Plus className="h-4 w-4" />
-                          Create Item
-                        </Button>
-                      </div>
+              </div>
+              
+              <div className="mt-4">
+                {loading ? (
+                  <div className="flex items-center justify-center h-64">
+                    <div className="text-center">
+                      <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
+                      <p className="mt-2 text-sm text-muted-foreground">Loading items...</p>
                     </div>
-                  ) : (
-                    <>
-                      <TabsContent value="grid" className="mt-0">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {filteredItems.map((item) => {
-                            const Icon = getIcon(item.type);
-                            return (
-                              <Card 
-                                key={item.id}
-                                className="overflow-hidden border hover:border-primary/30 hover:shadow-sm transition-all cursor-pointer rounded-lg"
-                                onClick={() => handleViewItem(item)}
-                              >
-                                <div className="p-4 flex items-center gap-4">
-                                  <div className={cn(
-                                    "h-10 w-10 rounded-md flex items-center justify-center flex-shrink-0",
-                                    item.type === 'reward' ? "bg-purple-50" : "bg-blue-50"
-                                  )}>
-                                    <Icon className={cn(
-                                      "h-5 w-5",
-                                      item.type === 'reward' ? "text-purple-500" : "text-blue-500"
-                                    )} />
-                                  </div>
-                                  
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center justify-between">
-                                      <h3 className="font-medium truncate">
-                                        {getItemName(item)}
-                                      </h3>
-                                      <Badge 
-                                        variant="outline" 
-                                        className={cn(
-                                          "ml-2 rounded-md",
-                                          item.status === 'active' 
-                                            ? "bg-green-50 text-green-700 border-green-200" 
-                                            : "bg-gray-50 text-gray-700 border-gray-200"
-                                        )}
-                                      >
-                                        {item.status || 'Draft'}
-                                      </Badge>
+                  </div>
+                ) : (
+                  <>
+                    {filteredItems.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-64 border border-dashed rounded-lg">
+                        <div className="text-center">
+                          <p className="text-muted-foreground mb-4">No items found</p>
+                          <Button 
+                            onClick={() => router.push('/create')}
+                            className="h-9 gap-2 rounded-md"
+                          >
+                            <Plus className="h-4 w-4" />
+                            Create Item
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <TabsContent value="grid" className="mt-0">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {filteredItems.map((item) => {
+                              const Icon = getIcon(item.type);
+                              return (
+                                <Card 
+                                  key={item.id}
+                                  className="overflow-hidden border hover:border-primary/30 hover:shadow-sm transition-all cursor-pointer rounded-lg"
+                                  onClick={() => handleViewItem(item)}
+                                >
+                                  <div className="p-4 flex items-center gap-4">
+                                    <div className={cn(
+                                      "h-10 w-10 rounded-md flex items-center justify-center flex-shrink-0",
+                                      item.type === 'reward' ? "bg-purple-50" : "bg-blue-50"
+                                    )}>
+                                      <Icon className={cn(
+                                        "h-5 w-5",
+                                        item.type === 'reward' ? "text-purple-500" : "text-blue-500"
+                                      )} />
                                     </div>
-                                    <p className="text-sm text-muted-foreground truncate mt-1">
-                                      {item.description || 'No description'}
-                                    </p>
-                                    <div className="flex items-center mt-2 text-xs text-muted-foreground">
-                                      <span>
+                                    
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center justify-between">
+                                        <h3 className="font-medium truncate">
+                                          {getItemName(item)}
+                                        </h3>
+                                        <Badge 
+                                          variant="outline" 
+                                          className={cn(
+                                            "ml-2 rounded-md",
+                                            item.status === 'active' 
+                                              ? "bg-green-50 text-green-700 border-green-200" 
+                                              : "bg-gray-50 text-gray-700 border-gray-200"
+                                          )}
+                                        >
+                                          {item.status || 'Draft'}
+                                        </Badge>
+                                      </div>
+                                      <p className="text-sm text-muted-foreground truncate mt-1">
+                                        {item.description || 'No description'}
+                                      </p>
+                                      <div className="flex items-center mt-2 text-xs text-muted-foreground">
+                                        <span>
+                                          {item.type === 'reward' 
+                                            ? `${item.pointsCost || 0} points` 
+                                            : `${item.points || 0} points`}
+                                        </span>
+                                        <span className="mx-2">•</span>
+                                        <span>{item.category || 'Uncategorized'}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="list" className="mt-0">
+                          <div className="border rounded-lg overflow-hidden">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="w-[40px]"></TableHead>
+                                  <TableHead>Name</TableHead>
+                                  <TableHead>Type</TableHead>
+                                  <TableHead>Points</TableHead>
+                                  <TableHead>Status</TableHead>
+                                  <TableHead>Category</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {filteredItems.map((item) => {
+                                  const Icon = getIcon(item.type);
+                                  return (
+                                    <TableRow 
+                                      key={item.id}
+                                      className="cursor-pointer hover:bg-muted/50"
+                                      onClick={() => handleViewItem(item)}
+                                    >
+                                      <TableCell>
+                                        <div className={cn(
+                                          "h-8 w-8 rounded-md flex items-center justify-center",
+                                          item.type === 'reward' ? "bg-purple-50" : "bg-blue-50"
+                                        )}>
+                                          <Icon className={cn(
+                                            "h-4 w-4",
+                                            item.type === 'reward' ? "text-purple-500" : "text-blue-500"
+                                          )} />
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="font-medium">
+                                        {getItemName(item)}
+                                      </TableCell>
+                                      <TableCell>
+                                        {item.type === 'reward' ? 'Reward' : 'Rule'}
+                                      </TableCell>
+                                      <TableCell>
                                         {item.type === 'reward' 
                                           ? `${item.pointsCost || 0} points` 
                                           : `${item.points || 0} points`}
-                                      </span>
-                                      <span className="mx-2">•</span>
-                                      <span>{item.category || 'Uncategorized'}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </Card>
-                            );
-                          })}
-                        </div>
-                      </TabsContent>
-                      
-                      <TabsContent value="list" className="mt-0">
-                        <div className="border rounded-lg overflow-hidden">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="w-[40px]"></TableHead>
-                                <TableHead>Name</TableHead>
-                                <TableHead>Type</TableHead>
-                                <TableHead>Points</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Category</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {filteredItems.map((item) => {
-                                const Icon = getIcon(item.type);
-                                return (
-                                  <TableRow 
-                                    key={item.id}
-                                    className="cursor-pointer hover:bg-muted/50"
-                                    onClick={() => handleViewItem(item)}
-                                  >
-                                    <TableCell>
-                                      <div className={cn(
-                                        "h-8 w-8 rounded-md flex items-center justify-center",
-                                        item.type === 'reward' ? "bg-purple-50" : "bg-blue-50"
-                                      )}>
-                                        <Icon className={cn(
-                                          "h-4 w-4",
-                                          item.type === 'reward' ? "text-purple-500" : "text-blue-500"
-                                        )} />
-                                      </div>
-                                    </TableCell>
-                                    <TableCell className="font-medium">
-                                      {getItemName(item)}
-                                    </TableCell>
-                                    <TableCell>
-                                      {item.type === 'reward' ? 'Reward' : 'Rule'}
-                                    </TableCell>
-                                    <TableCell>
-                                      {item.type === 'reward' 
-                                        ? `${item.pointsCost || 0} points` 
-                                        : `${item.points || 0} points`}
-                                    </TableCell>
-                                    <TableCell>
-                                      <Badge 
-                                        variant="outline" 
-                                        className={cn(
-                                          "rounded-md",
-                                          item.status === 'active' 
-                                            ? "bg-green-50 text-green-700 border-green-200" 
-                                            : "bg-gray-50 text-gray-700 border-gray-200"
-                                        )}
-                                      >
-                                        {item.status || 'Draft'}
-                                      </Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                      {item.category || 'Uncategorized'}
-                                    </TableCell>
-                                  </TableRow>
-                                );
-                              })}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </TabsContent>
-                    </>
-                  )}
-                </>
-              )}
-            </div>
-          </Tabs>
+                                      </TableCell>
+                                      <TableCell>
+                                        <Badge 
+                                          variant="outline" 
+                                          className={cn(
+                                            "rounded-md",
+                                            item.status === 'active' 
+                                              ? "bg-green-50 text-green-700 border-green-200" 
+                                              : "bg-gray-50 text-gray-700 border-gray-200"
+                                          )}
+                                        >
+                                          {item.status || 'Draft'}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell>
+                                        {item.category || 'Uncategorized'}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </TabsContent>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </Tabs>
+          </div>
         </div>
       </div>
-    </div>
+    </PageTransition>
   );
 } 

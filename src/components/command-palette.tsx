@@ -35,6 +35,7 @@ import { CreateRewardDialog } from "@/components/create-reward-dialog"
 import { CreateProgramDialog } from "@/components/create-program-dialog"
 import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { TapAiDialog } from "@/components/tap-ai-dialog"
+import { CreatePointsRuleDialog } from "@/components/create-points-rule-dialog"
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false)
@@ -43,6 +44,7 @@ export function CommandPalette() {
   const [createProgramOpen, setCreateProgramOpen] = useState(false)
   const [createBannerOpen, setCreateBannerOpen] = useState(false)
   const [tapAIOpen, setTapAIOpen] = useState(false)
+  const [createRuleOpen, setCreateRuleOpen] = useState(false)
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -67,7 +69,7 @@ export function CommandPalette() {
 
   return (
     <>
-      <CommandDialog open={open} onOpenChange={setOpen}>
+      <CommandDialog open={open} onOpenChange={setOpen} className="max-w-[280px] w-full mx-auto">
         <DialogTitle className="sr-only">Command Menu</DialogTitle>
         <CommandInput placeholder="Type a command or search..." />
         <CommandList>
@@ -128,7 +130,7 @@ export function CommandPalette() {
               <span>Create Program</span>
             </CommandItem>
             <CommandItem
-              onSelect={() => runCommand(() => router.push("/create"))}
+              onSelect={() => runCommand(() => setCreateRuleOpen(true))}
             >
               <Zap className="mr-2 h-4 w-4" />
               <span>Create Points Rule</span>
@@ -190,6 +192,11 @@ export function CommandPalette() {
       <TapAiDialog
         open={tapAIOpen}
         onOpenChange={setTapAIOpen}
+      />
+      
+      <CreatePointsRuleDialog 
+        open={createRuleOpen} 
+        onOpenChange={setCreateRuleOpen} 
       />
     </>
   )

@@ -23,7 +23,7 @@ export function TapAiButtonStandalone({
       <Button 
         variant={variant} 
         size={size}
-        className={className}
+        className={`h-9 ${className}`}
         onClick={() => setOpen(true)}
       >
         <Sparkles className="mr-2 h-4 w-4" />

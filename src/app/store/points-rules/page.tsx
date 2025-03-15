@@ -47,6 +47,7 @@ import { format } from "date-fns"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { collection, getDocs, query, doc, updateDoc, deleteDoc } from "firebase/firestore"
+import { CreatePointsRuleDialog } from "@/components/create-points-rule-dialog"
 
 // Types
 type RuleCategory = "all" | "active" | "inactive"
@@ -79,6 +80,7 @@ export default function PointsRulesPage() {
   const [sortField, setSortField] = useState<SortField>("name")
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
   const [loading, setLoading] = useState(true)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
 
   useEffect(() => {
     const fetchRules = async () => {
@@ -309,7 +311,7 @@ export default function PointsRulesPage() {
           
           <Button 
             className="h-9 gap-2 rounded-md"
-            onClick={() => router.push('/create')}
+            onClick={() => setCreateDialogOpen(true)}
           >
             <Plus className="h-4 w-4" />
             Create Rule
@@ -391,7 +393,7 @@ export default function PointsRulesPage() {
                             {!searchQuery && (
                               <Button 
                                 className="mt-4 h-9 gap-2 rounded-md"
-                                onClick={() => router.push('/create')}
+                                onClick={() => setCreateDialogOpen(true)}
                               >
                                 <Plus className="h-4 w-4" />
                                 Create Rule
@@ -526,7 +528,7 @@ export default function PointsRulesPage() {
                     {!searchQuery && (
                       <Button 
                         className="mt-4 h-9 gap-2 rounded-md"
-                        onClick={() => router.push('/create')}
+                        onClick={() => setCreateDialogOpen(true)}
                       >
                         <Plus className="h-4 w-4" />
                         Create {category.charAt(0).toUpperCase() + category.slice(1)} Rule
@@ -650,6 +652,10 @@ export default function PointsRulesPage() {
           ))}
         </Tabs>
       </div>
+      <CreatePointsRuleDialog 
+        open={createDialogOpen} 
+        onOpenChange={setCreateDialogOpen} 
+      />
     </div>
   )
 } 

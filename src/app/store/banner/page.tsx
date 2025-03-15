@@ -29,8 +29,8 @@ import {
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { Calendar, Clock, Store, Gift, Sparkles, Users, UserPlus, ChevronLeft, ChevronRight, AlertCircle, CheckCircle, XCircle, BarChart, PieChart, Activity, Bell, Library, Plus, Search, Edit, Image as ImageIcon } from "lucide-react"
-import { Filter, Download, MoreHorizontal, Eye, Trash2 } from "lucide-react"
+import { Calendar, Clock, Store, Gift, Sparkles, Users, UserPlus, ChevronLeft, ChevronRight, AlertCircle, CheckCircle, XCircle, BarChart, PieChart, Activity, Bell, Library, Plus, Search, Edit, Image as ImageIcon, Trash2 } from "lucide-react"
+import { Filter, Download, MoreHorizontal, Eye } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { useAuth } from "@/contexts/auth-context"
@@ -40,6 +40,8 @@ import { TapAiButton } from "@/components/tap-ai-button"
 import { toast } from "@/components/ui/use-toast"
 import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banner-preview"
 import { BannerScheduler } from "@/components/banner-scheduler"
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 /** 
  * Replace this interface with your actual banner data fields.
@@ -85,6 +87,7 @@ export default function BannerPage() {
   })
   const [dateFilter, setDateFilter] = useState("all")
   const [loading, setLoading] = useState(true)
+  const [bannerToDelete, setBannerToDelete] = useState<string | null>(null)
 
   // Fetch banners from Firestore
   useEffect(() => {
@@ -458,6 +461,124 @@ export default function BannerPage() {
     return `${displayHours}:${mins.toString().padStart(2, '0')} ${period}`
   }
 
+  // Add a delete function to handle banner deletion
+  const handleDeleteBanner = (bannerId: string) => {
+    // Set the banner ID to delete, which will open the confirmation dialog
+    setBannerToDelete(bannerId);
+  };
+
+  // Add a function to handle the actual deletion when confirmed
+  const confirmDeleteBanner = async () => {
+    if (!bannerToDelete || !user?.uid) {
+      setBannerToDelete(null);
+      return;
+    }
+    
+    try {
+      // Reference to the banner document
+      const bannerRef = doc(db, 'merchants', user.uid, 'banners', bannerToDelete);
+      
+      // Delete the banner
+      await deleteDoc(bannerRef);
+      
+      // Update the UI by removing the deleted banner
+      setBanners(prev => prev.filter(banner => banner.id !== bannerToDelete));
+      
+      toast({
+        title: "Banner deleted",
+        description: "The banner has been successfully deleted.",
+        variant: "default"
+      });
+    } catch (error) {
+      console.error("Error deleting banner:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete banner. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      // Clear the banner to delete state
+      setBannerToDelete(null);
+    }
+  };
+
+  // Update the function to schedule for 4 hours when no banners are active
+  const findNonConflictingTimeSlot = (banners: Banner[]): { startMinutes: number, endMinutes: number } => {
+    // If no banners are scheduled, return a 4-hour slot starting now
+    const scheduledBanners = banners.filter(b => b.scheduled && b.isActive);
+    if (scheduledBanners.length === 0) {
+      // Get current time rounded to the nearest hour
+      const now = new Date();
+      const currentHour = now.getHours();
+      const startMinutes = currentHour * 60;
+      
+      // Schedule for 4 hours
+      const endMinutes = startMinutes + 240;
+      
+      // If end time would be after midnight, cap at midnight
+      return {
+        startMinutes,
+        endMinutes: Math.min(endMinutes, 24 * 60)
+      };
+    }
+    
+    // Sort banners by start time
+    const sortedBanners = [...scheduledBanners].sort((a, b) => {
+      const aStart = a.scheduleStartMinutes || 0;
+      const bStart = b.scheduleStartMinutes || 0;
+      return aStart - bStart;
+    });
+    
+    // Find gaps between scheduled banners
+    let previousEndTime = 0;
+    
+    for (const banner of sortedBanners) {
+      const startTime = banner.scheduleStartMinutes || 0;
+      
+      // If there's a gap of at least 240 minutes (4 hours), use it
+      if (startTime - previousEndTime >= 240) {
+        return {
+          startMinutes: previousEndTime,
+          endMinutes: Math.min(previousEndTime + 240, startTime) // Use 4 hours or up to the next banner
+        };
+      }
+      
+      previousEndTime = banner.scheduleEndMinutes || 24 * 60;
+    }
+    
+    // Check if there's space after the last banner
+    if (previousEndTime < 24 * 60 - 240) {
+      return {
+        startMinutes: previousEndTime,
+        endMinutes: previousEndTime + 240 // Schedule for 4 hours
+      };
+    }
+    
+    // If no suitable gap found, return a default 4-hour slot at the beginning of the day
+    return {
+      startMinutes: 0,
+      endMinutes: 240
+    };
+  };
+
+  // Update the scheduling function to use the non-conflicting time slot finder
+  const handleScheduleBanner = (bannerId: string) => {
+    const timeSlot = findNonConflictingTimeSlot(banners);
+    
+    handleBannerScheduleUpdate(bannerId, {
+      scheduled: true,
+      scheduleStartMinutes: timeSlot.startMinutes,
+      scheduleEndMinutes: timeSlot.endMinutes
+    });
+    
+    // Show a toast notification about the scheduling
+    toast({
+      title: "Banner Scheduled",
+      description: `Banner scheduled from ${formatTime(timeSlot.startMinutes)} to ${formatTime(timeSlot.endMinutes)}.`,
+      variant: "default"
+    });
+  };
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
 
@@ -747,16 +868,21 @@ export default function BannerPage() {
                           variant="outline"
                           size="sm"
                           className="flex-1"
-                          onClick={() => handleBannerScheduleUpdate(banner.id, {
-                            scheduled: true,
-                            scheduleStartMinutes: 0,
-                            scheduleEndMinutes: 24 * 60
-                          })}
+                          onClick={() => handleScheduleBanner(banner.id)}
                         >
                           <Plus className="h-3.5 w-3.5 mr-1.5" />
                           Schedule
                         </Button>
                       )}
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1 text-red-600 hover:bg-red-50 border-red-200"
+                        onClick={() => handleDeleteBanner(banner.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                        Delete
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -905,6 +1031,15 @@ export default function BannerPage() {
                               <Clock className="h-3.5 w-3.5 mr-1.5" />
                               Remove
                             </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="flex-1 text-red-600 hover:bg-red-50 border-red-200"
+                              onClick={() => handleDeleteBanner(banner.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                              Delete
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -1024,6 +1159,15 @@ export default function BannerPage() {
                             >
                               <Clock className="h-3.5 w-3.5 mr-1.5" />
                               Remove
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="flex-1 text-red-600 hover:bg-red-50 border-red-200"
+                              onClick={() => handleDeleteBanner(banner.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                              Delete
                             </Button>
                           </div>
                         </div>
@@ -1166,14 +1310,19 @@ export default function BannerPage() {
                               variant="outline"
                               size="sm"
                               className="flex-1"
-                              onClick={() => handleBannerScheduleUpdate(banner.id, {
-                                scheduled: true,
-                                scheduleStartMinutes: 0,
-                                scheduleEndMinutes: 24 * 60
-                              })}
+                              onClick={() => handleScheduleBanner(banner.id)}
                             >
                               <Plus className="h-3.5 w-3.5 mr-1.5" />
                               Schedule
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="flex-1 text-red-600 hover:bg-red-50 border-red-200"
+                              onClick={() => handleDeleteBanner(banner.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                              Delete
                             </Button>
                           </div>
                         </div>
@@ -1338,16 +1487,21 @@ export default function BannerPage() {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => handleBannerScheduleUpdate(banner.id, {
-                              scheduled: true,
-                              scheduleStartMinutes: 0,
-                              scheduleEndMinutes: 24 * 60
-                            })}
+                            onClick={() => handleScheduleBanner(banner.id)}
                           >
                             <Plus className="h-3.5 w-3.5 mr-1.5" />
                             Add to Schedule
                           </Button>
                         )}
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="flex-1 text-red-600 hover:bg-red-50 border-red-200"
+                          onClick={() => handleDeleteBanner(banner.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                          Delete
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -1357,6 +1511,26 @@ export default function BannerPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!bannerToDelete} onOpenChange={() => setBannerToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Delete Banner</DialogTitle>
+            <DialogDescription className="text-red-500">
+              Are you sure you want to delete this banner? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end space-x-2 mt-5">
+            <Button variant="outline" onClick={() => setBannerToDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteBanner}>
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

@@ -14,7 +14,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { db, functions } from "@/lib/firebase"
 import { doc, updateDoc, writeBatch, collection, Timestamp, setDoc, getDocs, getDoc } from "firebase/firestore"
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { ArrowRight, CheckCircle, Coffee, Gift, Store, Users, Upload, Sparkles, Award, BarChart, Image, Utensils, Percent, Cake, Wine, UtensilsCrossed, Check, X, ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Ban, Calendar, ChevronLeft, Clock, Package, Plus, DollarSign, HelpCircle, Crown, ArrowUp } from "lucide-react"
+import { ArrowRight, CheckCircle, Coffee, Gift, Store, Users, Upload, Sparkles, Award, BarChart, Image, Utensils, Percent, Cake, Wine, UtensilsCrossed, Check, X, ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Ban, Calendar, ChevronLeft, Clock, Package, Plus, DollarSign, HelpCircle, Crown, ArrowUp, Eye } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
@@ -27,6 +27,8 @@ import { httpsCallable } from "firebase/functions"
 // Import the new component
 import { CoffeeProgramDisplay } from "@/components/coffee-program-display"
 import { Badge } from "@/components/ui/badge"
+import { BannerPreview } from "@/components/banner-preview"
+import { BannerStyle } from "@/types/banner-style"
 
 // Helper function to format a UNIX timestamp (in seconds) into hh:mm AM/PM
 function formatTimestamp(seconds: number) {
@@ -130,6 +132,7 @@ function PointsRuleCard({
   pointsmultiplier,
   isSelected,
   onSelect,
+  isPointsRule = true, // Add this new prop with default true
 }: {
   id: string
   name: string
@@ -139,6 +142,7 @@ function PointsRuleCard({
   pointsmultiplier?: number
   isSelected: boolean
   onSelect: () => void
+  isPointsRule?: boolean // New optional prop
 }) {
   // Basic expand/collapse state if you need it:
   const [expanded, setExpanded] = useState(false)
@@ -170,13 +174,6 @@ function PointsRuleCard({
             {/* Rule name + multiplier */}
             <div className="flex items-center gap-2">
               <h3 className="font-medium text-gray-900">{name}</h3>
-              {/* Show "Points Rule" badge on the same line */}
-              <Badge
-                variant="outline"
-                className="text-[10px] text-blue-600 border-blue-400 cursor-default"
-              >
-                Points Rule
-              </Badge>
               {multiplierLabel && (
                 <Badge 
                   variant="secondary" 
@@ -289,6 +286,196 @@ function PointsRuleCard({
   )
 }
 
+// Add these helper functions before the RewardCard component
+
+// Helper function to format condition objects into readable text
+function formatCondition(condition: { type: string; [key: string]: any }) {
+  if (condition.type === 'timeOfDay') {
+    const startLabel = formatShortAmPm(condition.startTime || '');
+    const endLabel = formatShortAmPm(condition.endTime || '');
+    return `Valid between ${startLabel} - ${endLabel}`;
+  } else if (condition.type === 'minimumSpend') {
+    return `Minimum spend of $${condition.amount || condition.value}`;
+  } else if (condition.type === 'daysOfWeek') {
+    const days = condition.days || (Array.isArray(condition.value) ? condition.value : []);
+    return `Valid on ${days.join(', ')}`;
+  } else if (condition.type === 'maximumTransactions') {
+    return `Limited to ${condition.value} transaction${condition.value !== 1 ? 's' : ''}`;
+  } else if (condition.type === 'minimumTransactions') {
+    return `Requires at least ${condition.value} transaction${condition.value !== 1 ? 's' : ''}`;
+  } else if (condition.type === 'totalLifetimeSpend') {
+    return `Total lifetime spend of $${condition.value}`;
+  } else if (condition.type === 'minimumLifetimeSpend') {
+    return `Minimum lifetime spend of $${condition.value}`;
+  }
+  return `${condition.type}: ${JSON.stringify(condition.value || condition)}`;
+}
+
+// Helper function to format limitation objects into readable text
+function formatLimitation(limitation: { type: string; value: any }) {
+  if (limitation.type === 'customerLimit') {
+    return `Limited to ${limitation.value} per customer`;
+  } else if (limitation.type === 'totalRedemptionLimit') {
+    return `Limited to ${limitation.value} total redemptions`;
+  } else if (limitation.type === 'daysOfWeek') {
+    const days = Array.isArray(limitation.value) ? limitation.value.join(', ') : limitation.value;
+    return `Only valid on ${days}`;
+  }
+  return `${limitation.type}: ${JSON.stringify(limitation.value)}`;
+}
+
+// Add this new RewardCard component definition that doesn't include the Points Rule badge
+
+function RewardCard({
+  id,
+  name,
+  description,
+  icon: Icon,
+  conditions,
+  limitations,
+  isSelected,
+  onSelect,
+  pointsmultiplier,
+}: {
+  id: string;
+  name: string;
+  description: string;
+  icon: LucideIcon;
+  conditions: { type: string; [key: string]: any }[];
+  limitations: { type: string; value: any }[];
+  isSelected: boolean;
+  onSelect: () => void;
+  pointsmultiplier?: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  // Convert numeric multiplier to something like "1.5x"
+  const multiplierLabel =
+    pointsmultiplier && pointsmultiplier > 1
+      ? `${pointsmultiplier}x`
+      : (pointsmultiplier === 1 ? '1x' : null);
+
+  return (
+    <div
+      className={`border rounded-lg overflow-hidden bg-white transition-all ${
+        isSelected ? 'ring-2 ring-blue-500 border-blue-500' : 'border-gray-200'
+      }`}
+    >
+      {/* Main clickable header */}
+      <div
+        className={`flex items-start gap-3 p-4 cursor-pointer transition-all ${
+          isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+        }`}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+          <Icon className="h-5 w-5 text-blue-600" />
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center justify-between">
+            {/* Rule name + multiplier */}
+            <div className="flex items-center gap-2">
+              <h3 className="font-medium text-gray-900">{name}</h3>
+              {multiplierLabel && (
+                <Badge 
+                  variant="secondary" 
+                  className="text-[10px]"
+                >
+                  {multiplierLabel}
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {isSelected && (
+                <span className="text-sm text-blue-600 flex items-center gap-1">
+                  <Check className="h-4 w-4" />
+                  Selected
+                </span>
+              )}
+              <ChevronDown
+                className={`h-5 w-5 text-gray-500 transition-transform ${
+                  expanded ? 'rotate-180' : ''
+                }`}
+              />
+            </div>
+          </div>
+          <p className="text-sm text-gray-500 mt-1">{description}</p>
+        </div>
+      </div>
+
+      {/* Collapsible details section */}
+      {expanded && (
+        <div className="border-t border-gray-200 bg-gray-50 p-4">
+          <div className="space-y-4">
+            {/* Conditions section */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Conditions:</h4>
+              {conditions.length === 0 ? (
+                <div className="text-sm text-gray-500 italic">No conditions</div>
+              ) : (
+                <div className="space-y-2">
+                  {conditions.map((cond, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <div className="h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Check className="h-3 w-3 text-blue-600" />
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        {formatCondition(cond)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Limitations section */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Limitations:</h4>
+              {limitations.length === 0 ? (
+                <div className="text-sm text-gray-500 italic">No limitations</div>
+              ) : (
+                <div className="space-y-2">
+                  {limitations.map((limit, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <div className="h-5 w-5 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Ban className="h-3 w-3 text-red-600" />
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        {formatLimitation(limit)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Select button */}
+      <div className="border-t border-gray-200 p-3 bg-gray-50">
+        <Button
+          variant={isSelected ? "default" : "outline"}
+          size="sm"
+          className="w-full"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect();
+          }}
+        >
+          {isSelected ? (
+            <>
+              <Check className="mr-1 h-4 w-4" /> Selected
+            </>
+          ) : (
+            "Select"
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function OnboardingWizard() {
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
@@ -299,6 +486,9 @@ export function OnboardingWizard() {
     bannerDetails: null as { name: string, type: string } | null,
     pointsRuleDetails: undefined
   })
+  
+  // Add this state variable for the merchant name
+  const [fetchedMerchantName, setFetchedMerchantName] = useState<string>("")
   
   // Move these state declarations up here, before they're used
   const [selectedPointsRules, setSelectedPointsRules] = useState<string[]>([])
@@ -311,13 +501,39 @@ export function OnboardingWizard() {
   const router = useRouter()
   const { toast } = useToast()
   
-  const totalSteps = 3
+  // Add this useEffect to fetch the merchant name
+  useEffect(() => {
+    async function fetchMerchantName() {
+      if (user?.uid) {
+        try {
+          const merchantRef = doc(db, "merchants", user.uid)
+          const docSnap = await getDoc(merchantRef)
+          if (docSnap.exists()) {
+            setFetchedMerchantName(docSnap.data().merchantName || "Your Store")
+          }
+        } catch (error) {
+          console.error("Error fetching merchant name:", error)
+          setFetchedMerchantName("Your Store")
+        }
+      }
+    }
+    fetchMerchantName()
+  }, [user])
+  
+  // First, let's update the totalSteps variable to include the info step
+  const totalSteps = 4; // Now includes: 1) Info, 2) Rewards, 3) Points Rules, 4) Banner
   
   const [customerCategoryStep, setCustomerCategoryStep] = useState<'new' | 'existing' | 'loyal' | null>(null)
   
   const handleNext = () => {
-    // If we're in Step 1 (Create First Reward)
+    // If we're in Step 1 (About Tap Loyalty), just move to step 2
     if (step === 1) {
+      setStep(2);
+      return;
+    }
+    
+    // If we're in Step 2 (Create First Reward)
+    if (step === 2) {
       // Handle the wizard sub-steps
       if (wizardStep === 1) {
         // From Industry Selection to Reward Selection
@@ -886,7 +1102,13 @@ export function OnboardingWizard() {
   const [expandedRewardDetails, setExpandedRewardDetails] = useState<string | null>(null)
 
   // Add a new state to track if the intro has been viewed
-  const [hasViewedIntro, setHasViewedIntro] = useState(false)
+  const [hasViewedIntro, setHasViewedIntro] = useState(true)
+
+  // Then in the useEffect that runs on component mount, add:
+  useEffect(() => {
+    // Set hasViewedIntro to true when component mounts
+    setHasViewedIntro(true)
+  }, [])
 
   // Fix the duplicate variable declaration
   // Add these new states to manage pagination
@@ -1228,268 +1450,6 @@ export function OnboardingWizard() {
   // First, add this state to track which reward's details are expanded
   const [expandedRewardId, setExpandedRewardId] = useState<string | null>(null);
 
-  // Add this helper function to format the reward card
-  const RewardCard = ({ 
-    id, 
-    name, 
-    description, 
-    icon: Icon,
-    conditions,
-    limitations,
-    isSelected,
-    onSelect,
-    pointsmultiplier
-  }: {
-    id: string;
-    name: string;
-    description: string;
-    icon: LucideIcon;
-    conditions: { type: string; [key: string]: any }[];
-    limitations: { type: string; value: any }[];
-    isSelected: boolean;
-    onSelect: () => void;
-    pointsmultiplier?: number;
-  }) => {
-    const isExpanded = expandedRewardId === id;
-
-    // Helper: Convert numeric multiplier to a simple "2x" string.
-    const multiplierLabel = pointsmultiplier && pointsmultiplier > 1
-      ? `${pointsmultiplier}x`
-      : null
-
-    return (
-      <div
-        className={`border rounded-lg overflow-hidden bg-white transition-all ${
-        isSelected ? 'ring-2 ring-green-500 border-green-500' : 'border-gray-200'
-        }`}
-      >
-        {/* Show a small points-rule badge at the top if we're on Step 2 */}
-        {step === 2 && (
-          <div className="px-4 pt-4">
-            <Badge
-              variant="outline"
-              className="text-[10px] text-blue-600 border-blue-400 cursor-default"
-            >
-              Points Rule
-            </Badge>
-          </div>
-        )}
-
-        <div 
-          className={`flex items-start gap-3 p-4 cursor-pointer transition-all ${
-            isSelected ? 'bg-green-50' : 'hover:bg-gray-50'
-          }`}
-          onClick={() => setExpandedRewardId(isExpanded ? null : id)}
-        >
-          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-            <Icon className="h-5 w-5 text-blue-600" />
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              {/* Display the rule name plus multiplier ("2x") if it exists */}
-              <div className="flex items-center gap-2">
-              <h3 className="font-medium text-gray-900">{name}</h3>
-                {multiplierLabel && (
-                  <Badge variant="secondary" className="text-[10px]">
-                    {multiplierLabel}
-                  </Badge>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                {isSelected && (
-                  <span className="text-sm text-green-600 flex items-center gap-1">
-                    <Check className="h-4 w-4" />
-                    Selected
-                  </span>
-                )}
-                <ChevronDown 
-                  className={`h-5 w-5 text-gray-500 transition-transform ${
-                    isExpanded ? 'rotate-180' : ''
-                  }`}
-                />
-              </div>
-            </div>
-            <p className="text-sm text-gray-500 mt-1">{description}</p>
-          </div>
-        </div>
-
-        {/* Collapsible details section */}
-        <div className={`border-t border-gray-200 ${isExpanded ? '' : 'hidden'}`}>
-          <div className="p-4 bg-gray-50 space-y-4">
-            {/* Conditions */}
-            <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Conditions:</h4>
-              {conditions.length === 0 ? (
-                <div className="text-sm text-gray-500 italic">No conditions</div>
-               ) : (
-                <div className="space-y-3">
-                  {conditions.map((cond, i) => {
-                    if (cond.type === 'timeOfDay') {
-                      const startLabel = formatShortAmPm(cond.startTime || '')
-                      const endLabel = formatShortAmPm(cond.endTime || '')
-                      return (
-                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
-                          <Clock className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                          <div>
-                            <span className="font-medium text-sm text-gray-700">Time Window:</span>
-                            <span className="text-sm text-gray-600 ml-1">{startLabel} - {endLabel}</span>
-                          </div>
-                        </div>
-                      )
-                    } else if (cond.type === 'minimumSpend') {
-                      return (
-                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
-                          <DollarSign className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                          <div>
-                            <span className="font-medium text-sm text-gray-700">Minimum Spend:</span>
-                            <span className="text-sm text-gray-600 ml-1">${cond.amount || cond.value}</span>
-                          </div>
-                        </div>
-                      )
-                    } else if (cond.type === 'daysOfWeek') {
-                      const days = cond.days || (Array.isArray(cond.value) ? cond.value : []);
-                      return (
-                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
-                          <Calendar className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                          <div>
-                            <span className="font-medium text-sm text-gray-700">Days:</span>
-                            <span className="text-sm text-gray-600 ml-1">{days.join(', ')}</span>
-                          </div>
-                        </div>
-                      )
-                    } else if (cond.type === 'maximumTransactions' || cond.type === 'minimumTransactions') {
-                      return (
-                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
-                          <Package className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                          <div>
-                            <span className="font-medium text-sm text-gray-700">{cond.type === 'maximumTransactions' ? 'Maximum' : 'Minimum'} Transactions:</span>
-                            <span className="text-sm text-gray-600 ml-1">{cond.value}</span>
-                          </div>
-                        </div>
-                      )
-                    } else if (cond.type === 'totalLifetimeSpend') {
-                      return (
-                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
-                          <DollarSign className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                          <div>
-                            <span className="font-medium text-sm text-gray-700">Total Lifetime Spend:</span>
-                            <span className="text-sm text-gray-600 ml-1">${cond.value}</span>
-                          </div>
-                        </div>
-                      )
-                    } else if (cond.type === 'minimumLifetimeSpend') {
-                      return (
-                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
-                          <DollarSign className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                          <div>
-                            <span className="font-medium text-sm text-gray-700">Minimum Lifetime Spend:</span>
-                            <span className="text-sm text-gray-600 ml-1">${cond.value}</span>
-                          </div>
-                        </div>
-                      )
-                    } else if (cond.type === 'daysOfWeek') {
-                      return (
-                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
-                          <Calendar className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                          <div>
-                            <span className="font-medium text-sm text-gray-700">Days:</span>
-                            <span className="text-sm text-gray-600 ml-1">{cond.days.join(', ')}</span>
-                          </div>
-                        </div>
-                      )
-                    }
-                    // Default case for any other condition types
-                    return (
-                      <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
-                        <HelpCircle className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                        <div className="text-sm text-gray-700">
-                          <span className="font-medium">{cond.type}:</span> {JSON.stringify(cond.value || cond)}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-               )}
-            </div>
- 
-            {/* Limitations - using the same nice formatting */}
-            {limitations && limitations.length > 0 && (
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-3">Limitations:</h4>
-                <div className="space-y-3">
-                  {limitations.map((limitation, i) => (
-                    <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-100">
-                      {limitation.type === 'customerLimit' ? (
-                        <>
-                          <Users className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                          <div>
-                            <span className="font-medium text-sm text-gray-700">Customer Limit:</span>
-                            <span className="text-sm text-gray-600 ml-1">{limitation.value} per customer</span>
-                          </div>
-                        </>
-                      ) : limitation.type === 'totalRedemptionLimit' ? (
-                        <>
-                          <Ban className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                          <div>
-                            <span className="font-medium text-sm text-gray-700">Total Limit:</span>
-                            <span className="text-sm text-gray-600 ml-1">{limitation.value} redemptions</span>
-                          </div>
-                        </>
-                      ) : limitation.type === 'daysOfWeek' ? (
-                        <>
-                          <Calendar className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                          <div>
-                            <span className="font-medium text-sm text-gray-700">Days:</span>
-                            <span className="text-sm text-gray-600 ml-1">
-                              {Array.isArray(limitation.value) 
-                                ? limitation.value.join(', ') 
-                                : limitation.value}
-                            </span>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <HelpCircle className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                          <div>
-                            <span className="font-medium text-sm text-gray-700">{limitation.type}:</span>
-                            <span className="text-sm text-gray-600 ml-1">{JSON.stringify(limitation.value)}</span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
- 
-            {/* Select button below limitations */}
-            <div className="pt-2">
-              <Button
-                size="sm"
-                variant={isSelected ? "outline" : "default"}
-                className={isSelected 
-                  ? "border-red-500 text-red-500 hover:bg-red-50" 
-                  : "bg-green-600 hover:bg-green-700 text-white"
-                }
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelect();
-                }}
-              >
-                {isSelected ? (
-                  "Remove Selection"
-                ) : (
-                  "Select Reward"
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="container max-w-[1600px] py-10">
       {/* Exit button */}
@@ -1508,44 +1468,67 @@ export function OnboardingWizard() {
         {/* Progress bar - only show when not on intro page */}
         {hasViewedIntro && (
           <div className="md:col-span-3 md:order-first">
-            <div className="fixed top-0 left-0 bottom-0 w-[320px] bg-white overflow-y-auto border-r border-gray-200 shadow-sm">
-              {/* Branding header */}
-              <div className="bg-[#007AFF] text-white p-5 pb-8">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
-                    <Sparkles className="h-5 w-5 text-white" />
-                  </div>
-                  <h2 className="text-xl font-semibold">Tap Loyalty</h2>
+            <div className="fixed top-0 left-0 bottom-0 w-[320px] bg-gray-50 overflow-y-auto border-r border-gray-100 shadow-sm">
+              {/* Simplified branding header */}
+              <div className="bg-[#007AFF] text-white p-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-6 w-6 text-white" />
+                  <h2 className="text-xl font-medium">Tap Loyalty</h2>
                 </div>
-                <p className="text-sm text-white/80">Business Onboarding</p>
-      </div>
-      
-              {/* Progress content with negative margin to overlap with header */}
-              <div className="px-5 pt-0 pb-5 -mt-4">
-                <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+                <p className="text-sm text-white/80 mt-1">Business Onboarding</p>
+              </div>
+              
+              {/* Progress content */}
+              <div className="px-5 py-6">
+                {/* Progress bar */}
+                <div className="mb-6">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-600">Progress</span>
+                    <span className="text-sm font-medium text-gray-500">Progress</span>
                     <span className="text-sm font-medium text-[#007AFF]">Step {step} of {totalSteps}</span>
                   </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-2 bg-white rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-[#007AFF] rounded-full transition-all duration-300"
                       style={{ width: `${(step / totalSteps) * 100}%` }}
                     />
                   </div>
-      </div>
+                </div>
                 
-                <h3 className="text-lg font-medium mb-4 text-gray-800">Your Setup Progress</h3>
-                
-                <div className="space-y-6">
-                  {/* Reward creation status */}
+                {/* Steps list */}
+                <div className="space-y-5">
+                  {/* Info step status */}
                   <div className="flex items-start gap-3">
-                    <div className={`h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    <div className={`h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 ${
                       step === 1 ? "bg-[#007AFF] text-white" :
                       step > 1 ? "bg-green-100 text-green-600" :
-                      "bg-gray-100 text-gray-400"
+                      "bg-white text-gray-400"
                     }`}>
                       {step > 1 ? (
+                        <Check className="h-5 w-5" />
+                      ) : (
+                        <Sparkles className="h-5 w-5" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className={`text-base font-medium ${
+                        step >= 1 ? "text-gray-800" : "text-gray-400"
+                      }`}>
+                        About Tap Loyalty
+                      </p>
+                      <p className="text-sm text-gray-500 mt-0.5">
+                        Learn how the platform works
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Reward creation status - now step 2 */}
+                  <div className="flex items-start gap-3">
+                    <div className={`h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      step === 2 ? "bg-[#007AFF] text-white" :
+                      step > 2 ? "bg-green-100 text-green-600" :
+                      "bg-white text-gray-400"
+                    }`}>
+                      {step > 2 ? (
                         <Check className="h-5 w-5" />
                       ) : (
                         <Gift className="h-5 w-5" />
@@ -1553,34 +1536,32 @@ export function OnboardingWizard() {
                     </div>
                     <div className="flex-1">
                       <p className={`text-base font-medium ${
-                        step >= 1 ? "text-gray-900" : "text-gray-500"
+                        step >= 2 ? "text-gray-800" : "text-gray-400"
                       }`}>
                         Create Rewards
                       </p>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Set up rewards for your customers to earn
+                      <p className="text-sm text-gray-500 mt-0.5">
+                        Set up rewards for customers
                       </p>
                       {businessData.selectedRewards.length > 0 && (
-                        <div className="mt-3 space-y-2">
-                          {businessData.selectedRewards.map((reward) => (
-                            <div key={reward.id} className="flex items-center gap-2 bg-gray-50 p-2 rounded-md border border-gray-200">
-                              <span className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0"></span>
-                              <p className="text-xs text-gray-600 truncate">{reward.name}</p>
-                            </div>
-                          ))}
+                        <div className="mt-2">
+                          <span className="text-sm text-green-600 flex items-center gap-1">
+                            <Check className="h-4 w-4" />
+                            {businessData.selectedRewards.length} rewards selected
+                          </span>
                         </div>
                       )}
                     </div>
                   </div>
                   
-                  {/* Points rule status */}
+                  {/* Points rule status - now step 3 */}
                   <div className="flex items-start gap-3">
-                    <div className={`h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      step === 2 ? "bg-[#007AFF] text-white" :
-                      step > 2 ? "bg-green-100 text-green-600" :
-                      "bg-gray-100 text-gray-400"
+                    <div className={`h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      step === 3 ? "bg-[#007AFF] text-white" :
+                      step > 3 ? "bg-green-100 text-green-600" :
+                      "bg-white text-gray-400"
                     }`}>
-                      {step > 2 ? (
+                      {step > 3 ? (
                         <Check className="h-5 w-5" />
                       ) : (
                         <BarChart className="h-5 w-5" />
@@ -1588,34 +1569,32 @@ export function OnboardingWizard() {
                     </div>
                     <div className="flex-1">
                       <p className={`text-base font-medium ${
-                        step >= 2 ? "text-gray-900" : "text-gray-500"
+                        step >= 3 ? "text-gray-800" : "text-gray-400"
                       }`}>
                         Set Up Points Rules
                       </p>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Define how customers earn points
+                      <p className="text-sm text-gray-500 mt-0.5">
+                        Define how points are earned
                       </p>
                       {selectedPointsRules.length > 0 && (
-                        <div className="mt-3 space-y-2">
-                          {selectedPointsRules.map((rule) => (
-                            <div key={rule} className="flex items-center gap-2 bg-gray-50 p-2 rounded-md border border-gray-200">
-                              <span className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0"></span>
-                              <p className="text-xs text-gray-600 truncate">{rule.replace(/-/g, ' ')}</p>
-                            </div>
-                          ))}
+                        <div className="mt-2">
+                          <span className="text-sm text-green-600 flex items-center gap-1">
+                            <Check className="h-4 w-4" />
+                            {selectedPointsRules.length} rules selected
+                          </span>
                         </div>
                       )}
                     </div>
                   </div>
                   
-                  {/* Banner status */}
+                  {/* Banner status - now step 4 */}
                   <div className="flex items-start gap-3">
-                    <div className={`h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      step === 3 ? "bg-[#007AFF] text-white" :
-                      step > 3 ? "bg-green-100 text-green-600" :
-                      "bg-gray-100 text-gray-400"
+                    <div className={`h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      step === 4 ? "bg-[#007AFF] text-white" :
+                      step > 4 ? "bg-green-100 text-green-600" :
+                      "bg-white text-gray-400"
                     }`}>
-                      {step > 3 ? (
+                      {step > 4 ? (
                         <Check className="h-5 w-5" />
                       ) : (
                         <Image className="h-5 w-5" />
@@ -1623,42 +1602,28 @@ export function OnboardingWizard() {
                     </div>
                     <div className="flex-1">
                       <p className={`text-base font-medium ${
-                        step >= 3 ? "text-gray-900" : "text-gray-500"
+                        step >= 4 ? "text-gray-800" : "text-gray-400"
                       }`}>
                         Create Homepage Banner
                       </p>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Design a banner to promote your program
+                      <p className="text-sm text-gray-500 mt-0.5">
+                        Design a promotional banner
                       </p>
                       {businessData.bannerDetails && (
-                        <div className="mt-3 bg-gray-50 p-2 rounded-md border border-gray-200">
-                          <p className="text-xs text-gray-600">
-                            {businessData.bannerDetails.name} ({businessData.bannerDetails.type})
-                          </p>
+                        <div className="mt-2">
+                          <span className="text-sm text-green-600 flex items-center gap-1">
+                            <Check className="h-4 w-4" />
+                            Banner created
+                          </span>
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
                 
-                {/* Add a help section at the bottom */}
-                <div className="mt-12 pt-6 border-t border-gray-200">
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                    <h4 className="text-sm font-medium flex items-center gap-2 mb-2">
-                      <HelpCircle className="h-4 w-4 text-[#007AFF]" />
-                      Need help?
-                    </h4>
-                    <p className="text-xs text-gray-600 mb-3">
-                      Our setup guide can help you make the most of your loyalty program.
-                    </p>
-                    <Button variant="outline" size="sm" className="w-full text-[#007AFF] border-[#007AFF]/30 hover:bg-[#007AFF]/10">
-                      View Setup Guide
-                    </Button>
-                  </div>
-                  
-                  <div className="mt-6 text-center">
-                    <p className="text-xs text-gray-500">© 2023 Tap Loyalty</p>
-                  </div>
+                {/* Copyright at bottom */}
+                <div className="mt-auto pt-8 text-center fixed bottom-4 left-0 right-0 w-[320px]">
+                  <p className="text-xs text-gray-400">© 2023 Tap Loyalty</p>
                 </div>
               </div>
             </div>
@@ -1685,20 +1650,22 @@ export function OnboardingWizard() {
                   {/* Title section - only show when not on intro page */}
                   <div className="flex-1">
                     <CardTitle className="text-lg">
-                      {step === 1 && wizardStep === 1 && "Select Your Business Type"}
-                      {step === 1 && wizardStep === 2 && "Select Rewards"}
-                      {step === 1 && wizardStep === 3 && "Select a Loyalty Program"}
-                      {step === 2 && "Points Rules"}
-                      {step === 3 && "Marketing Banner"}
+                      {step === 1 && "About Tap Loyalty"}
+                      {step === 2 && wizardStep === 1 && "Select Your Business Type"}
+                      {step === 2 && wizardStep === 2 && "Select Rewards"}
+                      {step === 2 && wizardStep === 3 && "Select a Loyalty Program"}
+                      {step === 3 && "Points Rules"}
+                      {step === 4 && "Marketing Banner"}
               </CardTitle>
                     <CardDescription className="text-xs">
-                      {step === 1 && wizardStep === 1 && "Choose your industry to get personalized reward suggestions"}
-                      {step === 1 && wizardStep === 2 && customerCategoryStep === 'new' && "Choose rewards for new customers"}
-                      {step === 1 && wizardStep === 2 && customerCategoryStep === 'existing' && "Choose rewards for existing customers"}
-                      {step === 1 && wizardStep === 2 && customerCategoryStep === 'loyal' && "Choose rewards for loyal customers"}
-                      {step === 1 && wizardStep === 3 && "Choose a program type that best fits your business"}
-                      {step === 2 && "Define how customers earn points"}
-                      {step === 3 && "Create a banner to promote your program"}
+                      {step === 1 && "Learn how our loyalty platform works for your business"}
+                      {step === 2 && wizardStep === 1 && "Choose your industry to get personalized reward suggestions"}
+                      {step === 2 && wizardStep === 2 && customerCategoryStep === 'new' && "Choose rewards for new customers"}
+                      {step === 2 && wizardStep === 2 && customerCategoryStep === 'existing' && "Choose rewards for existing customers"}
+                      {step === 2 && wizardStep === 2 && customerCategoryStep === 'loyal' && "Choose rewards for loyal customers"}
+                      {step === 2 && wizardStep === 3 && "Choose a program type that best fits your business"}
+                      {step === 3 && "Define how customers earn points"}
+                      {step === 4 && "Create a banner to promote your program"}
               </CardDescription>
                   </div>
                   
@@ -1752,8 +1719,8 @@ export function OnboardingWizard() {
             </CardHeader>
             
             <CardContent className="pt-6 space-y-4">
-              {/* Step 1: Create First Reward */}
-              {step === 1 && !hasViewedIntro && (
+              {/* Step 1: About Tap Loyalty */}
+              {step === 1 && (
                 <div className="space-y-8">
                   <div className="bg-gradient-to-br from-blue-50 to-white p-6 rounded-lg border border-blue-100">
                     <h3 className="text-xl font-semibold mb-4 text-blue-900">
@@ -1891,25 +1858,15 @@ export function OnboardingWizard() {
                         ))}
                       </div>
                     </div>
-                    
-                    {/* Get Started Button */}
-                    <div className="mt-8 text-center">
-                      <Button
-                        onClick={() => setHasViewedIntro(true)}
-                        className="bg-[#007AFF] hover:bg-[#0066CC] text-white px-8"
-                      >
-                        Let's Get Started <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                            </div>
-                          </div>
+                  </div>
                 </div>
               )}
 
-              {/* Original reward creation content - only show after intro */}
-              {step === 1 && hasViewedIntro && (
+              {/* Step 2: Create Rewards */}
+              {step === 2 && (
                 <div className="space-y-6">
                   {/* Industry Selection - wizardStep 1 */}
-                    {wizardStep === 1 && (
+                  {wizardStep === 1 && (
                     <>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         {/* Café / Coffee Shop */}
@@ -1990,27 +1947,27 @@ export function OnboardingWizard() {
                                 </Button>
                             </div>
                     </>
-                    )}
-                    
+                  )}
+                  
                   {/* Reward Selection - wizardStep 2 */}
-                    {wizardStep === 2 && (
+                  {wizardStep === 2 && (
                     <>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* New customer rewards */}
                         {customerCategoryStep === 'new' && (
                           <>
                             <RewardCard
-                              id="new-welcome-latte"
-                              name="Welcome Latte"
-                              description="Free coffee for first-time customers"
-                              icon={Coffee}
+                              id="new-welcome-discount"
+                              name="Welcome Discount"
+                              description="10% off first purchase"
+                              icon={Percent}
                               conditions={[{ type: 'maximumTransactions', value: 1 }]}
                               limitations={[
                                 { type: 'customerLimit', value: 1 },
-                                { type: 'totalRedemptionLimit', value: 500 }
+                                { type: 'totalRedemptionLimit', value: 300 }
                               ]}
-                              isSelected={wizardSelectedRewards.includes('new-welcome-latte')}
-                              onSelect={() => handleRewardSelection('new-welcome-latte')}
+                              isSelected={wizardSelectedRewards.includes('new-welcome-discount')}
+                              onSelect={() => handleRewardSelection('new-welcome-discount')}
                             />
 
                             {/* Add the new reward here */}
@@ -2240,7 +2197,7 @@ export function OnboardingWizard() {
                   )}
                   
                   {/* Program Selection - wizardStep 3 */}
-                    {wizardStep === 3 && (
+                  {wizardStep === 3 && (
                     <>
                       {/* Single container with dropdown for coffee program */}
                       <div className="mt-4">
@@ -2434,8 +2391,8 @@ export function OnboardingWizard() {
                 </div>
               )}
 
-              {/* Step 2: Set up Points Rules - Changing to Reward Categories */}
-              {step === 2 && (
+              {/* Step 3: Set up Points Rules - Changing to Reward Categories */}
+              {step === 3 && (
                 <div className="mt-4">
                   {/* Here we use PointsRuleCard, not RewardCard */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2499,107 +2456,125 @@ export function OnboardingWizard() {
                         pointsmultiplier={rule.pointsmultiplier}
                         isSelected={selectedPointsRules.includes(rule.id)}
                         onSelect={() => handlePointsRuleToggle(rule.id)}
+                        isPointsRule={true} // Explicitly set to true for points rules
                       />
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Step 3: Create Homepage Banner */}
-              {step === 3 && (
+              {/* Step 4: Create Homepage Banner */}
+              {step === 4 && (
                 <div className="space-y-6">
-                  {/* Moved the "Customize Banner" button above the container */}
-                  <div className="flex justify-end">
-                    {bannerData ? (
-                      <div className="flex items-center gap-2 text-green-600">
-                        <CheckCircle className="h-5 w-5" />
-                        <span className="text-sm font-medium">Selected!</span>
+                  {/* Banner creation card with illustration and prominent CTA */}
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl overflow-hidden border border-blue-100 shadow-sm">
+                    <div className="p-6 md:p-8 flex flex-col md:flex-row items-center gap-10">
+                      {/* Left side: Real BannerPreview component - increased gap and adjusted padding */}
+                      <div className="w-full md:w-2/5 flex justify-start pl-0 md:pl-4">
+                        <div className="relative w-full max-w-xs shadow-lg">
+                          {/* Show either the created banner or the example banner */}
+                          <div className="relative z-0">
+                            {bannerData ? (
+                              <BannerPreview
+                                title={bannerData.title}
+                                description={bannerData.description}
+                                color={bannerData.color}
+                                styleType={bannerData.styleType}
+                                merchantName={fetchedMerchantName || "Your Store"}
+                                forceWhiteText={bannerData.styleType !== BannerStyle.DARK}
+                              />
+                            ) : (
+                              <BannerPreview
+                                title="Welcome to Our Store"
+                                description="Join our loyalty program today and start earning rewards with every purchase!"
+                                color="#3B82F6"
+                                styleType={BannerStyle.LIGHT}
+                                merchantName="Your Store"
+                                forceWhiteText={true}
+                              />
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setShowBannerDialog(true)
-                          // Possibly pre-fill bannerData with a "Promotional Banner" template
-                        }}
-                      >
-                        Create Banner
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* A nicer introduction about creating banners */}
-                  <div className="bg-white p-4 rounded-md border border-gray-200">
-                    <h2 className="text-lg font-medium text-gray-900 mb-2">
-                      Create an Engaging Homepage Banner
-                    </h2>
-                    <p className="text-sm text-gray-600">
-                      Make a memorable first impression by adding a visually appealing banner 
-                      that highlights your loyalty program, seasonal offers, or key promotions. 
-                      This is a great way to capture attention and encourage customers to take action.
-                    </p>
-                  </div>
-
-                  <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                        <Image className="h-6 w-6 text-[#007AFF]" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-medium">Create Homepage Banner</h3>
-                        <p className="text-sm text-gray-500">
-                          Promote your loyalty program with an eye-catching banner
+                      
+                      {/* Right side: Content and CTA - updated description */}
+                      <div className="w-full md:w-3/5 text-center md:text-left">
+                        <div className="flex items-center gap-2 mb-3">
+                          <h2 className="text-2xl font-bold text-gray-900">
+                            Create Your App Homepage Banner
+                          </h2>
+                          <Badge variant="outline" className="text-gray-500 border-gray-300">
+                            Optional
+                          </Badge>
+                        </div>
+                        <p className="text-gray-600 mb-6">
+                          Add a beautiful banner to your loyalty app's home page to highlight 
+                          special offers and increase customer engagement.
                         </p>
+                        
+                        {bannerData ? (
+                          <div className="flex flex-col items-center md:items-start">
+                            <div className="flex items-center gap-2 text-green-600 mb-3">
+                              <CheckCircle className="h-5 w-5" />
+                              <span className="font-medium">Banner created successfully!</span>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button 
+                                variant="outline" 
+                                onClick={() => setShowBannerDialog(true)}
+                                className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                              >
+                                Edit Your Banner
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                onClick={() => {
+                                  setBannerData(null);
+                                  toast({
+                                    title: "Banner removed",
+                                    description: "Your banner has been removed.",
+                                    variant: "default"
+                                  });
+                                }}
+                                className="border-red-200 text-red-600 hover:bg-red-50"
+                              >
+                                Remove Banner
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <Button 
+                            onClick={() => setShowBannerDialog(true)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 rounded-lg text-lg shadow-md transition-all hover:shadow-lg flex items-center gap-2"
+                          >
+                            <Sparkles className="h-5 w-5" />
+                            Design Your Banner
+                          </Button>
+                        )}
                       </div>
                     </div>
                     
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-3 p-3 bg-white rounded-md border border-gray-200">
-                        <Image className="h-5 w-5 text-rose-500" />
-                        <div className="flex-1">
-                          <h4 className="font-medium">Welcome Banner</h4>
-                          <p className="text-sm text-gray-500">Introduce customers to your loyalty program</p>
-                        </div>
-                        {bannerData ? (
-                          <div className="flex items-center gap-2 text-green-600">
-                            <CheckCircle className="h-5 w-5" />
-                            <span className="text-sm font-medium">Selected!</span>
+                    {/* Bottom section with benefits */}
+                    <div className="bg-white border-t border-blue-100 p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                            <Eye className="h-4 w-4 text-blue-600" />
                           </div>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              setShowBannerDialog(true)
-                              // Possibly pre-fill bannerData with a "Welcome Banner" template
-                            }}
-                          >
-                            Customize Banner
-                          </Button>
-                        )}
-                      </div>
-                      
-                      <div className="flex items-center gap-3 p-3 bg-white rounded-md border border-gray-200">
-                        <Image className="h-5 w-5 text-amber-500" />
-                        <div className="flex-1">
-                          <h4 className="font-medium">Promotional Banner</h4>
-                          <p className="text-sm text-gray-500">Highlight special offers or limited-time rewards</p>
+                          <span className="text-sm text-gray-600">Increase app engagement</span>
                         </div>
-                        {bannerData ? (
-                          <div className="flex items-center gap-2 text-green-600">
-                            <CheckCircle className="h-5 w-5" />
-                            <span className="text-sm font-medium">Selected!</span>
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                            <Users className="h-4 w-4 text-green-600" />
                           </div>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              setShowBannerDialog(true)
-                              // Possibly pre-fill bannerData with a "Promotional Banner" template
-                            }}
-                          >
-                            Customize Banner
-                          </Button>
-                        )}
+                          <span className="text-sm text-gray-600">Attract new customers</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
+                            <Gift className="h-4 w-4 text-purple-600" />
+                          </div>
+                          <span className="text-sm text-gray-600">Promote special offers</span>
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -9,6 +9,9 @@ import {
   UserPlus,
   // etc. (any needed icons)
 } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
+import { doc, getDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
 interface BannerPreviewProps {
   title: string
@@ -19,6 +22,7 @@ interface BannerPreviewProps {
   merchantName?: string
   visibilityType?: string
   isActive?: boolean
+  forceWhiteText?: boolean
 }
 
 // Helper function to darken a color (same as in create-banner-dialog)
@@ -117,22 +121,38 @@ function getColorHex(colorName: string | undefined): string {
 export function BannerPreview({
   title,
   description,
-  buttonText,
   color,
   styleType,
   merchantName,
   visibilityType,
   isActive,
+  forceWhiteText,
 }: {
   title?: string
   description?: string
-  buttonText?: string
   color?: string
   styleType: BannerStyle
   merchantName?: string
   visibilityType?: BannerVisibility
   isActive?: boolean
+  forceWhiteText?: boolean
 }) {
+  const { user } = useAuth()
+  const [fetchedMerchantName, setFetchedMerchantName] = React.useState<string>("")
+
+  React.useEffect(() => {
+    async function fetchMerchantName() {
+      if (user?.uid) {
+        const merchantRef = doc(db, "merchants", user.uid)
+        const docSnap = await getDoc(merchantRef)
+        if (docSnap.exists()) {
+          setFetchedMerchantName(docSnap.data().merchantName)
+        }
+      }
+    }
+    fetchMerchantName()
+  }, [user])
+
   const Icon = getIcon(styleType)
   const colorHex = getColorHex(color)
 
@@ -165,18 +185,16 @@ export function BannerPreview({
   }
 
   function getButtonColor() {
-    if (styleType === BannerStyle.DARK) {
-      return "underline decoration-white"
-    }
-    return "underline decoration-black"
+    // Always return white text styling regardless of banner style
+    return "text-white underline decoration-white"
   }
 
   return (
     <div 
       className="w-full rounded-md overflow-hidden shadow-sm"
       style={{
-        backgroundColor: styleType === BannerStyle.LIGHT ? 'white' : color,
-        color: styleType === BannerStyle.LIGHT ? 'black' : 'white',
+        background: getBackground(),
+        color: forceWhiteText ? "white" : (styleType === BannerStyle.DARK ? "white" : "black"),
         minWidth: '350px',
         maxWidth: '800px',
         margin: '0 auto',
@@ -186,31 +204,29 @@ export function BannerPreview({
         <div className="flex">
           <div className="flex-1 z-10">
             <div className="text-xs font-medium px-2 py-1 rounded-md bg-black/10 inline-block mb-1">
-              {merchantName || "MerchantName"}
+              {fetchedMerchantName || "MerchantName"}
             </div>
             <h3 className="text-lg font-bold mb-1">
               {title || "Banner Title"}
             </h3>
             <p
               className={`text-sm ${
-                styleType === BannerStyle.DARK ? "text-gray-100" : "text-gray-600"
+                forceWhiteText ? "text-white" : (styleType === BannerStyle.DARK ? "text-gray-100" : "text-gray-600")
               }`}
             >
               {description || "Banner description text will appear here."}
             </p>
-            {buttonText && (
-              <button
-                className={`mt-2 text-sm font-medium ${getButtonColor()}`}
-                style={{
-                  color: styleType === BannerStyle.DARK ? "white" : color || "black",
-                }}
-              >
-                {buttonText} →
-              </button>
-            )}
+            <button
+              className={`mt-2 text-sm font-medium ${getButtonColor()}`}
+              style={{
+                color: forceWhiteText ? "white" : (styleType === BannerStyle.DARK ? "white" : color || "black"),
+              }}
+            >
+              Learn more →
+            </button>
           </div>
           <div className="absolute top-0 right-0 opacity-20">
-            <Icon size={100} color={styleType === BannerStyle.DARK ? "white" : color || "#333"} />
+            <Icon size={100} color={forceWhiteText ? "white" : (styleType === BannerStyle.DARK ? "white" : color || "#333")} />
           </div>
         </div>
         {visibilityType === BannerVisibility.NEW && (

@@ -392,11 +392,11 @@ export function CreateBannerDialog({
   
   // State for form fields
   const [activeTab, setActiveTab] = useState('design')
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [buttonText, setButtonText] = useState('')
-  const [color, setColor] = useState('#007AFF')
-  const [style, setStyle] = useState(BannerStyle.DARK)
+  const [title, setTitle] = useState(initialBannerData?.title || '')
+  const [description, setDescription] = useState(initialBannerData?.description || '')
+  const [buttonText, setButtonText] = useState(initialBannerData?.buttonText || '')
+  const [color, setColor] = useState(initialBannerData?.color || '#007AFF')
+  const [style, setStyle] = useState(initialBannerData?.styleType || BannerStyle.LIGHT)
   const [bannerAction, setBannerAction] = useState(BannerAction.STORE_REDIRECT)
   const [visibilityType, setVisibilityType] = useState(BannerVisibility.ALL)
   const [isActive, setIsActive] = useState(true)

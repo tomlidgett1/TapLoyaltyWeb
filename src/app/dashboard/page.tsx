@@ -588,16 +588,27 @@ export default function DashboardPage() {
                   <h2 className="text-lg font-medium">Banners</h2>
                   <p className="text-sm text-gray-500">Your active and scheduled banners</p>
                 </div>
-                <Button 
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-2"
-                  asChild
-                >
-                  <Link href="/store/banner">
-                    Manage banners
-                  </Link>
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-2"
+                    onClick={() => router.push('/store/banner?tab=scheduled')}
+                  >
+                    <Clock className="h-4 w-4" />
+                    View Schedule
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-2"
+                    asChild
+                  >
+                    <Link href="/store/banner">
+                      Manage banners
+                    </Link>
+                  </Button>
+                </div>
               </div>
               
               <div className="grid grid-cols-2 gap-6">

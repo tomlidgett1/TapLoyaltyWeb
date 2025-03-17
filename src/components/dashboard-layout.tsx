@@ -2,7 +2,7 @@
 
 import { SideNav } from "@/components/side-nav"
 import { usePathname } from "next/navigation"
-import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift } from "lucide-react"
+import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useState, useEffect } from "react"
@@ -17,8 +17,12 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
-import { TapAiButtonStandalone } from "@/components/tap-ai-button-standalone"
+import { TapAiButton } from "@/components/tap-ai-button"
 import Link from "next/link"
+import { CreateBannerDialog } from "@/components/create-banner-dialog"
+import { CreateRewardDialog } from "@/components/create-reward-dialog"
+import { SendBroadcastDialog } from "@/components/send-broadcast-dialog"
+import { CreatePointsRuleDialog } from "@/components/create-points-rule-dialog"
 
 interface Notification {
   id: string
@@ -62,6 +66,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   
   // Add state for onboarding detection
   const [isOnboarding, setIsOnboarding] = useState(false)
+  
+  // Add state for each dialog
+  const [showBannerDialog, setShowBannerDialog] = useState(false)
+  const [showRewardDialog, setShowRewardDialog] = useState(false)
+  const [showBroadcastDialog, setShowBroadcastDialog] = useState(false)
+  const [showPointsRuleDialog, setShowPointsRuleDialog] = useState(false)
   
   useEffect(() => {
     // Check if current path is onboarding
@@ -278,12 +288,37 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         {/* Top Header */}
         <header className="h-16 border-b border-gray-100 flex items-center justify-between px-6">
           <div className="flex items-center gap-4">
-            <TapAiButtonStandalone 
-              variant="default"
-              size="sm"
-              className="h-9 gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white"
-              initialPrompt="How can I help you today?"
-            />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="default"
+                  size="sm"
+                  className="h-9 gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  Create
+                  <ChevronDown className="h-4 w-4 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuItem onClick={() => setShowRewardDialog(true)}>
+                  <Gift className="h-4 w-4 mr-2" />
+                  New Reward
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowBannerDialog(true)}>
+                  <Image className="h-4 w-4 mr-2" />
+                  New Banner
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowBroadcastDialog(true)}>
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  New Message
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowPointsRuleDialog(true)}>
+                  <Zap className="h-4 w-4 mr-2" />
+                  New Points Rule
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           
           <div className="flex items-center gap-4">
@@ -312,17 +347,26 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
             
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="h-9 gap-2"
-              asChild
-            >
-              <Link href="/docs">
-                <FileText className="h-4 w-4" />
-                Docs
-              </Link>
-            </Button>
+            <div className="flex items-center gap-2">
+              <TapAiButton
+                variant="default"
+                size="sm"
+                className="h-9 gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white"
+                initialPrompt="How can I help you today?"
+              />
+
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-9 gap-2"
+                asChild
+              >
+                <Link href="/docs">
+                  <FileText className="h-4 w-4" />
+                  Docs
+                </Link>
+              </Button>
+            </div>
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -404,6 +448,24 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+
+      {/* Add the dialogs */}
+      <CreateBannerDialog 
+        open={showBannerDialog} 
+        onOpenChange={setShowBannerDialog}
+      />
+      <CreateRewardDialog 
+        open={showRewardDialog} 
+        onOpenChange={setShowRewardDialog}
+      />
+      <SendBroadcastDialog 
+        open={showBroadcastDialog} 
+        onOpenChange={setShowBroadcastDialog}
+      />
+      <CreatePointsRuleDialog 
+        open={showPointsRuleDialog} 
+        onOpenChange={setShowPointsRuleDialog}
+      />
     </div>
   )
 } 

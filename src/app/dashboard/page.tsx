@@ -30,7 +30,7 @@ import { format, formatDistanceToNow } from "date-fns"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, where } from "firebase/firestore"
+import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, where, Timestamp } from "firebase/firestore"
 import { toast } from "@/components/ui/use-toast"
 import { TapAiButton } from "@/components/tap-ai-button"
 import { PageTransition } from "@/components/page-transition"
@@ -51,126 +51,147 @@ export default function DashboardPage() {
 
   const getDateRange = (tf: TimeframeType): { start: Date; end: Date } => {
     const now = new Date()
+    const end = new Date(now) // Create a copy of now for end date
+    
     switch (tf) {
       case "today":
-        return {
-          start: new Date(now.setHours(0, 0, 0, 0)),
-          end: new Date()
-        }
+        const start = new Date(now)
+        start.setHours(0, 0, 0, 0)
+        return { start, end }
+        
       case "yesterday":
-        const yesterday = new Date(now)
-        yesterday.setDate(yesterday.getDate() - 1)
-        return {
-          start: new Date(yesterday.setHours(0, 0, 0, 0)),
-          end: new Date(yesterday.setHours(23, 59, 59, 999))
-        }
+        const yesterdayStart = new Date(now)
+        yesterdayStart.setDate(yesterdayStart.getDate() - 1)
+        yesterdayStart.setHours(0, 0, 0, 0)
+        
+        const yesterdayEnd = new Date(yesterdayStart)
+        yesterdayEnd.setHours(23, 59, 59, 999)
+        
+        return { start: yesterdayStart, end: yesterdayEnd }
+        
       case "7days":
-        const sevenDaysAgo = new Date(now)
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-        return {
-          start: new Date(sevenDaysAgo.setHours(0, 0, 0, 0)),
-          end: new Date()
-        }
+        const weekStart = new Date(now)
+        weekStart.setDate(weekStart.getDate() - 7)
+        weekStart.setHours(0, 0, 0, 0)
+        return { start: weekStart, end }
+        
       case "30days":
-        const thirtyDaysAgo = new Date(now)
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-        return {
-          start: new Date(thirtyDaysAgo.setHours(0, 0, 0, 0)),
-          end: new Date()
-        }
-    }
-    // Default to today
-    return {
-      start: new Date(now.setHours(0, 0, 0, 0)),
-      end: new Date()
+        const monthStart = new Date(now)
+        monthStart.setDate(monthStart.getDate() - 30)
+        monthStart.setHours(0, 0, 0, 0)
+        return { start: monthStart, end }
+        
+      default:
+        // Default to today
+        const defaultStart = new Date(now)
+        defaultStart.setHours(0, 0, 0, 0)
+        return { start: defaultStart, end }
     }
   }
 
   useEffect(() => {
-    // Fetch recent activity data
     const fetchRecentActivity = async () => {
       if (!user?.uid) return
       
       try {
         setLoading(true)
-        const { start, end } = getDateRange(timeframe)
         
-        const activityQuery = query(
-          collection(db, 'merchants', user.uid, 'activity'),
-          where('timestamp', '>=', start),
-          where('timestamp', '<=', end),
-          orderBy('timestamp', 'desc'),
-          limit(10)
+        // Fetch most recent transactions
+        const transactionsRef = collection(db, 'merchants', user.uid, 'transactions')
+        const transactionsQuery = query(
+          transactionsRef,
+          orderBy('createdAt', 'desc'),
+          limit(5)
         )
         
-        // Get the activity documents
-        const activitySnapshot = await getDocs(activityQuery)
+        // Fetch most recent redemptions from merchant's redemptions collection
+        const redemptionsRef = collection(db, 'merchants', user.uid, 'redemptions')
+        const redemptionsQuery = query(
+          redemptionsRef,
+          orderBy('redemptionDate', 'desc'),
+          limit(5)
+        )
         
-        // Map the documents to our activity format - match exactly with store/activity
-        const activityData = activitySnapshot.docs.map(doc => {
+        // Get both transactions and redemptions
+        const [transactionsSnapshot, redemptionsSnapshot] = await Promise.all([
+          getDocs(transactionsQuery),
+          getDocs(redemptionsQuery)
+        ])
+        
+        // Get unique customer IDs from both transactions and redemptions
+        const customerIds = new Set([
+          ...transactionsSnapshot.docs.map(doc => doc.data().customerId),
+          ...redemptionsSnapshot.docs.map(doc => doc.data().customerId)
+        ])
+        
+        // Fetch customer data for each unique customer ID
+        const customerData: Record<string, { name: string, profilePicture?: string }> = {}
+        await Promise.all(
+          Array.from(customerIds).map(async (customerId) => {
+            if (customerId) {
+              // Change to top-level customers collection
+              const customerDoc = await getDoc(doc(db, 'customers', customerId))
+              console.log('Raw customer data:', customerDoc.data())
+              if (customerDoc.exists()) {
+                const data = customerDoc.data()
+                customerData[customerId] = {
+                  name: data.fullName || 'Unknown Customer',
+                  // Use the correct field from customers collection
+                  profilePicture: data.profilePictureUrl || null
+                }
+                console.log('Processed customer:', customerId, customerData[customerId])
+              }
+            }
+          })
+        )
+        
+        // Convert transactions to activity format
+        const transactionActivity = transactionsSnapshot.docs.map(doc => {
           const data = doc.data()
           return {
             id: doc.id,
-            type: data.type || 'unknown',
+            type: "transaction",
+            displayName: data.type || "purchase",
             customer: {
-              id: data.customerId || 'unknown',
-              name: data.customerName || 'Anonymous Customer',
-              email: data.customerEmail || '',
-              phone: data.customerPhone || ''
+              id: data.customerId,
+              name: customerData[data.customerId]?.name || "Unknown Customer",
+              profilePicture: customerData[data.customerId]?.profilePicture
             },
-            timestamp: data.timestamp?.toDate() || new Date(),
-            details: data.details || '',
+            timestamp: data.createdAt?.toDate() || new Date(),
             amount: data.amount || 0,
-            points: data.points || 0,
-            rewardId: data.rewardId || null,
-            rewardName: data.rewardName || null,
-            transactionId: data.transactionId || null,
-            source: data.source || 'manual'
+            status: data.status || "completed"
           }
         })
         
-        console.log('Fetched activity data:', activityData)
-        
-        // Add fallback data
-        const fallbackActivity = [
-          {
-            id: "sample1",
-            type: "purchase",
-            customer: {
-              id: "sample-cust-1",
-              name: "Sarah Johnson",
-              email: "sarah@example.com"
-            },
-            timestamp: new Date(Date.now() - 1000 * 60 * 30),
-            details: "Purchased 3 items",
-            amount: 24.99,
-            points: 25,
-            source: "sample"
-          },
-          {
-            id: "sample2",
+        // Convert redemptions to activity format
+        const redemptionActivity = redemptionsSnapshot.docs.map(doc => {
+          const data = doc.data()
+          return {
+            id: doc.id,
             type: "redemption",
+            displayName: data.rewardName || "Unknown Reward",
             customer: {
-              id: "sample-cust-2",
-              name: "Michael Chen",
-              email: "michael@example.com"
+              id: data.customerId,
+              name: customerData[data.customerId]?.name || "Unknown Customer",
+              profilePicture: customerData[data.customerId]?.profilePicture
             },
-            timestamp: new Date(Date.now() - 1000 * 60 * 120),
-            details: "Redeemed Free Coffee reward",
-            points: 100,
-            rewardId: "sample-reward-1",
-            rewardName: "Free Coffee",
-            source: "sample"
+            timestamp: data.redemptionDate?.toDate() || new Date(),
+            points: data.pointsUsed || 0,
+            status: data.status || "completed"
           }
-        ]
+        })
         
-        // In the useEffect, if no data is returned, use the fallback
-        if (activityData.length === 0 && process.env.NODE_ENV === 'development') {
-          console.log('No activity data found, using fallback data')
-          setRecentActivity(fallbackActivity)
-        } else {
-          setRecentActivity(activityData)
-        }
+        // Combine and sort by timestamp
+        const combinedActivity = [...transactionActivity, ...redemptionActivity]
+          .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+          .slice(0, 5) // Keep only the 5 most recent activities
+        
+        console.log('Transaction activity with customer data:', transactionActivity)
+        console.log('Redemption activity with customer data:', redemptionActivity)
+        console.log('Final combined activity:', combinedActivity)
+        
+        setRecentActivity(combinedActivity)
+        
       } catch (error) {
         console.error('Error fetching recent activity:', error)
         toast({
@@ -183,11 +204,12 @@ export default function DashboardPage() {
       }
     }
     
-    fetchRecentActivity()
-  }, [user, timeframe])
+    if (user?.uid) {
+      fetchRecentActivity()
+    }
+  }, [user?.uid])
 
   useEffect(() => {
-    // Fetch rewards data and sort by redemption count
     const fetchPopularRewards = async () => {
       if (!user?.uid) return
       
@@ -271,8 +293,10 @@ export default function DashboardPage() {
       }
     }
     
-    fetchPopularRewards()
-  }, [user, timeframe])
+    if (user?.uid) {
+      fetchPopularRewards()
+    }
+  }, [user?.uid, timeframe])
 
   useEffect(() => {
     const fetchBanners = async () => {
@@ -334,8 +358,10 @@ export default function DashboardPage() {
       }
     }
     
-    fetchBanners()
-  }, [user])
+    if (user?.uid) {
+      fetchBanners()
+    }
+  }, [user?.uid])
 
   // Format date for display
   const formatDate = (date: Date) => {
@@ -453,7 +479,7 @@ export default function DashboardPage() {
           
           {/* Recent Activity and Popular Rewards - Side by side */}
           <div className="grid grid-cols-2 gap-6">
-            {/* Recent Activity */}
+            {/* Recent Activity - New Design */}
             <Card className="rounded-lg border border-gray-200">
               <CardHeader className="py-4 px-6 bg-gray-50 border-b border-gray-100">
                 <div className="flex justify-between items-center">
@@ -476,27 +502,106 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent className="p-0">
                 <div className="divide-y divide-gray-100">
-                  {recentActivity.map((activity) => (
-                    <div key={activity.id} className="p-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className="flex-1">
-                          <p className="font-medium text-sm">{activity.customer.name}</p>
-                          <p className="text-sm text-gray-500">{activity.details}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm text-gray-500">{formatTimeAgo(activity.timestamp)}</p>
-                          {activity.points && (
-                            <p className={cn(
-                              "text-sm font-medium",
-                              activity.type === "redemption" ? "text-gray-600" : "text-blue-600"
-                            )}>
-                              {activity.type === "redemption" ? "-" : "+"}{activity.points} points
-                            </p>
-                          )}
-                        </div>
+                  {loading ? (
+                    <div className="p-4 text-center">
+                      <div className="flex justify-center">
+                        <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
                       </div>
                     </div>
-                  ))}
+                  ) : recentActivity.length === 0 ? (
+                    <div className="p-4 text-center">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                          <Zap className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                        <h3 className="mt-2 text-sm font-medium">No recent activity</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Activity will appear here as customers interact
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-100">
+                      {recentActivity.map((activity) => (
+                        <div key={activity.id} className="px-4 py-3 hover:bg-gray-50/50 transition-colors">
+                          <div className="flex items-start gap-3">
+                            {/* Left side - Customer Avatar - Smaller */}
+                            <div className="flex-shrink-0">
+                              <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
+                                {activity.customer?.profilePicture ? (
+                                  <img 
+                                    src={activity.customer.profilePicture} 
+                                    alt={activity.customer.name}
+                                    className="h-full w-full object-cover"
+                                    onError={() => {
+                                      setRecentActivity(prev => 
+                                        prev.map(act => 
+                                          act.id === activity.id 
+                                            ? {
+                                                ...act,
+                                                customer: {
+                                                  ...act.customer,
+                                                  profilePicture: null
+                                                }
+                                              }
+                                            : act
+                                        )
+                                      )
+                                    }}
+                                  />
+                                ) : (
+                                  <Users className="h-4 w-4 text-gray-400" />
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Right side - Activity Details - More Compact */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-sm text-gray-900">{activity.customer.name}</p>
+                                  <span className="text-gray-300">•</span>
+                                  <span className="text-xs text-gray-500">{formatTimeAgo(activity.timestamp)}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  {activity.type === "transaction" ? (
+                                    <div className="px-2 py-0.5 rounded-md bg-green-50 text-green-700 text-xs font-medium">
+                                      ${activity.amount}
+                                    </div>
+                                  ) : (
+                                    <div className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 text-xs font-medium">
+                                      {activity.points} points
+                                    </div>
+                                  )}
+                                  <Badge variant="outline" className={cn(
+                                    "rounded-md px-2 py-0.5 text-xs",
+                                    activity.status?.toLowerCase() === "completed" && "bg-green-50 text-green-700 border-green-200",
+                                    activity.status?.toLowerCase() === "pending" && "bg-amber-50 text-amber-700 border-amber-200",
+                                    activity.status?.toLowerCase() === "failed" && "bg-red-50 text-red-700 border-red-200"
+                                  )}>
+                                    {activity.status}
+                                  </Badge>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                {activity.type === "transaction" ? (
+                                  <div className="flex items-center gap-1 text-xs text-gray-500">
+                                    <ShoppingCart className="h-3 w-3" />
+                                    <span>Made a purchase</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1 text-xs text-gray-500">
+                                    <Gift className="h-3 w-3" />
+                                    <span>Redeemed {activity.displayName}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -562,10 +667,10 @@ export default function DashboardPage() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
-                                <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-50">
+                                <Badge variant="outline" className="rounded-md px-2 py-0.5 text-xs bg-blue-50 text-blue-700 border-blue-200">
                                   {reward.redemptionCount} redeemed
                                 </Badge>
-                                <Badge variant="outline" className="bg-gray-50 text-gray-600 hover:bg-gray-50">
+                                <Badge variant="outline" className="rounded-md px-2 py-0.5 text-xs bg-gray-50 text-gray-600 border-gray-200">
                                   {reward.impressions} views
                                 </Badge>
                               </div>

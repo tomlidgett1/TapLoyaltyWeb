@@ -47,6 +47,7 @@ export default function DashboardPage() {
   const [recentActivity, setRecentActivity] = useState<any[]>([])
   const [popularRewards, setPopularRewards] = useState<any[]>([])
   const [activeBanners, setActiveBanners] = useState<any[]>([])
+  const [scheduledBanners, setScheduledBanners] = useState<any[]>([])
 
   const getDateRange = (tf: TimeframeType): { start: Date; end: Date } => {
     const now = new Date()
@@ -274,32 +275,33 @@ export default function DashboardPage() {
   }, [user, timeframe])
 
   useEffect(() => {
-    const fetchActiveBanners = async () => {
+    const fetchBanners = async () => {
       if (!user?.uid) return
       
       try {
-        const bannersQuery = query(
+        // Fetch active banners
+        const activeBannersQuery = query(
           collection(db, 'merchants', user.uid, 'banners'),
           where('isActive', '==', true),
           orderBy('createdAt', 'desc')
         )
         
-        const bannersSnapshot = await getDocs(bannersQuery)
+        // Fetch scheduled banners
+        const scheduledBannersQuery = query(
+          collection(db, 'merchants', user.uid, 'banners'),
+          where('scheduled', '==', true),
+          where('isActive', '==', false),
+          orderBy('createdAt', 'desc')
+        )
         
-        // Map the data more explicitly to ensure we have all required fields
-        const bannersData = bannersSnapshot.docs.map(doc => {
+        const [activeBannersSnapshot, scheduledBannersSnapshot] = await Promise.all([
+          getDocs(activeBannersQuery),
+          getDocs(scheduledBannersQuery)
+        ])
+        
+        // Process banners with the same mapping function
+        const processBannerData = (doc: any) => {
           const data = doc.data()
-          
-          // Helper function to safely convert Firestore timestamp
-          const getDate = (timestamp: any) => {
-            if (!timestamp) return new Date()
-            if (timestamp.toDate && typeof timestamp.toDate === 'function') {
-              return timestamp.toDate()
-            }
-            if (timestamp instanceof Date) return timestamp
-            return new Date(timestamp)
-          }
-
           return {
             id: doc.id,
             title: data.title || '',
@@ -313,27 +315,25 @@ export default function DashboardPage() {
                        BannerStyle.LIGHT,
             merchantName: data.merchantName ?? "My Store",
             visibilityType: BannerVisibility.ALL,
-            isActive: true,
-            impressions: data.impressions || 0,
-            updatedAt: getDate(data.updatedAt)
+            isActive: data.isActive,
+            impressions: data.impressions || 0
           }
-        })
+        }
+
+        setActiveBanners(activeBannersSnapshot.docs.map(processBannerData))
+        setScheduledBanners(scheduledBannersSnapshot.docs.map(processBannerData))
         
-        // Debug final banners array
-        console.log('Final banners array:', bannersData)
-        
-        setActiveBanners(bannersData)
       } catch (error) {
-        console.error('Error fetching active banners:', error)
+        console.error('Error fetching banners:', error)
         toast({
           title: "Error",
-          description: "Failed to load active banners. Please refresh the page.",
+          description: "Failed to load banners. Please refresh the page.",
           variant: "destructive"
         })
       }
     }
     
-    fetchActiveBanners()
+    fetchBanners()
   }, [user])
 
   // Format date for display
@@ -566,13 +566,13 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          {/* Live Banners Section */}
-          {activeBanners.length > 0 && (
+          {/* Live and Scheduled Banners Section */}
+          {(activeBanners.length > 0 || scheduledBanners.length > 0) && (
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <div>
-                  <h2 className="text-lg font-medium">Live Banners</h2>
-                  <p className="text-sm text-gray-500">Currently active banners in your store</p>
+                  <h2 className="text-lg font-medium">Banners</h2>
+                  <p className="text-sm text-gray-500">Your active and scheduled banners</p>
                 </div>
                 <Button 
                   variant="outline"
@@ -587,11 +587,10 @@ export default function DashboardPage() {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Live Banners First */}
                 {activeBanners.map((banner) => (
                   <div key={banner.id} className="flex flex-col bg-gray-50 rounded-lg overflow-hidden">
-                    {/* Banner Preview with status badges */}
                     <div className="relative">
-                      {/* Status Badges */}
                       <div className="absolute top-2 right-2 z-10 flex gap-2">
                         <div className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full flex items-center">
                           <Eye className="h-3 w-3 mr-1" />
@@ -603,22 +602,30 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       
-                      {/* Banner preview */}
                       <div className="rounded-lg overflow-hidden shadow-sm">
-                        <BannerPreview
-                          title={banner.title}
-                          description={banner.description}
-                          color={banner.color}
-                          styleType={
-                            banner.style === "light" ? BannerStyle.LIGHT :
-                            banner.style === "glass" ? BannerStyle.GLASS :
-                            banner.style === "dark" ? BannerStyle.DARK :
-                            BannerStyle.LIGHT
-                          }
-                          merchantName={banner.merchantName}
-                          visibilityType={BannerVisibility.ALL}
-                          isActive={banner.isActive}
-                        />
+                        <BannerPreview {...banner} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Then Scheduled Banners */}
+                {scheduledBanners.map((banner) => (
+                  <div key={banner.id} className="flex flex-col bg-gray-50 rounded-lg overflow-hidden">
+                    <div className="relative">
+                      <div className="absolute top-2 right-2 z-10 flex gap-2">
+                        <div className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center">
+                          <Clock className="h-3 w-3 mr-1" />
+                          Scheduled
+                        </div>
+                        <div className="bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full flex items-center">
+                          <Eye className="h-3 w-3 mr-1" />
+                          {banner.impressions || 0} views
+                        </div>
+                      </div>
+                      
+                      <div className="rounded-lg overflow-hidden shadow-sm">
+                        <BannerPreview {...banner} />
                       </div>
                     </div>
                   </div>

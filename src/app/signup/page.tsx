@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth"
+import { createUserWithEmailAndPassword, updateProfile, getAuth, fetchSignInMethodsForEmail } from "firebase/auth"
 import { doc, setDoc, GeoPoint } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { auth, db, storage } from "@/lib/firebase"
@@ -18,6 +18,8 @@ import Image from "next/image"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { collection, query, where, getDocs } from "firebase/firestore"
+import Script from "next/script"
 
 // Business types matching iOS app
 const businessTypes = [
@@ -110,7 +112,6 @@ export default function SignupPage() {
   
   // Step 6: Business Verification & Systems
   const [abn, setAbn] = useState("")
-  const [abnVerificationFile, setAbnVerificationFile] = useState<File | null>(null)
   const [pointOfSale, setPointOfSale] = useState("lightspeed")
   const [paymentProvider, setPaymentProvider] = useState("square")
   
@@ -126,7 +127,7 @@ export default function SignupPage() {
   
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
-      setAbnVerificationFile(e.target.files[0])
+      setLogoFile(e.target.files[0])
     }
   }
   
@@ -149,7 +150,7 @@ export default function SignupPage() {
         if (businessEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(businessEmail)) errors.push("Invalid business email format")
         break
         
-      case 3: // Address
+      case 3:
         if (!street) errors.push("Street address is required")
         if (!suburb) errors.push("Suburb is required")
         if (!state) errors.push("State is required")
@@ -178,7 +179,6 @@ export default function SignupPage() {
       case 6: // ABN & Verification
         if (!abn) errors.push("ABN is required")
         if (abn && (abn.length !== 11 || !/^\d+$/.test(abn))) errors.push("ABN must be 11 digits")
-        if (!abnVerificationFile) errors.push("ABN verification document is required")
         break
     }
     
@@ -186,9 +186,63 @@ export default function SignupPage() {
     return errors.length === 0
   }
   
-  const nextStep = () => {
-    if (validateCurrentStep()) {
-      setCurrentStep(prev => Math.min(prev + 1, totalSteps))
+  const nextStep = async () => {
+    if (!validateCurrentStep()) return;
+    
+    // For step 1, check if email already exists
+    if (currentStep === 1) {
+      setLoading(true);
+      try {
+        console.log("Checking if email exists:", email);
+        
+        // First check with Firebase Auth
+        const signInMethods = await fetchSignInMethodsForEmail(auth, email);
+        console.log("Sign-in methods found:", signInMethods);
+        
+        // If there are sign-in methods available, the email is already in use
+        if (signInMethods.length > 0) {
+          console.log("Email already exists in Auth, showing error");
+          setValidationErrors(["This email is already registered. Please use a different email or login."]);
+          setLoading(false);
+          return;
+        }
+        
+        // Also check in Firestore merchants collection for primaryemail field
+        console.log("Checking Firestore for email...");
+        const merchantsRef = collection(db, "merchants");
+        const q = query(merchantsRef, where("primaryemail", "==", email));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          console.log("Email found in Firestore merchants collection");
+          setValidationErrors(["This email is already registered. Please use a different email or login."]);
+          setLoading(false);
+          return;
+        }
+        
+        // Also check for businessEmail field
+        const businessEmailQuery = query(merchantsRef, where("businessEmail", "==", email));
+        const businessEmailSnapshot = await getDocs(businessEmailQuery);
+        
+        if (!businessEmailSnapshot.empty) {
+          console.log("Email found as business email in Firestore");
+          setValidationErrors(["This email is already registered. Please use a different email or login."]);
+          setLoading(false);
+          return;
+        }
+        
+        console.log("Email is available, proceeding to next step");
+        // Email is available, proceed to next step
+        setCurrentStep(prev => Math.min(prev + 1, totalSteps));
+      } catch (error) {
+        console.error("Error checking email:", error);
+        setValidationErrors(["An error occurred while checking email availability. Please try again."]);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // For other steps, just proceed normally
+      setCurrentStep(prev => Math.min(prev + 1, totalSteps));
     }
   }
   
@@ -196,36 +250,42 @@ export default function SignupPage() {
     setCurrentStep(prev => Math.max(prev - 1, 1))
   }
   
-  const uploadABNVerification = async (userId) => {
-    if (!abnVerificationFile) return null
-    
-    const filename = `${userId}/verification/abn_${abnVerificationFile.name}`
-    const storageRef = ref(storage, filename)
-    
-    try {
-      const snapshot = await uploadBytes(storageRef, abnVerificationFile)
-      const downloadURL = await getDownloadURL(snapshot.ref)
-      return downloadURL
-    } catch (error) {
-      console.error("Error uploading document:", error)
-      return null
-    }
-  }
-  
   const uploadLogo = async (userId) => {
-    if (!logoFile) return null
+    console.log("Starting logo upload for user:", userId);
     
-    const filename = `${userId}/logo/${logoFile.name}`
-    const storageRef = ref(storage, filename)
+    if (!logoFile) {
+      console.warn("No logo file selected");
+      return null;
+    }
+    
+    console.log("Logo file details:", {
+      name: logoFile.name,
+      type: logoFile.type,
+      size: `${(logoFile.size / 1024).toFixed(2)} KB`
+    });
+    
+    const filename = `${userId}/logo/${logoFile.name}`;
+    console.log("Target storage path:", filename);
     
     try {
-      const snapshot = await uploadBytes(storageRef, logoFile)
-      const downloadURL = await getDownloadURL(snapshot.ref)
-      return downloadURL
+      console.log("Creating storage reference...");
+      const storageRef = ref(storage, filename);
+      console.log("Storage reference created:", storageRef);
+      
+      console.log("Starting file upload...");
+      const snapshot = await uploadBytes(storageRef, logoFile);
+      console.log("Upload completed:", snapshot);
+      
+      console.log("Getting download URL...");
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      console.log("Download URL obtained:", downloadURL);
+      
+      return downloadURL;
     } catch (error) {
-      console.error("Error uploading logo:", error)
+      console.error("Error uploading logo:", error);
+      console.error("Error details:", JSON.stringify(error, null, 2));
       // Return the path instead of null, so we at least have the reference
-      return `${userId}/logo/${logoFile.name}`
+      return `${userId}/logo/${logoFile.name}`;
     }
   }
   
@@ -237,26 +297,39 @@ export default function SignupPage() {
     setLoading(true)
     
     try {
+      console.log("Starting account creation process...");
+      console.log("Form data:", { 
+        email, 
+        password: "********", // Don't log actual password
+        legalBusinessName,
+        tradingName,
+        businessType
+      });
+      
       // Create user account
+      console.log("Attempting to create user with Firebase Auth...");
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         email,
         password
       )
       
+      console.log("User created successfully:", userCredential.user.uid);
       const user = userCredential.user
       const userId = user.uid
       
       // Update profile with business name
+      console.log("Updating user profile...");
       await updateProfile(user, {
         displayName: tradingName
       })
       
-      // Try to upload logo if provided
-      let logoURL = ""
-      if (logoFile) {
-        logoURL = await uploadLogo(userId) || `${userId}/logo/${logoFile.name}`
-      }
+      console.log("User created successfully, starting file uploads...");
+
+      // Upload logo if provided
+      console.log("Uploading logo...");
+      const logoURL = await uploadLogo(userId);
+      console.log("Logo upload result:", logoURL);
       
       // Format the display address
       const displayAddress = [street, suburb]
@@ -319,21 +392,20 @@ export default function SignupPage() {
         router.push("/dashboard")
       }, 1500)
       
-    } catch (error: any) {
-      console.error("Error creating account:", error)
-      
-      let errorMessage = "Failed to create account. Please try again."
-      
-      if (error.code === "auth/email-already-in-use") {
-        errorMessage = "This email is already registered. Please use a different email or login."
+    } catch (error) {
+      console.error("Error creating account:", error);
+      // More detailed error logging
+      if (error.code) {
+        console.error("Error code:", error.code);
       }
       
+      // Show error to user
       toast({
-        title: "Error",
-        description: errorMessage,
+        title: "Account creation failed",
+        description: error.message || "There was an error creating your account. Please try again.",
         variant: "destructive"
-      })
-      
+      });
+    } finally {
       setLoading(false)
     }
   }
@@ -577,7 +649,14 @@ export default function SignupPage() {
                 id="repPhone"
                 placeholder="Phone number"
                 value={repPhone}
-                onChange={(e) => setRepPhone(e.target.value)}
+                onChange={(e) => {
+                  // Only allow numeric input
+                  const numericValue = e.target.value.replace(/\D/g, '');
+                  setRepPhone(numericValue);
+                }}
+                type="tel"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 required
               />
             </div>
@@ -610,36 +689,7 @@ export default function SignupPage() {
               />
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="abnVerification">ABN Verification Document</Label>
-              <div className="border rounded-md p-4 bg-gray-50">
-                <div className="flex items-center justify-center w-full">
-                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-white hover:bg-gray-50">
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                      <Upload className="w-8 h-8 mb-2 text-gray-500" />
-                      <p className="mb-2 text-sm text-gray-500">
-                        <span className="font-semibold">Click to upload</span> or drag and drop
-                      </p>
-                      <p className="text-xs text-gray-500">PDF, PNG, JPG (MAX. 10MB)</p>
-                    </div>
-                    <input 
-                      id="abnVerification" 
-                      type="file" 
-                      className="hidden" 
-                      onChange={handleFileChange}
-                      accept=".pdf,.png,.jpg,.jpeg"
-                    />
-                  </label>
-                </div>
-                {abnVerificationFile && (
-                  <p className="mt-2 text-sm text-green-600">
-                    File selected: {abnVerificationFile.name}
-                  </p>
-                )}
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="pointOfSale">Point of Sale System</Label>
                 <Select value={pointOfSale} onValueChange={setPointOfSale}>
@@ -684,16 +734,21 @@ export default function SignupPage() {
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
       <div className="w-full max-w-md space-y-6">
         <div className="flex flex-col items-center space-y-2 text-center">
-          <Image 
-            src="/logo.png" 
-            alt="Tap Loyalty" 
-            width={180} 
-            height={48} 
-            className="mb-2"
-          />
-          <h1 className="text-2xl font-bold">Create your account</h1>
+          <div className="flex items-center gap-2">
+            <Image 
+              src="/logo.png" 
+              alt="Tap Loyalty" 
+              width={48} 
+              height={48} 
+              className="rounded-lg"
+            />
+            <h1 className="text-2xl">
+              <span className="text-[#007AFF] font-extrabold">Tap</span>{" "}
+              <span className="font-semibold">Loyalty</span>
+            </h1>
+          </div>
           <p className="text-gray-500 max-w-xs">
-            Join thousands of businesses using Tap Loyalty to grow their customer base
+Let's get started...
           </p>
         </div>
         

@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 import { TapAiButtonStandalone } from "@/components/tap-ai-button-standalone"
+import Link from "next/link"
 
 interface Notification {
   id: string
@@ -388,9 +389,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               variant="outline" 
               size="sm" 
               className="h-9 gap-2"
+              asChild
             >
-              <FileText className="h-4 w-4" />
-              Docs
+              <Link href="/docs">
+                <FileText className="h-4 w-4" />
+                Docs
+              </Link>
             </Button>
             
             <DropdownMenu>

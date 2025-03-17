@@ -246,11 +246,16 @@ export function SideNav() {
           alt="Tap Loyalty Logo"
           className="w-6.2 h-7 mr-2 object-cover rounded"
         />
-        <span className="text-xl font-semibold">
-          <span className="text-[#007AFF] font-extrabold">Tap</span>
-          {' '}
-          <span>Loyalty</span>
-        </span>
+        <div className="flex flex-col">
+          <span className="text-xl font-semibold leading-none">
+            <span className="text-[#007AFF] font-extrabold">Tap</span>
+            {' '}
+            <span>Loyalty</span>
+          </span>
+          <span className="text-xs text-gray-500 mt-0.5">
+            Merchant Portal
+          </span>
+        </div>
       </div>
       
       <nav className="p-2 flex-1 overflow-y-auto">

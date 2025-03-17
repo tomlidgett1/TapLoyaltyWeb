@@ -279,14 +279,15 @@ export default function DashboardPage() {
       if (!user?.uid) return
       
       try {
-        // Fetch active banners
+        // Fetch active and scheduled banners
         const activeBannersQuery = query(
           collection(db, 'merchants', user.uid, 'banners'),
+          where('scheduled', '==', true),
           where('isActive', '==', true),
           orderBy('createdAt', 'desc')
         )
         
-        // Fetch scheduled banners
+        // Fetch scheduled but not yet active banners
         const scheduledBannersQuery = query(
           collection(db, 'merchants', user.uid, 'banners'),
           where('scheduled', '==', true),
@@ -450,19 +451,26 @@ export default function DashboardPage() {
             </div>
           </div>
           
-          {/* Recent Activity - Simplified */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Recent Activity and Popular Rewards - Side by side */}
+          <div className="grid grid-cols-2 gap-6">
+            {/* Recent Activity */}
             <Card className="rounded-lg border border-gray-200">
-              <CardHeader className="border-b border-gray-100">
+              <CardHeader className="py-4 px-6 bg-gray-50 border-b border-gray-100">
                 <div className="flex justify-between items-center">
-                  <CardTitle className="text-lg">Recent Activity</CardTitle>
+                  <div>
+                    <CardTitle className="text-base font-medium text-gray-900">Recent Activity</CardTitle>
+                    <p className="text-sm text-gray-500 mt-0.5">Latest customer interactions and rewards</p>
+                  </div>
                   <Button 
                     variant="ghost" 
                     size="sm"
-                    className="text-blue-600 hover:text-blue-700"
+                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50/50 h-8 px-2"
                     asChild
                   >
-                    <Link href="/store/activity">View all</Link>
+                    <Link href="/store/activity" className="flex items-center gap-1">
+                      View all
+                      <ChevronRight className="h-3 w-3" />
+                    </Link>
                   </Button>
                 </div>
               </CardHeader>
@@ -493,18 +501,24 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
 
-            {/* Popular Rewards - Redesigned */}
+            {/* Popular Rewards */}
             <Card className="rounded-lg border border-gray-200">
-              <CardHeader className="py-4 px-6">
+              <CardHeader className="py-4 px-6 bg-gray-50 border-b border-gray-100">
                 <div className="flex justify-between items-center">
-                  <CardTitle className="text-base font-medium">Popular Rewards</CardTitle>
+                  <div>
+                    <CardTitle className="text-base font-medium text-gray-900">Popular Rewards</CardTitle>
+                    <p className="text-sm text-gray-500 mt-0.5">Most redeemed rewards by customers</p>
+                  </div>
                   <Button 
                     variant="ghost" 
                     size="sm"
-                    className="text-blue-600 hover:text-blue-700 h-8 px-2"
+                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50/50 h-8 px-2"
                     asChild
                   >
-                    <Link href="/store/rewards">View all</Link>
+                    <Link href="/store/rewards" className="flex items-center gap-1">
+                      View all
+                      <ChevronRight className="h-3 w-3" />
+                    </Link>
                   </Button>
                 </div>
               </CardHeader>
@@ -586,7 +600,7 @@ export default function DashboardPage() {
                 </Button>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-2 gap-6">
                 {/* Live Banners First */}
                 {activeBanners.map((banner) => (
                   <div key={banner.id} className="flex flex-col bg-gray-50 rounded-lg overflow-hidden">

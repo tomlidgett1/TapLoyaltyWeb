@@ -282,92 +282,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               variant="default"
               size="sm"
               className="h-9 gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white"
-            >
-              <Sparkles className="h-4 w-4" />
-              <span>
-                <span className="font-bold">TAP</span>AI
-              </span>
-              <kbd className="ml-1 inline-flex h-5 select-none items-center gap-1 rounded border border-white/30 bg-blue-600 px-1.5 font-mono text-[10px] font-medium text-white">
-                <span className="text-xs">⌘</span>I
-              </kbd>
-            </TapAiButtonStandalone>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 gap-2">
-                  <Award className="h-4 w-4" />
-                  Rewards
-                  <ChevronDown className="h-4 w-4 opacity-50" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-80">
-                <div className="flex items-center justify-between px-4 py-2 border-b">
-                  <h3 className="font-medium">Your Reward Programs</h3>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-8 text-xs rounded-md"
-                    onClick={() => router.push('/rewards')}
-                  >
-                    View All
-                  </Button>
-                </div>
-                <div className="max-h-[400px] overflow-y-auto">
-                  {selectedRewards.length === 0 ? (
-                    <div className="py-6 text-center">
-                      <Gift className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">No rewards configured yet</p>
-                    </div>
-                  ) : (
-                    selectedRewards.map((reward) => (
-                      <div 
-                        key={reward.id} 
-                        className="px-4 py-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors cursor-pointer"
-                        onClick={() => setShowRewardDetails(true)}
-                      >
-                        <div className="flex gap-3">
-                          <div className={cn(
-                            "h-8 w-8 rounded-md flex items-center justify-center flex-shrink-0",
-                            reward.type === "program" ? "bg-amber-100" : "bg-blue-100"
-                          )}>
-                            {reward.type === "program" ? (
-                              <Gift className="h-4 w-4 text-amber-600" />
-                            ) : (
-                              <Award className="h-4 w-4 text-blue-600" />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start">
-                              <h4 className="text-sm font-medium">{reward.name}</h4>
-                              <Badge variant={reward.type === "program" ? "outline" : "secondary"} className="text-xs">
-                                {reward.type === "program" ? "Program" : "Individual"}
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {reward.description}
-                            </p>
-                            {reward.type === "program" && reward.programtype === "coffee" && (
-                              <div className="mt-2 text-xs">
-                                <div className="flex items-center gap-1 text-amber-700">
-                                  <span className="font-medium">Coffee Program:</span>
-                                  <span>{reward.coffeeConfig?.frequency || 5} coffees for 1 free</span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="justify-center" asChild>
-                  <a href="/rewards/create" className="w-full text-center cursor-pointer">
-                    Create new reward
-                  </a>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              initialPrompt="How can I help you today?"
+            />
           </div>
           
           <div className="flex items-center gap-4">
@@ -375,9 +291,20 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
                 placeholder="Search..." 
-                className="pl-8 pr-10 h-9 w-full"
+                className="pl-8 pr-10 h-9 w-full cursor-pointer"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onClick={(e) => {
+                  e.preventDefault()
+                  // Simulate Command+K keypress
+                  const event = new KeyboardEvent('keydown', {
+                    key: 'k',
+                    metaKey: true,
+                    bubbles: true
+                  })
+                  document.dispatchEvent(event)
+                }}
+                readOnly // Make it read-only since we're using it as a button
               />
               <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1 text-xs text-muted-foreground bg-gray-100 px-1.5 py-0.5 rounded">
                 <Command className="h-3 w-3" />

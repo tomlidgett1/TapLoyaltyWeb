@@ -21,7 +21,8 @@ import {
   Clock,
   Star,
   ChevronRight,
-  BarChart
+  BarChart,
+  Eye
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -29,18 +30,60 @@ import { format, formatDistanceToNow } from "date-fns"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs } from "firebase/firestore"
+import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, where } from "firebase/firestore"
 import { toast } from "@/components/ui/use-toast"
 import { TapAiButton } from "@/components/tap-ai-button"
 import { PageTransition } from "@/components/page-transition"
+import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banner-preview"
+
+type TimeframeType = "today" | "yesterday" | "7days" | "30days"
 
 export default function DashboardPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
-  const [timeframe, setTimeframe] = useState<"today" | "week" | "month" | "year">("month")
+  const [timeframe, setTimeframe] = useState<TimeframeType>("today")
   const [loading, setLoading] = useState(true)
   const [recentActivity, setRecentActivity] = useState<any[]>([])
+  const [popularRewards, setPopularRewards] = useState<any[]>([])
+  const [activeBanners, setActiveBanners] = useState<any[]>([])
+
+  const getDateRange = (tf: TimeframeType): { start: Date; end: Date } => {
+    const now = new Date()
+    switch (tf) {
+      case "today":
+        return {
+          start: new Date(now.setHours(0, 0, 0, 0)),
+          end: new Date()
+        }
+      case "yesterday":
+        const yesterday = new Date(now)
+        yesterday.setDate(yesterday.getDate() - 1)
+        return {
+          start: new Date(yesterday.setHours(0, 0, 0, 0)),
+          end: new Date(yesterday.setHours(23, 59, 59, 999))
+        }
+      case "7days":
+        const sevenDaysAgo = new Date(now)
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+        return {
+          start: new Date(sevenDaysAgo.setHours(0, 0, 0, 0)),
+          end: new Date()
+        }
+      case "30days":
+        const thirtyDaysAgo = new Date(now)
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+        return {
+          start: new Date(thirtyDaysAgo.setHours(0, 0, 0, 0)),
+          end: new Date()
+        }
+    }
+    // Default to today
+    return {
+      start: new Date(now.setHours(0, 0, 0, 0)),
+      end: new Date()
+    }
+  }
 
   useEffect(() => {
     // Fetch recent activity data
@@ -49,10 +92,12 @@ export default function DashboardPage() {
       
       try {
         setLoading(true)
+        const { start, end } = getDateRange(timeframe)
         
-        // Create a query to get the most recent activity - exactly as in store/activity
         const activityQuery = query(
           collection(db, 'merchants', user.uid, 'activity'),
+          where('timestamp', '>=', start),
+          where('timestamp', '<=', end),
           orderBy('timestamp', 'desc'),
           limit(10)
         )
@@ -138,6 +183,157 @@ export default function DashboardPage() {
     }
     
     fetchRecentActivity()
+  }, [user, timeframe])
+
+  useEffect(() => {
+    // Fetch rewards data and sort by redemption count
+    const fetchPopularRewards = async () => {
+      if (!user?.uid) return
+      
+      try {
+        setLoading(true)
+        const { start, end } = getDateRange(timeframe)
+        
+        // Create a query to get all rewards for the merchant
+        const rewardsQuery = query(
+          collection(db, 'merchants', user.uid, 'rewards'),
+          orderBy('redemptionCount', 'desc'),
+          where('lastRedeemedAt', '>=', start),
+          where('lastRedeemedAt', '<=', end),
+          limit(3)
+        )
+        
+        // Get the rewards documents
+        const rewardsSnapshot = await getDocs(rewardsQuery)
+        
+        // Map the documents to our rewards format
+        const rewardsData = rewardsSnapshot.docs.map(doc => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            name: data.name || 'Unnamed Reward',
+            rewardName: data.rewardName || data.name || 'Unnamed Reward',
+            redemptionCount: data.redemptionCount || 0,
+            impressions: data.impressions || 0,
+            pointsCost: data.pointsCost || 0,
+            type: data.type || 'item',
+            conversionRate: data.conversionRate || 0,
+            lastRedeemedAt: data.lastRedeemedAt?.toDate() || null
+          }
+        })
+        
+        console.log('Fetched rewards data:', rewardsData)
+        
+        // If no rewards found and in development, use sample data
+        if (rewardsData.length === 0 && process.env.NODE_ENV === 'development') {
+          setPopularRewards([
+            {
+              id: "rew1",
+              name: "Free Coffee",
+              redemptionCount: 342,
+              impressions: 1000,
+              pointsCost: 100,
+              type: "item",
+              conversionRate: 0.78
+            },
+            {
+              id: "rew2",
+              name: "10% Off Next Purchase",
+              redemptionCount: 215,
+              impressions: 800,
+              pointsCost: 200,
+              type: "discount",
+              conversionRate: 0.65
+            },
+            {
+              id: "rew3",
+              name: "Buy 10 Get 1 Free",
+              redemptionCount: 187,
+              impressions: 700,
+              pointsCost: 0,
+              type: "program",
+              conversionRate: 0.92
+            }
+          ])
+        } else {
+          setPopularRewards(rewardsData)
+        }
+      } catch (error) {
+        console.error('Error fetching popular rewards:', error)
+        toast({
+          title: "Error",
+          description: "Failed to load popular rewards. Please refresh the page.",
+          variant: "destructive"
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchPopularRewards()
+  }, [user, timeframe])
+
+  useEffect(() => {
+    const fetchActiveBanners = async () => {
+      if (!user?.uid) return
+      
+      try {
+        const bannersQuery = query(
+          collection(db, 'merchants', user.uid, 'banners'),
+          where('isActive', '==', true),
+          orderBy('createdAt', 'desc')
+        )
+        
+        const bannersSnapshot = await getDocs(bannersQuery)
+        
+        // Map the data more explicitly to ensure we have all required fields
+        const bannersData = bannersSnapshot.docs.map(doc => {
+          const data = doc.data()
+          
+          // Helper function to safely convert Firestore timestamp
+          const getDate = (timestamp: any) => {
+            if (!timestamp) return new Date()
+            if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+              return timestamp.toDate()
+            }
+            if (timestamp instanceof Date) return timestamp
+            return new Date(timestamp)
+          }
+
+          return {
+            id: doc.id,
+            title: data.title || '',
+            description: data.description || '',
+            buttonText: data.buttonText,
+            color: data.color ?? "#0ea5e9",
+            style: data.style?.toLowerCase() || 'light',
+            styleType: data.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
+                       data.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
+                       data.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
+                       BannerStyle.LIGHT,
+            merchantName: data.merchantName ?? "My Store",
+            visibilityType: BannerVisibility.ALL,
+            isActive: true,
+            impressions: data.impressions || 0,
+            updatedAt: getDate(data.updatedAt)
+          }
+        })
+        
+        // Debug final banners array
+        console.log('Final banners array:', bannersData)
+        
+        setActiveBanners(bannersData)
+      } catch (error) {
+        console.error('Error fetching active banners:', error)
+        toast({
+          title: "Error",
+          description: "Failed to load active banners. Please refresh the page.",
+          variant: "destructive"
+        })
+      }
+    }
+    
+    fetchActiveBanners()
   }, [user])
 
   // Format date for display
@@ -164,420 +360,279 @@ export default function DashboardPage() {
 
   return (
     <PageTransition>
-      <div className="container mx-auto p-4">
+      <div className="container mx-auto p-6">
         <div className="max-w-7xl mx-auto space-y-8">
-          {/* Welcome Section */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Here's what's happening with your loyalty program today
-              </p>
-            </div>
-            
-            <div className="flex items-center gap-3">
-              <Button 
-                variant="outline" 
-                className="h-9 gap-2 rounded-md"
-                onClick={() => router.push('/store')}
-              >
-                <Gift className="h-4 w-4" />
-                <span>View My Store</span>
-              </Button>
+          {/* Welcome Section with Timeframe Tabs */}
+          <div className="space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
+                <p className="text-sm text-gray-500 mt-1">
+                  Here's an overview of your business
+                </p>
+              </div>
               
               <Button 
-                className="h-9 gap-2 rounded-md"
+                className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={() => router.push('/create')}
               >
                 <PlusCircle className="h-4 w-4" />
-                <span>Create</span>
+                <span>New Reward</span>
               </Button>
+            </div>
+
+            <Tabs
+              defaultValue="today"
+              value={timeframe}
+              onValueChange={(value) => setTimeframe(value as TimeframeType)}
+              className="w-full"
+            >
+              <TabsList className="grid grid-cols-4 w-full max-w-md">
+                <TabsTrigger value="today">Today</TabsTrigger>
+                <TabsTrigger value="yesterday">Yesterday</TabsTrigger>
+                <TabsTrigger value="7days">Last 7 days</TabsTrigger>
+                <TabsTrigger value="30days">Last 30 days</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+          
+          {/* Reduce space between tabs and metrics */}
+          <div className="mt-6">
+            {/* Key Metrics - Simplified */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="rounded-lg border border-gray-200">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col">
+                    <p className="text-sm font-medium text-gray-500">Total Customers</p>
+                    <div className="mt-2 flex items-baseline">
+                      <p className="text-2xl font-semibold">1,247</p>
+                      <p className="ml-2 text-sm text-blue-600">+12.5%</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-lg border border-gray-200">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col">
+                    <p className="text-sm font-medium text-gray-500">Points Issued</p>
+                    <div className="mt-2 flex items-baseline">
+                      <p className="text-2xl font-semibold">45,892</p>
+                      <p className="ml-2 text-sm text-blue-600">+23.7%</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-lg border border-gray-200">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col">
+                    <p className="text-sm font-medium text-gray-500">Redemption Rate</p>
+                    <div className="mt-2 flex items-baseline">
+                      <p className="text-2xl font-semibold">32%</p>
+                      <p className="ml-2 text-sm text-blue-600">+5.2%</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-lg border border-gray-200">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col">
+                    <p className="text-sm font-medium text-gray-500">Avg. Order Value</p>
+                    <div className="mt-2 flex items-baseline">
+                      <p className="text-2xl font-semibold">$24.50</p>
+                      <p className="ml-2 text-sm text-blue-600">+3.8%</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </div>
           
-          {/* Key Metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard 
-              title="Total Customers"
-              value="1,247"
-              change={12.5}
-              icon={Users}
-              color="blue"
-            />
-            
-            <MetricCard 
-              title="Points Issued"
-              value="45,892"
-              change={23.7}
-              icon={Zap}
-              color="amber"
-            />
-            
-            <MetricCard 
-              title="Redemption Rate"
-              value="32%"
-              change={5.2}
-              icon={Gift}
-              color="purple"
-            />
-            
-            <MetricCard 
-              title="Avg. Order Value"
-              value="$24.50"
-              change={3.8}
-              icon={ShoppingCart}
-              color="green"
-            />
-          </div>
-          
-          {/* Main Content Tabs */}
-          <div className="space-y-6">
-            <h1 className="text-2xl font-bold">Dashboard</h1>
-            
-            {/* Recent Activity */}
-            <Card className="rounded-lg overflow-hidden">
-              <CardHeader className="pb-2">
+          {/* Recent Activity - Simplified */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="rounded-lg border border-gray-200">
+              <CardHeader className="border-b border-gray-100">
                 <div className="flex justify-between items-center">
-                  <CardTitle>Recent Activity</CardTitle>
+                  <CardTitle className="text-lg">Recent Activity</CardTitle>
                   <Button 
                     variant="ghost" 
-                    size="sm" 
-                    className="h-8 gap-1 rounded-md"
+                    size="sm"
+                    className="text-blue-600 hover:text-blue-700"
                     asChild
                   >
-                    <Link href="/store/activity">
-                      <span>View all</span>
-                      <ChevronRight className="h-4 w-4" />
-                    </Link>
+                    <Link href="/store/activity">View all</Link>
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="divide-y divide-gray-100">
+                  {recentActivity.map((activity) => (
+                    <div key={activity.id} className="p-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{activity.customer.name}</p>
+                          <p className="text-sm text-gray-500">{activity.details}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-500">{formatTimeAgo(activity.timestamp)}</p>
+                          {activity.points && (
+                            <p className={cn(
+                              "text-sm font-medium",
+                              activity.type === "redemption" ? "text-gray-600" : "text-blue-600"
+                            )}>
+                              {activity.type === "redemption" ? "-" : "+"}{activity.points} points
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Popular Rewards - Redesigned */}
+            <Card className="rounded-lg border border-gray-200">
+              <CardHeader className="py-4 px-6">
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-base font-medium">Popular Rewards</CardTitle>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    className="text-blue-600 hover:text-blue-700 h-8 px-2"
+                    asChild
+                  >
+                    <Link href="/store/rewards">View all</Link>
                   </Button>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
                 {loading ? (
-                  <div className="p-8 flex justify-center items-center">
-                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
-                  </div>
-                ) : recentActivity.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <p className="text-muted-foreground">No recent activity found</p>
-                  </div>
+                  <div className="p-4 text-center text-gray-500">Loading rewards...</div>
+                ) : popularRewards.length === 0 ? (
+                  <div className="p-4 text-center text-gray-500">No rewards found</div>
                 ) : (
-                  <div className="divide-y">
-                    {recentActivity.map((activity) => (
-                      <div key={activity.id} className="p-4 hover:bg-muted/50 transition-colors">
-                        <div className="flex gap-3">
-                          <div className={cn(
-                            "h-10 w-10 rounded-md flex items-center justify-center flex-shrink-0",
-                            activity.type === "purchase" && "bg-green-100",
-                            activity.type === "redemption" && "bg-purple-100",
-                            activity.type === "signup" && "bg-blue-100",
-                            activity.type === "pointsAdjustment" && "bg-amber-100"
-                          )}>
-                            {activity.type === "purchase" && <ShoppingCart className="h-5 w-5 text-green-600" />}
-                            {activity.type === "redemption" && <Gift className="h-5 w-5 text-purple-600" />}
-                            {activity.type === "signup" && <Users className="h-5 w-5 text-blue-600" />}
-                            {activity.type === "pointsAdjustment" && <Zap className="h-5 w-5 text-amber-600" />}
+                  <div className="grid grid-cols-1 divide-y divide-gray-100">
+                    {popularRewards.map((reward) => (
+                      <Link 
+                        key={reward.id} 
+                        href={`/rewards/${reward.id}`}
+                        className="block hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="px-6 py-3 flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
+                            <p className="text-sm font-semibold text-blue-600">
+                              #{popularRewards.indexOf(reward) + 1}
+                            </p>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <Link 
-                                  href={`/customers/${activity.customer.id}`}
-                                  className="font-medium text-sm hover:underline"
-                                >
-                                  {activity.customer.name}
-                                </Link>
-                                <p className="text-sm text-muted-foreground">
-                                  {activity.details}
+                            <div className="flex justify-between items-center">
+                              <div className="truncate">
+                                <p className="text-sm font-medium truncate">
+                                  {reward.rewardName || reward.name}
                                 </p>
+                                <div className="flex items-center gap-2 mt-2">
+                                  <p className="text-xs text-gray-500">
+                                    {reward.pointsCost > 0 ? `${reward.pointsCost} points` : 'Punch card'}
+                                  </p>
+                                  {reward.lastRedeemedAt && (
+                                    <>
+                                      <span className="text-xs text-gray-400">•</span>
+                                      <p className="text-xs text-gray-500">
+                                        Last redeemed {formatDistanceToNow(reward.lastRedeemedAt, { addSuffix: true })}
+                                      </p>
+                                    </>
+                                  )}
+                                </div>
                               </div>
-                              <p className="text-xs text-muted-foreground">
-                                {formatTimeAgo(activity.timestamp)}
-                              </p>
-                            </div>
-                            {activity.points && (
-                              <div className="mt-1">
-                                <Badge variant="outline" className={cn(
-                                  "rounded-md",
-                                  activity.type === "redemption" 
-                                    ? "bg-red-50 text-red-700 border-red-200" 
-                                    : "bg-blue-50 text-blue-700 border-blue-200"
-                                )}>
-                                  {activity.type === "redemption" ? "-" : "+"}{activity.points} points
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-50">
+                                  {reward.redemptionCount} redeemed
+                                </Badge>
+                                <Badge variant="outline" className="bg-gray-50 text-gray-600 hover:bg-gray-50">
+                                  {reward.impressions} views
                                 </Badge>
                               </div>
-                            )}
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      </Link>
                     ))}
                   </div>
                 )}
               </CardContent>
             </Card>
-            
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Program Growth */}
-              <Card className="rounded-lg">
-                <CardHeader>
-                  <CardTitle>Program Growth</CardTitle>
-                  <CardDescription>Last 30 days</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <p className="text-sm font-medium">New Customers</p>
-                      <Badge variant="outline" className="rounded-md bg-green-50 text-green-700 border-green-200">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        15%
-                      </Badge>
-                    </div>
-                    <Progress value={65} className="h-2 rounded-md" />
-                    <p className="text-xs text-muted-foreground mt-2">
-                      42 new customers this month
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <p className="text-sm font-medium">Repeat Purchase Rate</p>
-                      <Badge variant="outline" className="rounded-md bg-green-50 text-green-700 border-green-200">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        8%
-                      </Badge>
-                    </div>
-                    <Progress value={72} className="h-2 rounded-md" />
-                    <p className="text-xs text-muted-foreground mt-2">
-                      72% of customers made repeat purchases
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              {/* Popular Rewards */}
-              <Card className="rounded-lg">
-                <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <CardTitle>Popular Rewards</CardTitle>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-8 gap-1 rounded-md"
-                      asChild
-                    >
-                      <Link href="/rewards">
-                        <span>View all</span>
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="divide-y">
-                    {popularRewards.map((reward) => (
-                      <Link 
-                        key={reward.id} 
-                        href={`/rewards/${reward.id}`}
-                        className="block p-4 hover:bg-muted/50 transition-colors"
-                      >
-                        <div className="flex gap-3">
-                          <div className={cn(
-                            "h-10 w-10 rounded-md flex items-center justify-center flex-shrink-0",
-                            reward.type === "item" && "bg-purple-100",
-                            reward.type === "discount" && "bg-green-100",
-                            reward.type === "program" && "bg-amber-100"
-                          )}>
-                            {reward.type === "item" && <Gift className="h-5 w-5 text-purple-600" />}
-                            {reward.type === "discount" && <DollarSign className="h-5 w-5 text-green-600" />}
-                            {reward.type === "program" && <Coffee className="h-5 w-5 text-amber-600" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <h3 className="font-medium text-sm">{reward.name}</h3>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {reward.pointsCost > 0 ? `${reward.pointsCost} points` : 'Punch card program'}
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="font-medium text-sm">{reward.redemptionCount}</p>
-                                <p className="text-xs text-muted-foreground">redemptions</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </CardContent>
-                <CardFooter className="border-t p-4">
-                  <Button 
-                    variant="outline" 
-                    className="w-full rounded-md h-9 gap-2"
-                    onClick={() => router.push('/create')}
-                  >
-                    <PlusCircle className="h-4 w-4" />
-                    Create new reward
-                  </Button>
-                </CardFooter>
-              </Card>
-            </div>
           </div>
+
+          {/* Live Banners Section */}
+          {activeBanners.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-lg font-medium">Live Banners</h2>
+                  <p className="text-sm text-gray-500">Currently active banners in your store</p>
+                </div>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-2"
+                  asChild
+                >
+                  <Link href="/store/banner">
+                    Manage banners
+                  </Link>
+                </Button>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {activeBanners.map((banner) => (
+                  <div key={banner.id} className="flex flex-col bg-gray-50 rounded-lg overflow-hidden">
+                    {/* Banner Preview with status badges */}
+                    <div className="relative">
+                      {/* Status Badges */}
+                      <div className="absolute top-2 right-2 z-10 flex gap-2">
+                        <div className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full flex items-center">
+                          <Eye className="h-3 w-3 mr-1" />
+                          Live
+                        </div>
+                        <div className="bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full flex items-center">
+                          <Eye className="h-3 w-3 mr-1" />
+                          {banner.impressions || 0} views
+                        </div>
+                      </div>
+                      
+                      {/* Banner preview */}
+                      <div className="rounded-lg overflow-hidden shadow-sm">
+                        <BannerPreview
+                          title={banner.title}
+                          description={banner.description}
+                          color={banner.color}
+                          styleType={
+                            banner.style === "light" ? BannerStyle.LIGHT :
+                            banner.style === "glass" ? BannerStyle.GLASS :
+                            banner.style === "dark" ? BannerStyle.DARK :
+                            BannerStyle.LIGHT
+                          }
+                          merchantName={banner.merchantName}
+                          visibilityType={BannerVisibility.ALL}
+                          isActive={banner.isActive}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </PageTransition>
   )
 }
 
-// Component for metric cards
-function MetricCard({ 
-  title, 
-  value, 
-  change, 
-  icon: Icon, 
-  color 
-}: { 
-  title: string
-  value: string
-  change: number
-  icon: React.ElementType
-  color: "blue" | "green" | "red" | "amber" | "purple" | "indigo"
-}) {
-  return (
-    <Card className="rounded-lg">
-      <CardContent className="p-6">
-        <div className="flex justify-between items-start">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
-            <p className="text-2xl font-bold mt-1">{value}</p>
-          </div>
-          <div className={cn(
-            "h-9 w-9 rounded-md flex items-center justify-center",
-            color === "blue" && "bg-blue-100",
-            color === "green" && "bg-green-100",
-            color === "red" && "bg-red-100",
-            color === "amber" && "bg-amber-100",
-            color === "purple" && "bg-purple-100",
-            color === "indigo" && "bg-indigo-100"
-          )}>
-            <Icon className={cn(
-              "h-5 w-5",
-              color === "blue" && "text-blue-600",
-              color === "green" && "text-green-600",
-              color === "red" && "text-red-600",
-              color === "amber" && "text-amber-600",
-              color === "purple" && "text-purple-600",
-              color === "indigo" && "text-indigo-600"
-            )} />
-          </div>
-        </div>
-        <div className="mt-4">
-          <Badge variant="outline" className={cn(
-            "rounded-md",
-            change > 0 && "bg-green-50 text-green-700 border-green-200",
-            change < 0 && "bg-red-50 text-red-700 border-red-200"
-          )}>
-            {change > 0 ? <ArrowUp className="h-3 w-3 mr-1" /> : <ArrowDown className="h-3 w-3 mr-1" />}
-            {Math.abs(change)}%
-          </Badge>
-          <span className="text-xs text-muted-foreground ml-2">vs last month</span>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-// Component for customer segment cards
-function CustomerSegmentCard({
-  title,
-  count,
-  percentage,
-  change,
-  description,
-  color
-}: {
-  title: string
-  count: number
-  percentage: number
-  change: number
-  description: string
-  color: "blue" | "green" | "red" | "amber" | "purple"
-}) {
-  return (
-    <Card className="rounded-lg">
-      <CardContent className="p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <div className={cn(
-            "h-8 w-8 rounded-md flex items-center justify-center",
-            color === "blue" && "bg-blue-100",
-            color === "green" && "bg-green-100",
-            color === "red" && "bg-red-100",
-            color === "amber" && "bg-amber-100",
-            color === "purple" && "bg-purple-100"
-          )}>
-            <Users className={cn(
-              "h-4 w-4",
-              color === "blue" && "text-blue-600",
-              color === "green" && "text-green-600",
-              color === "red" && "text-red-600",
-              color === "amber" && "text-amber-600",
-              color === "purple" && "text-purple-600"
-            )} />
-          </div>
-          <h3 className="font-medium">{title}</h3>
-        </div>
-        
-        <div className="flex justify-between items-end mt-2">
-          <div>
-            <p className="text-2xl font-bold">{count}</p>
-            <p className="text-xs text-muted-foreground">{description}</p>
-          </div>
-          <div className="text-right">
-            <Badge variant="outline" className={cn(
-              "rounded-md",
-              change > 0 && "bg-green-50 text-green-700 border-green-200",
-              change < 0 && "bg-red-50 text-red-700 border-red-200"
-            )}>
-              {change > 0 ? <ArrowUp className="h-3 w-3 mr-1" /> : <ArrowDown className="h-3 w-3 mr-1" />}
-              {Math.abs(change)}%
-            </Badge>
-            <p className="text-xs text-muted-foreground mt-1">{percentage}% of total</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 // Sample data
-const popularRewards = [
-  {
-    id: "rew1",
-    name: "Free Coffee",
-    redemptionCount: 342,
-    pointsCost: 100,
-    type: "item",
-    conversionRate: 0.78
-  },
-  {
-    id: "rew2",
-    name: "10% Off Next Purchase",
-    redemptionCount: 215,
-    pointsCost: 200,
-    type: "discount",
-    conversionRate: 0.65
-  },
-  {
-    id: "rew3",
-    name: "Buy 10 Get 1 Free",
-    redemptionCount: 187,
-    pointsCost: 0,
-    type: "program",
-    conversionRate: 0.92
-  }
-]
-
 const recentSignups = [
   {
     id: "cust1",

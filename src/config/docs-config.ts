@@ -35,19 +35,11 @@ export const docsConfig = [
         href: "/docs/customers",
         icon: Users
       },
-      {
-        title: "Campaigns",
-        href: "/docs/campaigns",
-      },
     ],
   },
   {
     title: "Advanced",
     items: [
-      {
-        title: "API Integration",
-        href: "/docs/api",
-      },
       {
         title: "Webhooks",
         href: "/docs/webhooks",

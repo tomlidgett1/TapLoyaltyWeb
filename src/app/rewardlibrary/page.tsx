@@ -28,10 +28,6 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { RewardDetailsDialog } from "@/components/reward-details-dialog"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
-import { db } from "@/lib/firebase"
-import { collection, addDoc, doc, setDoc } from "firebase/firestore"
-import { useAuth } from "@/hooks/use-auth"
-import { useToast } from "@/components/ui/use-toast"
 
 const rewardTemplates = [
   {
@@ -161,8 +157,6 @@ const rewardCategories = [
 
 export default function RewardLibraryPage() {
   const router = useRouter()
-  const { user } = useAuth()
-  const { toast } = useToast()
   const [viewType, setViewType] = useState<'grid' | 'list'>('grid')
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedReward, setSelectedReward] = useState<typeof rewardTemplates[0] | null>(null)
@@ -190,59 +184,8 @@ export default function RewardLibraryPage() {
     setIsCreateOpen(true)
   }
 
-  const handleCreate = async () => {
-    if (!selectedReward || !user) return
-
-    try {
-      // Create the reward document
-      const rewardDoc = await addDoc(collection(db, "rewards"), {
-        name: selectedReward.name,
-        description: selectedReward.description,
-        pointsCost: parseInt(selectedReward.pointsCost),
-        type: selectedReward.type,
-        voucherAmount: selectedReward.voucherAmount ? parseInt(selectedReward.voucherAmount) : null,
-        isActive: selectedReward.isActive,
-        conditions: selectedReward.conditions,
-        limitations: selectedReward.limitations,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        createdBy: user.uid,
-        merchantId: user.uid // Assuming merchantId is the same as user.uid
-      })
-
-      // Create the merchant-specific reward reference
-      await setDoc(doc(db, `merchants/${user.uid}/rewards/${rewardDoc.id}`), {
-        rewardId: rewardDoc.id,
-        name: selectedReward.name,
-        description: selectedReward.description,
-        pointsCost: parseInt(selectedReward.pointsCost),
-        type: selectedReward.type,
-        voucherAmount: selectedReward.voucherAmount ? parseInt(selectedReward.voucherAmount) : null,
-        isActive: selectedReward.isActive,
-        conditions: selectedReward.conditions,
-        limitations: selectedReward.limitations,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      })
-
-      toast({
-        title: "Reward Created",
-        description: "Your reward has been created successfully.",
-      })
-
-      // Close the dialog
-      setIsDetailsOpen(false)
-
-      // Redirect to the reward details page
-      router.push(`/store/rewards/${rewardDoc.id}`)
-    } catch (error) {
-      console.error("Error creating reward:", error)
-      toast({
-        title: "Error",
-        description: "There was an error creating your reward. Please try again.",
-        variant: "destructive"
-      })
-    }
+  const handleCreate = () => {
+    router.push(`/store/rewards/create?template=${selectedReward?.id}`)
   }
 
   const renderRewardItem = (template: typeof rewardTemplates[0], viewType: 'grid' | 'list') => {

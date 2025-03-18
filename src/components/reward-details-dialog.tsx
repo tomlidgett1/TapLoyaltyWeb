@@ -3,6 +3,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Gift, Clock, Users, AlertCircle } from "lucide-react"
 import Image from "next/image"
+import { useState } from "react"
+import { useToast } from "@/components/ui/use-toast"
+import { db, auth } from "@/lib/firebase"
+import { collection, addDoc, doc, setDoc } from "firebase/firestore"
+import { v4 as uuidv4 } from "uuid"
 
 interface RewardTemplate {
   id: string
@@ -53,6 +58,38 @@ const formatConditionKey = (key: string) => {
     .replace(/^./, str => str.toUpperCase()) // Capitalize first letter
 }
 
+// Add a function to create the reward
+const createRewardFromTemplate = async (reward: RewardTemplate, userId: string) => {
+  try {
+    const rewardId = uuidv4()
+    const merchantId = userId // Assuming userId is the merchantId
+    const timestamp = new Date().toISOString()
+    
+    // Create a serializable reward object by removing non-serializable properties
+    const { icon, ...serializableReward } = reward
+    
+    // Add additional fields
+    const newReward = {
+      ...serializableReward,
+      id: rewardId,
+      merchantId,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    }
+    
+    // Add to rewards collection
+    await setDoc(doc(db, "rewards", rewardId), newReward)
+    
+    // Add to merchants/rewards subcollection
+    await setDoc(doc(db, `merchants/${merchantId}/rewards`, rewardId), newReward)
+    
+    return rewardId
+  } catch (error) {
+    console.error("Error creating reward:", error)
+    throw error
+  }
+}
+
 export function RewardDetailsDialog({
   isOpen,
   onClose,
@@ -60,6 +97,49 @@ export function RewardDetailsDialog({
   onEdit,
   onCreate
 }: RewardDetailsDialogProps) {
+  const [isCreating, setIsCreating] = useState(false)
+  const { toast } = useToast()
+  
+  // Handle create reward
+  const handleCreateReward = async () => {
+    try {
+      setIsCreating(true)
+      
+      const userId = auth.currentUser?.uid
+      if (!userId) {
+        toast({
+          title: "Authentication error",
+          description: "You must be logged in to create rewards",
+          variant: "destructive"
+        })
+        return
+      }
+      
+      const rewardId = await createRewardFromTemplate(reward, userId)
+      
+      toast({
+        title: "Reward created",
+        description: "The reward has been added to your store",
+        variant: "default"
+      })
+      
+      // Close the dialog
+      onClose()
+      
+      // Navigate to the reward page
+      onCreate()
+    } catch (error) {
+      console.error("Error creating reward:", error)
+      toast({
+        title: "Error creating reward",
+        description: "There was a problem creating your reward. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
   // Filter active conditions
   const activeConditions = Object.entries(reward.conditions).filter(([key, value]) => {
     if (typeof value === 'boolean') return value
@@ -179,9 +259,10 @@ export function RewardDetailsDialog({
               </Button>
               <Button 
                 className="bg-[#007AFF] hover:bg-[#0063CC] text-white"
-                onClick={onCreate}
+                onClick={handleCreateReward}
+                disabled={isCreating}
               >
-                Use Template
+                {isCreating ? "Creating..." : "Use Template"}
               </Button>
             </div>
           </div>

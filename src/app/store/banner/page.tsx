@@ -563,20 +563,31 @@ export default function BannerPage() {
 
   // Update the scheduling function to use the non-conflicting time slot finder
   const handleScheduleBanner = (bannerId: string) => {
-    const timeSlot = findNonConflictingTimeSlot(banners);
+    // Check if there are already 4 scheduled banners
+    const scheduledCount = banners.filter((b: Banner) => b.scheduled).length
+    if (scheduledCount >= 4) {
+      toast({
+        title: "Maximum Scheduled Banners Reached",
+        description: "Only 4 banners can be scheduled at once. Please remove one before adding another.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    const timeSlot = findNonConflictingTimeSlot(banners)
     
     handleBannerScheduleUpdate(bannerId, {
       scheduled: true,
       scheduleStartMinutes: timeSlot.startMinutes,
       scheduleEndMinutes: timeSlot.endMinutes
-    });
-    
-    // Show a toast notification about the scheduling
+    })
+
+    // Show a toast notification
     toast({
       title: "Banner Scheduled",
       description: `Banner scheduled from ${formatTime(timeSlot.startMinutes)} to ${formatTime(timeSlot.endMinutes)}.`,
       variant: "default"
-    });
+    })
   };
 
   return (

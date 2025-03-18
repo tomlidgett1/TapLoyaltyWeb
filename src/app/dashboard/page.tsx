@@ -96,32 +96,47 @@ export default function DashboardPage() {
       try {
         setLoading(true)
         
-        // Fetch most recent transactions
+        // Debug transactions query
         const transactionsRef = collection(db, 'merchants', user.uid, 'transactions')
         const transactionsQuery = query(
           transactionsRef,
           orderBy('createdAt', 'desc'),
           limit(5)
         )
+        console.log('Fetching transactions from:', `merchants/${user.uid}/transactions`)
         
-        // Fetch most recent redemptions from merchant's redemptions collection
-        const redemptionsRef = collection(db, 'merchants', user.uid, 'redemptions')
+        // Update redemptions query to use top-level collection
+        const redemptionsRef = collection(db, 'redemptions')
         const redemptionsQuery = query(
           redemptionsRef,
+          where('merchantId', '==', user.uid),
           orderBy('redemptionDate', 'desc'),
           limit(5)
         )
         
-        // Get both transactions and redemptions
+        console.log('Fetching redemptions for merchant:', user.uid)
+        
         const [transactionsSnapshot, redemptionsSnapshot] = await Promise.all([
           getDocs(transactionsQuery),
           getDocs(redemptionsQuery)
         ])
         
+        // Log raw redemptions data
+        console.log('Raw redemptions data:', redemptionsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          data: doc.data()
+        })))
+        
         // Get unique customer IDs from both transactions and redemptions
         const customerIds = new Set([
-          ...transactionsSnapshot.docs.map(doc => doc.data().customerId),
-          ...redemptionsSnapshot.docs.map(doc => doc.data().customerId)
+          ...transactionsSnapshot.docs.map(doc => {
+            const data = doc.data()
+            return data.customerId
+          }),
+          ...redemptionsSnapshot.docs.map(doc => {
+            const data = doc.data()
+            return data.customerId
+          })
         ])
         
         // Fetch customer data for each unique customer ID
@@ -145,17 +160,24 @@ export default function DashboardPage() {
           })
         )
         
-        // Convert transactions to activity format
+        // Convert transactions to activity format with type safety
         const transactionActivity = transactionsSnapshot.docs.map(doc => {
-          const data = doc.data()
+          const data = doc.data() as {
+            type?: string
+            customerId?: string
+            createdAt?: { toDate(): Date }
+            amount?: number
+            status?: string
+          }
+          
           return {
             id: doc.id,
             type: "transaction",
             displayName: data.type || "purchase",
             customer: {
-              id: data.customerId,
-              name: customerData[data.customerId]?.name || "Unknown Customer",
-              profilePicture: customerData[data.customerId]?.profilePicture
+              id: data.customerId || '',
+              name: customerData[data.customerId || '']?.name || "Unknown Customer",
+              profilePicture: customerData[data.customerId || '']?.profilePicture
             },
             timestamp: data.createdAt?.toDate() || new Date(),
             amount: data.amount || 0,
@@ -163,37 +185,50 @@ export default function DashboardPage() {
           }
         })
         
-        // Convert redemptions to activity format
+        // Convert redemptions to activity format with type safety
         const redemptionActivity = redemptionsSnapshot.docs.map(doc => {
-          const data = doc.data()
+          const data = doc.data() as {
+            customerId?: string
+            merchantId: string
+            pointsUsed: number
+            redemptionDate: { toDate(): Date }
+            redemptionId: string
+            rewardId: string
+            rewardName: string
+            status: string
+          }
+          
           return {
             id: doc.id,
             type: "redemption",
             displayName: data.rewardName || "Unknown Reward",
             customer: {
-              id: data.customerId,
-              name: customerData[data.customerId]?.name || "Unknown Customer",
-              profilePicture: customerData[data.customerId]?.profilePicture
+              id: data.customerId || '',
+              name: customerData[data.customerId || '']?.name || "Unknown Customer",
+              profilePicture: customerData[data.customerId || '']?.profilePicture
             },
             timestamp: data.redemptionDate?.toDate() || new Date(),
             points: data.pointsUsed || 0,
-            status: data.status || "completed"
+            status: data.status || "completed",
+            rewardName: data.rewardName,
+            rewardId: data.rewardId,
           }
         })
+        
+        // Log processed redemption activity
+        console.log('Processed redemption activity:', redemptionActivity)
         
         // Combine and sort by timestamp
         const combinedActivity = [...transactionActivity, ...redemptionActivity]
           .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
           .slice(0, 5) // Keep only the 5 most recent activities
         
-        console.log('Transaction activity with customer data:', transactionActivity)
-        console.log('Redemption activity with customer data:', redemptionActivity)
         console.log('Final combined activity:', combinedActivity)
         
         setRecentActivity(combinedActivity)
         
       } catch (error) {
-        console.error('Error fetching recent activity:', error)
+        console.error('Error in fetchRecentActivity:', error)
         toast({
           title: "Error",
           description: "Failed to load recent activity. Please refresh the page.",
@@ -583,18 +618,34 @@ export default function DashboardPage() {
                                   </Badge>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1 mt-0.5">
+                              <div className="flex items-center gap-1 text-xs text-gray-500">
                                 {activity.type === "transaction" ? (
-                                  <div className="flex items-center gap-1 text-xs text-gray-500">
+                                  <div className="flex items-center gap-1">
                                     <ShoppingCart className="h-3 w-3" />
                                     <span>Made a purchase</span>
                                   </div>
                                 ) : (
-                                  <div className="flex items-center gap-1 text-xs text-gray-500">
+                                  <div className="flex items-center gap-1">
                                     <Gift className="h-3 w-3" />
-                                    <span>Redeemed {activity.displayName}</span>
+                                    <span>
+                                      Redeemed{' '}
+                                      {console.log("Rendering redemption link for:", {
+                                        rewardId: activity.rewardId,
+                                        rewardName: activity.rewardName
+                                      }) && (
+                                        <Link 
+                                          href={`/store/${activity.rewardId}`}
+                                          className="text-blue-600 hover:text-blue-700 hover:underline"
+                                        >
+                                          {activity.rewardName}
+                                        </Link>
+                                      )}
+                                      {activity.points > 0 && ` (${activity.points} points)`}
+                                    </span>
                                   </div>
                                 )}
+                                <span className="text-gray-300">•</span>
+                                <span>{formatTimeAgo(activity.timestamp)}</span>
                               </div>
                             </div>
                           </div>
@@ -637,7 +688,7 @@ export default function DashboardPage() {
                     {popularRewards.map((reward) => (
                       <Link 
                         key={reward.id} 
-                        href={`/rewards/${reward.id}`}
+                        href={`/store/${reward.id}`}
                         className="block hover:bg-gray-50 transition-colors"
                       >
                         <div className="px-6 py-3 flex items-center gap-3">

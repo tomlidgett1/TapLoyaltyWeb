@@ -310,8 +310,15 @@ const extractConversationFromReward = (jsonData) => {
   return { conversationText, rewardData, rewardsArray };
 };
 
-// Now, let's create a component to render the reward card
-const RewardCard = ({ reward }: { reward: any }) => {
+// First, define the props interface for RewardCard
+interface RewardCardProps {
+  reward: any;
+  setCreateRewardData: (data: any) => void;
+  setEditDialogOpen: (open: boolean) => void;
+}
+
+// Update the RewardCard component to accept these props
+const RewardCard = ({ reward, setCreateRewardData, setEditDialogOpen }: RewardCardProps) => {
   const { toast } = useToast();
   const [isExpanded, setIsExpanded] = useState(false);
   
@@ -1367,7 +1374,7 @@ function MessageContent({
                   {extractedJson.jsonObjects.map((reward, idx) => {
                     // Determine if it's a reward or banner
                     if (reward.rewardName) {
-                      return <RewardCard key={idx} reward={reward} />;
+                      return <RewardCard key={idx} reward={reward} setCreateRewardData={setCreateRewardData} setEditDialogOpen={setEditDialogOpen} />;
                     } else if (isBannerData(reward)) {
                       return <BannerCard key={idx} banner={reward} />;
                     } else {
@@ -1405,7 +1412,7 @@ function MessageContent({
                   {rewards.map((reward, idx) => {
                     // Determine if it's a reward or banner
                     if (reward.rewardName) {
-                      return <RewardCard key={idx} reward={reward} />;
+                      return <RewardCard key={idx} reward={reward} setCreateRewardData={setCreateRewardData} setEditDialogOpen={setEditDialogOpen} />;
                     } else if (isBannerData(reward)) {
                       return <BannerCard key={idx} banner={reward} />;
                     } else {
@@ -2840,7 +2847,7 @@ export function TapAiDialog({
                                         )}
                                         <div className="space-y-4">
                                           {rewardsArray && rewardsArray.map((reward, rewardIdx) => (
-                                            <RewardCard key={`${idx}-${rewardIdx}`} reward={reward} />
+                                            <RewardCard key={`${idx}-${rewardIdx}`} reward={reward} setCreateRewardData={setCreateRewardData} setEditDialogOpen={setEditDialogOpen} />
                                           ))}
                                         </div>
                                       </div>
@@ -2848,7 +2855,7 @@ export function TapAiDialog({
                                   }
                                   // Determine if it's a reward or banner
                                   if (jsonObj.rewardName) {
-                                    return <RewardCard key={idx} reward={jsonObj} />;
+                                    return <RewardCard key={idx} reward={jsonObj} setCreateRewardData={setCreateRewardData} setEditDialogOpen={setEditDialogOpen} />;
                                   } else if (isBannerData(jsonObj)) {
                                     return <BannerCard key={idx} banner={jsonObj} />;
                                   } else {
@@ -2881,12 +2888,12 @@ export function TapAiDialog({
                                         {rewardsArray && rewardsArray.length > 0 ? (
                                           <div className="space-y-4">
                                             {rewardsArray.map((reward, idx) => (
-                                              <RewardCard key={idx} reward={reward} />
+                                              <RewardCard key={idx} reward={reward} setCreateRewardData={setCreateRewardData} setEditDialogOpen={setEditDialogOpen} />
                                             ))}
                                           </div>
                                         ) : rewardData.rewardName ? (
                                           /* Otherwise just display the single reward */
-                                          <RewardCard reward={rewardData} />
+                                          <RewardCard reward={rewardData} setCreateRewardData={setCreateRewardData} setEditDialogOpen={setEditDialogOpen} />
                                         ) : isBannerData(rewardData) ? (
                                           <BannerCard banner={rewardData} />
                                         ) : null}

@@ -9,10 +9,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import { format } from "date-fns"
+import { formatDistanceToNow } from "date-fns"
 import { 
   ArrowLeft, Calendar, Clock, Gift, Tag, Users, Zap, 
-  ChevronRight, BarChart, Award, CheckCircle, AlertCircle
+  ChevronRight, BarChart, Award, CheckCircle, AlertCircle, Edit, Eye
 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
@@ -20,6 +20,23 @@ import { showToast } from "@/components/ui/use-toast"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDate } from '@/lib/date-utils'
+import { cn } from "@/lib/utils"
+
+interface Condition {
+  type: string
+  value: number | string
+  amount?: number
+}
+
+interface Limitation {
+  type: string
+  value: number | string | string[] | { 
+    startTime?: string
+    endTime?: string
+    startDate?: string
+    endDate?: string 
+  }
+}
 
 interface RewardDetails {
   id: string
@@ -27,27 +44,62 @@ interface RewardDetails {
   description: string
   rewardType: string
   category: string
-  status: string
-  pointsCost: number
+  pointsCost: string | number
   redemptionCount: number
+  status: string
   startDate?: string
   endDate?: string
-  createdAt: string
-  updatedAt: string
-  conditions?: any[]
-  limitations?: any
+  createdAt: { seconds: number, nanoseconds: number } | string
+  updatedAt: { seconds: number, nanoseconds: number } | string
+  lastRedeemedAt: { seconds: number, nanoseconds: number } | string
+  conditions?: Condition[]
+  limitations?: Limitation[]
+  impressions: number
+  impressioncustomercount: number
+  pin: string
+  uniqueCustomersCount: number
 }
 
-export default function RewardDetailsPage() {
-  const { id } = useParams()
+interface Redemption {
+  id: string
+  customerName: string
+  customerId: string
+  redemptionDate: {
+    seconds: number
+    nanoseconds: number
+  }
+  pointsUsed?: number
+  status: 'completed' | 'pending' | 'cancelled'
+  transactionAmount?: number
+  location?: string
+}
+
+interface MockRedemption extends Redemption {
+  customerEmail?: string | null
+  customerPhone?: string | null
+  redeemedAt?: string
+  locationName?: string
+  points?: string | number
+  isMockData?: boolean
+}
+
+export function RewardDetailsPage() {
+  const params = useParams<{ id: string }>()
+  const id = params?.id
   const router = useRouter()
   const { user } = useAuth()
   const [reward, setReward] = useState<RewardDetails | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [redemptions, setRedemptions] = useState<any[]>([])
+  const [redemptions, setRedemptions] = useState<Redemption[]>([])
   const [redemptionsLoading, setRedemptionsLoading] = useState(true)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+
+  console.log("RewardDetailsPage rendering with:", {
+    params,
+    id,
+    userId: user?.uid
+  })
 
   // Updated helper function to safely format dates with better type checking
   const safeFormatDate = (dateValue: any) => {
@@ -60,18 +112,104 @@ export default function RewardDetailsPage() {
     return str.charAt(0).toUpperCase() + str.slice(1);
   };
 
+  // Add a helper function to safely format dates
+  const formatTimestamp = (timestamp: any) => {
+    if (!timestamp) return 'Unknown'
+    
+    // If it's a Firestore timestamp
+    if (timestamp && typeof timestamp.toDate === 'function') {
+      return formatDistanceToNow(timestamp.toDate(), { addSuffix: true })
+    }
+    
+    // If it's a date string
+    if (typeof timestamp === 'string') {
+      return formatDistanceToNow(new Date(timestamp), { addSuffix: true })
+    }
+    
+    // If it's seconds
+    if (timestamp.seconds) {
+      return formatDistanceToNow(new Date(timestamp.seconds * 1000), { addSuffix: true })
+    }
+    
+    return 'Unknown'
+  }
+
+  // Add these helper functions at the top of your component
+  const formatCondition = (condition: Condition) => {
+    switch (condition.type) {
+      case 'minimumTransactions':
+        return `Minimum ${condition.value} transactions`
+      case 'maximumTransactions':
+        return `Maximum ${condition.value} transactions`
+      case 'minimumLifetimeSpend':
+        return `Minimum lifetime spend of $${condition.value}`
+      case 'minimumPointsBalance':
+        return `Minimum balance of ${condition.value} points`
+      case 'daysSinceJoined':
+        return `Account age: ${condition.value} days`
+      case 'daysSinceLastVisit':
+        return `${condition.value} days since last visit`
+      case 'membershipLevel':
+        return `${capitalize(condition.value.toString())} membership required`
+      default:
+        return JSON.stringify(condition)
+    }
+  }
+
+  const formatLimitation = (limitation: Limitation) => {
+    switch (limitation.type) {
+      case 'activePeriod': {
+        const value = limitation.value as { startDate: string, endDate: string }
+        const startDate = new Date(value.startDate).toLocaleDateString()
+        const endDate = new Date(value.endDate).toLocaleDateString()
+        return `Active from ${startDate} to ${endDate}`
+      }
+      case 'totalRedemptionLimit':
+        return `Limited to ${limitation.value} total redemptions`
+      case 'customerLimit':
+        return `${limitation.value} per customer`
+      case 'timeOfDay': {
+        const value = limitation.value as { startTime: string, endTime: string }
+        return `Available ${value.startTime} to ${value.endTime}`
+      }
+      case 'daysOfWeek':
+        const days = limitation.value as string[]
+        return `Available on ${days.join(', ')}`
+      default:
+        return JSON.stringify(limitation)
+    }
+  }
+
   useEffect(() => {
     async function fetchRewardDetails() {
       if (!user?.uid) {
+        console.log("No user ID found")
         setError("Please log in to view reward details")
+        setLoading(false)
+        return
+      }
+
+      if (!id) {
+        console.log("No reward ID found")
+        setError("Reward ID is missing")
         setLoading(false)
         return
       }
 
       try {
         setLoading(true)
-        const rewardRef = doc(db, 'merchants', user.uid, 'rewards', id as string)
+        console.log("Fetching reward details:", {
+          merchantId: user.uid,
+          rewardId: id
+        })
+        
+        const rewardRef = doc(db, 'merchants', user.uid, 'rewards', id)
         const rewardDoc = await getDoc(rewardRef)
+
+        console.log("Reward doc exists:", rewardDoc.exists())
+        if (rewardDoc.exists()) {
+          console.log("Reward data:", rewardDoc.data())
+        }
 
         if (!rewardDoc.exists()) {
           setError("Reward not found")
@@ -84,6 +222,7 @@ export default function RewardDetailsPage() {
           ...rewardDoc.data()
         } as RewardDetails
 
+        console.log("Setting reward data:", rewardData)
         setReward(rewardData)
       } catch (error) {
         console.error("Error fetching reward details:", error)
@@ -97,7 +236,7 @@ export default function RewardDetailsPage() {
   }, [id, user?.uid])
 
   useEffect(() => {
-    const generateMockRedemptions = () => {
+    const generateMockRedemptions = (): Redemption[] => {
       const statuses = ['completed', 'pending', 'cancelled'];
       const locations = ['Main Store', 'Online', 'Downtown Branch', 'Mall Location'];
       const names = [
@@ -114,7 +253,7 @@ export default function RewardDetailsPage() {
         return now.toISOString();
       };
       
-      return Array.from({ length: 10 }, (_, i) => ({
+      const mockData = Array.from({ length: 10 }, (_, i) => ({
         id: `mock-${i + 1}`,
         customerName: names[Math.floor(Math.random() * names.length)],
         customerEmail: i % 2 === 0 ? `customer${i + 1}@example.com` : null,
@@ -124,6 +263,18 @@ export default function RewardDetailsPage() {
         locationName: locations[Math.floor(Math.random() * locations.length)],
         points: reward?.pointsCost || 100,
         isMockData: true
+      }));
+      
+      return mockData.map(mock => ({
+        id: mock.id,
+        customerName: mock.customerName,
+        customerId: 'mock-customer-id',
+        redemptionDate: {
+          seconds: new Date(mock.redeemedAt).getTime() / 1000,
+          nanoseconds: 0
+        },
+        pointsUsed: typeof mock.points === 'string' ? parseInt(mock.points) : mock.points,
+        status: mock.status as 'completed' | 'pending' | 'cancelled'
       }));
     };
 
@@ -201,12 +352,11 @@ export default function RewardDetailsPage() {
     },
     
     limitations: {
-      totalRedemptionLimit: reward.limitations?.totalRedemptionLimit?.toString() || '',
-      perCustomerLimit: reward.limitations?.perCustomerLimit?.toString() || '',
+      totalRedemptionLimit: reward.limitations?.find(l => l.type === 'totalRedemptionLimit')?.value?.toString() || '',
+      perCustomerLimit: reward.limitations?.find(l => l.type === 'customerLimit')?.value?.toString() || '',
       useTimeRestrictions: false,
       startTime: '',
       endTime: '',
-      dayRestrictions: [],
     },
     
     // Add active period
@@ -217,268 +367,332 @@ export default function RewardDetailsPage() {
     }
   } : null;
 
-  return (
-    <div className="container max-w-6xl py-8">
-      <div className="flex items-center justify-between mb-8">
-        <Button 
-          variant="ghost" 
-          className="flex items-center text-muted-foreground hover:text-foreground transition-colors" 
-          onClick={() => router.back()}
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          <span>Back to Rewards</span>
-        </Button>
-        
-        {!loading && reward && (
-          <Button 
-            onClick={() => setIsEditModalOpen(true)}
-            className="bg-primary hover:bg-primary/90"
-          >
-            Edit Reward
-          </Button>
-        )}
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
       </div>
-      
-      {loading ? (
-        <div className="flex flex-col items-center justify-center h-64 gap-4">
-          <div className="animate-spin h-10 w-10 border-4 border-primary border-t-transparent rounded-full"></div>
-          <p className="text-muted-foreground">Loading reward details...</p>
-        </div>
-      ) : error ? (
-        <Card className="border-destructive/50">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3 text-destructive">
-              <AlertCircle className="h-5 w-5" />
-              <p>{error}</p>
+    )
+  }
+
+  if (!reward) return null
+
+  return (
+    <div className="min-h-screen bg-gray-50/50">
+      {/* Top Navigation */}
+      <div className="sticky top-0 z-10 bg-white border-b">
+        <div className="container max-w-6xl py-4">
+          <div className="flex items-center justify-between">
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => router.back()}
+              className="gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+
+            <div className="flex items-center gap-2">
+              <Badge 
+                variant="outline" 
+                className={reward.status === 'active' ? 
+                  "rounded-md bg-blue-50 text-blue-700 border-blue-200" : 
+                  "rounded-md bg-gray-100 text-gray-700 border-gray-200"
+                }
+              >
+                {capitalize(reward.status)}
+              </Badge>
+              <Button size="sm" className="gap-2" onClick={() => setIsEditModalOpen(true)}>
+                <Edit className="h-4 w-4" />
+                Edit
+              </Button>
             </div>
-          </CardContent>
-        </Card>
-      ) : reward ? (
-        <div className="space-y-8">
-          {/* Hero section */}
-          <Card className="overflow-hidden border-none shadow-md">
-            <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-8">
-              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={
-                      reward.status === 'active' ? 'bg-green-100 text-green-800 border-green-200' : 
-                      reward.status === 'inactive' ? 'bg-amber-100 text-amber-800 border-amber-200' : 
-                      'bg-gray-100 text-gray-800 border-gray-200'
-                    }>
-                      {capitalize(reward.status)}
-                    </Badge>
-                    <span className="text-sm text-muted-foreground">•</span>
-                    <span className="text-sm text-muted-foreground">{reward.category}</span>
-                  </div>
-                  <h1 className="text-3xl font-bold tracking-tight">{reward.rewardName}</h1>
-                  <p className="text-muted-foreground max-w-2xl">{reward.description}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="container max-w-6xl py-8 space-y-6">
+        {/* Hero Section */}
+        <div className="bg-white rounded-md border shadow-sm p-6">
+          <div className="flex items-start justify-between">
+            <div className="space-y-1">
+              <h1 className="text-2xl font-semibold">{reward.rewardName}</h1>
+              <p className="text-gray-500">{reward.description}</p>
+            </div>
+            <div className="bg-primary/5 px-6 py-3 rounded-md text-center">
+              <div className="text-2xl font-bold text-primary">{reward.pointsCost}</div>
+              <div className="text-sm text-gray-500">points</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Points Cost */}
+          <Card className="rounded-md">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <div className="h-10 w-10 rounded-md bg-blue-50 flex items-center justify-center">
+                  <Zap className="h-5 w-5 text-blue-600" />
                 </div>
-                
-                <div className="flex items-center justify-center bg-white shadow-sm rounded-lg p-4 min-w-[140px]">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-primary">{reward.pointsCost}</div>
-                    <div className="text-sm text-muted-foreground">points</div>
-                  </div>
+                <div>
+                  <div className="text-sm text-gray-500">Points Cost</div>
+                  <div className="font-medium">{reward.pointsCost || '0'}</div>
                 </div>
               </div>
-            </div>
+            </CardContent>
           </Card>
-          
-          {/* Tabs for details and redemptions */}
-          <Tabs defaultValue="details" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="details">Reward Details</TabsTrigger>
-              <TabsTrigger value="redemptions">Redemption History</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="details" className="space-y-6">
-              {/* Stats cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-start gap-4">
-                      <div className="bg-primary/10 p-3 rounded-full">
-                        <Gift className="h-6 w-6 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-muted-foreground">Reward Type</p>
-                        <p className="text-lg font-semibold mt-1">
-                          {reward.rewardType ? capitalize(reward.rewardType) : 'Unknown'}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-start gap-4">
-                      <div className="bg-primary/10 p-3 rounded-full">
-                        <Users className="h-6 w-6 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-muted-foreground">Redemptions</p>
-                        <p className="text-lg font-semibold mt-1">
-                          {reward.redemptionCount || 0} claimed
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-start gap-4">
-                      <div className="bg-primary/10 p-3 rounded-full">
-                        <Calendar className="h-6 w-6 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-muted-foreground">Active Period</p>
-                        <div className="text-lg font-semibold mt-1">
-                          {safeFormatDate(reward.startDate)}
-                          {reward.endDate && (
-                            <>
-                              <span className="mx-2 text-muted-foreground">→</span>
-                              {safeFormatDate(reward.endDate)}
-                            </>
-                          )}
-                          {!reward.endDate && <span className="text-sm text-muted-foreground ml-2">(ongoing)</span>}
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+
+          {/* Redemptions */}
+          <Card className="rounded-md">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <div className="h-10 w-10 rounded-md bg-gray-50 flex items-center justify-center">
+                  <Gift className="h-5 w-5 text-gray-600" />
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500">Total Redemptions</div>
+                  <div className="font-medium">{reward.redemptionCount || 0}</div>
+                </div>
               </div>
-              
-              {/* Additional details */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Additional Details</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                    {reward.conditions && reward.conditions.length > 0 && (
-                      <>
-                        <dt className="text-sm font-medium text-muted-foreground">Conditions</dt>
-                        <dd className="text-sm">
-                          <ul className="list-disc pl-5 space-y-1">
-                            {reward.conditions.map((condition, index) => (
-                              <li key={index}>{condition.description || JSON.stringify(condition)}</li>
-                            ))}
-                          </ul>
-                        </dd>
-                      </>
-                    )}
-                    
-                    {reward.limitations && Object.keys(reward.limitations).length > 0 && (
-                      <>
-                        <dt className="text-sm font-medium text-muted-foreground">Limitations</dt>
-                        <dd className="text-sm">
-                          <ul className="list-disc pl-5 space-y-1">
-                            {reward.limitations.totalRedemptionLimit && (
-                              <li>Maximum {reward.limitations.totalRedemptionLimit} total redemptions</li>
-                            )}
-                            {reward.limitations.perCustomerLimit && (
-                              <li>Limit of {reward.limitations.perCustomerLimit} per customer</li>
-                            )}
-                          </ul>
-                        </dd>
-                      </>
-                    )}
-                    
-                    <dt className="text-sm font-medium text-muted-foreground">Created</dt>
-                    <dd className="text-sm">{safeFormatDate(reward.createdAt)}</dd>
-                    
-                    <dt className="text-sm font-medium text-muted-foreground">Last Updated</dt>
-                    <dd className="text-sm">{safeFormatDate(reward.updatedAt)}</dd>
-                  </dl>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="redemptions">
-              <Card className="border shadow-sm">
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span>Redemption History</span>
-                    {redemptions.length > 0 && redemptions[0].isMockData && (
-                      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                        Mock Data
-                      </Badge>
-                    )}
-                  </CardTitle>
-                  <CardDescription>
-                    View all customer redemptions for this reward
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {redemptionsLoading ? (
-                    <div className="flex items-center justify-center h-40">
-                      <div className="animate-spin h-6 w-6 border-4 border-primary border-t-transparent rounded-full"></div>
-                    </div>
-                  ) : redemptions.length === 0 ? (
-                    <div className="text-center py-10 text-muted-foreground">
-                      <Award className="h-10 w-10 mx-auto mb-3 opacity-20" />
-                      <p>No redemptions found for this reward</p>
-                    </div>
-                  ) : (
-                    <div className="rounded-md border overflow-hidden">
-                      <Table>
-                        <TableHeader className="bg-muted/50">
-                          <TableRow>
-                            <TableHead>Customer</TableHead>
-                            <TableHead>Contact</TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Location</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {redemptions.map((redemption) => (
-                            <TableRow key={redemption.id} className="hover:bg-muted/30 transition-colors">
-                              <TableCell className="font-medium">
-                                {redemption.customerName || 'Unknown customer'}
-                              </TableCell>
-                              <TableCell className="text-muted-foreground">
-                                {redemption.customerEmail || redemption.customerPhone || 'No contact info'}
-                              </TableCell>
-                              <TableCell>
-                                {safeFormatDate(redemption.redeemedAt)}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className={
-                                  redemption.status === 'completed' ? 'bg-green-50 text-green-700 border-green-200' : 
-                                  redemption.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
-                                  'bg-gray-50 text-gray-700 border-gray-200'
-                                }>
-                                  {capitalize(redemption.status)}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                {redemption.locationName || 'Online'}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+            </CardContent>
+          </Card>
+
+          {/* Impressions */}
+          <Card className="rounded-md">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <div className="h-10 w-10 rounded-md bg-blue-50 flex items-center justify-center">
+                  <Eye className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500">Impressions</div>
+                  <div className="font-medium">{reward.impressions || 0}</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Unique Customers */}
+          <Card className="rounded-md">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <div className="h-10 w-10 rounded-md bg-gray-100 flex items-center justify-center">
+                  <Users className="h-5 w-5 text-gray-600" />
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500">Unique Customers</div>
+                  <div className="font-medium">{reward.uniqueCustomersCount || 0}</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      ) : (
-        <Card className="border-amber-200">
+
+        {/* Additional Details Card */}
+        <Card className="rounded-md">
           <CardContent className="pt-6">
-            <div className="flex items-center gap-3 text-amber-600">
-              <AlertCircle className="h-5 w-5" />
-              <p>Reward not found</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              {/* Last Redeemed */}
+              <div>
+                <div className="text-sm text-gray-500">Last Redeemed</div>
+                <div className="font-medium mt-1">
+                  {formatTimestamp(reward.lastRedeemedAt) || 'Never'}
+                </div>
+              </div>
+
+              {/* Status */}
+              <div>
+                <div className="text-sm text-gray-500">Status</div>
+                <div className="mt-1">
+                  <Badge 
+                    variant="outline" 
+                    className={`rounded-md ${
+                      reward.status === 'live' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                      'bg-gray-100 text-gray-700 border-gray-200'
+                    }`}
+                  >
+                    {capitalize(reward.status)}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* PIN */}
+              <div>
+                <div className="text-sm text-gray-500">PIN</div>
+                <div className="font-mono text-sm mt-1">{reward.pin || 'None'}</div>
+              </div>
+
+              {/* Created */}
+              <div>
+                <div className="text-sm text-gray-500">Created</div>
+                <div className="font-medium mt-1">
+                  {formatTimestamp(reward.createdAt)}
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
-      )}
+
+        {/* Requirements & Limitations */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Conditions */}
+          <Card className="rounded-md">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 mb-4">
+                <CheckCircle className="h-5 w-5 text-gray-600" />
+                <h2 className="font-medium">Requirements</h2>
+              </div>
+              <div className="space-y-2">
+                {reward.conditions?.map((condition, index) => (
+                  <div 
+                    key={index}
+                    className="flex items-center gap-2 text-sm p-3 rounded-md bg-gray-50 border border-gray-100"
+                  >
+                    <div className="h-2 w-2 rounded-full bg-gray-400" />
+                    <span className="text-gray-700">{formatCondition(condition)}</span>
+                  </div>
+                ))}
+                {(!reward.conditions || reward.conditions.length === 0) && (
+                  <div className="text-sm text-gray-500">No special requirements</div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Limitations */}
+          <Card className="rounded-md">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 mb-4">
+                <AlertCircle className="h-5 w-5 text-gray-600" />
+                <h2 className="font-medium">Limitations</h2>
+              </div>
+              <div className="space-y-2">
+                {reward.limitations?.map((limitation, index) => (
+                  <div 
+                    key={index}
+                    className="flex items-center gap-2 text-sm p-3 rounded-md bg-gray-50 border border-gray-100"
+                  >
+                    <div className="h-2 w-2 rounded-full bg-gray-400" />
+                    <span className="text-gray-700">{formatLimitation(limitation)}</span>
+                  </div>
+                ))}
+                {(!reward.limitations || reward.limitations.length === 0) && (
+                  <div className="text-sm text-gray-500">No limitations set</div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Update the Redemption History section */}
+        <Card className="mt-8">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Redemption History</CardTitle>
+                <CardDescription>
+                  {redemptions.length} total redemptions
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="border-t">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date & Time</TableHead>
+                    <TableHead className="w-[250px]">Customer</TableHead>
+                    <TableHead>Points</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {redemptionsLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="h-24 text-center">
+                        <div className="flex justify-center">
+                          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : redemptions.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="h-24 text-center">
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                            <Zap className="h-6 w-6 text-muted-foreground" />
+                          </div>
+                          <h3 className="mt-4 text-lg font-medium">No redemptions yet</h3>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            This reward hasn't been redeemed by any customers
+                          </p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    redemptions.map((redemption) => (
+                      <TableRow 
+                        key={redemption.id}
+                        className="hover:bg-muted/50"
+                      >
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="font-medium">
+                              {redemption.redemptionDate?.seconds 
+                                ? new Date(redemption.redemptionDate.seconds * 1000).toLocaleDateString()
+                                : 'Unknown date'
+                              }
+                            </span>
+                            <span className="text-sm text-muted-foreground">
+                              {redemption.redemptionDate?.seconds
+                                ? new Date(redemption.redemptionDate.seconds * 1000).toLocaleTimeString()
+                                : 'Unknown time'
+                              }
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                              <Users className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                            <span>{redemption.customerName || 'Unknown Customer'}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="inline-block px-3 py-1 rounded-md border border-slate-200 shadow-sm bg-white">
+                            <span className="text-indigo-600 font-medium">
+                              {(redemption.pointsUsed ?? 0).toLocaleString()} points
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant="outline" 
+                            className={cn(
+                              "rounded-md px-2 py-1",
+                              redemption.status === 'completed' 
+                                ? "bg-blue-50 text-blue-700 border-blue-200" 
+                                : redemption.status === 'pending'
+                                ? "bg-gray-100 text-gray-600 border-gray-200"
+                                : "bg-gray-50 text-gray-500 border-gray-100"
+                            )}
+                          >
+                            {capitalize(redemption.status)}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Edit Reward Dialog */}
       <CreateRewardDialog 

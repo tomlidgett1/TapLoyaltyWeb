@@ -105,7 +105,7 @@ const navItems = [
   },
   {
     title: "Rewards Library",
-    href: "/Library",
+    href: "/rewardlibrary",
     icon: Gift
   },
   {

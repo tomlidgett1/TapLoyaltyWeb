@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { useState, useEffect } from "react"
-import { CalendarIcon, Clock, HelpCircle, Users, UserCheck, UserCog, ShoppingCart, DollarSign, UserPlus, X, BugPlay, FileText, Eye, ListChecks, AlertTriangle, ChevronRight, Edit as EditIcon } from "lucide-react"
+import { CalendarIcon, Clock, HelpCircle, Users, UserCheck, UserCog, ShoppingCart, DollarSign, UserPlus, X, BugPlay, FileText, Eye, ListChecks, AlertTriangle, ChevronRight, Edit as EditIcon, CheckCircle, ClipboardCheck } from "lucide-react"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format } from "date-fns"
@@ -653,11 +653,26 @@ export function CreateRewardDialog({
           className="w-full flex-1 overflow-hidden flex flex-col"
         >
           <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="step1">Basic Details</TabsTrigger>
-            <TabsTrigger value="step2">Visibility</TabsTrigger>
-            <TabsTrigger value="step3">Conditions</TabsTrigger>
-            <TabsTrigger value="step4">Limitations</TabsTrigger>
-            <TabsTrigger value="step5">Review</TabsTrigger>
+            <TabsTrigger value="step1" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              <span>Basic Details</span>
+            </TabsTrigger>
+            <TabsTrigger value="step2" className="flex items-center gap-2">
+              <Eye className="h-4 w-4" />
+              <span>Visibility</span>
+            </TabsTrigger>
+            <TabsTrigger value="step3" className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4" />
+              <span>Conditions</span>
+            </TabsTrigger>
+            <TabsTrigger value="step4" className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              <span>Limitations</span>
+            </TabsTrigger>
+            <TabsTrigger value="step5" className="flex items-center gap-2">
+              <ClipboardCheck className="h-4 w-4" />
+              <span>Review</span>
+            </TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-y-auto">

@@ -621,15 +621,6 @@ export function CreateRewardDialog({
                 </Button>
               )}
               <Button 
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  // Your template logic here
-                }}
-              >
-                Create from Template
-              </Button>
-              <Button 
                 variant="outline" 
                 size="sm"
                 className="bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-700"

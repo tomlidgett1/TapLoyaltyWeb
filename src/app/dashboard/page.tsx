@@ -22,7 +22,8 @@ import {
   Star,
   ChevronRight,
   BarChart,
-  Eye
+  Eye,
+  Server
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -48,6 +49,14 @@ export default function DashboardPage() {
   const [popularRewards, setPopularRewards] = useState<any[]>([])
   const [activeBanners, setActiveBanners] = useState<any[]>([])
   const [scheduledBanners, setScheduledBanners] = useState<any[]>([])
+  const [metricsType, setMetricsType] = useState<"consumer" | "platform">("platform")
+  const [metrics, setMetrics] = useState({
+    totalCustomers: 0,
+    customerGrowth: 0,
+    totalPointsIssued: 0,
+    redemptionRate: 0,
+    avgOrderValue: 0
+  })
 
   const getDateRange = (tf: TimeframeType): { start: Date; end: Date } => {
     const now = new Date()
@@ -398,6 +407,87 @@ export default function DashboardPage() {
     }
   }, [user?.uid])
 
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      if (!user?.uid) return
+      
+      try {
+        setLoading(true)
+        const { start, end } = getDateRange(timeframe)
+        
+        // Fetch total customers
+        const customersRef = collection(db, 'customers')
+        const customersQuery = query(
+          customersRef,
+          where('merchantId', '==', user.uid),
+          where('createdAt', '>=', start),
+          where('createdAt', '<=', end)
+        )
+        const customersSnapshot = await getDocs(customersQuery)
+        const totalCustomers = customersSnapshot.docs.length
+        
+        // Fetch total points issued
+        const transactionsRef = collection(db, 'merchants', user.uid, 'transactions')
+        const transactionsQuery = query(
+          transactionsRef,
+          where('merchantId', '==', user.uid),
+          where('createdAt', '>=', start),
+          where('createdAt', '<=', end)
+        )
+        const transactionsSnapshot = await getDocs(transactionsQuery)
+        const totalPointsIssued = transactionsSnapshot.docs.reduce((total, doc) => total + (doc.data().amount || 0), 0)
+        
+        // Fetch redemption rate
+        const redemptionsRef = collection(db, 'redemptions')
+        const redemptionsQuery = query(
+          redemptionsRef,
+          where('merchantId', '==', user.uid),
+          where('createdAt', '>=', start),
+          where('createdAt', '<=', end)
+        )
+        const redemptionsSnapshot = await getDocs(redemptionsQuery)
+        const totalRedemptions = redemptionsSnapshot.docs.length
+        const redemptionRate = totalRedemptions / totalCustomers
+        
+        // Fetch average order value
+        const totalAmount = transactionsSnapshot.docs.reduce((total, doc) => total + (doc.data().amount || 0), 0)
+        const avgOrderValue = totalAmount / totalCustomers
+        
+        // Calculate customer growth
+        const customersRef2 = collection(db, 'customers')
+        const customersQuery2 = query(
+          customersRef2,
+          where('merchantId', '==', user.uid),
+          where('createdAt', '<', start)
+        )
+        const customersSnapshot2 = await getDocs(customersQuery2)
+        const previousTotalCustomers = customersSnapshot2.docs.length
+        const customerGrowth = ((totalCustomers - previousTotalCustomers) / previousTotalCustomers) * 100
+        
+        setMetrics({
+          totalCustomers,
+          customerGrowth,
+          totalPointsIssued,
+          redemptionRate,
+          avgOrderValue
+        })
+      } catch (error) {
+        console.error('Error fetching metrics:', error)
+        toast({
+          title: "Error",
+          description: "Failed to load metrics. Please refresh the page.",
+          variant: "destructive"
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    if (user?.uid) {
+      fetchMetrics()
+    }
+  }, [user?.uid, timeframe])
+
   // Format date for display
   const formatDate = (date: Date) => {
     return format(date, "MMM d, yyyy")
@@ -443,84 +533,240 @@ export default function DashboardPage() {
               </Button>
             </div>
 
-            <Tabs
-              defaultValue="today"
-              value={timeframe}
-              onValueChange={(value) => setTimeframe(value as TimeframeType)}
-              className="w-full"
-            >
-              <TabsList className="grid grid-cols-4 w-full max-w-md">
-                <TabsTrigger value="today">Today</TabsTrigger>
-                <TabsTrigger value="yesterday">Yesterday</TabsTrigger>
-                <TabsTrigger value="7days">Last 7 days</TabsTrigger>
-                <TabsTrigger value="30days">Last 30 days</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-          
-          {/* Reduce space between tabs and metrics */}
-          <div className="mt-6">
-            {/* Key Metrics - Simplified */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card className="rounded-lg border border-gray-200">
-                <CardContent className="pt-6">
-                  <div className="flex flex-col">
-                    <p className="text-sm font-medium text-gray-500">Total Customers</p>
-                    <div className="mt-2 flex items-baseline">
-                      <p className="text-2xl font-semibold">1,247</p>
-                      <p className="ml-2 text-sm text-blue-600">+12.5%</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-lg border border-gray-200">
-                <CardContent className="pt-6">
-                  <div className="flex flex-col">
-                    <p className="text-sm font-medium text-gray-500">Points Issued</p>
-                    <div className="mt-2 flex items-baseline">
-                      <p className="text-2xl font-semibold">45,892</p>
-                      <p className="ml-2 text-sm text-blue-600">+23.7%</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-lg border border-gray-200">
-                <CardContent className="pt-6">
-                  <div className="flex flex-col">
-                    <p className="text-sm font-medium text-gray-500">Redemption Rate</p>
-                    <div className="mt-2 flex items-baseline">
-                      <p className="text-2xl font-semibold">32%</p>
-                      <p className="ml-2 text-sm text-blue-600">+5.2%</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-lg border border-gray-200">
-                <CardContent className="pt-6">
-                  <div className="flex flex-col">
-                    <p className="text-sm font-medium text-gray-500">Avg. Order Value</p>
-                    <div className="mt-2 flex items-baseline">
-                      <p className="text-2xl font-semibold">$24.50</p>
-                      <p className="ml-2 text-sm text-blue-600">+3.8%</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+            {/* Update the tabs layout to be side-by-side with a separator */}
+            <div className="flex items-center gap-4">
+              {/* Metrics type tabs */}
+              <Tabs 
+                defaultValue="platform" 
+                className="flex-shrink-0"
+                onValueChange={(value) => setMetricsType(value)}
+              >
+                <TabsList>
+                  <TabsTrigger value="platform" className="flex items-center gap-2">
+                    <Server className="h-4 w-4" />
+                    <span>Platform Metrics</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="consumer" className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    <span>Consumer Metrics</span>
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+              
+              {/* Vertical separator */}
+              <div className="h-8 w-px bg-gray-200"></div>
+              
+              {/* Date range tabs */}
+              <Tabs 
+                defaultValue="today"
+                value={timeframe}
+                onValueChange={(value) => setTimeframe(value as TimeframeType)}
+              >
+                <TabsList>
+                  <TabsTrigger value="today">Today</TabsTrigger>
+                  <TabsTrigger value="yesterday">Yesterday</TabsTrigger>
+                  <TabsTrigger value="7days">Last 7 Days</TabsTrigger>
+                  <TabsTrigger value="30days">Last 30 Days</TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
           </div>
           
+          {/* Metrics section - conditionally render based on metricsType */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+            {metricsType === "consumer" ? (
+              <>
+                {/* Consumer metrics */}
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-500">Total Customers</p>
+                        <div className="text-2xl font-semibold">{metrics.totalCustomers}</div>
+                      </div>
+                      <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
+                        <Users className="h-5 w-5 text-blue-500" />
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-center text-xs">
+                      <div className={cn(
+                        "flex items-center",
+                        metrics.customerGrowth > 0 ? "text-green-600" : "text-red-600"
+                      )}>
+                        {metrics.customerGrowth > 0 ? (
+                          <ArrowUp className="h-3 w-3 mr-1" />
+                        ) : (
+                          <ArrowDown className="h-3 w-3 mr-1" />
+                        )}
+                        <span>{Math.abs(metrics.customerGrowth)}%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-500">Average Spend</p>
+                        <div className="text-2xl font-semibold">${metrics.avgOrderValue.toFixed(2)}</div>
+                      </div>
+                      <div className="h-10 w-10 rounded-full bg-green-50 flex items-center justify-center">
+                        <DollarSign className="h-5 w-5 text-green-500" />
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        <span>5.2%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-500">Total Transactions</p>
+                        <div className="text-2xl font-semibold">{metrics.totalTransactions || 0}</div>
+                      </div>
+                      <div className="h-10 w-10 rounded-full bg-amber-50 flex items-center justify-center">
+                        <ShoppingCart className="h-5 w-5 text-amber-500" />
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        <span>8.7%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-500">Total Redemptions</p>
+                        <div className="text-2xl font-semibold">{metrics.totalRedemptions || 0}</div>
+                      </div>
+                      <div className="h-10 w-10 rounded-full bg-purple-50 flex items-center justify-center">
+                        <Gift className="h-5 w-5 text-purple-500" />
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        <span>12.3%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <>
+                {/* Platform metrics */}
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-500">Active Merchants</p>
+                        <div className="text-2xl font-semibold">127</div>
+                      </div>
+                      <div className="h-10 w-10 rounded-full bg-purple-50 flex items-center justify-center">
+                        <ShoppingCart className="h-5 w-5 text-purple-500" />
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        <span>12%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-500">Total Rewards</p>
+                        <div className="text-2xl font-semibold">3,842</div>
+                      </div>
+                      <div className="h-10 w-10 rounded-full bg-amber-50 flex items-center justify-center">
+                        <Gift className="h-5 w-5 text-amber-500" />
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        <span>8%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-500">API Requests</p>
+                        <div className="text-2xl font-semibold">1.2M</div>
+                      </div>
+                      <div className="h-10 w-10 rounded-full bg-green-50 flex items-center justify-center">
+                        <Zap className="h-5 w-5 text-green-500" />
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        <span>23%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-500">System Uptime</p>
+                        <div className="text-2xl font-semibold">99.98%</div>
+                      </div>
+                      <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
+                        <Server className="h-5 w-5 text-blue-500" />
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        <span>0.1%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
+          
           {/* Recent Activity and Popular Rewards - Side by side */}
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-2 gap-6 mt-6">
             {/* Recent Activity - New Design */}
-            <Card className="rounded-lg border border-gray-200">
+            <Card className="rounded-lg border border-gray-200 overflow-hidden">
               <CardHeader className="py-4 px-6 bg-gray-50 border-b border-gray-100">
                 <div className="flex justify-between items-center">
                   <div>
                     <CardTitle className="text-base font-medium text-gray-900">Recent Activity</CardTitle>
-                    <p className="text-sm text-gray-500 mt-0.5">Latest customer interactions and rewards</p>
+                    <p className="text-sm text-gray-500 mt-0.5">Latest customer transactions and redemptions</p>
                   </div>
                   <Button 
                     variant="ghost" 
@@ -528,14 +774,14 @@ export default function DashboardPage() {
                     className="text-blue-600 hover:text-blue-700 hover:bg-blue-50/50 h-8 px-2"
                     asChild
                   >
-                    <Link href="/store/activity" className="flex items-center gap-1">
+                    <Link href="/customers" className="flex items-center gap-1">
                       View all
                       <ChevronRight className="h-3 w-3" />
                     </Link>
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="p-0 bg-white">
                 <div className="divide-y divide-gray-100">
                   {loading ? (
                     <div className="p-4 text-center">
@@ -658,7 +904,7 @@ export default function DashboardPage() {
             </Card>
 
             {/* Popular Rewards */}
-            <Card className="rounded-lg border border-gray-200">
+            <Card className="rounded-lg border border-gray-200 overflow-hidden">
               <CardHeader className="py-4 px-6 bg-gray-50 border-b border-gray-100">
                 <div className="flex justify-between items-center">
                   <div>
@@ -678,7 +924,7 @@ export default function DashboardPage() {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="p-0 bg-white">
                 {loading ? (
                   <div className="p-4 text-center text-gray-500">Loading rewards...</div>
                 ) : popularRewards.length === 0 ? (

@@ -479,7 +479,15 @@ const RewardCard = ({ reward, setCreateRewardData, setEditDialogOpen }: RewardCa
                 <Clock className="h-4 w-4 text-[#007AFF] mr-2" />
                 <div>
                   <div className="text-xs text-gray-500">Delayed Visibility</div>
-                  <div className="font-medium">{reward.delayedVisibility.value} {reward.delayedVisibility.type}</div>
+                  <div className="font-medium">
+                    {/* Format the delayed visibility value */}
+                    {reward.delayedVisibility.type === 'totalLifetimeSpend' 
+                      ? `$${reward.delayedVisibility.value} lifetime spend`
+                      : reward.delayedVisibility.type === 'transactions'
+                      ? `${reward.delayedVisibility.value} transactions`
+                      : `${reward.delayedVisibility.value} ${reward.delayedVisibility.type.replace(/([A-Z])/g, ' $1').toLowerCase()}`
+                    }
+                  </div>
                 </div>
               </div>
             )}
@@ -561,19 +569,14 @@ const RewardCard = ({ reward, setCreateRewardData, setEditDialogOpen }: RewardCa
   );
 };
 
-// Update the BannerCard component to display banners left-aligned
+// Update the BannerCard component to include the expandable content with the Create Banner button
 const BannerCard = ({ banner }: { banner: any }) => {
   const { toast } = useToast();
   const [isExpanded, setIsExpanded] = useState(false);
   const { user } = useAuth();
   const [merchantName, setMerchantName] = useState<string>("");
   const [createBannerOpen, setCreateBannerOpen] = useState(false);
-  
-  // Debug banner data on mount
-  useEffect(() => {
-    console.log("BannerCard mounted with data:", JSON.stringify(banner, null, 2));
-  }, []);
-  
+
   // Fetch merchant name on component mount
   useEffect(() => {
     const fetchMerchantName = async () => {
@@ -582,7 +585,6 @@ const BannerCard = ({ banner }: { banner: any }) => {
           const merchantDoc = await getDoc(doc(db, 'merchants', user.uid));
           if (merchantDoc.exists()) {
             const data = merchantDoc.data();
-            // Specifically use merchantName field first, then fall back to other fields
             const name = data.merchantName || data.businessName || data.storeName || data.name || 'Your Store';
             setMerchantName(name);
           }
@@ -594,71 +596,16 @@ const BannerCard = ({ banner }: { banner: any }) => {
     
     fetchMerchantName();
   }, [user]);
-  
-  // Map visibility type string to enum
-  const getVisibilityType = (visibilityString: string) => {
-    if (visibilityString?.toLowerCase().includes('new')) {
-      return BannerVisibility.NEW;
-    }
-    return BannerVisibility.ALL;
-  };
-  
-  // Map style string to enum
-  const getStyleType = (styleString: string) => {
-    if (styleString?.toLowerCase() === 'dark') {
-      return BannerStyle.DARK;
-    } else if (styleString?.toLowerCase() === 'glass') {
-      return BannerStyle.GLASS;
-    }
-    return BannerStyle.LIGHT;
-  };
 
-  // Log banner data for debugging
-  useEffect(() => {
-    if (createBannerOpen) {
-      console.log("Dialog opened with banner data:", JSON.stringify(banner, null, 2));
-    }
-  }, [createBannerOpen, banner]);
-  
-  // Create a deep copy of the banner data for the dialog
-  const getBannerDataForDialog = () => {
-    try {
-      // Create a deep copy to avoid reference issues
-      const bannerCopy = JSON.parse(JSON.stringify(banner));
-      console.log("Prepared banner data for dialog:", bannerCopy);
-      return bannerCopy;
-    } catch (error) {
-      console.error("Error preparing banner data:", error);
-      // Return a minimal valid object if parsing fails
-      return {
-        title: banner?.title || "Banner Title",
-        description: banner?.description || "Banner Description",
-        color: banner?.color || "#007AFF",
-        style: banner?.style || "light",
-        bannerAction: banner?.bannerAction || "Take to store page",
-        visibilityType: banner?.visibilityType || "All customers",
-        isActive: banner?.isActive !== undefined ? banner.isActive : true
-      };
-    }
+  // Always return dark style
+  const getStyleType = (styleString: string): BannerStyle => {
+    return BannerStyle.DARK; // Always use dark style
   };
 
   // Handle opening the dialog
   const handleOpenDialog = (e: React.MouseEvent) => {
     e.stopPropagation();
-    console.log("Opening banner dialog with raw data:", banner);
-    console.log("Banner data type:", typeof banner);
-    console.log("Banner data keys:", Object.keys(banner));
     setCreateBannerOpen(true);
-  };
-
-  // Handle saving the banner
-  const handleSaveBanner = (bannerData: any) => {
-    console.log("Banner saved with data:", bannerData);
-    toast({
-      title: "Banner saved",
-      description: "Your banner has been saved successfully.",
-    });
-    setCreateBannerOpen(false);
   };
 
   return (
@@ -669,17 +616,18 @@ const BannerCard = ({ banner }: { banner: any }) => {
           <BannerPreview
             title={banner.title}
             description={banner.description}
-            buttonText={banner.buttonText}
-            color={banner.color}
-            styleType={getStyleType(banner.style)}
+            buttonText={banner.buttonText || "Learn more"}
+            color={banner.color || "#007AFF"} // Default to blue if no color provided
+            styleType={BannerStyle.DARK} // Always use dark style
             merchantName={merchantName || banner.merchantName || "Your Store"}
-            visibilityType={getVisibilityType(banner.visibilityType)}
+            visibilityType={banner.visibilityType === 'new' ? BannerVisibility.NEW : BannerVisibility.ALL}
             isActive={banner.isActive}
+            forceWhiteText={true} // Always force white text
           />
         </div>
       </div>
-      
-      {/* Expandable content - appears below the banner when clicked */}
+
+      {/* Expandable content */}
       {isExpanded && (
         <div className="mt-2 p-4 bg-gray-50 rounded-lg border border-gray-100" style={{ width: "350px", maxWidth: "100%" }}>
           <div className="space-y-3">
@@ -729,17 +677,17 @@ const BannerCard = ({ banner }: { banner: any }) => {
           </div>
         </div>
       )}
-      
+
       {/* CreateBannerDialog component */}
       {createBannerOpen && (
         <CreateBannerDialog
           open={createBannerOpen}
-          onOpenChange={(open) => {
-            console.log("Dialog open state changing to:", open);
-            setCreateBannerOpen(open);
+          onOpenChange={setCreateBannerOpen}
+          initialBannerData={banner}
+          onSave={(bannerData) => {
+            console.log("Banner saved:", bannerData);
+            setCreateBannerOpen(false);
           }}
-          initialBannerData={getBannerDataForDialog()}
-          onSave={handleSaveBanner}
         />
       )}
     </div>
@@ -2019,25 +1967,24 @@ export function TapAiDialog({
   };
 
   const handleEditReward = (reward: any) => {
-    console.log("Editing reward:", reward);
+    console.log("Editing reward:", reward)
     
     // Ensure conditions and limitations are arrays
-    const conditions = Array.isArray(reward.conditions) ? reward.conditions : [];
-    const limitations = Array.isArray(reward.limitations) ? reward.limitations : [];
+    const conditions = Array.isArray(reward.conditions) ? reward.conditions : []
+    const limitations = Array.isArray(reward.limitations) ? reward.limitations : []
     
     // Map the reward data to the format expected by CreateRewardDialog
     const editFormData = {
       rewardName: reward.rewardName || '',
       description: reward.description || '',
-      type: reward.programtype || 'points', 
+      type: reward.programtype || 'points',
       rewardVisibility: reward.rewardVisibility || 'global',
       pin: '',
       pointsCost: reward.pointsCost?.toString() || '0',
       isActive: reward.isActive !== false,
       delayedVisibility: !!reward.delayedVisibility,
-      delayedVisibilityType: 'transactions',
-      delayedVisibilityTransactions: '',
-      delayedVisibilitySpend: '',
+      delayedVisibilityType: reward.delayedVisibility?.type || 'transactions',
+      delayedVisibilityValue: reward.delayedVisibility?.value?.toString() || '',
       isTargeted: false,
       discountAmount: '0',
       itemName: '',
@@ -2049,35 +1996,34 @@ export function TapAiDialog({
         useSpendingRequirements: false,
         useTimeRequirements: false,
         newCustomer: false,
-        minimumTransactions: '',
-        maximumTransactions: '',
-        daysSinceJoined: '',
-        daysSinceLastVisit: '',
-        minimumLifetimeSpend: conditions.find(c => c.type === 'minimumSpend')?.amount?.toString() || '',
-        minimumPointsBalance: '',
-        membershipLevel: ''
+        minimumTransactions: conditions.find(c => c.type === 'minimumTransactions')?.value?.toString() || '',
+        maximumTransactions: conditions.find(c => c.type === 'maximumTransactions')?.value?.toString() || '',
+        daysSinceJoined: conditions.find(c => c.type === 'daysSinceJoined')?.value?.toString() || '',
+        daysSinceLastVisit: conditions.find(c => c.type === 'daysSinceLastVisit')?.value?.toString() || '',
+        minimumLifetimeSpend: conditions.find(c => c.type === 'minimumLifetimeSpend')?.value?.toString() || '',
+        minimumPointsBalance: conditions.find(c => c.type === 'minimumPointsBalance')?.value?.toString() || '',
+        membershipLevel: conditions.find(c => c.type === 'membershipLevel')?.value?.toString() || ''
       },
       
       limitations: {
         totalRedemptionLimit: limitations.find(l => l.type === 'totalRedemptionLimit')?.value?.toString() || '',
         perCustomerLimit: limitations.find(l => l.type === 'customerLimit')?.value?.toString() || '',
-        useTimeRestrictions: false,
-        startTime: '',
-        endTime: '',
-        useDayRestrictions: false,
-        dayRestrictions: [],
-      },
-      
-      hasActivePeriod: false,
-      activePeriod: {
-        startDate: '',
-        endDate: ''
+        useTimeRestrictions: !!limitations.find(l => l.type === 'timeOfDay'),
+        startTime: limitations.find(l => l.type === 'timeOfDay')?.value?.startTime || '',
+        endTime: limitations.find(l => l.type === 'timeOfDay')?.value?.endTime || '',
+        useDayRestrictions: !!limitations.find(l => l.type === 'daysOfWeek'),
+        dayRestrictions: limitations.find(l => l.type === 'daysOfWeek')?.value || [],
+        hasActivePeriod: !!limitations.find(l => l.type === 'activePeriod'),
+        activePeriod: {
+          startDate: limitations.find(l => l.type === 'activePeriod')?.value?.startDate || '',
+          endDate: limitations.find(l => l.type === 'activePeriod')?.value?.endDate || ''
+        }
       }
-    };
+    }
     
-    setCreateRewardData(editFormData);
-    setEditDialogOpen(true);
-  };
+    setCreateRewardData(editFormData)
+    setEditDialogOpen(true)
+  }
 
   // Create a wrapper function that preserves program data
   const setSavingReward = (reward: any) => {
@@ -2102,37 +2048,14 @@ export function TapAiDialog({
   };
 
   const initializeConversation = async () => {
-    console.log('initializeConversation called');
-    
     try {
-      // If we already have a threadId, use it
-      if (threadId) {
-        console.log('Current threadId:', threadId);
-      return;
-    }
-    
-      console.log('No threadId, creating new thread');
-      
-      // Create a simple first message to initialize the thread
-      const initialMessage = "Hey, this is the initial message";
-      
-      // Use talkToAssistant to create a thread and get initial response
-      const response = await talkToAssistant(initialMessage);
-      
-      console.log('Initial conversation created with threadId:', response.threadId);
-      
-      // Set the threadId for future messages
-      if (response.threadId) {
-        setThreadId(response.threadId);
+      // Only set input to initialPrompt if it has a value
+      if (initialPrompt.trim()) {
+        setInput(initialPrompt);
       }
-      
-      // Add the initial messages to the UI
-      setLocalMessages([
-        { role: 'assistant', content: response.content }
-      ]);
+      // Rest of the initialization code...
     } catch (error) {
-      console.error('Error initializing conversation:', error);
-      setError('Failed to initialize conversation. Please try again.');
+      console.error("Error initializing conversation:", error);
     }
   };
 
@@ -2464,7 +2387,7 @@ export function TapAiDialog({
       setThreadId(null);
       
       // Create a new thread via the assistant API
-      const initialMessage = "Hello, I'm ready to help with your loyalty program.";
+      const initialMessage = "Say hi and let the user know you can create banners and rewards. Dont mention you're an AI.";
       const response = await talkToAssistant(initialMessage);
       
       if (!response.threadId) {
@@ -2686,7 +2609,7 @@ export function TapAiDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent 
-        className="sm:max-w-[1400px] h-[90vh] flex flex-col p-0 border-0 rounded-xl overflow-hidden focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+        className="sm:max-w-[1400px] h-[97vh] flex flex-col p-0 border-0 rounded-xl overflow-hidden focus:outline-none focus-visible:outline-none focus-visible:ring-0"
       >
         <div className="flex h-full">
           {/* Conversations sidebar */}
@@ -2778,15 +2701,56 @@ export function TapAiDialog({
                   <span>AI</span>
                   <span className="ml-1 font-normal">Assistant</span>
                 </DialogTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 mr-8 h-7 text-xs"
-                  onClick={() => window.open('https://docs.taployalty.dev/ai-assistant', '_blank')}
-                >
-                  <HelpCircle className="h-3 w-3" />
-                  Help Guide
-                </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 mr-8 h-7 text-xs"
+                    >
+                      <HelpCircle className="h-3 w-3" />
+                      Help Guide
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent 
+                    className="w-80" 
+                    side="bottom" 
+                    align="end" 
+                    sideOffset={5}
+                    // Add this to ensure it stays within the dialog
+                    style={{ zIndex: 99999 }}
+                  >
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 border-b pb-2">
+                        <Sparkles className="h-4 w-4 text-[#007AFF]" />
+                        <h4 className="font-semibold">Welcome to TapAI!</h4>
+                      </div>
+                      
+                      <div className="space-y-3 text-sm">
+                        <p>
+                          I'm here to help you create and manage your loyalty program. Just chat with me naturally and I can:
+                        </p>
+                        <ul className="space-y-2">
+                          <li className="flex items-start gap-2">
+                            <Gift className="h-4 w-4 text-blue-500 mt-0.5" />
+                            <span>Design rewards and loyalty programs</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <MessageSquare className="h-4 w-4 text-purple-500 mt-0.5" />
+                            <span>Create engaging promotional banners</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <SparklesIcon className="h-4 w-4 text-amber-500 mt-0.5" />
+                            <span>Provide loyalty strategy advice</span>
+                          </li>
+                        </ul>
+                        <p className="text-gray-600 text-xs">
+                          Simply describe what you need, and I'll help you create it!
+                        </p>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
             </DialogHeader>
 
@@ -2821,20 +2785,37 @@ export function TapAiDialog({
                         {parsedContent.hasJson ? (
                           <div>
                             {message.role === 'assistant' ? (
-                              <StaggeredText text={
-                                // Clean any unwanted array brackets from the text
-                                (parsedContent.beforeJson || '')
-                                  .replace(/\[\s*,\s*,\s*\]/g, '')
-                                  .replace(/\[\s*\]/g, '')
-                                  .trim()
-                              } />
+                              <>
+                                <StaggeredText text={
+                                  // Clean any unwanted array brackets from the text
+                                  (parsedContent.beforeJson || '')
+                                    .replace(/\[\s*,\s*,\s*\]/g, '')
+                                    .replace(/\[\s*\]/g, '')
+                                    .trim()
+                                } />
+                                {/* Add a gap before JSON content */}
+                                <div className="h-3" /> {/* This adds the gap */}
+                              </>
                             ) : (
-                              parsedContent.beforeJson
+                              <>
+                                {parsedContent.beforeJson}
+                                <div className="h-3" /> {/* This adds the gap */}
+                              </>
                             )}
 
                             {parsedContent.multipleJson ? (
                               <div className="space-y-4">
-                                {parsedContent.jsonObjects.map((jsonObj, idx) => {
+                                {/* For banners specifically, create a horizontal layout */}
+                                {parsedContent.jsonObjects.some(obj => isBannerData(obj)) && (
+                                  <div className="flex flex-wrap gap-4 mb-4">
+                                    {parsedContent.jsonObjects.filter(obj => isBannerData(obj)).map((banner, idx) => (
+                                      <BannerCard key={`banner-${idx}`} banner={banner} />
+                                    ))}
+                                  </div>
+                                )}
+                                
+                                {/* For rewards and other objects, keep the vertical layout */}
+                                {parsedContent.jsonObjects.filter(obj => !isBannerData(obj)).map((jsonObj, idx) => {
                                   // Check if this is a rewards container
                                   if (jsonObj.rewards && Array.isArray(jsonObj.rewards)) {
                                     const { conversationText, rewardsArray } = extractConversationFromReward(jsonObj);
@@ -2853,11 +2834,9 @@ export function TapAiDialog({
                                       </div>
                                     );
                                   }
-                                  // Determine if it's a reward or banner
+                                  // Determine if it's a reward
                                   if (jsonObj.rewardName) {
                                     return <RewardCard key={idx} reward={jsonObj} setCreateRewardData={setCreateRewardData} setEditDialogOpen={setEditDialogOpen} />;
-                                  } else if (isBannerData(jsonObj)) {
-                                    return <BannerCard key={idx} banner={jsonObj} />;
                                   } else {
                                     // Fallback for other JSON objects
                                     return (
@@ -2943,12 +2922,12 @@ export function TapAiDialog({
                   </div>
                 )}
 
-                {/* Loading indicator - Updated position and added "Thinking..." text */}
+                {/* Loading indicator - Updated position and removed grey background */}
                 {isLoading && (
                   <div className="flex justify-start">
-                    <div className="bg-gray-200 text-gray-900 p-2.5 rounded-lg flex items-center space-x-2 fade-in">
+                    <div className="flex items-center gap-2 text-gray-600 fade-in">
                       <div className="h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                      <span className="text-gray-700 font-medium">Thinking...</span>
+                      <span className="font-medium">Thinking...</span>
                     </div>
                   </div>
                 )}

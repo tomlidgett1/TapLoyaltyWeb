@@ -352,7 +352,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 variant="default"
                 size="sm"
                 className="h-9 w-[120px] bg-[#007AFF] hover:bg-[#0066CC] text-white"
-                initialPrompt="How can I help you today?"
+                //initialPrompt="How can I help you today?"
               />
               <Button 
                 variant="outline" 

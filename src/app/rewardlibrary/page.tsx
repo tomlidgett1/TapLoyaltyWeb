@@ -19,7 +19,9 @@ import {
   Calendar,
   UserPlus,
   LayoutGrid,
-  List
+  List,
+  Clock,
+  AlertCircle
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { useRouter } from "next/navigation"
@@ -29,25 +31,94 @@ import { cn } from "@/lib/utils"
 import { RewardDetailsDialog } from "@/components/reward-details-dialog"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
 
+// Empty array for reward templates
 const rewardTemplates = [
   {
-    id: 'test-reward',
-    name: 'Test Reward',
-    description: 'Enjoy a special test reward to elevate your experience!',
-    category: 'special-occasion',
-    pointsCost: "5",
-    icon: Gift,
-    tags: ['Test', 'Special', '$10 Value'],
+    id: 'free-coffee',
+    name: 'Free Coffee',
+    description: 'Enjoy a complimentary cup of our signature coffee on your next visit with any purchase.',
+    category: 'welcome',
+    pointsCost: "0",
+    icon: Coffee,
+    tags: ['Free', 'Beverage', 'Welcome'],
     type: "voucher",
-    voucherAmount: "10",
+    voucherAmount: "0",
     rewardVisibility: "global",
     isActive: true,
     conditions: {
       useTransactionRequirements: true,
       minimumTransactions: "1",
       maximumTransactions: "",
+      useSpendingRequirements: false,
+      minimumLifetimeSpend: "",
+      minimumPointsBalance: "",
+      useTimeRequirements: false,
+      daysSinceJoined: "",
+      daysSinceLastVisit: "",
+      membershipLevel: "",
+      newCustomer: false
+    },
+    limitations: {
+      totalRedemptionLimit: "200",
+      perCustomerLimit: "1",
+      useTimeRestrictions: false,
+      startTime: "",
+      endTime: "",
+      dayRestrictions: []
+    }
+  },
+  {
+    id: 'free-muffin',
+    name: 'Free Muffin',
+    description: 'Grab a free muffin with any beverage purchase at our café!',
+    category: 'loyalty',
+    pointsCost: "0",
+    icon: Cake,
+    tags: ['Free', 'Food', 'Bakery'],
+    type: "voucher",
+    voucherAmount: "0",
+    rewardVisibility: "global",
+    isActive: true,
+    conditions: {
+      useTransactionRequirements: false,
+      minimumTransactions: "",
+      maximumTransactions: "",
       useSpendingRequirements: true,
-      minimumLifetimeSpend: "20",
+      minimumLifetimeSpend: "5",
+      minimumPointsBalance: "",
+      useTimeRequirements: false,
+      daysSinceJoined: "",
+      daysSinceLastVisit: "",
+      membershipLevel: "",
+      newCustomer: false
+    },
+    limitations: {
+      totalRedemptionLimit: "150",
+      perCustomerLimit: "1",
+      useTimeRestrictions: false,
+      startTime: "",
+      endTime: "",
+      dayRestrictions: []
+    }
+  },
+  {
+    id: 'free-pastry',
+    name: 'Free Pastry',
+    description: 'Enjoy a free pastry of your choice on any order over $10!',
+    category: 'loyalty',
+    pointsCost: "0",
+    icon: Cake,
+    tags: ['Free', 'Food', 'Bakery'],
+    type: "voucher",
+    voucherAmount: "0",
+    rewardVisibility: "global",
+    isActive: true,
+    conditions: {
+      useTransactionRequirements: false,
+      minimumTransactions: "",
+      maximumTransactions: "",
+      useSpendingRequirements: true,
+      minimumLifetimeSpend: "10",
       minimumPointsBalance: "",
       useTimeRequirements: false,
       daysSinceJoined: "",
@@ -65,20 +136,20 @@ const rewardTemplates = [
     }
   },
   {
-    id: 'birthday-reward',
-    name: 'Birthday Reward',
-    description: 'Special reward for customers on their birthday',
-    category: 'special-occasion',
+    id: 'free-iced-tea',
+    name: 'Free Iced Tea',
+    description: 'Cool down with a complimentary iced tea with any meal purchased!',
+    category: 'loyalty',
     pointsCost: "0",
-    icon: Cake,
-    tags: ['Birthday', 'Free', 'Annual'],
+    icon: Coffee,
+    tags: ['Free', 'Beverage', 'Refreshing'],
     type: "voucher",
-    voucherAmount: "10",
+    voucherAmount: "0",
     rewardVisibility: "global",
     isActive: true,
     conditions: {
-      useTransactionRequirements: false,
-      minimumTransactions: "",
+      useTransactionRequirements: true,
+      minimumTransactions: "2",
       maximumTransactions: "",
       useSpendingRequirements: false,
       minimumLifetimeSpend: "",
@@ -90,8 +161,8 @@ const rewardTemplates = [
       newCustomer: false
     },
     limitations: {
-      totalRedemptionLimit: "",
-      perCustomerLimit: "",
+      totalRedemptionLimit: "120",
+      perCustomerLimit: "1",
       useTimeRestrictions: false,
       startTime: "",
       endTime: "",
@@ -99,52 +170,178 @@ const rewardTemplates = [
     }
   },
   {
-    id: 'coffee-loyalty',
-    name: 'Coffee Loyalty',
-    description: 'Buy 9 coffees, get 1 free',
-    category: 'loyalty',
-    pointsCost: "100",
-    icon: Coffee,
-    tags: ['Drinks', 'Popular', 'Frequent']
-  },
-  {
-    id: 'welcome-discount',
-    name: 'Welcome Discount',
-    description: '10% off first purchase for new customers',
-    category: 'welcome',
-    pointsCost: "0",
-    icon: ShoppingBag,
-    tags: ['New Customers', 'Discount']
-  },
-  {
-    id: 'vip-reward',
-    name: 'VIP Status Reward',
-    description: 'Exclusive reward for VIP members',
-    category: 'tier',
-    pointsCost: "500",
-    icon: Star,
-    tags: ['VIP', 'Premium', 'Exclusive']
-  },
-  {
-    id: 'spend-bonus',
-    name: 'Spend Bonus',
-    description: '$5 reward for every $100 spent',
+    id: 'free-sandwich',
+    name: 'Free Sandwich',
+    description: 'Enjoy a complimentary sandwich with any purchase over $15!',
     category: 'spending',
     pointsCost: "0",
-    icon: DollarSign,
-    tags: ['Spending', 'Cash Back']
+    icon: ShoppingBag,
+    tags: ['Free', 'Food', 'Meal'],
+    type: "voucher",
+    voucherAmount: "0",
+    rewardVisibility: "global",
+    isActive: true,
+    conditions: {
+      useTransactionRequirements: false,
+      minimumTransactions: "",
+      maximumTransactions: "",
+      useSpendingRequirements: true,
+      minimumLifetimeSpend: "15",
+      minimumPointsBalance: "",
+      useTimeRequirements: false,
+      daysSinceJoined: "",
+      daysSinceLastVisit: "",
+      membershipLevel: "",
+      newCustomer: false
+    },
+    limitations: {
+      totalRedemptionLimit: "80",
+      perCustomerLimit: "1",
+      useTimeRestrictions: false,
+      startTime: "",
+      endTime: "",
+      dayRestrictions: []
+    }
   },
   {
-    id: 'monthly-special',
-    name: 'Monthly Special',
-    description: 'Rotating monthly reward for members',
+    id: 'free-hot-chocolate',
+    name: 'Free Hot Chocolate',
+    description: 'Warm up with a free hot chocolate after any pastry purchase!',
+    category: 'special-occasion',
+    pointsCost: "0",
+    icon: Coffee,
+    tags: ['Free', 'Beverage', 'Seasonal'],
+    type: "voucher",
+    voucherAmount: "0",
+    rewardVisibility: "global",
+    isActive: true,
+    conditions: {
+      useTransactionRequirements: true,
+      minimumTransactions: "1",
+      maximumTransactions: "",
+      useSpendingRequirements: false,
+      minimumLifetimeSpend: "",
+      minimumPointsBalance: "",
+      useTimeRequirements: false,
+      daysSinceJoined: "",
+      daysSinceLastVisit: "",
+      membershipLevel: "",
+      newCustomer: false
+    },
+    limitations: {
+      totalRedemptionLimit: "90",
+      perCustomerLimit: "1",
+      useTimeRestrictions: false,
+      startTime: "",
+      endTime: "",
+      dayRestrictions: []
+    }
+  },
+  {
+    id: 'free-smoothie',
+    name: 'Free Smoothie',
+    description: 'Refresh yourself with a delicious smoothie after your third visit!',
+    category: 'loyalty',
+    pointsCost: "0",
+    icon: Coffee,
+    tags: ['Free', 'Beverage', 'Healthy'],
+    type: "voucher",
+    voucherAmount: "0",
+    rewardVisibility: "global",
+    isActive: true,
+    conditions: {
+      useTransactionRequirements: true,
+      minimumTransactions: "3",
+      maximumTransactions: "",
+      useSpendingRequirements: false,
+      minimumLifetimeSpend: "",
+      minimumPointsBalance: "",
+      useTimeRequirements: false,
+      daysSinceJoined: "",
+      daysSinceLastVisit: "",
+      membershipLevel: "",
+      newCustomer: false
+    },
+    limitations: {
+      totalRedemptionLimit: "75",
+      perCustomerLimit: "1",
+      useTimeRestrictions: false,
+      startTime: "",
+      endTime: "",
+      dayRestrictions: []
+    }
+  },
+  {
+    id: 'free-cake-slice',
+    name: 'Free Cake Slice',
+    description: 'Enjoy a complimentary slice of cake with any drink purchase over $10!',
+    category: 'special-occasion',
+    pointsCost: "0",
+    icon: Cake,
+    tags: ['Free', 'Dessert', 'Premium'],
+    type: "voucher",
+    voucherAmount: "0",
+    rewardVisibility: "global",
+    isActive: true,
+    conditions: {
+      useTransactionRequirements: false,
+      minimumTransactions: "",
+      maximumTransactions: "",
+      useSpendingRequirements: true,
+      minimumLifetimeSpend: "10",
+      minimumPointsBalance: "",
+      useTimeRequirements: false,
+      daysSinceJoined: "",
+      daysSinceLastVisit: "",
+      membershipLevel: "",
+      newCustomer: false
+    },
+    limitations: {
+      totalRedemptionLimit: "60",
+      perCustomerLimit: "1",
+      useTimeRestrictions: false,
+      startTime: "",
+      endTime: "",
+      dayRestrictions: []
+    }
+  },
+  {
+    id: 'free-breakfast-item',
+    name: 'Free Breakfast Item',
+    description: 'Start your day right with a free breakfast item with any purchase before 10 AM!',
     category: 'recurring',
-    pointsCost: "200",
-    icon: Calendar,
-    tags: ['Monthly', 'Seasonal']
+    pointsCost: "0",
+    icon: Coffee,
+    tags: ['Free', 'Breakfast', 'Morning'],
+    type: "voucher",
+    voucherAmount: "0",
+    rewardVisibility: "global",
+    isActive: true,
+    conditions: {
+      useTransactionRequirements: false,
+      minimumTransactions: "",
+      maximumTransactions: "",
+      useSpendingRequirements: false,
+      minimumLifetimeSpend: "",
+      minimumPointsBalance: "",
+      useTimeRequirements: true,
+      daysSinceJoined: "",
+      daysSinceLastVisit: "1",
+      membershipLevel: "",
+      newCustomer: false
+    },
+    limitations: {
+      totalRedemptionLimit: "70",
+      perCustomerLimit: "1",
+      useTimeRestrictions: true,
+      startTime: "06:00 AM",
+      endTime: "10:00 AM",
+      dayRestrictions: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    }
   }
 ]
 
+// Keep the categories for the UI structure
 const rewardCategories = [
   { id: 'all', label: 'All Templates', icon: Gift },
   { id: 'special-occasion', label: 'Special Occasions', icon: Cake },
@@ -188,48 +385,60 @@ export default function RewardLibraryPage() {
     router.push(`/store/rewards/create?template=${selectedReward?.id}`)
   }
 
-  const renderRewardItem = (template: typeof rewardTemplates[0], viewType: 'grid' | 'list') => {
-    const Icon = template.icon
+  const renderRewardItem = (template, viewType) => {
+    const Icon = template.icon || Gift
+    
+    // Count active conditions and limitations
+    const conditionCount = Object.entries(template.conditions).filter(([key, value]) => {
+      if (key === 'useTransactionRequirements' || key === 'useSpendingRequirements' || key === 'useTimeRequirements') {
+        return value === true
+      }
+      if (key === 'newCustomer') return value === true
+      return value && value !== ""
+    }).length
+    
+    const limitationCount = Object.entries(template.limitations).filter(([key, value]) => {
+      if (key === 'useTimeRestrictions') return value === true
+      if (key === 'dayRestrictions') return Array.isArray(value) && value.length > 0
+      return value && value !== ""
+    }).length
 
     if (viewType === 'list') {
       return (
-        <Card 
-          key={template.id} 
-          className="group hover:shadow-md transition-shadow rounded-md cursor-pointer"
+        <div 
+          key={template.id}
+          className="group flex items-stretch overflow-hidden bg-gray-50 border border-gray-100 rounded-lg hover:shadow-md transition-all cursor-pointer"
           onClick={() => handleRewardClick(template)}
         >
-          <div className="flex items-center p-4">
-            <div className="flex items-center gap-3 flex-1">
-              <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                <Icon className="h-5 w-5 text-blue-500" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-base font-medium">{template.name}</h3>
-                <p className="text-sm text-muted-foreground truncate">{template.description}</p>
-              </div>
+          <div className="w-16 bg-blue-50 flex items-center justify-center">
+            <Icon className="h-6 w-6 text-blue-500" />
+          </div>
+          
+          <div className="flex-1 p-4 flex items-center">
+            <div className="flex-1">
+              <h3 className="font-medium text-gray-900">{template.name}</h3>
+              <p className="text-sm text-gray-500 line-clamp-1">{template.description}</p>
             </div>
-            <div className="flex items-center gap-6">
-              <div className="flex flex-wrap gap-2">
-                {template.tags.map((tag) => (
-                  <Badge 
-                    key={tag} 
-                    variant="secondary"
-                    className="bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  >
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-              <div className="text-sm text-muted-foreground w-24 text-right">
-                {template.pointsCost === "0" ? (
-                  <span className="text-green-600 font-medium">Free</span>
-                ) : (
-                  <span>{template.pointsCost} points</span>
-                )}
-              </div>
+            
+            <div className="flex items-center gap-3 ml-4">
+              {conditionCount > 0 && (
+                <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">
+                  <Clock className="h-3 w-3" />
+                  {conditionCount} {conditionCount === 1 ? 'condition' : 'conditions'}
+                </div>
+              )}
+              
+              {limitationCount > 0 && (
+                <div className="flex items-center gap-1.5 bg-white text-gray-700 px-2 py-1 rounded-full text-xs font-medium border border-gray-100">
+                  <AlertCircle className="h-3 w-3" />
+                  {limitationCount} {limitationCount === 1 ? 'limit' : 'limits'}
+                </div>
+              )}
+              
               <Button 
                 variant="outline" 
                 size="sm"
+                className="ml-2 bg-white border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
                 onClick={(e) => {
                   e.stopPropagation()
                   handleRewardClick(template)
@@ -239,52 +448,70 @@ export default function RewardLibraryPage() {
               </Button>
             </div>
           </div>
-        </Card>
+        </div>
       )
     }
 
     return (
-      <Card 
+      <div 
         key={template.id} 
-        className="group hover:shadow-md transition-shadow rounded-md cursor-pointer"
+        className="group bg-gray-50 border border-gray-100 hover:border-blue-100 hover:shadow-md transition-all rounded-lg overflow-hidden cursor-pointer"
         onClick={() => handleRewardClick(template)}
       >
-        <CardHeader>
-          <div className="flex items-start justify-between">
+        <div className="p-5">
+          <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
                 <Icon className="h-5 w-5 text-blue-500" />
               </div>
               <div>
-                <CardTitle className="text-base">{template.name}</CardTitle>
-                <CardDescription>{template.description}</CardDescription>
+                <h3 className="font-medium text-gray-900">{template.name}</h3>
+                <p className="text-sm text-gray-500 line-clamp-2 mt-0.5">{template.description}</p>
               </div>
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
+          
           <div className="flex flex-wrap gap-2 mb-4">
             {template.tags.map((tag) => (
               <Badge 
                 key={tag} 
                 variant="secondary"
-                className="bg-gray-100 text-gray-600 hover:bg-gray-200"
+                className="bg-white text-gray-600 border border-gray-100"
               >
                 {tag}
               </Badge>
             ))}
           </div>
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              {template.pointsCost === "0" ? (
-                <span className="text-green-600 font-medium">Free</span>
-              ) : (
-                <span>{template.pointsCost} points</span>
+          
+          <div className="flex items-center justify-between pt-3 border-t border-gray-200">
+            <div className="flex items-center gap-2">
+              {conditionCount > 0 && (
+                <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">
+                  <Clock className="h-3 w-3" />
+                  {conditionCount}
+                </div>
               )}
+              
+              {limitationCount > 0 && (
+                <div className="flex items-center gap-1.5 bg-white text-gray-700 px-2 py-1 rounded-full text-xs font-medium border border-gray-100">
+                  <AlertCircle className="h-3 w-3" />
+                  {limitationCount}
+                </div>
+              )}
+              
+              <div className="text-sm text-gray-500">
+                {template.pointsCost === "0" ? (
+                  <span className="text-green-600 font-medium">Free</span>
+                ) : (
+                  <span>{template.pointsCost} points</span>
+                )}
+              </div>
             </div>
+            
             <Button 
               variant="outline" 
               size="sm"
+              className="bg-white border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
               onClick={(e) => {
                 e.stopPropagation()
                 handleRewardClick(template)
@@ -293,8 +520,8 @@ export default function RewardLibraryPage() {
               Use Template
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     )
   }
 

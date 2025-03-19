@@ -22,7 +22,7 @@ export function TapAiButton({
 
   // Use the width prop to set a style that will override Tailwind classes
   const buttonStyle = {
-    width: width === "auto" ? "160px" : width,
+    width: width === "auto" ? "131px" : width,
     maxWidth: "100%"
   }
 

@@ -63,24 +63,25 @@ import { Checkbox } from "@/components/ui/checkbox"
 
 // Types
 type RuleCategory = "all" | "active" | "inactive"
-type SortField = "name" | "type" | "points" | "usageCount" | "createdAt"
+type SortField = "name" | "pointsmultiplier" | "usageCount" | "createdAt"
 type SortDirection = "asc" | "desc"
 
 interface PointsRule {
   id: string
   name: string
-  description: string
-  type: "purchase" | "referral" | "engagement" | "other"
-  points: number
+  description?: string
+  pointsmultiplier: number
   usageCount: number
-  status: "active" | "inactive" | "draft"
+  active: boolean
   createdAt: Date
-  updatedAt: Date
-  conditions?: {
-    minPurchase?: number
-    maxPoints?: number
-    frequency?: string
-  }
+  conditions?: Array<{
+    type: string
+    startTime?: any
+    endTime?: any
+    days?: string[]
+    amount?: number
+    number?: number
+  }>
 }
 
 export default function PointsRulesPage() {
@@ -142,13 +143,11 @@ export default function PointsRulesPage() {
             id: doc.id,
             name: data.name || 'Unnamed Rule',
             description: data.description || '',
-            type: data.type || 'purchase',
-            points: data.points || 0,
+            pointsmultiplier: data.pointsmultiplier || 0,
             usageCount: data.usageCount || 0,
-            status: data.status || 'active',
+            active: data.active === undefined ? true : data.active,
             createdAt: getDateSafely(data.createdAt),
-            updatedAt: getDateSafely(data.updatedAt),
-            conditions: data.conditions || {}
+            conditions: data.conditions || []
           })
         })
         
@@ -162,40 +161,31 @@ export default function PointsRulesPage() {
               id: "mock1",
               name: "Purchase Points",
               description: "Earn points for every purchase",
-              type: "purchase",
-              points: 10,
+              pointsmultiplier: 10,
               usageCount: 156,
-              status: "active",
+              active: true,
               createdAt: new Date(),
-              updatedAt: new Date(),
-              conditions: {
-                minPurchase: 1
-              }
+              conditions: [{ type: "purchase" }]
             },
             {
               id: "mock2",
               name: "Referral Bonus",
               description: "Earn points when you refer a friend",
-              type: "referral",
-              points: 50,
+              pointsmultiplier: 50,
               usageCount: 23,
-              status: "active",
+              active: true,
               createdAt: new Date(),
-              updatedAt: new Date()
+              conditions: [{ type: "referral" }]
             },
             {
               id: "mock3",
               name: "Birthday Bonus",
               description: "Earn extra points on your birthday",
-              type: "engagement",
-              points: 100,
+              pointsmultiplier: 100,
               usageCount: 42,
-              status: "active",
+              active: true,
               createdAt: new Date(),
-              updatedAt: new Date(),
-              conditions: {
-                frequency: "yearly"
-              }
+              conditions: [{ type: "engagement" }]
             }
           ])
         }
@@ -221,13 +211,13 @@ export default function PointsRulesPage() {
     // Filter by search query
     const matchesSearch = 
       rule.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      rule.description.toLowerCase().includes(searchQuery.toLowerCase())
+      rule.description?.toLowerCase().includes(searchQuery.toLowerCase())
     
     // Filter by category
     const matchesCategory = 
       ruleCategory === "all" || 
-      (ruleCategory === "active" && rule.status === "active") ||
-      (ruleCategory === "inactive" && rule.status === "inactive")
+      (ruleCategory === "active" && rule.active) ||
+      (ruleCategory === "inactive" && !rule.active)
     
     return matchesSearch && matchesCategory
   }).sort((a, b) => {
@@ -238,11 +228,8 @@ export default function PointsRulesPage() {
       case "name":
         comparison = a.name.localeCompare(b.name)
         break
-      case "type":
-        comparison = a.type.localeCompare(b.type)
-        break
-      case "points":
-        comparison = a.points - b.points
+      case "pointsmultiplier":
+        comparison = a.pointsmultiplier - b.pointsmultiplier
         break
       case "usageCount":
         comparison = a.usageCount - b.usageCount
@@ -267,20 +254,20 @@ export default function PointsRulesPage() {
     }
   }
 
-  const toggleRuleStatus = async (id: string, currentStatus: string) => {
+  const toggleRuleStatus = async (id: string, currentStatus: boolean) => {
     if (!user?.uid) return
     
     try {
-      const newStatus = currentStatus === "active" ? "inactive" : "active"
+      const newStatus = !currentStatus
       const ruleRef = doc(db, 'merchants', user.uid, 'pointsRules', id)
       await updateDoc(ruleRef, { 
-        status: newStatus,
+        active: newStatus,
         updatedAt: new Date()
       })
       
       // Update local state
       setRules(prev => prev.map(rule => 
-        rule.id === id ? { ...rule, status: newStatus, updatedAt: new Date() } : rule
+        rule.id === id ? { ...rule, active: newStatus, updatedAt: new Date() } : rule
       ))
     } catch (error) {
       console.error("Error updating rule status:", error)
@@ -403,6 +390,62 @@ export default function PointsRulesPage() {
   // Calculate the total number of columns based on selection mode
   const totalColumns = selectionMode ? 8 : 7;
 
+  const formatTimeRange = (startTime: any, endTime: any) => {
+    try {
+      const formatTime = (time: any) => {
+        if (!time) return "?";
+        
+        let date: Date;
+        
+        if (time && typeof time.toDate === 'function') {
+          date = time.toDate();
+        } else if (time.seconds) {
+          date = new Date(time.seconds * 1000);
+        } else if (time instanceof Date) {
+          date = time;
+        } else {
+          return "?";
+        }
+        
+        const hours = date.getHours();
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        const hour = hours % 12 || 12;
+        return `${hour}${ampm}`;
+      };
+      
+      return `${formatTime(startTime)}-${formatTime(endTime)}`;
+    } catch (error) {
+      return "Invalid time";
+    }
+  };
+
+  const formatDays = (days: string[] | undefined) => {
+    if (!days || days.length === 0) return "None";
+    
+    if (days.length === 7) return "All days";
+    
+    if (days.length <= 2) {
+      return days.map(day => day.charAt(0).toUpperCase() + day.slice(1, 3)).join(", ");
+    }
+    
+    return `${days.length} days`;
+  };
+
+  // Helper function to determine the primary rule type from conditions
+  const getRuleType = (rule: PointsRule): string => {
+    if (!rule.conditions || rule.conditions.length === 0) return "other";
+    
+    // Check for specific condition types
+    if (rule.conditions.some(c => c.type === "minimumSpend")) return "purchase";
+    if (rule.conditions.some(c => c.type === "firstPurchase")) return "purchase";
+    if (rule.conditions.some(c => c.type === "visitNumber")) return "engagement";
+    if (rule.conditions.some(c => c.type === "daysOfWeek")) return "engagement";
+    if (rule.conditions.some(c => c.type === "timeOfDay")) return "engagement";
+    
+    // Default to the first condition type
+    return rule.conditions[0].type;
+  };
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <div>
@@ -499,29 +542,28 @@ export default function PointsRulesPage() {
                         <TableHead className="w-[40px]">
                           <Checkbox 
                             checked={
-                              filteredRules.length > 0 && 
+                              selectedRules.length > 0 && 
                               selectedRules.length === filteredRules.length
                             }
-                            onCheckedChange={handleSelectAll}
-                            aria-label="Select all"
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedRules(filteredRules.map(rule => rule.id))
+                              } else {
+                                setSelectedRules([])
+                              }
+                            }}
                           />
                         </TableHead>
                       )}
-                      <TableHead className="w-[300px]">
+                      <TableHead>
                         <SortButton field="name">Rule Name</SortButton>
                       </TableHead>
                       <TableHead>
-                        <span>Type</span>
+                        <SortButton field="pointsmultiplier">Multiplier</SortButton>
                       </TableHead>
+                      <TableHead>Conditions</TableHead>
                       <TableHead>
-                        <div className="text-right">
-                          <SortButton field="points">Points</SortButton>
-                        </div>
-                      </TableHead>
-                      <TableHead>
-                        <div className="text-right">
-                          <SortButton field="usageCount">Usage Count</SortButton>
-                        </div>
+                        <SortButton field="usageCount">Usage Count</SortButton>
                       </TableHead>
                       <TableHead>
                         <span>Status</span>
@@ -566,107 +608,118 @@ export default function PointsRulesPage() {
                       </TableRow>
                     ) : (
                       filteredRules.map((rule) => (
-                        <TableRow key={rule.id}>
+                        <TableRow 
+                          key={rule.id}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => router.push(`/store/rules/${rule.id}`)}
+                        >
                           {selectionMode && (
-                            <TableCell>
+                            <TableCell onClick={(e) => e.stopPropagation()}>
                               <Checkbox 
                                 checked={selectedRules.includes(rule.id)}
-                                onCheckedChange={(checked) => 
-                                  handleSelectRule(rule.id, checked === true)
-                                }
-                                aria-label={`Select ${rule.name}`}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setSelectedRules([...selectedRules, rule.id])
+                                  } else {
+                                    setSelectedRules(selectedRules.filter(id => id !== rule.id))
+                                  }
+                                }}
                               />
                             </TableCell>
                           )}
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              <div className="h-9 w-9 min-w-[36px] rounded-md bg-muted flex items-center justify-center">
-                                {getRuleTypeIcon(rule.type)}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="truncate">{rule.name}</div>
-                                <div className="text-xs text-muted-foreground line-clamp-1">{rule.description}</div>
-                              </div>
-                            </div>
+                          <TableCell>
+                            <div className="font-medium">{rule.name}</div>
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline" className={cn(
-                              "rounded-md",
-                              rule.type === "purchase" && "bg-green-50 text-green-700 border-green-200",
-                              rule.type === "referral" && "bg-blue-50 text-blue-700 border-blue-200",
-                              rule.type === "engagement" && "bg-purple-50 text-purple-700 border-purple-200"
-                            )}>
-                              <div className="flex items-center gap-1">
-                                {getRuleTypeIcon(rule.type)}
-                                <span>{getRuleTypeLabel(rule.type)}</span>
-                              </div>
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-right flex items-center justify-end gap-1">
+                            <div className="flex items-center gap-1">
                               <Zap className="h-4 w-4 text-blue-600" />
-                              <span>{rule.points}</span>
+                              <span>{rule.pointsmultiplier}x</span>
                             </div>
                           </TableCell>
                           <TableCell>
-                            <div className="text-right">
-                              {rule.usageCount}
+                            <div className="flex flex-wrap gap-1">
+                              {rule.conditions?.map((condition, index) => {
+                                if (condition.type === "timeOfDay") {
+                                  return (
+                                    <Badge key={index} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                      Time: {formatTimeRange(condition.startTime, condition.endTime)}
+                                    </Badge>
+                                  );
+                                } else if (condition.type === "daysOfWeek") {
+                                  return (
+                                    <Badge key={index} variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                      Days: {formatDays(condition.days)}
+                                    </Badge>
+                                  );
+                                } else if (condition.type === "minimumSpend") {
+                                  return (
+                                    <Badge key={index} variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                                      Min: ${condition.amount}
+                                    </Badge>
+                                  );
+                                } else if (condition.type === "firstPurchase") {
+                                  return (
+                                    <Badge key={index} variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                                      First Purchase
+                                    </Badge>
+                                  );
+                                } else if (condition.type === "visitNumber") {
+                                  return (
+                                    <Badge key={index} variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                                      Visit #{condition.number}
+                                    </Badge>
+                                  );
+                                }
+                                return null;
+                              })}
+                              {(!rule.conditions || rule.conditions.length === 0) && (
+                                <span className="text-sm text-muted-foreground">None</span>
+                              )}
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            {rule.usageCount}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline" className={cn(
                               "rounded-md",
-                              rule.status === "active" && "bg-green-50 text-green-700 border-green-200",
-                              rule.status === "inactive" && "bg-gray-50 text-gray-700 border-gray-200",
-                              rule.status === "draft" && "bg-amber-50 text-amber-700 border-amber-200"
+                              rule.active ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-700 border-gray-200"
                             )}>
-                              {rule.status}
+                              {rule.active ? "Active" : "Inactive"}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-muted-foreground text-sm">
                             {formatDate(rule.createdAt)}
                           </TableCell>
-                          <TableCell>
-                            <div className="flex justify-end">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" className="h-8 w-8 p-0 rounded-md">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="rounded-md">
-                                  <DropdownMenuItem onClick={() => window.location.href = `/store/rules/${rule.id}`}>
-                                    <Eye className="h-4 w-4 mr-2" />
-                                    View Details
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => window.location.href = `/store/rules/${rule.id}/edit`}>
-                                    <Edit className="h-4 w-4 mr-2" />
-                                    Edit
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => toggleRuleStatus(rule.id, rule.status)}>
-                                    {rule.status === "active" ? (
-                                      <>
-                                        <Clock className="h-4 w-4 mr-2" />
-                                        Deactivate
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Zap className="h-4 w-4 mr-2" />
-                                        Activate
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem 
-                                    className="text-red-600"
-                                    onClick={() => confirmDeleteRule(rule.id)}
-                                  >
-                                    <Trash className="h-4 w-4 mr-2" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
+                          <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => router.push(`/store/rules/${rule.id}`)}>
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  View
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => router.push(`/store/rules/${rule.id}/edit`)}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  className="text-red-600"
+                                  onClick={() => {
+                                    setRuleToDelete(rule.id)
+                                    setDeleteDialogOpen(true)
+                                  }}
+                                >
+                                  <Trash className="mr-2 h-4 w-4" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
                       ))
@@ -719,23 +772,21 @@ export default function PointsRulesPage() {
                         <div className="flex justify-between items-start">
                           <Badge variant="outline" className={cn(
                             "rounded-md mb-2",
-                            rule.type === "purchase" && "bg-green-50 text-green-700 border-green-200",
-                            rule.type === "referral" && "bg-blue-50 text-blue-700 border-blue-200",
-                            rule.type === "engagement" && "bg-purple-50 text-purple-700 border-purple-200"
+                            getRuleType(rule) === "purchase" && "bg-green-50 text-green-700 border-green-200",
+                            getRuleType(rule) === "referral" && "bg-blue-50 text-blue-700 border-blue-200",
+                            getRuleType(rule) === "engagement" && "bg-purple-50 text-purple-700 border-purple-200"
                           )}>
                             <div className="flex items-center gap-1">
-                              {getRuleTypeIcon(rule.type)}
-                              <span>{getRuleTypeLabel(rule.type)}</span>
+                              {getRuleTypeIcon(getRuleType(rule))}
+                              <span>{getRuleTypeLabel(getRuleType(rule))}</span>
                             </div>
                           </Badge>
                           
                           <Badge variant="outline" className={cn(
                             "rounded-md",
-                            rule.status === "active" && "bg-green-50 text-green-700 border-green-200",
-                            rule.status === "inactive" && "bg-gray-50 text-gray-700 border-gray-200",
-                            rule.status === "draft" && "bg-amber-50 text-amber-700 border-amber-200"
+                            rule.active ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-700 border-gray-200"
                           )}>
-                            {rule.status}
+                            {rule.active ? "Active" : "Inactive"}
                           </Badge>
                         </div>
                         <CardTitle className="text-lg">{rule.name}</CardTitle>
@@ -750,7 +801,7 @@ export default function PointsRulesPage() {
                             <div className="flex items-center mt-1">
                               <div className="flex items-center gap-1">
                                 <Zap className="h-4 w-4 text-blue-600" />
-                                <span className="font-medium">{rule.points}</span>
+                                <span className="font-medium">{rule.pointsmultiplier}x</span>
                               </div>
                             </div>
                           </div>
@@ -797,8 +848,8 @@ export default function PointsRulesPage() {
                               <Edit className="h-4 w-4 mr-2" />
                               Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => toggleRuleStatus(rule.id, rule.status)}>
-                              {rule.status === "active" ? (
+                            <DropdownMenuItem onClick={() => toggleRuleStatus(rule.id, rule.active)}>
+                              {rule.active ? (
                                 <>
                                   <Clock className="h-4 w-4 mr-2" />
                                   Deactivate

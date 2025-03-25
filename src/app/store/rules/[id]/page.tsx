@@ -351,10 +351,10 @@ export default function PointsRuleDetailsPage() {
           <div className="flex items-start justify-between">
             <div className="space-y-1">
               <h1 className="text-2xl font-semibold">{rule.name}</h1>
-              <p className="text-gray-500">Points Multiplier: {rule.pointsmultiplier}x • Created: {safeFormatDate(rule.createdAt)}</p>
+              <p className="text-gray-500">Created: {safeFormatDate(rule.createdAt)}</p>
             </div>
-            <div className="bg-primary/5 px-6 py-3 rounded-md text-center">
-              <div className="text-2xl font-bold text-primary">{rule.pointsmultiplier}x</div>
+            <div className="px-6 py-3 rounded-md text-center">
+              <div className="text-2xl font-bold text-[#007AFF]">{rule.pointsmultiplier}x</div>
               <div className="text-sm text-gray-500">multiplier</div>
             </div>
           </div>

@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { formatDistanceToNow } from "date-fns"
 import { 
   ArrowLeft, Calendar, Clock, Gift, Tag, Users, Zap, 
-  ChevronRight, BarChart, Award, CheckCircle, AlertCircle, Edit, Eye
+  ChevronRight, BarChart, Award, CheckCircle, AlertCircle, Edit, Eye, Copy
 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
@@ -94,6 +94,7 @@ export function RewardDetailsPage() {
   const [redemptions, setRedemptions] = useState<Redemption[]>([])
   const [redemptionsLoading, setRedemptionsLoading] = useState(true)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false)
 
   console.log("RewardDetailsPage rendering with:", {
     params,
@@ -317,53 +318,109 @@ export function RewardDetailsPage() {
     }
   }, [user?.uid, id, reward]);
 
-  // Update the createRewardDialogData object with more complete data
+  // Update the safeParseDate function to be even more robust
+  const safeParseDate = (dateString: string | undefined): string => {
+    if (!dateString) return '';
+    
+    try {
+      // Try different date formats
+      let date: Date | null = null;
+      
+      // Try as ISO string
+      date = new Date(dateString);
+      if (!isNaN(date.getTime())) {
+        return date.toISOString();
+      }
+      
+      // Try as timestamp (seconds)
+      if (typeof dateString === 'string' && /^\d+$/.test(dateString)) {
+        date = new Date(parseInt(dateString) * 1000);
+        if (!isNaN(date.getTime())) {
+          return date.toISOString();
+        }
+      }
+      
+      // Try with Firestore timestamp format
+      if (typeof dateString === 'object' && 'seconds' in dateString) {
+        date = new Date((dateString as any).seconds * 1000);
+        if (!isNaN(date.getTime())) {
+          return date.toISOString();
+        }
+      }
+      
+      // If all else fails, return a valid default date
+      return new Date().toISOString();
+    } catch (e) {
+      console.error("Error parsing date:", e, dateString);
+      // Return a valid default date instead of empty string
+      return new Date().toISOString();
+    }
+  };
+
+  // Update the createRewardDialogData object to properly map conditions and limitations
   const createRewardDialogData = reward ? {
     rewardName: reward.rewardName || '',
     description: reward.description || '',
     type: reward.rewardType || 'individual',
     rewardVisibility: 'all',
-    pin: '',
+    pin: reward.pin || '',
     pointsCost: reward.pointsCost?.toString() || '0',
     isActive: reward.status === 'active',
     delayedVisibility: false,
     delayedVisibilityType: 'transactions',
     delayedVisibilityTransactions: '',
     delayedVisibilitySpend: '',
-    isTargeted: false,
-    discountAmount: '0',
     itemName: '',
     voucherAmount: '',
     spendThreshold: '',
     
-    // Add these nested objects
+    // Map conditions array to object structure
     conditions: {
-      useTransactionRequirements: false,
-      useSpendingRequirements: false,
-      useTimeRequirements: false,
-      minimumTransactions: '',
-      maximumTransactions: '',
-      daysSinceJoined: '',
-      daysSinceLastVisit: '',
-      minimumLifetimeSpend: '',
-      minimumPointsBalance: '',
-      membershipLevel: '',
-      newCustomer: false,
+      useTransactionRequirements: Array.isArray(reward.conditions) && 
+        reward.conditions.some(c => ['minimumTransactions', 'maximumTransactions'].includes(c.type)),
+      useSpendingRequirements: Array.isArray(reward.conditions) && 
+        reward.conditions.some(c => ['minimumLifetimeSpend', 'minimumPointsBalance'].includes(c.type)),
+      useTimeRequirements: Array.isArray(reward.conditions) && 
+        reward.conditions.some(c => ['daysSinceJoined', 'daysSinceLastVisit'].includes(c.type)),
+      minimumTransactions: Array.isArray(reward.conditions) ? 
+        reward.conditions.find(c => c.type === 'minimumTransactions')?.value?.toString() || '' : '',
+      maximumTransactions: Array.isArray(reward.conditions) ? 
+        reward.conditions.find(c => c.type === 'maximumTransactions')?.value?.toString() || '' : '',
+      daysSinceJoined: Array.isArray(reward.conditions) ? 
+        reward.conditions.find(c => c.type === 'daysSinceJoined')?.value?.toString() || '' : '',
+      daysSinceLastVisit: Array.isArray(reward.conditions) ? 
+        reward.conditions.find(c => c.type === 'daysSinceLastVisit')?.value?.toString() || '' : '',
+      minimumLifetimeSpend: Array.isArray(reward.conditions) ? 
+        reward.conditions.find(c => c.type === 'minimumLifetimeSpend')?.value?.toString() || '' : '',
+      minimumPointsBalance: Array.isArray(reward.conditions) ? 
+        reward.conditions.find(c => c.type === 'minimumPointsBalance')?.value?.toString() || '' : '',
+      membershipLevel: Array.isArray(reward.conditions) ? 
+        reward.conditions.find(c => c.type === 'membershipLevel')?.value?.toString() || '' : '',
+      newCustomer: Array.isArray(reward.conditions) && 
+        reward.conditions.some(c => c.type === 'newCustomer'),
     },
     
+    // Map limitations array to object structure
     limitations: {
-      totalRedemptionLimit: reward.limitations?.find(l => l.type === 'totalRedemptionLimit')?.value?.toString() || '',
-      perCustomerLimit: reward.limitations?.find(l => l.type === 'customerLimit')?.value?.toString() || '',
-      useTimeRestrictions: false,
-      startTime: '',
-      endTime: '',
+      totalRedemptionLimit: Array.isArray(reward.limitations) ? 
+        reward.limitations.find(l => l.type === 'totalRedemptionLimit')?.value?.toString() || '' : '',
+      perCustomerLimit: Array.isArray(reward.limitations) ? 
+        reward.limitations.find(l => l.type === 'customerLimit')?.value?.toString() || '' : '',
+      useTimeRestrictions: Array.isArray(reward.limitations) && 
+        reward.limitations.some(l => l.type === 'timeOfDay' || l.type === 'daysOfWeek'),
+      startTime: Array.isArray(reward.limitations) && reward.limitations.find(l => l.type === 'timeOfDay') ? 
+        (reward.limitations.find(l => l.type === 'timeOfDay')?.value as any)?.startTime || '' : '',
+      endTime: Array.isArray(reward.limitations) && reward.limitations.find(l => l.type === 'timeOfDay') ? 
+        (reward.limitations.find(l => l.type === 'timeOfDay')?.value as any)?.endTime || '' : '',
+      dayRestrictions: Array.isArray(reward.limitations) && reward.limitations.find(l => l.type === 'daysOfWeek') ? 
+        (reward.limitations.find(l => l.type === 'daysOfWeek')?.value as string[]) || [] : [],
     },
     
-    // Add active period
+    // Add active period with proper date formatting
     hasActivePeriod: !!(reward.startDate || reward.endDate),
     activePeriod: {
-      startDate: reward.startDate || '',
-      endDate: reward.endDate || ''
+      startDate: safeParseDate(reward.startDate),
+      endDate: safeParseDate(reward.endDate)
     }
   } : null;
 
@@ -396,13 +453,24 @@ export function RewardDetailsPage() {
             <div className="flex items-center gap-2">
               <Badge 
                 variant="outline" 
-                className={reward.status === 'active' ? 
-                  "rounded-md bg-blue-50 text-blue-700 border-blue-200" : 
-                  "rounded-md bg-gray-100 text-gray-700 border-gray-200"
-                }
+                className={cn(
+                  "rounded-md h-8 px-3 flex items-center",
+                  reward.status === 'active' ? 
+                    "bg-green-50 text-green-700 border-green-200" : 
+                    "bg-gray-100 text-gray-700 border-gray-200"
+                )}
               >
                 {capitalize(reward.status)}
               </Badge>
+              <Button 
+                size="sm" 
+                variant="outline"
+                className="gap-2" 
+                onClick={() => setIsDuplicateModalOpen(true)}
+              >
+                <Copy className="h-4 w-4" />
+                Duplicate
+              </Button>
               <Button size="sm" className="gap-2" onClick={() => setIsEditModalOpen(true)}>
                 <Edit className="h-4 w-4" />
                 Edit
@@ -545,7 +613,7 @@ export function RewardDetailsPage() {
                 <h2 className="font-medium">Requirements</h2>
               </div>
               <div className="space-y-2">
-                {reward.conditions?.map((condition, index) => (
+                {Array.isArray(reward.conditions) && reward.conditions.map((condition, index) => (
                   <div 
                     key={index}
                     className="flex items-center gap-2 text-sm p-3 rounded-md bg-gray-50 border border-gray-100"
@@ -554,7 +622,7 @@ export function RewardDetailsPage() {
                     <span className="text-gray-700">{formatCondition(condition)}</span>
                   </div>
                 ))}
-                {(!reward.conditions || reward.conditions.length === 0) && (
+                {(!reward.conditions || !Array.isArray(reward.conditions) || reward.conditions.length === 0) && (
                   <div className="text-sm text-gray-500">No special requirements</div>
                 )}
               </div>
@@ -569,7 +637,7 @@ export function RewardDetailsPage() {
                 <h2 className="font-medium">Limitations</h2>
               </div>
               <div className="space-y-2">
-                {reward.limitations?.map((limitation, index) => (
+                {Array.isArray(reward.limitations) && reward.limitations.map((limitation, index) => (
                   <div 
                     key={index}
                     className="flex items-center gap-2 text-sm p-3 rounded-md bg-gray-50 border border-gray-100"
@@ -578,7 +646,7 @@ export function RewardDetailsPage() {
                     <span className="text-gray-700">{formatLimitation(limitation)}</span>
                   </div>
                 ))}
-                {(!reward.limitations || reward.limitations.length === 0) && (
+                {(!reward.limitations || !Array.isArray(reward.limitations) || reward.limitations.length === 0) && (
                   <div className="text-sm text-gray-500">No limitations set</div>
                 )}
               </div>
@@ -699,6 +767,19 @@ export function RewardDetailsPage() {
         open={isEditModalOpen}
         onOpenChange={setIsEditModalOpen}
         defaultValues={createRewardDialogData}
+        isEditing={true}
+        rewardId={id as string}
+      />
+
+      {/* Duplicate Reward Dialog */}
+      <CreateRewardDialog 
+        open={isDuplicateModalOpen}
+        onOpenChange={setIsDuplicateModalOpen}
+        defaultValues={{
+          ...createRewardDialogData,
+          rewardName: createRewardDialogData ? `${createRewardDialogData.rewardName} (Copy)` : '',
+        }}
+        isEditing={false}
       />
     </div>
   )

@@ -32,6 +32,8 @@ interface CreateRewardDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultValues?: any
+  isEditing?: boolean
+  rewardId?: string
 }
 
 interface FormData {
@@ -87,7 +89,9 @@ interface FormData {
 export function CreateRewardDialog({ 
   open, 
   onOpenChange,
-  defaultValues 
+  defaultValues,
+  isEditing = false,
+  rewardId
 }: CreateRewardDialogProps) {
   const [currentStep, setCurrentStep] = useState(1)
   const { toast } = useToast()
@@ -297,10 +301,10 @@ export function CreateRewardDialog({
   }
 
   const saveReward = async () => {
-    if (!user?.uid) {
+    if (!user) {
       toast({
-        title: "Error",
-        description: "You must be logged in to create rewards.",
+        title: "Authentication Error",
+        description: "You must be logged in to save rewards.",
         variant: "destructive"
       })
       return
@@ -461,44 +465,77 @@ export function CreateRewardDialog({
         uniqueCustomerIds: []
       }
 
-      // Save to merchant's rewards subcollection
-      const merchantRewardRef = await addDoc(
-        collection(db, 'merchants', user.uid, 'rewards'),
-        rewardData
-      )
-
-      // Add the ID to the reward data
-      const rewardWithId = {
-        ...rewardData,
-        id: merchantRewardRef.id
+      // If editing, update the existing document in both collections
+      if (isEditing && rewardId) {
+        // Update in merchant's rewards subcollection
+        const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
+        await updateDoc(merchantRewardRef, {
+          ...rewardData,
+          updatedAt: new Date().toISOString()
+        });
+        
+        // Also update in top-level rewards collection
+        const globalRewardRef = doc(db, 'rewards', rewardId);
+        await updateDoc(globalRewardRef, {
+          ...rewardData,
+          updatedAt: new Date().toISOString()
+        });
+        
+        toast({
+          title: "Reward Updated",
+          description: "Your reward has been successfully updated.",
+        });
+      } 
+      // Otherwise, create a new document in both collections
+      else {
+        // Create in merchant's rewards subcollection
+        const merchantRewardsRef = collection(db, 'merchants', user.uid, 'rewards');
+        const newRewardRef = await addDoc(merchantRewardsRef, {
+          ...rewardData,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+        
+        // Add the ID to the reward data
+        const rewardWithId = {
+          ...rewardData,
+          id: newRewardRef.id,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        // Update the merchant's reward with the ID
+        await updateDoc(
+          doc(db, 'merchants', user.uid, 'rewards', newRewardRef.id),
+          { id: newRewardRef.id }
+        );
+        
+        // Also save to top-level rewards collection
+        await setDoc(
+          doc(db, 'rewards', newRewardRef.id),
+          rewardWithId
+        );
+        
+        toast({
+          title: "Reward Created",
+          description: "Your new reward has been successfully created.",
+        });
       }
 
-      // Update the merchant's reward with the ID
-      await updateDoc(
-        doc(db, 'merchants', user.uid, 'rewards', merchantRewardRef.id),
-        { id: merchantRewardRef.id }
-      )
-
-      // Save to top-level rewards collection
-      await setDoc(
-        doc(db, 'rewards', merchantRewardRef.id),
-        rewardWithId
-      )
-
-      toast({
-        title: "Success",
-        description: "Your reward has been created successfully.",
-      })
-
-      onOpenChange(false)
-      return merchantRewardRef.id
+      // Close the dialog
+      onOpenChange(false);
+      
+      // Optional: refresh the page or update the UI
+      if (isEditing) {
+        window.location.reload();
+      }
     } catch (error) {
-      console.error('Error creating reward:', error)
+      console.error("Error saving reward:", error);
       toast({
         title: "Error",
-        description: "There was a problem creating your reward. Please try again.",
+        description: `Failed to ${isEditing ? 'update' : 'create'} reward. Please try again.`,
         variant: "destructive"
-      })
+      });
     }
   }
 
@@ -535,6 +572,7 @@ export function CreateRewardDialog({
 
   const fillTestData = () => {
     setFormData({
+      ...formData,
       rewardName: "Test Reward",
       description: "This is a test reward with all fields populated",
       pointsCost: "100",
@@ -551,6 +589,9 @@ export function CreateRewardDialog({
       delayedVisibilityTransactions: "5",
       delayedVisibilitySpend: "100",
       voucherAmount: "10",
+      type: "discount",
+      itemName: "Test Item",
+      spendThreshold: "50",
       conditions: {
         useTransactionRequirements: true,
         minimumTransactions: "1",
@@ -587,6 +628,9 @@ export function CreateRewardDialog({
       .join(' ')
   }
 
+  // Update the button text based on editing mode
+  const submitButtonText = isEditing ? 'Update Reward' : 'Create Reward';
+
   return (
     <Dialog 
       open={open} 
@@ -594,17 +638,18 @@ export function CreateRewardDialog({
     >
       <DialogContent 
         className="sm:max-w-[800px] h-[700px] flex flex-col"
-        closeable={false}
       >
         <DialogHeader className="space-y-4">
           <div className="flex items-start justify-between">
             <div className="flex flex-col gap-4">
               <div className="space-y-1.5">
                 <DialogTitle className="text-2xl">
-                  <span className="text-[#007AFF]">Create</span> New Reward
+                  <span className="text-[#007AFF]">{isEditing ? 'Edit' : 'Create'}</span> {isEditing ? 'Reward' : 'New Reward'}
                 </DialogTitle>
                 <DialogDescription>
-                  Design a new reward for your loyal customers. Fill out the details below.
+                  {isEditing 
+                    ? 'Update the details of your existing reward.' 
+                    : 'Design a new reward for your loyal customers. Fill out the details below.'}
                 </DialogDescription>
               </div>
             </div>
@@ -646,785 +691,594 @@ export function CreateRewardDialog({
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="step1" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
-              <span>Basic Details</span>
+              Basic Details
             </TabsTrigger>
             <TabsTrigger value="step2" className="flex items-center gap-2">
               <Eye className="h-4 w-4" />
-              <span>Visibility</span>
+              Visibility
             </TabsTrigger>
             <TabsTrigger value="step3" className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4" />
-              <span>Conditions</span>
+              <ListChecks className="h-4 w-4" />
+              Conditions
             </TabsTrigger>
             <TabsTrigger value="step4" className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4" />
-              <span>Limitations</span>
+              Limitations
             </TabsTrigger>
             <TabsTrigger value="step5" className="flex items-center gap-2">
-              <ClipboardCheck className="h-4 w-4" />
-              <span>Review</span>
+              <CheckCircle className="h-4 w-4" />
+              Review
             </TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-y-auto">
-            <TabsContent value="step1" className="space-y-6 py-4">
-              {/* Reward Information Group */}
+            <TabsContent value="step1" className="min-h-[400px] py-4">
               <div className="space-y-4">
-                <h3 className="text-base font-medium">Reward Information</h3>
-                <div className="rounded-md border p-4 space-y-4">
+                <div className="grid gap-4">
                   <div className="grid gap-2">
                     <Label>Reward Name</Label>
-                    <Input 
+                    <Input
                       value={formData.rewardName}
-                      onChange={(e) => setFormData({...formData, rewardName: e.target.value})}
-                      placeholder="e.g., Free Coffee"
+                      onChange={(e) => setFormData({ ...formData, rewardName: e.target.value })}
+                      placeholder="Enter reward name"
                     />
-                    <p className="text-sm text-muted-foreground">
-                      Choose a clear, descriptive name for your reward
-                    </p>
                   </div>
-
                   <div className="grid gap-2">
                     <Label>Description</Label>
                     <Textarea
                       value={formData.description}
-                      onChange={(e) => setFormData({...formData, description: e.target.value})}
-                      placeholder="Describe what the customer will receive"
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      placeholder="Describe your reward"
+                      className="min-h-[100px]"
                     />
-                    <p className="text-sm text-muted-foreground">
-                      Provide details about the reward and how to redeem it
-                    </p>
                   </div>
-                </div>
-              </div>
-
-              {/* Reward Settings Group */}
-              <div className="space-y-4">
-                <h3 className="text-base font-medium">Reward Settings</h3>
-                <div className="rounded-md border p-4 space-y-4">
+                  <div className="grid gap-2">
+                    <Label>Reward Type</Label>
+                    <Select
+                      value={formData.type}
+                      onValueChange={(value) => setFormData({ ...formData, type: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select reward type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="discount">Discount</SelectItem>
+                        <SelectItem value="freeItem">Free Item</SelectItem>
+                        <SelectItem value="voucher">Gift Voucher</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="grid gap-2">
                     <Label>Points Cost</Label>
-                    <Input 
+                    <Input
                       type="number"
                       min="0"
                       value={formData.pointsCost}
-                      onChange={(e) => {
-                        const value = Math.max(0, Number(e.target.value))
-                        setFormData({...formData, pointsCost: value.toString()})
-                      }}
-                      placeholder="Enter points required"
+                      onChange={(e) => setFormData({ ...formData, pointsCost: e.target.value })}
+                      placeholder="Enter points cost"
                     />
-                    <p className="text-sm text-muted-foreground">
-                      Number of points needed to redeem this reward
-                    </p>
                   </div>
-
                   <div className="grid gap-2">
-                    <Label>PIN Code</Label>
-                    <Input 
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
+                    <Label>PIN Code (4 digits)</Label>
+                    <Input
                       maxLength={4}
                       value={formData.pin}
                       onChange={(e) => {
                         const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
-                        setFormData({...formData, pin: value})
+                        setFormData({ ...formData, pin: value })
                       }}
                       placeholder="Enter 4-digit PIN"
                     />
-                    <p className="text-sm text-muted-foreground">
-                      Set a 4-digit PIN code for staff to verify redemptions
-                    </p>
                   </div>
-
                   <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <Label>Active Status</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Make this reward available immediately
-                      </p>
-                    </div>
-                    <Switch 
+                    <Label>Active Status</Label>
+                    <Switch
                       checked={formData.isActive}
-                      onCheckedChange={(checked) => setFormData({...formData, isActive: checked})}
+                      onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
                     />
                   </div>
-
-                  {/* Add Active Period section */}
-                  <div className="space-y-4 pt-4 border-t">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <Label>Active Period</Label>
-                        <p className="text-sm text-muted-foreground">
-                          Set when this reward is available
-                        </p>
-                      </div>
-                      <Switch 
-                        checked={formData.hasActivePeriod}
-                        onCheckedChange={(checked) => setFormData({
-                          ...formData, 
-                          hasActivePeriod: checked,
-                          activePeriod: {
-                            startDate: "",
-                            endDate: ""
-                          }
-                        })}
-                      />
-                    </div>
-
-                    {formData.hasActivePeriod && (
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="grid gap-2">
-                          <Label>Start Date</Label>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className={cn(
-                                  "w-full justify-start text-left font-normal",
-                                  !formData.activePeriod.startDate && "text-muted-foreground"
-                                )}
-                              >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {formData.activePeriod.startDate ? 
-                                  format(new Date(formData.activePeriod.startDate), "PPP") : 
-                                  "Select date"
-                                }
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar
-                                mode="single"
-                                selected={formData.activePeriod.startDate ? new Date(formData.activePeriod.startDate) : undefined}
-                                onSelect={(date) => setFormData({
-                                  ...formData,
-                                  activePeriod: {
-                                    ...formData.activePeriod,
-                                    startDate: date ? date.toISOString() : ""
-                                  }
-                                })}
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>End Date</Label>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className={cn(
-                                  "w-full justify-start text-left font-normal",
-                                  !formData.activePeriod.endDate && "text-muted-foreground"
-                                )}
-                              >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {formData.activePeriod.endDate ? 
-                                  format(new Date(formData.activePeriod.endDate), "PPP") : 
-                                  "Select date"
-                                }
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar
-                                mode="single"
-                                selected={formData.activePeriod.endDate ? new Date(formData.activePeriod.endDate) : undefined}
-                                onSelect={(date) => setFormData({
-                                  ...formData,
-                                  activePeriod: {
-                                    ...formData.activePeriod,
-                                    endDate: date ? date.toISOString() : ""
-                                  }
-                                })}
-                                disabled={(date) => 
-                                  date < new Date(formData.activePeriod.startDate) ||
-                                  date < new Date()
-                                }
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                      </div>
-                    )}
-                    {!formData.hasActivePeriod && (
-                      <p className="text-sm text-muted-foreground italic">
-                        This reward will run indefinitely
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="step2" className="space-y-4 py-4">
-              <div className="space-y-6">
-                {/* Reward Visibility Group */}
-                <div className="space-y-4">
-                  <h3 className="text-base font-medium">Reward Visibility</h3>
-                  <div className="rounded-md border p-4 space-y-4">
-                    <Select 
-                      value={formData.rewardVisibility}
-                      onValueChange={(value) => setFormData({
-                        ...formData, 
-                        rewardVisibility: value,
-                        conditions: {
-                          ...formData.conditions,
-                          minimumTransactions: value === 'existing' ? "1" : "",
-                          maximumTransactions: value === 'new' ? "0" : ""
-                        },
-                        delayedVisibility: value === 'new' ? false : formData.delayedVisibility,
-                        delayedVisibilityType: value === 'new' ? "transactions" : formData.delayedVisibilityType,
-                        delayedVisibilityTransactions: value === 'new' ? "" : formData.delayedVisibilityTransactions,
-                        delayedVisibilitySpend: value === 'new' ? "" : formData.delayedVisibilitySpend
-                      })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select visibility" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">
-                          <div className="flex items-center">
-                            <Users className="mr-2 h-4 w-4" />
-                            All Customers
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="new">
-                          <div className="flex items-center">
-                            <UserPlus className="mr-2 h-4 w-4" />
-                            New Customers
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="existing">
-                          <div className="flex items-center">
-                            <UserCheck className="mr-2 h-4 w-4" />
-                            Existing Customers
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="conditional">
-                          <div className="flex items-center">
-                            <UserCog className="mr-2 h-4 w-4" />
-                            Conditional Customers
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-
-                    {/* Show requirements based on selection */}
-                    {formData.rewardVisibility === 'existing' && (
-                      <div className="rounded-md bg-muted/50 p-3">
-                        <div className="flex items-center gap-2 text-sm">
-                          <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-                          <span>Minimum Lifetime Transactions: 1</span>
-                        </div>
-                      </div>
-                    )}
-                    {formData.rewardVisibility === 'new' && (
-                      <div className="rounded-md bg-muted/50 p-3">
-                        <div className="flex items-center gap-2 text-sm">
-                          <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-                          <span>Maximum Lifetime Transactions: 0</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Delayed Visibility Group */}
-                <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-base font-medium">Delayed Visibility</h3>
-                    <Switch 
-                      checked={formData.delayedVisibility}
-                      onCheckedChange={(checked) => setFormData({
-                        ...formData, 
-                        delayedVisibility: checked,
-                        delayedVisibilityType: checked ? formData.delayedVisibilityType : "transactions",
-                        delayedVisibilityTransactions: "",
-                        delayedVisibilitySpend: ""
-                      })}
-                      disabled={formData.rewardVisibility === 'new'}
+                    <Label>Set Active Period</Label>
+                    <Switch
+                      checked={formData.hasActivePeriod}
+                      onCheckedChange={(checked) => setFormData({ ...formData, hasActivePeriod: checked })}
                     />
                   </div>
-
-                  {formData.delayedVisibility && (
-                    <div className={cn(
-                      "rounded-md border p-4 space-y-4",
-                      formData.rewardVisibility === 'new' && "opacity-50"
-                    )}>
-                      <Select 
-                        value={formData.delayedVisibilityType}
-                        onValueChange={(value) => setFormData({
-                          ...formData,
-                          delayedVisibilityType: value,
-                          delayedVisibilityTransactions: "",
-                          delayedVisibilitySpend: ""
-                        })}
-                        disabled={formData.rewardVisibility === 'new'}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select visibility type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="transactions">
-                            <div className="flex items-center">
-                              <ShoppingCart className="mr-2 h-4 w-4" />
-                              Total Lifetime Transactions
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="spend">
-                            <div className="flex items-center">
-                              <DollarSign className="mr-2 h-4 w-4" />
-                              Total Lifetime Spend
-                            </div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      {formData.delayedVisibilityType === 'transactions' && (
-                        <div className="grid gap-2">
-                          <Label>Required Transactions</Label>
-                          <Input 
-                            type="number"
-                            value={formData.delayedVisibilityTransactions}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              delayedVisibilityTransactions: e.target.value
-                            })}
-                            placeholder="Enter number of transactions"
-                            disabled={formData.rewardVisibility === 'new'}
-                          />
-                          <p className="text-sm text-muted-foreground">
-                            Reward becomes visible after this many transactions
-                          </p>
-                        </div>
-                      )}
-
-                      {formData.delayedVisibilityType === 'spend' && (
-                        <div className="grid gap-2">
-                          <Label>Required Spend ($)</Label>
-                          <Input 
-                            type="number"
-                            value={formData.delayedVisibilitySpend}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              delayedVisibilitySpend: e.target.value
-                            })}
-                            placeholder="Enter spend amount"
-                            disabled={formData.rewardVisibility === 'new'}
-                          />
-                          <p className="text-sm text-muted-foreground">
-                            Reward becomes visible after this spend amount
-                          </p>
-                        </div>
-                      )}
+                  {formData.hasActivePeriod && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label>Start Date</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "justify-start text-left font-normal",
+                                !formData.activePeriod.startDate && "text-muted-foreground"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {formData.activePeriod.startDate ? (
+                                formatDate(formData.activePeriod.startDate)
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={formData.activePeriod.startDate ? new Date(formData.activePeriod.startDate) : undefined}
+                              onSelect={(date) => {
+                                if (date) {
+                                  setFormData({
+                                    ...formData,
+                                    activePeriod: {
+                                      ...formData.activePeriod,
+                                      startDate: date.toISOString()
+                                    }
+                                  })
+                                }
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>End Date</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "justify-start text-left font-normal",
+                                !formData.activePeriod.endDate && "text-muted-foreground"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {formData.activePeriod.endDate ? (
+                                formatDate(formData.activePeriod.endDate)
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={formData.activePeriod.endDate ? new Date(formData.activePeriod.endDate) : undefined}
+                              onSelect={(date) => {
+                                if (date) {
+                                  setFormData({
+                                    ...formData,
+                                    activePeriod: {
+                                      ...formData.activePeriod,
+                                      endDate: date.toISOString()
+                                    }
+                                  })
+                                }
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
             </TabsContent>
 
-            <TabsContent value="step3" className="space-y-4 py-4">
-              <div className="space-y-6">
-                {/* Main container */}
-                <div className="space-y-6">
-                  {/* Transaction Requirements Group */}
-                  <div className="space-y-4">
+            <TabsContent value="step2" className="min-h-[400px] py-4">
+              <div className="space-y-4">
+                <div className="grid gap-4">
+                  <div className="grid gap-2">
+                    <Label>Reward Visibility</Label>
+                    <Select
+                      value={formData.rewardVisibility}
+                      onValueChange={(value) => setFormData({ ...formData, rewardVisibility: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select visibility" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Customers</SelectItem>
+                        <SelectItem value="new">New Customers Only</SelectItem>
+                        <SelectItem value="returning">Returning Customers Only</SelectItem>
+                        <SelectItem value="vip">VIP Customers Only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <Label>Delayed Visibility</Label>
+                    <Switch
+                      checked={formData.delayedVisibility}
+                      onCheckedChange={(checked) => setFormData({ ...formData, delayedVisibility: checked })}
+                    />
+                  </div>
+                  
+                  {formData.delayedVisibility && (
+                    <>
+                      <div className="grid gap-2">
+                        <Label>Visibility Requirement</Label>
+                        <Select
+                          value={formData.delayedVisibilityType}
+                          onValueChange={(value) => setFormData({ ...formData, delayedVisibilityType: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select requirement type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="transactions">Number of Transactions</SelectItem>
+                            <SelectItem value="spend">Total Spend Amount</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      {formData.delayedVisibilityType === 'transactions' ? (
+                        <div className="grid gap-2">
+                          <Label>Required Transactions</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={formData.delayedVisibilityTransactions}
+                            onChange={(e) => setFormData({ ...formData, delayedVisibilityTransactions: e.target.value })}
+                            placeholder="Enter number of transactions"
+                          />
+                        </div>
+                      ) : (
+                        <div className="grid gap-2">
+                          <Label>Required Spend ($)</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={formData.delayedVisibilitySpend}
+                            onChange={(e) => setFormData({ ...formData, delayedVisibilitySpend: e.target.value })}
+                            placeholder="Enter spend amount"
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="step3" className="min-h-[400px] py-4">
+              <div className="space-y-4">
+                <div className="grid gap-4">
+                  {/* Transaction Requirements Section */}
+                  <div className="border-b pb-2">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-base font-medium">Transaction Requirements</h3>
-                      <Switch 
+                      <Label className="text-base font-medium">Transaction Requirements</Label>
+                      <Switch
                         checked={formData.conditions.useTransactionRequirements}
                         onCheckedChange={(checked) => setFormData({
                           ...formData,
                           conditions: {
                             ...formData.conditions,
-                            useTransactionRequirements: checked,
-                            minimumTransactions: formData.rewardVisibility === 'existing' ? "1" : "",
-                            maximumTransactions: ""
+                            useTransactionRequirements: checked
                           }
                         })}
-                        disabled={formData.rewardVisibility === 'new'}
                       />
                     </div>
-
-                    {formData.conditions.useTransactionRequirements && (
-                      <div className={cn(
-                        "space-y-4 rounded-md border p-4",
-                        formData.rewardVisibility === 'new' && "opacity-50"
-                      )}>
-                        <div className="grid gap-2">
-                          <Label>Minimum Transactions</Label>
-                          <Input 
-                            type="number"
-                            value={formData.conditions.minimumTransactions}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              conditions: { ...formData.conditions, minimumTransactions: e.target.value }
-                            })}
-                            placeholder="Enter minimum transactions"
-                            disabled={formData.rewardVisibility === 'new' || formData.rewardVisibility === 'existing'}
-                          />
-                          {formData.rewardVisibility === 'existing' && (
-                            <p className="text-sm text-muted-foreground">
-                              Fixed at 1 transaction for existing customers
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label>Maximum Transactions</Label>
-                          <Input 
-                            type="number"
-                            value={formData.conditions.maximumTransactions}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              conditions: { ...formData.conditions, maximumTransactions: e.target.value }
-                            })}
-                            placeholder="Enter maximum transactions"
-                            disabled={formData.rewardVisibility === 'new'}
-                          />
-                          {formData.rewardVisibility === 'new' && (
-                            <p className="text-sm text-muted-foreground">
-                              Set to 0 for new customers
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
-
-                  {/* Spending Requirements Group */}
-                  <div className="space-y-4">
+                  
+                  {formData.conditions.useTransactionRequirements && (
+                    <>
+                      <div className="grid gap-2">
+                        <Label>Minimum Transactions</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={formData.conditions.minimumTransactions}
+                          onChange={(e) => setFormData({
+                            ...formData,
+                            conditions: {
+                              ...formData.conditions,
+                              minimumTransactions: e.target.value
+                            }
+                          })}
+                          placeholder="Enter minimum transactions"
+                        />
+                      </div>
+                      
+                      <div className="grid gap-2">
+                        <Label>Maximum Transactions</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={formData.conditions.maximumTransactions}
+                          onChange={(e) => setFormData({
+                            ...formData,
+                            conditions: {
+                              ...formData.conditions,
+                              maximumTransactions: e.target.value
+                            }
+                          })}
+                          placeholder="Enter maximum transactions"
+                        />
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* Spending Requirements Section */}
+                  <div className="border-b pb-2 pt-2">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-base font-medium">Spending Requirements</h3>
-                      <Switch 
+                      <Label className="text-base font-medium">Spending Requirements</Label>
+                      <Switch
                         checked={formData.conditions.useSpendingRequirements}
                         onCheckedChange={(checked) => setFormData({
                           ...formData,
                           conditions: {
                             ...formData.conditions,
-                            useSpendingRequirements: checked,
-                            minimumLifetimeSpend: "",
-                            minimumPointsBalance: ""
+                            useSpendingRequirements: checked
                           }
                         })}
-                        disabled={formData.rewardVisibility === 'new'}
                       />
                     </div>
-
-                    {formData.conditions.useSpendingRequirements && (
-                      <div className={cn(
-                        "space-y-4 rounded-md border p-4",
-                        formData.rewardVisibility === 'new' && "opacity-50"
-                      )}>
-                        <div className="grid gap-2">
-                          <Label>Minimum Lifetime Spend ($)</Label>
-                          <Input 
-                            type="number"
-                            value={formData.conditions.minimumLifetimeSpend}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              conditions: { ...formData.conditions, minimumLifetimeSpend: e.target.value }
-                            })}
-                            placeholder="Enter minimum spend amount"
-                            disabled={formData.rewardVisibility === 'new'}
-                          />
-                          <p className="text-sm text-muted-foreground">
-                            Customer must have spent at least this amount
-                          </p>
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label>Minimum Points Balance</Label>
-                          <Input 
-                            type="number"
-                            value={formData.conditions.minimumPointsBalance}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              conditions: { ...formData.conditions, minimumPointsBalance: e.target.value }
-                            })}
-                            placeholder="Enter minimum points"
-                            disabled={formData.rewardVisibility === 'new'}
-                          />
-                          <p className="text-sm text-muted-foreground">
-                            Customer must have at least this many points
-                          </p>
-                        </div>
-                      </div>
-                    )}
                   </div>
-
-                  {/* Time-based Requirements Group */}
-                  <div className="space-y-4">
+                  
+                  {formData.conditions.useSpendingRequirements && (
+                    <>
+                      <div className="grid gap-2">
+                        <Label>Minimum Lifetime Spend ($)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={formData.conditions.minimumLifetimeSpend}
+                          onChange={(e) => setFormData({
+                            ...formData,
+                            conditions: {
+                              ...formData.conditions,
+                              minimumLifetimeSpend: e.target.value
+                            }
+                          })}
+                          placeholder="Enter minimum lifetime spend"
+                        />
+                      </div>
+                      
+                      <div className="grid gap-2">
+                        <Label>Minimum Points Balance</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={formData.conditions.minimumPointsBalance}
+                          onChange={(e) => setFormData({
+                            ...formData,
+                            conditions: {
+                              ...formData.conditions,
+                              minimumPointsBalance: e.target.value
+                            }
+                          })}
+                          placeholder="Enter minimum points balance"
+                        />
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* Time Requirements Section */}
+                  <div className="border-b pb-2 pt-2">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-base font-medium">Time-based Requirements</h3>
-                      <Switch 
+                      <Label className="text-base font-medium">Time Requirements</Label>
+                      <Switch
                         checked={formData.conditions.useTimeRequirements}
                         onCheckedChange={(checked) => setFormData({
                           ...formData,
                           conditions: {
                             ...formData.conditions,
-                            useTimeRequirements: checked,
-                            daysSinceJoined: "",
-                            daysSinceLastVisit: ""
+                            useTimeRequirements: checked
                           }
                         })}
-                        disabled={formData.rewardVisibility === 'new'}
                       />
                     </div>
-
-                    {formData.conditions.useTimeRequirements && (
-                      <div className={cn(
-                        "space-y-4 rounded-md border p-4",
-                        formData.rewardVisibility === 'new' && "opacity-50"
-                      )}>
-                        <div className="grid gap-2">
-                          <Label>Days Since Joined</Label>
-                          <Input 
-                            type="number"
-                            value={formData.conditions.daysSinceJoined}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              conditions: { ...formData.conditions, daysSinceJoined: e.target.value }
-                            })}
-                            placeholder="Enter number of days"
-                            disabled={formData.rewardVisibility === 'new'}
-                          />
-                          <p className="text-sm text-muted-foreground">
-                            Customer must be a member for at least this many days
-                          </p>
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label>Days Since Last Visit</Label>
-                          <Input 
-                            type="number"
-                            value={formData.conditions.daysSinceLastVisit}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              conditions: { ...formData.conditions, daysSinceLastVisit: e.target.value }
-                            })}
-                            placeholder="Enter number of days"
-                            disabled={formData.rewardVisibility === 'new'}
-                          />
-                          <p className="text-sm text-muted-foreground">
-                            Customer's last visit must be within this many days
-                          </p>
-                        </div>
-                      </div>
-                    )}
                   </div>
-
-                  {/* Membership Level Section */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-base font-medium">Membership Level</h3>
-                      <Switch 
-                        checked={!!formData.conditions.membershipLevel}
-                        onCheckedChange={(checked) => setFormData({
-                          ...formData,
-                          conditions: {
-                            ...formData.conditions,
-                            membershipLevel: checked ? "bronze" : "" // Default to bronze when enabled
-                          }
-                        })}
-                      />
-                    </div>
-
-                    {formData.conditions.membershipLevel && (
-                      <div className="rounded-md border p-4 space-y-4">
-                        <Select
-                          value={formData.conditions.membershipLevel}
-                          onValueChange={(value) => setFormData({
+                  
+                  {formData.conditions.useTimeRequirements && (
+                    <>
+                      <div className="grid gap-2">
+                        <Label>Days Since Joined</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={formData.conditions.daysSinceJoined}
+                          onChange={(e) => setFormData({
                             ...formData,
                             conditions: {
                               ...formData.conditions,
-                              membershipLevel: value
+                              daysSinceJoined: e.target.value
                             }
                           })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select membership level" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="bronze">Bronze</SelectItem>
-                            <SelectItem value="silver">Silver</SelectItem>
-                            <SelectItem value="gold">Gold</SelectItem>
-                            <SelectItem value="platinum">Platinum</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-sm text-muted-foreground">
-                          Only customers with this membership level or higher can see this reward
-                        </p>
+                          placeholder="Enter days since joined"
+                        />
                       </div>
-                    )}
+                      
+                      <div className="grid gap-2">
+                        <Label>Days Since Last Visit</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={formData.conditions.daysSinceLastVisit}
+                          onChange={(e) => setFormData({
+                            ...formData,
+                            conditions: {
+                              ...formData.conditions,
+                              daysSinceLastVisit: e.target.value
+                            }
+                          })}
+                          placeholder="Enter days since last visit"
+                        />
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* Other Requirements Section */}
+                  <div className="border-b pb-2 pt-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-base font-medium">Other Requirements</Label>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <Label>New Customer Only</Label>
+                    <Switch
+                      checked={formData.conditions.newCustomer}
+                      onCheckedChange={(checked) => setFormData({
+                        ...formData,
+                        conditions: {
+                          ...formData.conditions,
+                          newCustomer: checked
+                        }
+                      })}
+                    />
                   </div>
                 </div>
               </div>
             </TabsContent>
 
-            <TabsContent value="step4" className="space-y-6 py-4">
-              {/* Redemption Limits Group */}
+            <TabsContent value="step4" className="min-h-[400px] py-4">
               <div className="space-y-4">
-                <h3 className="text-base font-medium">Redemption Limits</h3>
-                <div className="rounded-md border p-4 space-y-4">
+                <div className="grid gap-4">
                   <div className="grid gap-2">
                     <Label>Total Redemption Limit</Label>
-                    <Input 
+                    <Input
                       type="number"
                       min="0"
                       value={formData.limitations.totalRedemptionLimit}
-                      onChange={(e) => {
-                        const value = Math.max(0, Number(e.target.value))
-                        setFormData({
-                          ...formData,
-                          limitations: { 
-                            ...formData.limitations, 
-                            totalRedemptionLimit: value.toString() 
-                          }
-                        })
-                      }}
-                      placeholder="Enter total limit"
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        limitations: {
+                          ...formData.limitations,
+                          totalRedemptionLimit: e.target.value
+                        }
+                      })}
+                      placeholder="Enter total redemption limit (leave empty for unlimited)"
                     />
-                    <p className="text-sm text-muted-foreground">
-                      Maximum number of times this reward can be redeemed by all customers
-                    </p>
                   </div>
-
+                  
                   <div className="grid gap-2">
                     <Label>Per Customer Limit</Label>
-                    <Input 
+                    <Input
                       type="number"
                       min="0"
                       value={formData.limitations.perCustomerLimit}
-                      onChange={(e) => {
-                        const value = Math.max(0, Number(e.target.value))
-                        setFormData({
-                          ...formData,
-                          limitations: { 
-                            ...formData.limitations, 
-                            perCustomerLimit: value.toString() 
-                          }
-                        })
-                      }}
-                      placeholder="Enter customer limit"
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        limitations: {
+                          ...formData.limitations,
+                          perCustomerLimit: e.target.value
+                        }
+                      })}
+                      placeholder="Enter per customer limit (leave empty for unlimited)"
                     />
-                    <p className="text-sm text-muted-foreground">
-                      Maximum number of times each customer can redeem this reward
-                    </p>
                   </div>
-                </div>
-              </div>
-
-              {/* Time Restrictions Group */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-medium">Time Restrictions</h3>
-                  <Switch 
-                    checked={formData.limitations.useTimeRestrictions}
-                    onCheckedChange={(checked) => setFormData({
-                      ...formData,
-                      limitations: { 
-                        ...formData.limitations, 
-                        useTimeRestrictions: checked,
-                        startTime: "",
-                        endTime: "",
-                        dayRestrictions: []
-                      }
-                    })}
-                  />
-                </div>
-
-                {formData.limitations.useTimeRestrictions && (
-                  <div className="rounded-md border p-4 space-y-4">
-                    <div className="grid gap-4 sm:grid-cols-2">
+                  
+                  <div className="flex items-center justify-between">
+                    <Label>Time Restrictions</Label>
+                    <Switch
+                      checked={formData.limitations.useTimeRestrictions}
+                      onCheckedChange={(checked) => setFormData({
+                        ...formData,
+                        limitations: {
+                          ...formData.limitations,
+                          useTimeRestrictions: checked
+                        }
+                      })}
+                    />
+                  </div>
+                  
+                  {formData.limitations.useTimeRestrictions && (
+                    <>
                       <div className="grid gap-2">
                         <Label>Start Time</Label>
                         <Select
                           value={formData.limitations.startTime}
                           onValueChange={(value) => setFormData({
                             ...formData,
-                            limitations: { ...formData.limitations, startTime: value }
+                            limitations: {
+                              ...formData.limitations,
+                              startTime: value
+                            }
                           })}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Select start time" />
                           </SelectTrigger>
                           <SelectContent>
-                            {Array.from({ length: 24 }, (_, i) => (
-                              <SelectItem 
-                                key={to12HourFormat(i)} 
-                                value={to12HourFormat(i)}
-                              >
-                                {to12HourFormat(i)}
-                              </SelectItem>
-                            ))}
+                            {Array.from({ length: 24 }).map((_, i) => {
+                              const hour = i % 12 || 12
+                              const period = i < 12 ? 'AM' : 'PM'
+                              return (
+                                <SelectItem key={i} value={`${hour}:00 ${period}`}>
+                                  {`${hour}:00 ${period}`}
+                                </SelectItem>
+                              )
+                            })}
                           </SelectContent>
                         </Select>
                       </div>
+                      
                       <div className="grid gap-2">
                         <Label>End Time</Label>
                         <Select
                           value={formData.limitations.endTime}
                           onValueChange={(value) => setFormData({
                             ...formData,
-                            limitations: { ...formData.limitations, endTime: value }
+                            limitations: {
+                              ...formData.limitations,
+                              endTime: value
+                            }
                           })}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Select end time" />
                           </SelectTrigger>
                           <SelectContent>
-                            {Array.from({ length: 24 }, (_, i) => (
-                              <SelectItem 
-                                key={to12HourFormat(i)} 
-                                value={to12HourFormat(i)}
-                              >
-                                {to12HourFormat(i)}
-                              </SelectItem>
-                            ))}
+                            {Array.from({ length: 24 }).map((_, i) => {
+                              const hour = i % 12 || 12
+                              const period = i < 12 ? 'AM' : 'PM'
+                              return (
+                                <SelectItem key={i} value={`${hour}:00 ${period}`}>
+                                  {`${hour}:00 ${period}`}
+                                </SelectItem>
+                              )
+                            })}
                           </SelectContent>
                         </Select>
                       </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Available Days</Label>
-                      <div className="flex flex-wrap gap-2">
-                        {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => {
-                          const isSelected = formData.limitations.dayRestrictions.includes(day)
-                          return (
+                      
+                      <div className="grid gap-2">
+                        <Label>Day Restrictions</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => (
                             <Button
                               key={day}
-                              variant={isSelected ? "default" : "outline"}
-                              size="sm"
-                              className={cn(
-                                "w-[90px]",
-                                isSelected && "bg-[#007AFF] hover:bg-[#007AFF]/90 text-white"
-                              )}
+                              type="button"
+                              variant={formData.limitations.dayRestrictions.includes(day) ? "default" : "outline"}
                               onClick={() => {
-                                const newDays = isSelected
+                                const newDays = formData.limitations.dayRestrictions.includes(day)
                                   ? formData.limitations.dayRestrictions.filter(d => d !== day)
                                   : [...formData.limitations.dayRestrictions, day]
                                 setFormData({
                                   ...formData,
-                                  limitations: { ...formData.limitations, dayRestrictions: newDays }
+                                  limitations: {
+                                    ...formData.limitations,
+                                    dayRestrictions: newDays
+                                  }
                                 })
                               }}
                             >
-                              {day.slice(0, 3)}
+                              {day.substring(0, 3)}
                             </Button>
-                          )
-                        })}
+                          ))}
+                        </div>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        Select which days this reward is available
-                      </p>
-                    </div>
-                  </div>
-                )}
+                    </>
+                  )}
+                </div>
               </div>
             </TabsContent>
 
@@ -1515,7 +1369,10 @@ export function CreateRewardDialog({
                     <div className="space-y-1 pt-2 border-t">
                       <p className="text-sm font-medium text-muted-foreground">Active Period</p>
                       <p className="text-sm">
-                        {`${format(new Date(formData.activePeriod.startDate), 'PPP')} to ${format(new Date(formData.activePeriod.endDate), 'PPP')}`}
+                        {formData.activePeriod.startDate && formData.activePeriod.endDate ? 
+                          `${new Date(formData.activePeriod.startDate).toLocaleDateString()} to ${new Date(formData.activePeriod.endDate).toLocaleDateString()}`
+                          : "Date range not specified"
+                        }
                       </p>
                     </div>
                   )}
@@ -1543,31 +1400,20 @@ export function CreateRewardDialog({
                       value && 
                       value !== "" && 
                       !key.startsWith('use')
-                  ).length > 0 ? (
-                    <div className="grid grid-cols-2 gap-4">
-                      {Object.entries(formData.conditions)
-                        .filter(([key, value]) => 
-                          value && 
-                          value !== "" && 
-                          !key.startsWith('use')
-                        )
-                        .map(([key, value]) => (
-                          <div key={key} className="space-y-1">
-                            <p className="text-sm font-medium text-muted-foreground">
-                              {formatLabel(key)}
-                            </p>
-                            <p className="text-sm">
-                              {typeof value === 'number' ? value.toString() : value}
-                            </p>
-                          </div>
-                        ))
-                      }
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground italic">
-                      No conditions set
-                    </p>
-                  )}
+                    )
+                    .map(([key, value]) => (
+                      <div key={key} className="space-y-1">
+                        <p className="text-sm font-medium text-muted-foreground">
+                          {formatLabel(key)}
+                        </p>
+                        <p className="text-sm">
+                          {typeof value === 'boolean' 
+                            ? value ? 'Yes' : 'No' 
+                            : String(value)}
+                        </p>
+                      </div>
+                    ))
+                  }
                 </div>
               </div>
 
@@ -1665,7 +1511,7 @@ export function CreateRewardDialog({
                 }}
                 disabled={currentStep === 5 && !(validations.basic && validations.conditions && validations.limitations)}
               >
-                {currentStep === 5 ? 'Create Reward' : 'Next'}
+                {currentStep === 5 ? submitButtonText : 'Next'}
               </Button>
             </div>
           </div>

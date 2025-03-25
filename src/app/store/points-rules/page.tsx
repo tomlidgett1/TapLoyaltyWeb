@@ -98,6 +98,29 @@ export default function PointsRulesPage() {
         querySnapshot.forEach((doc) => {
           const data = doc.data()
           
+          // Handle different date formats safely
+          const getDateSafely = (dateField: any): Date => {
+            if (!dateField) return new Date();
+            
+            // If it's a Firestore timestamp with toDate method
+            if (dateField && typeof dateField.toDate === 'function') {
+              return dateField.toDate();
+            }
+            
+            // If it's a string or number timestamp
+            if (typeof dateField === 'string' || typeof dateField === 'number') {
+              const date = new Date(dateField);
+              return isNaN(date.getTime()) ? new Date() : date;
+            }
+            
+            // If it's a seconds-based Firestore timestamp
+            if (dateField.seconds) {
+              return new Date(dateField.seconds * 1000);
+            }
+            
+            return new Date();
+          };
+          
           fetchedRules.push({
             id: doc.id,
             name: data.name || 'Unnamed Rule',
@@ -106,8 +129,8 @@ export default function PointsRulesPage() {
             points: data.points || 0,
             usageCount: data.usageCount || 0,
             status: data.status || 'active',
-            createdAt: data.createdAt?.toDate() || new Date(),
-            updatedAt: data.updatedAt?.toDate() || new Date(),
+            createdAt: getDateSafely(data.createdAt),
+            updatedAt: getDateSafely(data.updatedAt),
             conditions: data.conditions || {}
           })
         })

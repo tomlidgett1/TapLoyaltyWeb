@@ -574,7 +574,7 @@ export default function RewardsPage() {
                     <TableRow 
                       key={reward.id}
                       className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => router.push(`/library/${reward.id}`)}
+                      onClick={() => router.push(`/store/${reward.id}`)}
                     >
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
@@ -586,7 +586,8 @@ export default function RewardsPage() {
                           <div className="min-w-0">
                             <div className="truncate flex items-center gap-1">
                               {reward.rewardName}
-                              {reward.conditions?.find(c => c.type === 'maximumTransactions')?.value === 0 && (
+                              {Array.isArray(reward.conditions) && 
+                                reward.conditions.find(c => c.type === 'maximumTransactions')?.value === 0 && (
                                 <Badge variant="outline" className="ml-1 py-0 h-4 text-[10px] px-1.5 bg-teal-50 text-teal-700 border-teal-200">
                                   New Customers
                                 </Badge>
@@ -698,11 +699,11 @@ export default function RewardsPage() {
                             align="end"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <DropdownMenuItem onClick={() => router.push(`/library/${reward.id}`)}>
+                            <DropdownMenuItem onClick={() => router.push(`/store/${reward.id}`)}>
                               <Eye className="h-4 w-4 mr-2" />
                               View
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => router.push(`/library/${reward.id}/edit`)}>
+                            <DropdownMenuItem onClick={() => router.push(`/store/${reward.id}/edit`)}>
                               <Edit className="h-4 w-4 mr-2" />
                               Edit
                             </DropdownMenuItem>
@@ -1759,7 +1760,7 @@ export default function RewardsPage() {
                         <TableRow 
                           key={reward.id}
                           className="cursor-pointer hover:bg-gray-50"
-                          onClick={() => router.push(`/library/${reward.id}`)}
+                          onClick={() => router.push(`/store/${reward.id}`)}
                         >
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2">
@@ -1771,7 +1772,8 @@ export default function RewardsPage() {
                               <div className="min-w-0">
                                 <div className="truncate flex items-center gap-1">
                                   {reward.rewardName}
-                                  {reward.conditions?.find(c => c.type === 'maximumTransactions')?.value === 0 && (
+                                  {Array.isArray(reward.conditions) && 
+                                    reward.conditions.find(c => c.type === 'maximumTransactions')?.value === 0 && (
                                     <Badge variant="outline" className="ml-1 py-0 h-4 text-[10px] px-1.5 bg-teal-50 text-teal-700 border-teal-200">
                                       New Customers
                                     </Badge>
@@ -1883,11 +1885,11 @@ export default function RewardsPage() {
                                 align="end"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <DropdownMenuItem onClick={() => router.push(`/library/${reward.id}`)}>
+                                <DropdownMenuItem onClick={() => router.push(`/store/${reward.id}`)}>
                                   <Eye className="h-4 w-4 mr-2" />
                                   View
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => router.push(`/library/${reward.id}/edit`)}>
+                                <DropdownMenuItem onClick={() => router.push(`/store/${reward.id}/edit`)}>
                                   <Edit className="h-4 w-4 mr-2" />
                                   Edit
                                 </DropdownMenuItem>
@@ -2084,7 +2086,7 @@ export default function RewardsPage() {
                         <TableRow 
                           key={reward.id}
                           className="cursor-pointer hover:bg-gray-50"
-                          onClick={() => router.push(`/library/${reward.id}`)}
+                          onClick={() => router.push(`/store/${reward.id}`)}
                         >
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2">
@@ -2096,7 +2098,8 @@ export default function RewardsPage() {
                               <div className="min-w-0">
                                 <div className="truncate flex items-center gap-1">
                                   {reward.rewardName}
-                                  {reward.conditions?.find(c => c.type === 'maximumTransactions')?.value === 0 && (
+                                  {Array.isArray(reward.conditions) && 
+                                    reward.conditions.find(c => c.type === 'maximumTransactions')?.value === 0 && (
                                     <Badge variant="outline" className="ml-1 py-0 h-4 text-[10px] px-1.5 bg-teal-50 text-teal-700 border-teal-200">
                                       New Customers
                                     </Badge>
@@ -2208,11 +2211,11 @@ export default function RewardsPage() {
                                 align="end"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <DropdownMenuItem onClick={() => router.push(`/library/${reward.id}`)}>
+                                <DropdownMenuItem onClick={() => router.push(`/store/${reward.id}`)}>
                                   <Eye className="h-4 w-4 mr-2" />
                                   View
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => router.push(`/library/${reward.id}/edit`)}>
+                                <DropdownMenuItem onClick={() => router.push(`/store/${reward.id}/edit`)}>
                                   <Edit className="h-4 w-4 mr-2" />
                                   Edit
                                 </DropdownMenuItem>

@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { useState } from "react"
-import { FileText, Clock, ListChecks, Edit as EditIcon } from "lucide-react"
+import { FileText, Clock, ListChecks, Edit as EditIcon, Info, Settings, CheckCircle } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
@@ -180,9 +180,18 @@ export function CreatePointsRuleDialog({ open, onOpenChange }: CreatePointsRuleD
 
         <Tabs value={`step${currentStep}`} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="step1">Basic Details</TabsTrigger>
-            <TabsTrigger value="step2">Conditions</TabsTrigger>
-            <TabsTrigger value="step3">Review</TabsTrigger>
+            <TabsTrigger value="step1" className="flex items-center gap-2">
+              <Info className="h-4 w-4" />
+              Basic Details
+            </TabsTrigger>
+            <TabsTrigger value="step2" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Conditions
+            </TabsTrigger>
+            <TabsTrigger value="step3" className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4" />
+              Review
+            </TabsTrigger>
           </TabsList>
 
           <div className="mt-4">

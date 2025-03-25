@@ -224,235 +224,248 @@ export default function CustomerDetailsPage() {
             <CardHeader className="pb-0">
               <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="grid grid-cols-4 h-10 rounded-md">
-                  <TabsTrigger value="overview" className="rounded-md">Overview</TabsTrigger>
-                  <TabsTrigger value="transactions" className="rounded-md">Transactions</TabsTrigger>
-                  <TabsTrigger value="rewards" className="rounded-md">Rewards</TabsTrigger>
-                  <TabsTrigger value="notes" className="rounded-md">Notes</TabsTrigger>
+                  <TabsTrigger value="overview" className="rounded-md flex items-center gap-1.5">
+                    <Zap className="h-4 w-4" />
+                    Overview
+                  </TabsTrigger>
+                  <TabsTrigger value="transactions" className="rounded-md flex items-center gap-1.5">
+                    <ShoppingCart className="h-4 w-4" />
+                    Transactions
+                  </TabsTrigger>
+                  <TabsTrigger value="rewards" className="rounded-md flex items-center gap-1.5">
+                    <Gift className="h-4 w-4" />
+                    Rewards
+                  </TabsTrigger>
+                  <TabsTrigger value="notes" className="rounded-md flex items-center gap-1.5">
+                    <Edit className="h-4 w-4" />
+                    Notes
+                  </TabsTrigger>
                 </TabsList>
+
+                <CardContent className="pt-6">
+                  <TabsContent value="overview" className="mt-0 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Card className="rounded-lg">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-medium">Recent Activity</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            {customer.recentTransactions && customer.recentTransactions.length > 0 ? (
+                              customer.recentTransactions.slice(0, 3).map((transaction, index) => (
+                                <div key={index} className="flex items-start gap-3">
+                                  <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                    <ShoppingCart className="h-4 w-4 text-primary" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium">{transaction.type || 'Purchase'}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {formatTimeAgo(transaction.timestamp)} • ${transaction.amount}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-sm text-muted-foreground">No recent transactions</p>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card className="rounded-lg">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-medium">Recent Rewards</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            {customer.recentRedemptions && customer.recentRedemptions.length > 0 ? (
+                              customer.recentRedemptions.slice(0, 3).map((redemption, index) => (
+                                <div key={index} className="flex items-start gap-3">
+                                  <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                    <Gift className="h-4 w-4 text-primary" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium">{redemption.rewardName || 'Reward Redeemed'}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {formatTimeAgo(redemption.timestamp)} • {redemption.pointsCost || 0} points
+                                    </p>
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-sm text-muted-foreground">No recent redemptions</p>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                    
+                    <Card className="rounded-lg">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium">Customer Stats</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">Average Order Value</p>
+                            <p className="text-lg font-medium">
+                              ${customer.averageOrderValue?.toFixed(2) || '0.00'}
+                            </p>
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">Purchase Frequency</p>
+                            <p className="text-lg font-medium">
+                              {customer.purchaseFrequencyDays ? 
+                                `Every ${customer.purchaseFrequencyDays} days` : 
+                                'N/A'}
+                            </p>
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">Days Since Last Visit</p>
+                            <p className="text-lg font-medium">
+                              {customer.daysSinceLastVisit || 'N/A'}
+                            </p>
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">Favorite Product</p>
+                            <p className="text-lg font-medium">
+                              {customer.favoriteProduct || 'None'}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                  
+                  <TabsContent value="transactions" className="mt-0">
+                    <div className="space-y-4">
+                      {customer.transactions && customer.transactions.length > 0 ? (
+                        customer.transactions.map((transaction, index) => (
+                          <div key={index} className="flex items-start gap-4 p-4 border rounded-md">
+                            <div className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                              <ShoppingCart className="h-5 w-5 text-primary" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <p className="font-medium">{transaction.type || 'Purchase'}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {formatDate(transaction.timestamp)} at {transaction.location || 'Unknown location'}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-medium">${transaction.amount}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {transaction.pointsEarned ? `+${transaction.pointsEarned} points` : ''}
+                                  </p>
+                                </div>
+                              </div>
+                              {transaction.items && (
+                                <div className="mt-2 pt-2 border-t">
+                                  <p className="text-sm font-medium mb-1">Items:</p>
+                                  <div className="space-y-1">
+                                    {transaction.items.map((item, idx) => (
+                                      <div key={idx} className="text-sm flex justify-between">
+                                        <span>{item.quantity}x {item.name}</span>
+                                        <span>${item.price}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8">
+                          <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                          <h3 className="text-lg font-medium">No transactions yet</h3>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            This customer hasn't made any purchases yet.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="rewards" className="mt-0">
+                    <div className="space-y-4">
+                      {customer.redemptions && customer.redemptions.length > 0 ? (
+                        customer.redemptions.map((redemption, index) => (
+                          <div key={index} className="flex items-start gap-4 p-4 border rounded-md">
+                            <div className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                              <Gift className="h-5 w-5 text-primary" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <p className="font-medium">{redemption.rewardName || 'Reward Redeemed'}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {formatDate(redemption.timestamp)} at {redemption.location || 'Unknown location'}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-medium">{redemption.pointsCost || 0} points</p>
+                                  <Badge variant="outline" className="rounded-md">
+                                    {redemption.status || 'Redeemed'}
+                                  </Badge>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8">
+                          <Gift className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                          <h3 className="text-lg font-medium">No rewards redeemed</h3>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            This customer hasn't redeemed any rewards yet.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="notes" className="mt-0">
+                    <div className="space-y-4">
+                      {customer.notes && customer.notes.length > 0 ? (
+                        customer.notes.map((note, index) => (
+                          <div key={index} className="p-4 border rounded-md">
+                            <div className="flex justify-between items-start mb-2">
+                              <p className="font-medium">{note.title || 'Note'}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatDate(note.timestamp)}
+                              </p>
+                            </div>
+                            <p className="text-sm">{note.content}</p>
+                            {note.author && (
+                              <p className="text-xs text-muted-foreground mt-2">
+                                Added by {note.author}
+                              </p>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8">
+                          <div className="h-12 w-12 text-muted-foreground mx-auto mb-4">📝</div>
+                          <h3 className="text-lg font-medium">No notes yet</h3>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Add notes about this customer to keep track of important information.
+                          </p>
+                          <Button className="mt-4 rounded-md">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Note
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+                </CardContent>
               </Tabs>
             </CardHeader>
-            <CardContent className="pt-6">
-              <TabsContent value="overview" className="mt-0 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Card className="rounded-lg">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium">Recent Activity</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {customer.recentTransactions && customer.recentTransactions.length > 0 ? (
-                          customer.recentTransactions.slice(0, 3).map((transaction, index) => (
-                            <div key={index} className="flex items-start gap-3">
-                              <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                <ShoppingCart className="h-4 w-4 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium">{transaction.type || 'Purchase'}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {formatTimeAgo(transaction.timestamp)} • ${transaction.amount}
-                                </p>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-sm text-muted-foreground">No recent transactions</p>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card className="rounded-lg">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium">Recent Rewards</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {customer.recentRedemptions && customer.recentRedemptions.length > 0 ? (
-                          customer.recentRedemptions.slice(0, 3).map((redemption, index) => (
-                            <div key={index} className="flex items-start gap-3">
-                              <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                <Gift className="h-4 w-4 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium">{redemption.rewardName || 'Reward Redeemed'}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {formatTimeAgo(redemption.timestamp)} • {redemption.pointsCost || 0} points
-                                </p>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-sm text-muted-foreground">No recent redemptions</p>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-                
-                <Card className="rounded-lg">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Customer Stats</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">Average Order Value</p>
-                        <p className="text-lg font-medium">
-                          ${customer.averageOrderValue?.toFixed(2) || '0.00'}
-                        </p>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">Purchase Frequency</p>
-                        <p className="text-lg font-medium">
-                          {customer.purchaseFrequencyDays ? 
-                            `Every ${customer.purchaseFrequencyDays} days` : 
-                            'N/A'}
-                        </p>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">Days Since Last Visit</p>
-                        <p className="text-lg font-medium">
-                          {customer.daysSinceLastVisit || 'N/A'}
-                        </p>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">Favorite Product</p>
-                        <p className="text-lg font-medium">
-                          {customer.favoriteProduct || 'None'}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-              
-              <TabsContent value="transactions" className="mt-0">
-                <div className="space-y-4">
-                  {customer.transactions && customer.transactions.length > 0 ? (
-                    customer.transactions.map((transaction, index) => (
-                      <div key={index} className="flex items-start gap-4 p-4 border rounded-md">
-                        <div className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <ShoppingCart className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="font-medium">{transaction.type || 'Purchase'}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {formatDate(transaction.timestamp)} at {transaction.location || 'Unknown location'}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-medium">${transaction.amount}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {transaction.pointsEarned ? `+${transaction.pointsEarned} points` : ''}
-                              </p>
-                            </div>
-                          </div>
-                          {transaction.items && (
-                            <div className="mt-2 pt-2 border-t">
-                              <p className="text-sm font-medium mb-1">Items:</p>
-                              <div className="space-y-1">
-                                {transaction.items.map((item, idx) => (
-                                  <div key={idx} className="text-sm flex justify-between">
-                                    <span>{item.quantity}x {item.name}</span>
-                                    <span>${item.price}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8">
-                      <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="text-lg font-medium">No transactions yet</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        This customer hasn't made any purchases yet.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="rewards" className="mt-0">
-                <div className="space-y-4">
-                  {customer.redemptions && customer.redemptions.length > 0 ? (
-                    customer.redemptions.map((redemption, index) => (
-                      <div key={index} className="flex items-start gap-4 p-4 border rounded-md">
-                        <div className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <Gift className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="font-medium">{redemption.rewardName || 'Reward Redeemed'}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {formatDate(redemption.timestamp)} at {redemption.location || 'Unknown location'}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-medium">{redemption.pointsCost || 0} points</p>
-                              <Badge variant="outline" className="rounded-md">
-                                {redemption.status || 'Redeemed'}
-                              </Badge>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8">
-                      <Gift className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="text-lg font-medium">No rewards redeemed</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        This customer hasn't redeemed any rewards yet.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="notes" className="mt-0">
-                <div className="space-y-4">
-                  {customer.notes && customer.notes.length > 0 ? (
-                    customer.notes.map((note, index) => (
-                      <div key={index} className="p-4 border rounded-md">
-                        <div className="flex justify-between items-start mb-2">
-                          <p className="font-medium">{note.title || 'Note'}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatDate(note.timestamp)}
-                          </p>
-                        </div>
-                        <p className="text-sm">{note.content}</p>
-                        {note.author && (
-                          <p className="text-xs text-muted-foreground mt-2">
-                            Added by {note.author}
-                          </p>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8">
-                      <div className="h-12 w-12 text-muted-foreground mx-auto mb-4">📝</div>
-                      <h3 className="text-lg font-medium">No notes yet</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Add notes about this customer to keep track of important information.
-                      </p>
-                      <Button className="mt-4 rounded-md">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Note
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-            </CardContent>
           </Card>
         </div>
       </div>

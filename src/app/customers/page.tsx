@@ -222,10 +222,22 @@ export default function CustomersPage() {
           <Tabs defaultValue="all" onValueChange={(value) => setCohort(value as CustomerCohort)}>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
               <TabsList className="h-9 rounded-md">
-                <TabsTrigger value="all">All Customers</TabsTrigger>
-                <TabsTrigger value="active">Active</TabsTrigger>
-                <TabsTrigger value="at-risk">At Risk</TabsTrigger>
-                <TabsTrigger value="dormant">Dormant</TabsTrigger>
+                <TabsTrigger value="all" className="flex items-center gap-1.5">
+                  <Users className="h-4 w-4" />
+                  All Customers
+                </TabsTrigger>
+                <TabsTrigger value="active" className="flex items-center gap-1.5">
+                  <UserCheck className="h-4 w-4" />
+                  Active
+                </TabsTrigger>
+                <TabsTrigger value="at-risk" className="flex items-center gap-1.5">
+                  <UserMinus className="h-4 w-4" />
+                  At Risk
+                </TabsTrigger>
+                <TabsTrigger value="dormant" className="flex items-center gap-1.5">
+                  <UserX className="h-4 w-4" />
+                  Dormant
+                </TabsTrigger>
               </TabsList>
               
               <div className="flex items-center gap-2">
@@ -463,7 +475,7 @@ export default function CustomersPage() {
                             <TableRow 
                               key={customer.customerId} 
                               className="hover:bg-muted/50 cursor-pointer"
-                              onClick={() => router.push(`/customers/${customer.customerId}`)}
+                              onClick={() => router.push(`/customers/id?customerId=${customer.customerId}`)}
                             >
                               <TableCell>
                                 <div className="flex items-center gap-3">
@@ -523,17 +535,10 @@ export default function CustomersPage() {
                                     <DropdownMenuContent align="end" className="rounded-md">
                                       <DropdownMenuItem onClick={(e) => {
                                         e.stopPropagation();
-                                        router.push(`/customers/${customer.customerId}`);
+                                        router.push(`/customers/id?customerId=${customer.customerId}`);
                                       }}>
                                         <Eye className="h-4 w-4 mr-2" />
                                         View Details
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem onClick={(e) => {
-                                        e.stopPropagation();
-                                        router.push(`/customers/${customer.customerId}/edit`);
-                                      }}>
-                                        <Edit className="h-4 w-4 mr-2" />
-                                        Edit Customer
                                       </DropdownMenuItem>
                                       <DropdownMenuSeparator />
                                       <DropdownMenuItem 

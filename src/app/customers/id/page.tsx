@@ -1,11 +1,11 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { doc, getDoc, collection, getDocs, query, orderBy, where } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
-import { Card } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { 
   Table, 
@@ -15,11 +15,24 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table"
-import { User, Gift, Receipt, Clock, CreditCard, ArrowLeft } from "lucide-react"
+import { 
+  User, 
+  Gift, 
+  Receipt, 
+  Clock, 
+  CreditCard, 
+  ArrowLeft, 
+  Calendar, 
+  ShoppingCart, 
+  DollarSign, 
+  Award,
+  TrendingUp
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { formatDistanceToNow, format } from "date-fns"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
 
 interface Transaction {
   actualcreatedAt: any
@@ -75,7 +88,8 @@ const formatDateTime = (timestamp: any) => {
 }
 
 export default function CustomerDetailPage() {
-  const { customerId } = useParams()
+  const searchParams = useSearchParams()
+  const customerId = searchParams.get('customerId')
   const { user } = useAuth()
   const [customer, setCustomer] = useState<any>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -141,119 +155,211 @@ export default function CustomerDetailPage() {
   }, [user?.uid, customerId])
 
   if (loading) {
-    return <div className="p-8 text-center">Loading...</div>
+    return (
+      <div className="p-8 flex justify-center items-center">
+        <div className="flex flex-col items-center gap-2">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
+          <p className="text-sm text-muted-foreground">Loading customer details...</p>
+        </div>
+      </div>
+    )
   }
 
   if (!customer) {
-    return <div className="p-8 text-center">Customer not found</div>
+    return (
+      <div className="p-8">
+        <Card className="rounded-lg">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <h3 className="text-lg font-medium">Customer not found</h3>
+              <p className="text-sm text-muted-foreground mt-2">
+                The customer you're looking for doesn't exist or you don't have permission to view it.
+              </p>
+              <Button asChild className="mt-4 rounded-md">
+                <Link href="/customers">Back to Customers</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
-    <div className="p-4">
+    <div className="p-4 md:p-6">
       <div className="max-w-[1200px] mx-auto space-y-6">
         <div className="flex items-center gap-2">
           <Link href="/customers">
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-md">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
           <h1 className="text-2xl font-semibold tracking-tight">Customer Details</h1>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          {/* Customer Profile Card */}
-          <Card className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="h-16 w-16 rounded-full bg-[#007AFF]/10 flex items-center justify-center overflow-hidden">
-                {customer.profileData?.shareProfileWithMerchants && customer.profileData?.profilePictureUrl ? (
-                  <img 
-                    src={customer.profileData.profilePictureUrl} 
-                    alt={customer.fullName}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <User className="h-8 w-8 text-[#007AFF]" />
-                )}
-              </div>
-              <div>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <Card className="lg:col-span-1 rounded-lg">
+            <CardHeader className="pb-2">
+              <CardTitle>Profile</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col items-center">
+                <div className="h-24 w-24 rounded-full bg-[#007AFF]/10 flex items-center justify-center overflow-hidden mb-4">
+                  {customer.profileData?.shareProfileWithMerchants && customer.profileData?.profilePictureUrl ? (
+                    <img 
+                      src={customer.profileData.profilePictureUrl} 
+                      alt={customer.fullName}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User className="h-12 w-12 text-[#007AFF]" />
+                  )}
+                </div>
+                
                 <h2 className="text-xl font-semibold">{customer.fullName}</h2>
+                
                 {customer.membershipTier && (
-                  <span className="inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full bg-[#007AFF]/10 text-[#007AFF]">
+                  <Badge className="mt-1 rounded-md bg-[#007AFF]/10 text-[#007AFF] border-0">
                     {customer.membershipTier}
-                  </span>
+                  </Badge>
                 )}
               </div>
-            </div>
+              
+              <div className="mt-6 pt-6 border-t space-y-4">
+                <div className="flex items-center gap-3">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">First Purchase</p>
+                    <p className="text-sm text-muted-foreground">{formatDateTime(customer.firstTransactionDate)}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Last Visit</p>
+                    <p className="text-sm text-muted-foreground">{formatDateTime(customer.lastTransactionDate)}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Customer Age</p>
+                    <p className="text-sm text-muted-foreground">{customer.daysSinceFirstPurchase} days</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
           </Card>
-
-          {/* Stats Cards */}
-          <div className="md:col-span-2 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="p-4">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-full bg-[#007AFF]/10 flex items-center justify-center">
-                  <CreditCard className="h-4 w-4 text-[#007AFF]" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Points Balance</p>
-                  <p className="text-xl font-semibold">{customer.pointsBalance.toLocaleString()}</p>
-                </div>
-              </div>
-            </Card>
+          
+          <div className="lg:col-span-3 space-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Card className="rounded-lg">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center text-center">
+                    <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center mb-2">
+                      <Award className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <p className="text-2xl font-bold">{customer.pointsBalance.toLocaleString()}</p>
+                    <p className="text-sm text-muted-foreground">Points Balance</p>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="rounded-lg">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center text-center">
+                    <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center mb-2">
+                      <DollarSign className="h-6 w-6 text-green-600" />
+                    </div>
+                    <p className="text-2xl font-bold">${customer.totalLifetimeSpend}</p>
+                    <p className="text-sm text-muted-foreground">Lifetime Spend</p>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="rounded-lg">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center text-center">
+                    <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center mb-2">
+                      <ShoppingCart className="h-6 w-6 text-purple-600" />
+                    </div>
+                    <p className="text-2xl font-bold">{customer.lifetimeTransactionCount}</p>
+                    <p className="text-sm text-muted-foreground">Total Visits</p>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="rounded-lg">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center text-center">
+                    <div className="h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center mb-2">
+                      <Gift className="h-6 w-6 text-amber-600" />
+                    </div>
+                    <p className="text-2xl font-bold">{customer.redemptionCount || 0}</p>
+                    <p className="text-sm text-muted-foreground">Rewards Redeemed</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
             
-            <Card className="p-4">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-full bg-[#007AFF]/10 flex items-center justify-center">
-                  <Receipt className="h-4 w-4 text-[#007AFF]" />
+            <Card className="rounded-lg">
+              <CardHeader className="pb-2">
+                <CardTitle>Customer Insights</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Days Since Last Visit</p>
+                    <p className="text-lg font-medium">{customer.daysSinceLastVisit}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {customer.daysSinceLastVisit <= 30 
+                        ? "Active customer" 
+                        : customer.daysSinceLastVisit <= 90 
+                          ? "Engaged customer" 
+                          : "At risk of churning"}
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <p className="text-sm text-muted-foreground">Highest Transaction</p>
+                    <p className="text-lg font-medium">${customer.highestTransactionAmount}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {formatDateTime(customer.lastTransactionDate)}
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <p className="text-sm text-muted-foreground">Average Order Value</p>
+                    <p className="text-lg font-medium">
+                      ${(customer.totalLifetimeSpend / Math.max(1, customer.lifetimeTransactionCount)).toFixed(2)}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Based on {customer.lifetimeTransactionCount} transactions
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Spend</p>
-                  <p className="text-xl font-semibold">${customer.totalLifetimeSpend}</p>
-                </div>
-              </div>
-            </Card>
-
-            <Card className="p-4">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-full bg-[#007AFF]/10 flex items-center justify-center">
-                  <Gift className="h-4 w-4 text-[#007AFF]" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Redemptions</p>
-                  <p className="text-xl font-semibold">{customer.redemptionCount || 0}</p>
-                </div>
-              </div>
-            </Card>
-
-            <Card className="p-4">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-full bg-[#007AFF]/10 flex items-center justify-center">
-                  <Clock className="h-4 w-4 text-[#007AFF]" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Last Visit</p>
-                  <p className="text-sm font-medium">
-                    {formatFirestoreDate(customer.lastTransactionDate)}
-                  </p>
-                </div>
-              </div>
+              </CardContent>
             </Card>
           </div>
         </div>
 
-        {/* Activity Tabs */}
-        <Card>
+        <Card className="rounded-lg">
           <Tabs defaultValue="transactions" className="w-full">
             <TabsList className="w-full justify-start border-b rounded-none h-12 p-0 px-6">
               <TabsTrigger 
                 value="transactions" 
-                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[#007AFF] rounded-none h-12"
+                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[#007AFF] rounded-none h-12 flex items-center gap-2"
               >
+                <ShoppingCart className="h-4 w-4" />
                 Transactions
               </TabsTrigger>
               <TabsTrigger 
                 value="redemptions"
-                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[#007AFF] rounded-none h-12"
+                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[#007AFF] rounded-none h-12 flex items-center gap-2"
               >
+                <Gift className="h-4 w-4" />
                 Redemptions
               </TabsTrigger>
             </TabsList>

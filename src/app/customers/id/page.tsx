@@ -33,6 +33,7 @@ import { formatDistanceToNow, format } from "date-fns"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
+import { useRouter } from "next/navigation"
 
 interface Transaction {
   actualcreatedAt: any
@@ -95,6 +96,7 @@ export default function CustomerDetailPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [redemptions, setRedemptions] = useState<Redemption[]>([])
   const [loading, setLoading] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
     async function fetchCustomerData() {
@@ -195,6 +197,15 @@ export default function CustomerDetailPage() {
             </Button>
           </Link>
           <h1 className="text-2xl font-semibold tracking-tight">Customer Details</h1>
+          <div className="ml-auto">
+            <Button 
+              className="rounded-md flex items-center gap-2 bg-[#007AFF] hover:bg-[#0062CC]"
+              onClick={() => router.push(`/rewards/create?customerId=${customerId}&customerName=${encodeURIComponent(customer.fullName)}`)}
+            >
+              <Gift className="h-4 w-4" />
+              Create Reward for {customer.fullName.split(' ')[0]}
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

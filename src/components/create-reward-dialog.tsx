@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { useState, useEffect } from "react"
-import { CalendarIcon, Clock, HelpCircle, Users, UserCheck, UserCog, ShoppingCart, DollarSign, UserPlus, X, BugPlay, FileText, Eye, ListChecks, AlertTriangle, ChevronRight, Edit as EditIcon, CheckCircle, ClipboardCheck } from "lucide-react"
+import { CalendarIcon, Clock, HelpCircle, Users, UserCheck, UserCog, ShoppingCart, DollarSign, UserPlus, X, BugPlay, FileText, Eye, ListChecks, AlertTriangle, ChevronRight, Edit as EditIcon, CheckCircle, ClipboardCheck, User } from "lucide-react"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format } from "date-fns"
@@ -34,6 +34,8 @@ interface CreateRewardDialogProps {
   defaultValues?: any
   isEditing?: boolean
   rewardId?: string
+  customerId?: string
+  customerName?: string
 }
 
 interface FormData {
@@ -91,7 +93,9 @@ export function CreateRewardDialog({
   onOpenChange,
   defaultValues,
   isEditing = false,
-  rewardId
+  rewardId,
+  customerId,
+  customerName
 }: CreateRewardDialogProps) {
   const [currentStep, setCurrentStep] = useState(1)
   const { toast } = useToast()
@@ -150,8 +154,15 @@ export function CreateRewardDialog({
   useEffect(() => {
     if (defaultValues) {
       setFormData(defaultValues)
+    } else if (customerId) {
+      setFormData({
+        ...formData,
+        rewardVisibility: 'specific',
+        specificCustomerId: customerId,
+        specificCustomerName: customerName
+      })
     }
-  }, [defaultValues])
+  }, [defaultValues, customerId, customerName])
 
   const rewardExamples = [
     {
@@ -300,6 +311,16 @@ export function CreateRewardDialog({
     return `${newHour}:00 ${newPeriod}`
   }
 
+  // Add this debugging function at the top of your component
+  const debugObject = (obj: any, label: string) => {
+    console.log(`----- DEBUG ${label} -----`);
+    console.log("Type:", typeof obj);
+    console.log("Value:", obj);
+    console.log("JSON string:", JSON.stringify(obj));
+    console.log("Keys:", Object.keys(obj));
+    console.log("------------------------");
+  };
+
   const saveReward = async () => {
     if (!user) {
       toast({
@@ -311,6 +332,12 @@ export function CreateRewardDialog({
     }
 
     try {
+      console.log("FORM DATA AT START OF SAVE:", {
+        rewardVisibility: formData.rewardVisibility,
+        specificCustomerId: formData.specificCustomerId,
+        customerName: customerName
+      });
+
       // Transform conditions into array of objects
       const conditions = []
 
@@ -440,13 +467,33 @@ export function CreateRewardDialog({
         timestamp.getMinutes()
       ))
 
+      // Create uniqueCustomerIds object for specific customer
+      console.log("BEFORE creating uniqueCustomerIds:");
+      console.log("rewardVisibility:", formData.rewardVisibility);
+      console.log("specificCustomerId:", formData.specificCustomerId);
+      console.log("customerName:", customerName);
+
+      // Force the customer ID to be used regardless of visibility setting
+      let uniqueCustomerIds = {};
+      if (customerId) {
+        // Use the prop directly instead of formData
+        uniqueCustomerIds = { [customerId]: true };
+        console.log(`Setting uniqueCustomerIds.${customerId} = true`);
+      }
+
+      // Debug the created object
+      debugObject(uniqueCustomerIds, "uniqueCustomerIds");
+
+      // Also update the customerVisibility field
+      const customerVisibility = customerId ? 'specific' : 'all';
+
       const rewardData = {
         rewardName: formData.rewardName,
         description: formData.description,
         programtype: "points",
         isActive: formData.isActive,
         pointsCost: Math.max(0, Number(formData.pointsCost)),
-        rewardVisibility: formData.rewardVisibility === 'conditional' ? 'conditional' : 'global',
+        rewardVisibility: formData.rewardVisibility,
         voucherAmount: Number(formData.voucherAmount) || 0,
         delayedVisibility,
         conditions,
@@ -462,8 +509,16 @@ export function CreateRewardDialog({
         redemptionCount: 0,
         uniqueCustomersCount: 0,
         lastRedeemedAt: null,
-        uniqueCustomerIds: []
+        uniqueCustomerIds,
+        specificCustomerId: customerId,
+        customerVisibility
       }
+
+      // Debug the final rewardData
+      debugObject(rewardData, "rewardData");
+
+      // Before saving to Firestore
+      console.log("FINAL DATA TO SAVE:", JSON.stringify(rewardData));
 
       // If editing, update the existing document in both collections
       if (isEditing && rewardId) {
@@ -509,7 +564,7 @@ export function CreateRewardDialog({
           doc(db, 'merchants', user.uid, 'rewards', newRewardRef.id),
           { id: newRewardRef.id }
         );
-        
+
         // Also save to top-level rewards collection
         await setDoc(
           doc(db, 'rewards', newRewardRef.id),
@@ -520,14 +575,24 @@ export function CreateRewardDialog({
           title: "Reward Created",
           description: "Your new reward has been successfully created.",
         });
-      }
 
-      // Close the dialog
-      onOpenChange(false);
-      
-      // Optional: refresh the page or update the UI
-      if (isEditing) {
-        window.location.reload();
+        // Log the final result
+        console.log("REWARD SAVED SUCCESSFULLY!");
+        console.log("Final uniqueCustomerIds:", uniqueCustomerIds);
+
+        // Comment out the dialog close and redirect to see the logs
+        // onOpenChange(false);
+
+        // Optional: Add a button to manually close the dialog after viewing logs
+        toast({
+          title: "Debug Mode",
+          description: "Check console logs and click 'Close' when done.",
+          action: <Button onClick={() => onOpenChange(false)}>Close</Button>
+        });
+
+        // if (isEditing) {
+        //   window.location.reload();
+        // }
       }
     } catch (error) {
       console.error("Error saving reward:", error);
@@ -541,13 +606,14 @@ export function CreateRewardDialog({
 
   // Helper function to format the visibility text
   const getVisibilityText = (visibility: string) => {
-    const map = {
-      'all': 'All Customers',
-      'new': 'New Customers Only',
-      'existing': 'Existing Customers Only',
-      'conditional': 'Conditional'
+    switch (visibility) {
+      case 'all': return 'All Customers';
+      case 'new': return 'New Customers Only';
+      case 'returning': return 'Returning Customers Only';
+      case 'vip': return 'VIP Customers Only';
+      case 'specific': return `${customerName} Only`;
+      default: return 'All Customers';
     }
-    return map[visibility as keyof typeof map] || visibility
   }
 
   // Helper function to format the date safely
@@ -659,9 +725,20 @@ export function CreateRewardDialog({
                 <DialogDescription>
                   {isEditing 
                     ? 'Update the details of your existing reward.' 
-                    : 'Design a new reward for your loyal customers. Fill out the details below.'}
+                    : customerName
+                      ? `Design a personalized reward for ${customerName}.`
+                      : 'Design a new reward for your loyal customers. Fill out the details below.'}
                 </DialogDescription>
               </div>
+              
+              {customerId && customerName && (
+                <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-100 rounded-md">
+                  <User className="h-4 w-4 text-[#007AFF]" />
+                  <span className="text-sm text-blue-700">
+                    Creating reward for <span className="font-medium">{customerName}</span>
+                  </span>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2 pt-1">
               {process.env.NODE_ENV === 'development' && (
@@ -905,6 +982,9 @@ export function CreateRewardDialog({
                         <SelectItem value="new">New Customers Only</SelectItem>
                         <SelectItem value="returning">Returning Customers Only</SelectItem>
                         <SelectItem value="vip">VIP Customers Only</SelectItem>
+                        {customerId && (
+                          <SelectItem value="specific">Specific Customer Only</SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>

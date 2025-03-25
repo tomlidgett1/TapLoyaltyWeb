@@ -25,7 +25,6 @@ import {
 export default function CreatePage() {
   const router = useRouter()
   const [createRewardOpen, setCreateRewardOpen] = useState(false)
-  const [createProgramOpen, setCreateProgramOpen] = useState(false)
   const [createRecurringOpen, setCreateRecurringOpen] = useState(false)
   const [createRuleOpen, setCreateRuleOpen] = useState(false)
   const [createBannerOpen, setCreateBannerOpen] = useState(false)
@@ -45,13 +44,6 @@ export default function CreatePage() {
           icon: Gift,
           iconColor: "text-[#007AFF]",
           action: () => setCreateRewardOpen(true)
-        },
-        {
-          title: "Coffee Program",
-          description: "Set up a buy-X-get-1-free coffee or loyalty program",
-          icon: Coffee,
-          iconColor: "text-[#007AFF]",
-          action: () => setCreateProgramOpen(true)
         },
         {
           title: "Recurring Reward",
@@ -156,12 +148,6 @@ export default function CreatePage() {
       <CreateRewardDialog 
         open={createRewardOpen} 
         onOpenChange={setCreateRewardOpen}
-      />
-      
-      <CreateRewardDialog 
-        open={createProgramOpen} 
-        onOpenChange={setCreateProgramOpen}
-        defaultType="program"
       />
       
       <CreateRecurringRewardDialog 

@@ -122,28 +122,54 @@ export function CreatePointsRuleDialog({ open, onOpenChange }: CreatePointsRuleD
     }
 
     try {
-      // Format the conditions object
-      const conditions: any = {}
+      // Format the conditions as an array of condition objects
+      const conditions: any[] = []
       
       // Add time restrictions if enabled
       if (formData.useTimeRestrictions) {
-        conditions.timeRestrictions = {
-          startTime: formData.startTime,
-          endTime: formData.endTime
-        }
+        // Parse the time strings to create proper Firestore timestamps
+        const createTimestamp = (timeStr: string) => {
+          if (!timeStr) return null;
+          
+          // Get today's date as a base
+          const today = new Date();
+          const [time, period] = timeStr.split(' ');
+          const [hours, minutes] = time.split(':');
+          let hour = parseInt(hours);
+          
+          // Convert to 24-hour format
+          if (period === 'PM' && hour !== 12) hour += 12;
+          if (period === 'AM' && hour === 12) hour = 0;
+          
+          // Create a new date with the specified time
+          const date = new Date(today);
+          date.setHours(hour, parseInt(minutes) || 0, 0, 0);
+          
+          // Return a Firestore timestamp
+          return Timestamp.fromDate(date);
+        };
+        
+        conditions.push({
+          type: "timeOfDay",
+          startTime: createTimestamp(formData.startTime),
+          endTime: createTimestamp(formData.endTime)
+        });
       }
       
       // Add minimum spend if enabled
       if (formData.useMinimumSpend) {
-        conditions.minimumSpend = parseFloat(formData.minimumSpend)
+        conditions.push({
+          type: "minimumSpend",
+          amount: parseFloat(formData.minimumSpend)
+        });
       }
       
-      // Add day restrictions if enabled - convert to lowercase first letter
+      // Add day restrictions if enabled
       if (formData.useDayRestrictions && formData.dayRestrictions.length > 0) {
-        // Convert day names to lowercase first letter (Monday -> monday)
-        conditions.dayRestrictions = formData.dayRestrictions.map(day => 
-          day.charAt(0).toLowerCase() + day.slice(1)
-        )
+        conditions.push({
+          type: "daysOfWeek",
+          days: formData.dayRestrictions.map(day => day.toLowerCase())
+        });
       }
       
       // Create the rule data
@@ -151,9 +177,10 @@ export function CreatePointsRuleDialog({ open, onOpenChange }: CreatePointsRuleD
         name: formData.name,
         pointsmultiplier: parseFloat(formData.pointsmultiplier),
         conditions: conditions,
+        active: true,
         status: "active",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
       }
       
       // Save to Firestore

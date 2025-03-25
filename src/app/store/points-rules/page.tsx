@@ -510,14 +510,22 @@ export default function PointsRulesPage() {
                       <TableHead className="w-[300px]">
                         <SortButton field="name">Rule Name</SortButton>
                       </TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">
-                        <SortButton field="points">Points</SortButton>
+                      <TableHead>
+                        <span>Type</span>
                       </TableHead>
-                      <TableHead className="text-right">
-                        <SortButton field="usageCount">Usage Count</SortButton>
+                      <TableHead>
+                        <div className="text-right">
+                          <SortButton field="points">Points</SortButton>
+                        </div>
                       </TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>
+                        <div className="text-right">
+                          <SortButton field="usageCount">Usage Count</SortButton>
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <span>Status</span>
+                      </TableHead>
                       <TableHead>
                         <SortButton field="createdAt">Created</SortButton>
                       </TableHead>
@@ -594,13 +602,17 @@ export default function PointsRulesPage() {
                               </div>
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1">
+                          <TableCell>
+                            <div className="text-right flex items-center justify-end gap-1">
                               <Zap className="h-4 w-4 text-blue-600" />
                               <span>{rule.points}</span>
                             </div>
                           </TableCell>
-                          <TableCell className="text-right">{rule.usageCount}</TableCell>
+                          <TableCell>
+                            <div className="text-right">
+                              {rule.usageCount}
+                            </div>
+                          </TableCell>
                           <TableCell>
                             <Badge variant="outline" className={cn(
                               "rounded-md",

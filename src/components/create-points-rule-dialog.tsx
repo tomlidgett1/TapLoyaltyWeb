@@ -112,55 +112,63 @@ export function CreatePointsRuleDialog({ open, onOpenChange }: CreatePointsRuleD
   }
 
   const savePointsRule = async () => {
-    if (!user?.uid) return
+    if (!user?.uid) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to create rules.",
+        variant: "destructive"
+      })
+      return
+    }
 
     try {
-      const conditions = []
-
-      // Add time restrictions
+      // Format the conditions object
+      const conditions: any = {}
+      
+      // Add time restrictions if enabled
       if (formData.useTimeRestrictions) {
-        conditions.push({
-          type: "timeOfDay",
-          startTime: formData.startTime ? Timestamp.fromDate(new Date(`2000/01/01 ${formData.startTime}`)) : null,
-          endTime: formData.endTime ? Timestamp.fromDate(new Date(`2000/01/01 ${formData.endTime}`)) : null
-        })
+        conditions.timeRestrictions = {
+          startTime: formData.startTime,
+          endTime: formData.endTime
+        }
       }
-
-      // Add minimum spend
-      if (formData.useMinimumSpend && formData.minimumSpend) {
-        conditions.push({
-          type: "minimumSpend",
-          amount: Number(formData.minimumSpend)
-        })
+      
+      // Add minimum spend if enabled
+      if (formData.useMinimumSpend) {
+        conditions.minimumSpend = parseFloat(formData.minimumSpend)
       }
-
-      // Add day restrictions
+      
+      // Add day restrictions if enabled - convert to lowercase first letter
       if (formData.useDayRestrictions && formData.dayRestrictions.length > 0) {
-        conditions.push({
-          type: "daysOfWeek",
-          days: formData.dayRestrictions
-        })
+        // Convert day names to lowercase first letter (Monday -> monday)
+        conditions.dayRestrictions = formData.dayRestrictions.map(day => 
+          day.charAt(0).toLowerCase() + day.slice(1)
+        )
       }
-
+      
+      // Create the rule data
       const ruleData = {
         name: formData.name,
-        pointsmultiplier: Number(formData.pointsmultiplier),
-        conditions,
-        merchantId: user.uid,
-        createdAt: Timestamp.now()
+        pointsmultiplier: parseFloat(formData.pointsmultiplier),
+        conditions: conditions,
+        status: "active",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       }
-
-      await addDoc(collection(db, 'merchants', user.uid, 'pointsRules'), ruleData)
-
+      
+      // Save to Firestore
+      const rulesRef = collection(db, 'merchants', user.uid, 'pointsRules')
+      await addDoc(rulesRef, ruleData)
+      
       toast({
         title: "Success",
         description: "Points rule created successfully.",
       })
-
+      
       onOpenChange(false)
-
+      
     } catch (error) {
-      console.error('Error creating points rule:', error)
+      console.error("Error creating points rule:", error)
       toast({
         title: "Error",
         description: "There was a problem creating the points rule.",

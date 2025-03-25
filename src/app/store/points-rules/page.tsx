@@ -39,7 +39,8 @@ import {
   Tag,
   DollarSign,
   Users,
-  ListFilter
+  ListFilter,
+  Check
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -48,6 +49,17 @@ import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { collection, getDocs, query, doc, updateDoc, deleteDoc } from "firebase/firestore"
 import { CreatePointsRuleDialog } from "@/components/create-points-rule-dialog"
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 
 // Types
 type RuleCategory = "all" | "active" | "inactive"
@@ -81,6 +93,11 @@ export default function PointsRulesPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
   const [loading, setLoading] = useState(true)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [ruleToDelete, setRuleToDelete] = useState<string | null>(null)
+  const [selectedRules, setSelectedRules] = useState<string[]>([])
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
+  const [selectionMode, setSelectionMode] = useState(false)
 
   useEffect(() => {
     const fetchRules = async () => {
@@ -192,6 +209,13 @@ export default function PointsRulesPage() {
     fetchRules()
   }, [user])
 
+  // Clear selections when exiting selection mode
+  useEffect(() => {
+    if (!selectionMode) {
+      setSelectedRules([])
+    }
+  }, [selectionMode])
+
   // Filter and sort rules
   const filteredRules = rules.filter(rule => {
     // Filter by search query
@@ -263,17 +287,25 @@ export default function PointsRulesPage() {
     }
   }
 
-  const deleteRule = async (id: string) => {
-    if (!user?.uid || !confirm("Are you sure you want to delete this points rule? This action cannot be undone.")) return
+  const confirmDeleteRule = (id: string) => {
+    setRuleToDelete(id)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteRule = async () => {
+    if (!user?.uid || !ruleToDelete) return
     
     try {
-      const ruleRef = doc(db, 'merchants', user.uid, 'pointsRules', id)
+      const ruleRef = doc(db, 'merchants', user.uid, 'pointsRules', ruleToDelete)
       await deleteDoc(ruleRef)
       
       // Update local state
-      setRules(prev => prev.filter(rule => rule.id !== id))
+      setRules(prev => prev.filter(rule => rule.id !== ruleToDelete))
     } catch (error) {
       console.error("Error deleting points rule:", error)
+    } finally {
+      setRuleToDelete(null)
+      setDeleteDialogOpen(false)
     }
   }
 
@@ -321,6 +353,56 @@ export default function PointsRulesPage() {
     </button>
   )
 
+  const handleSelectRule = (id: string, isChecked: boolean) => {
+    if (isChecked) {
+      setSelectedRules(prev => [...prev, id])
+    } else {
+      setSelectedRules(prev => prev.filter(ruleId => ruleId !== id))
+    }
+  }
+
+  const handleSelectAll = (isChecked: boolean) => {
+    if (isChecked) {
+      setSelectedRules(filteredRules.map(rule => rule.id))
+    } else {
+      setSelectedRules([])
+    }
+  }
+
+  const confirmBulkDelete = () => {
+    if (selectedRules.length > 0) {
+      setBulkDeleteDialogOpen(true)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (!user?.uid || selectedRules.length === 0) return
+    
+    try {
+      // Delete each selected rule
+      for (const ruleId of selectedRules) {
+        const ruleRef = doc(db, 'merchants', user.uid, 'pointsRules', ruleId)
+        await deleteDoc(ruleRef)
+      }
+      
+      // Update local state
+      setRules(prev => prev.filter(rule => !selectedRules.includes(rule.id)))
+      setSelectedRules([]) // Clear selection
+    } catch (error) {
+      console.error("Error deleting points rules:", error)
+    } finally {
+      setBulkDeleteDialogOpen(false)
+    }
+  }
+
+  // Toggle selection mode
+  const toggleSelectionMode = () => {
+    setSelectionMode(prev => !prev)
+  }
+
+  // Calculate the total number of columns based on selection mode
+  const totalColumns = selectionMode ? 8 : 7;
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <div>
@@ -358,15 +440,52 @@ export default function PointsRulesPage() {
               </TabsTrigger>
             </TabsList>
             
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input 
-                type="search" 
-                placeholder="Search rules..." 
-                className="w-[250px] pl-9 h-9 rounded-md"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+            <div className="flex items-center gap-2">
+              {selectionMode ? (
+                <>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={toggleSelectionMode}
+                    className="h-9 rounded-md"
+                  >
+                    Cancel
+                  </Button>
+                  
+                  {selectedRules.length > 0 && (
+                    <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      onClick={confirmBulkDelete}
+                      className="h-9 rounded-md"
+                    >
+                      <Trash className="h-4 w-4 mr-2" />
+                      Delete Selected ({selectedRules.length})
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={toggleSelectionMode}
+                  className="h-9 rounded-md"
+                >
+                  <Check className="h-4 w-4 mr-2" />
+                  Select
+                </Button>
+              )}
+              
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  type="search" 
+                  placeholder="Search rules..." 
+                  className="w-[250px] pl-9 h-9 rounded-md"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
           </div>
           
@@ -376,6 +495,18 @@ export default function PointsRulesPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      {selectionMode && (
+                        <TableHead className="w-[40px]">
+                          <Checkbox 
+                            checked={
+                              filteredRules.length > 0 && 
+                              selectedRules.length === filteredRules.length
+                            }
+                            onCheckedChange={handleSelectAll}
+                            aria-label="Select all"
+                          />
+                        </TableHead>
+                      )}
                       <TableHead className="w-[300px]">
                         <SortButton field="name">Rule Name</SortButton>
                       </TableHead>
@@ -390,13 +521,13 @@ export default function PointsRulesPage() {
                       <TableHead>
                         <SortButton field="createdAt">Created</SortButton>
                       </TableHead>
-                      <TableHead></TableHead>
+                      <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="h-24 text-center">
+                        <TableCell colSpan={totalColumns} className="h-24 text-center">
                           <div className="flex justify-center">
                             <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
                           </div>
@@ -404,7 +535,7 @@ export default function PointsRulesPage() {
                       </TableRow>
                     ) : filteredRules.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="h-24 text-center">
+                        <TableCell colSpan={totalColumns} className="h-24 text-center">
                           <div className="flex flex-col items-center justify-center">
                             <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
                               <Zap className="h-6 w-6 text-muted-foreground" />
@@ -428,6 +559,17 @@ export default function PointsRulesPage() {
                     ) : (
                       filteredRules.map((rule) => (
                         <TableRow key={rule.id}>
+                          {selectionMode && (
+                            <TableCell>
+                              <Checkbox 
+                                checked={selectedRules.includes(rule.id)}
+                                onCheckedChange={(checked) => 
+                                  handleSelectRule(rule.id, checked === true)
+                                }
+                                aria-label={`Select ${rule.name}`}
+                              />
+                            </TableCell>
+                          )}
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2">
                               <div className="h-9 w-9 min-w-[36px] rounded-md bg-muted flex items-center justify-center">
@@ -481,11 +623,11 @@ export default function PointsRulesPage() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="rounded-md">
-                                  <DropdownMenuItem onClick={() => router.push(`/rules/${rule.id}`)}>
+                                  <DropdownMenuItem onClick={() => window.location.href = `/store/rules/${rule.id}`}>
                                     <Eye className="h-4 w-4 mr-2" />
                                     View Details
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => router.push(`/rules/${rule.id}/edit`)}>
+                                  <DropdownMenuItem onClick={() => window.location.href = `/store/rules/${rule.id}/edit`}>
                                     <Edit className="h-4 w-4 mr-2" />
                                     Edit
                                   </DropdownMenuItem>
@@ -505,7 +647,7 @@ export default function PointsRulesPage() {
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem 
                                     className="text-red-600"
-                                    onClick={() => deleteRule(rule.id)}
+                                    onClick={() => confirmDeleteRule(rule.id)}
                                   >
                                     <Trash className="h-4 w-4 mr-2" />
                                     Delete
@@ -627,7 +769,7 @@ export default function PointsRulesPage() {
                         <Button 
                           variant="outline" 
                           className="h-9 rounded-md"
-                          onClick={() => router.push(`/rules/${rule.id}`)}
+                          onClick={() => window.location.href = `/store/rules/${rule.id}`}
                         >
                           View Details
                         </Button>
@@ -639,7 +781,7 @@ export default function PointsRulesPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="rounded-md">
-                            <DropdownMenuItem onClick={() => router.push(`/rules/${rule.id}/edit`)}>
+                            <DropdownMenuItem onClick={() => window.location.href = `/store/rules/${rule.id}/edit`}>
                               <Edit className="h-4 w-4 mr-2" />
                               Edit
                             </DropdownMenuItem>
@@ -659,7 +801,7 @@ export default function PointsRulesPage() {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem 
                               className="text-red-600"
-                              onClick={() => deleteRule(rule.id)}
+                              onClick={() => confirmDeleteRule(rule.id)}
                             >
                               <Trash className="h-4 w-4 mr-2" />
                               Delete
@@ -675,6 +817,45 @@ export default function PointsRulesPage() {
           ))}
         </Tabs>
       </div>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="rounded-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Points Rule</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this points rule? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-md">Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteRule}
+              className="bg-red-600 hover:bg-red-700 rounded-md"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent className="rounded-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Multiple Points Rules</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedRules.length} selected points rules? 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-md">Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleBulkDelete}
+              className="bg-red-600 hover:bg-red-700 rounded-md"
+            >
+              Delete {selectedRules.length} Rules
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <CreatePointsRuleDialog 
         open={createDialogOpen} 
         onOpenChange={setCreateDialogOpen} 

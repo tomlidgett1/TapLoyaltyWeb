@@ -636,8 +636,18 @@ export function CreateRewardDialog({
       open={open} 
       onOpenChange={onOpenChange}
     >
+      <style jsx global>{`
+        .dialog-content input:focus,
+        .dialog-content textarea:focus,
+        .dialog-content select:focus,
+        .dialog-content [data-state="open"] {
+          outline: none !important;
+          box-shadow: none !important;
+          border-color: #007AFF !important;
+        }
+      `}</style>
       <DialogContent 
-        className="sm:max-w-[800px] h-[700px] flex flex-col"
+        className="sm:max-w-[800px] h-[700px] flex flex-col dialog-content"
       >
         <DialogHeader className="space-y-4">
           <div className="flex items-start justify-between">
@@ -874,6 +884,13 @@ export function CreateRewardDialog({
             <TabsContent value="step2" className="min-h-[400px] py-4">
               <div className="space-y-4">
                 <div className="grid gap-4">
+                  {/* Visibility Settings Section */}
+                  <div className="border-b pb-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-base font-medium">Visibility Settings</Label>
+                    </div>
+                  </div>
+                  
                   <div className="grid gap-2">
                     <Label>Reward Visibility</Label>
                     <Select
@@ -892,12 +909,15 @@ export function CreateRewardDialog({
                     </Select>
                   </div>
                   
-                  <div className="flex items-center justify-between">
-                    <Label>Delayed Visibility</Label>
-                    <Switch
-                      checked={formData.delayedVisibility}
-                      onCheckedChange={(checked) => setFormData({ ...formData, delayedVisibility: checked })}
-                    />
+                  {/* Delayed Visibility Section */}
+                  <div className="border-b pb-2 pt-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-base font-medium">Delayed Visibility</Label>
+                      <Switch
+                        checked={formData.delayedVisibility}
+                        onCheckedChange={(checked) => setFormData({ ...formData, delayedVisibility: checked })}
+                      />
+                    </div>
                   </div>
                   
                   {formData.delayedVisibility && (
@@ -1142,6 +1162,13 @@ export function CreateRewardDialog({
             <TabsContent value="step4" className="min-h-[400px] py-4">
               <div className="space-y-4">
                 <div className="grid gap-4">
+                  {/* Redemption Limits Section */}
+                  <div className="border-b pb-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-base font-medium">Redemption Limits</Label>
+                    </div>
+                  </div>
+                  
                   <div className="grid gap-2">
                     <Label>Total Redemption Limit</Label>
                     <Input
@@ -1176,18 +1203,21 @@ export function CreateRewardDialog({
                     />
                   </div>
                   
-                  <div className="flex items-center justify-between">
-                    <Label>Time Restrictions</Label>
-                    <Switch
-                      checked={formData.limitations.useTimeRestrictions}
-                      onCheckedChange={(checked) => setFormData({
-                        ...formData,
-                        limitations: {
-                          ...formData.limitations,
-                          useTimeRestrictions: checked
-                        }
-                      })}
-                    />
+                  {/* Time Restrictions Section */}
+                  <div className="border-b pb-2 pt-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-base font-medium">Time Restrictions</Label>
+                      <Switch
+                        checked={formData.limitations.useTimeRestrictions}
+                        onCheckedChange={(checked) => setFormData({
+                          ...formData,
+                          limitations: {
+                            ...formData.limitations,
+                            useTimeRestrictions: checked
+                          }
+                        })}
+                      />
+                    </div>
                   </div>
                   
                   {formData.limitations.useTimeRestrictions && (

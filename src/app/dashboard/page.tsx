@@ -53,6 +53,7 @@ export default function DashboardPage() {
   const [metricsType, setMetricsType] = useState<"consumer" | "platform">("platform")
   const [metrics, setMetrics] = useState({
     totalCustomers: 0,
+    activeCustomers: 0,
     customerGrowth: 0,
     totalPointsIssued: 0,
     redemptionRate: 0,
@@ -61,7 +62,9 @@ export default function DashboardPage() {
     totalRedemptions: 0,
     activeRewards: 0,
     totalBannerImpressions: 0,
-    totalStoreViews: 0
+    totalStoreViews: 0,
+    customersWithRedeemableRewards: 0,
+    customersWithoutRedeemableRewards: 0
   })
   const [histogramData, setHistogramData] = useState<any[]>([])
   const [chartTimeframe, setChartTimeframe] = useState<"7days" | "30days" | "90days">("30days")
@@ -429,15 +432,48 @@ export default function DashboardPage() {
         const customersRef = collection(db, 'customers')
         const customersQuery = query(
           customersRef,
-          where('merchantId', '==', user.uid),
-          where('createdAt', '>=', start),
-          where('createdAt', '<=', end)
+          where('merchantId', '==', user.uid)
         )
         const customersSnapshot = await getDocs(customersQuery)
         const totalCustomers = customersSnapshot.docs.length
         
-        // Fetch total points issued
+        // Calculate active customers (had a transaction in the last 30 days)
+        const thirtyDaysAgo = new Date()
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+        
+        // Get all transactions in the last 30 days
         const transactionsRef = collection(db, 'merchants', user.uid, 'transactions')
+        const recentTransactionsQuery = query(
+          transactionsRef,
+          where('createdAt', '>=', thirtyDaysAgo)
+        )
+        const recentTransactionsSnapshot = await getDocs(recentTransactionsQuery)
+        
+        // Get unique customer IDs from recent transactions
+        const activeCustomerIds = new Set()
+        recentTransactionsSnapshot.docs.forEach(doc => {
+          const data = doc.data()
+          if (data.customerId) {
+            activeCustomerIds.add(data.customerId)
+          }
+        })
+        const activeCustomers = activeCustomerIds.size
+        
+        // Calculate customers with redeemable rewards (customers with points >= minimum reward threshold)
+        const minPointsForReward = 100 // Adjust this based on your reward system
+        let customersWithRedeemableRewards = 0
+        let customersWithoutRedeemableRewards = 0
+        
+        customersSnapshot.docs.forEach(doc => {
+          const data = doc.data()
+          if (data.points && data.points >= minPointsForReward) {
+            customersWithRedeemableRewards++
+          } else {
+            customersWithoutRedeemableRewards++
+          }
+        })
+        
+        // Fetch total points issued
         const transactionsQuery = query(
           transactionsRef,
           where('merchantId', '==', user.uid),
@@ -448,9 +484,8 @@ export default function DashboardPage() {
         const totalPointsIssued = transactionsSnapshot.docs.reduce((total, doc) => total + (doc.data().amount || 0), 0)
         
         // Fetch redemption rate
-        const redemptionsRef = collection(db, 'redemptions')
         const redemptionsQuery = query(
-          redemptionsRef,
+          collection(db, 'redemptions'),
           where('merchantId', '==', user.uid),
           where('createdAt', '>=', start),
           where('createdAt', '<=', end)
@@ -474,22 +509,18 @@ export default function DashboardPage() {
         const previousTotalCustomers = customersSnapshot2.docs.length
         const customerGrowth = ((totalCustomers - previousTotalCustomers) / previousTotalCustomers) * 100
         
-        // Fetch active rewards
-        const rewardsRef = collection(db, 'rewards')
+        // Fetch active rewards from the correct path
+        const rewardsRef = collection(db, 'merchants', user.uid, 'rewards')
         const activeRewardsQuery = query(
           rewardsRef,
-          where('merchantId', '==', user.uid),
-          where('active', '==', true)
+          where('isActive', '==', true)
         )
         const activeRewardsSnapshot = await getDocs(activeRewardsQuery)
         const activeRewards = activeRewardsSnapshot.docs.length
         
-        // Fetch banner impressions
-        const bannersRef = collection(db, 'banners')
-        const bannersQuery = query(
-          bannersRef,
-          where('merchantId', '==', user.uid)
-        )
+        // Fetch banner impressions from the correct path
+        const bannersRef = collection(db, 'merchants', user.uid, 'banners')
+        const bannersQuery = query(bannersRef)
         const bannersSnapshot = await getDocs(bannersQuery)
         const totalBannerImpressions = bannersSnapshot.docs.reduce(
           (total, doc) => total + (doc.data().impressions || 0), 
@@ -511,6 +542,7 @@ export default function DashboardPage() {
         // Update metrics state with all values
         setMetrics({
           totalCustomers,
+          activeCustomers,
           customerGrowth,
           totalPointsIssued,
           redemptionRate,
@@ -519,7 +551,9 @@ export default function DashboardPage() {
           totalRedemptions,
           activeRewards,
           totalBannerImpressions,
-          totalStoreViews
+          totalStoreViews,
+          customersWithRedeemableRewards,
+          customersWithoutRedeemableRewards
         })
       } catch (error) {
         console.error('Error fetching metrics:', error)
@@ -936,146 +970,193 @@ export default function DashboardPage() {
             
             {/* Key Metrics on the right - takes up 1/3 of the space */}
             <div className="space-y-4">
-              {metricsType === "consumer" ? (
-                <>
-                  {/* Consumer metrics - stacked vertically */}
-                  <Card className="rounded-lg border border-gray-200">
-                    <CardContent className="p-6">
-                      <div className="flex justify-between">
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-gray-500">Total Customers</p>
-                          <div className="text-2xl font-semibold">{metrics.totalCustomers}</div>
-                        </div>
-                        <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
-                          <Users className="h-5 w-5 text-blue-500" />
-                        </div>
+            {metricsType === "consumer" ? (
+              <>
+                  {/* Consumer metrics - compact stacked layout */}
+                  <div className="space-y-2">
+                    {/* Active Customers */}
+                <Card className="rounded-lg border border-gray-200">
+                      <CardContent className="p-3">
+                    <div className="flex justify-between">
+                          <div className="space-y-0.5">
+                            <p className="text-sm font-medium text-gray-500">Active Customers</p>
+                            <div className="text-lg font-semibold">{metrics.activeCustomers}</div>
                       </div>
-                      <div className="mt-4 flex items-center text-xs">
-                        <div className={cn(
-                          "flex items-center",
-                          metrics.customerGrowth > 0 ? "text-green-600" : "text-red-600"
-                        )}>
-                          {metrics.customerGrowth > 0 ? (
-                            <ArrowUp className="h-3 w-3 mr-1" />
-                          ) : (
-                            <ArrowDown className="h-3 w-3 mr-1" />
-                          )}
-                          <span>{Math.abs(metrics.customerGrowth)}%</span>
-                        </div>
-                        <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                          <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
+                            <Users className="h-4 w-4 text-blue-500" />
                       </div>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card className="rounded-lg border border-gray-200">
-                    <CardContent className="p-6">
-                      <div className="flex justify-between">
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-gray-500">Average Spend</p>
-                          <div className="text-2xl font-semibold">${metrics.avgOrderValue.toFixed(2)}</div>
-                        </div>
-                        <div className="h-10 w-10 rounded-full bg-green-50 flex items-center justify-center">
-                          <DollarSign className="h-5 w-5 text-green-500" />
-                        </div>
-                      </div>
-                      <div className="mt-4 flex items-center text-xs">
-                        <div className="text-green-600 flex items-center">
+                    </div>
+                        <div className="mt-1 flex items-center text-xs">
+                      <div className={cn(
+                        "flex items-center",
+                        metrics.customerGrowth > 0 ? "text-green-600" : "text-red-600"
+                      )}>
+                        {metrics.customerGrowth > 0 ? (
                           <ArrowUp className="h-3 w-3 mr-1" />
-                          <span>5.2%</span>
-                        </div>
-                        <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                        ) : (
+                          <ArrowDown className="h-3 w-3 mr-1" />
+                        )}
+                        <span>{Math.abs(metrics.customerGrowth)}%</span>
                       </div>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card className="rounded-lg border border-gray-200">
-                    <CardContent className="p-6">
-                      <div className="flex justify-between">
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-gray-500">Total Transactions</p>
-                          <div className="text-2xl font-semibold">{metrics.totalTransactions || 0}</div>
-                        </div>
-                        <div className="h-10 w-10 rounded-full bg-amber-50 flex items-center justify-center">
-                          <ShoppingCart className="h-5 w-5 text-amber-500" />
-                        </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                    {/* Total Transactions */}
+                <Card className="rounded-lg border border-gray-200">
+                      <CardContent className="p-3">
+                    <div className="flex justify-between">
+                          <div className="space-y-0.5">
+                            <p className="text-sm font-medium text-gray-500">Total Transactions</p>
+                            <div className="text-lg font-semibold">{metrics.totalTransactions || 0}</div>
                       </div>
-                      <div className="mt-4 flex items-center text-xs">
-                        <div className="text-green-600 flex items-center">
-                          <ArrowUp className="h-3 w-3 mr-1" />
-                          <span>8.7%</span>
-                        </div>
-                        <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                          <div className="h-8 w-8 rounded-full bg-amber-50 flex items-center justify-center">
+                            <ShoppingCart className="h-4 w-4 text-amber-500" />
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                        <div className="mt-1 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                            <span>8.7%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                    {/* Total Redemptions */}
+                <Card className="rounded-lg border border-gray-200">
+                      <CardContent className="p-3">
+                    <div className="flex justify-between">
+                          <div className="space-y-0.5">
+                            <p className="text-sm font-medium text-gray-500">Total Redemptions</p>
+                            <div className="text-lg font-semibold">{metrics.totalRedemptions}</div>
+                      </div>
+                          <div className="h-8 w-8 rounded-full bg-purple-50 flex items-center justify-center">
+                            <Gift className="h-4 w-4 text-purple-500" />
+                      </div>
+                    </div>
+                        <div className="mt-1 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                            <span>7.3%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                    {/* Customers with Rewards */}
+                <Card className="rounded-lg border border-gray-200">
+                      <CardContent className="p-3">
+                    <div className="flex justify-between">
+                          <div className="space-y-0.5">
+                            <p className="text-sm font-medium text-gray-500">Customers with Rewards</p>
+                            <div className="text-lg font-semibold">{metrics.customersWithRedeemableRewards}</div>
+                      </div>
+                          <div className="h-8 w-8 rounded-full bg-purple-50 flex items-center justify-center">
+                            <Gift className="h-4 w-4 text-purple-500" />
+                      </div>
+                    </div>
+                        <div className="mt-1 flex items-center text-xs">
+                          <div className="text-gray-600 flex items-center">
+                            <span>{((metrics.customersWithRedeemableRewards / metrics.totalCustomers) * 100).toFixed(1)}%</span>
+                      </div>
+                          <span className="text-gray-500 ml-1.5">of total customers</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                    
+                    {/* Customers without Rewards */}
+                <Card className="rounded-lg border border-gray-200">
+                      <CardContent className="p-3">
+                    <div className="flex justify-between">
+                          <div className="space-y-0.5">
+                            <p className="text-sm font-medium text-gray-500">Customers without Rewards</p>
+                            <div className="text-lg font-semibold">{metrics.customersWithoutRedeemableRewards}</div>
+                      </div>
+                          <div className="h-8 w-8 rounded-full bg-red-50 flex items-center justify-center">
+                            <Users className="h-4 w-4 text-red-500" />
+                      </div>
+                    </div>
+                        <div className="mt-1 flex items-center text-xs">
+                          <div className="text-gray-600 flex items-center">
+                            <span>{((metrics.customersWithoutRedeemableRewards / metrics.totalCustomers) * 100).toFixed(1)}%</span>
+                      </div>
+                          <span className="text-gray-500 ml-1.5">of total customers</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                  </div>
                 </>
               ) : (
                 <>
                   {/* Platform metrics - stacked vertically */}
-                  <Card className="rounded-lg border border-gray-200">
-                    <CardContent className="p-6">
-                      <div className="flex justify-between">
-                        <div className="space-y-1">
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between">
+                      <div className="space-y-1">
                           <p className="text-sm font-medium text-gray-500">Active Rewards</p>
                           <div className="text-2xl font-semibold">{metrics.activeRewards}</div>
-                        </div>
-                        <div className="h-10 w-10 rounded-full bg-amber-50 flex items-center justify-center">
-                          <Gift className="h-5 w-5 text-amber-500" />
-                        </div>
                       </div>
-                      <div className="mt-4 flex items-center text-xs">
-                        <div className="text-green-600 flex items-center">
-                          <ArrowUp className="h-3 w-3 mr-1" />
-                          <span>8%</span>
-                        </div>
-                        <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                      <div className="h-10 w-10 rounded-full bg-amber-50 flex items-center justify-center">
+                        <Gift className="h-5 w-5 text-amber-500" />
                       </div>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card className="rounded-lg border border-gray-200">
-                    <CardContent className="p-6">
-                      <div className="flex justify-between">
-                        <div className="space-y-1">
+                    </div>
+                    <div className="mt-4 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        <span>8%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between">
+                      <div className="space-y-1">
                           <p className="text-sm font-medium text-gray-500">Banner Impressions</p>
                           <div className="text-2xl font-semibold">{metrics.totalBannerImpressions.toLocaleString()}</div>
-                        </div>
+                      </div>
                         <div className="h-10 w-10 rounded-full bg-purple-50 flex items-center justify-center">
                           <Eye className="h-5 w-5 text-purple-500" />
-                        </div>
                       </div>
-                      <div className="mt-4 flex items-center text-xs">
-                        <div className="text-green-600 flex items-center">
-                          <ArrowUp className="h-3 w-3 mr-1" />
+                    </div>
+                    <div className="mt-4 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
                           <span>12%</span>
-                        </div>
-                        <span className="text-gray-500 ml-1.5">vs. previous period</span>
                       </div>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card className="rounded-lg border border-gray-200">
-                    <CardContent className="p-6">
-                      <div className="flex justify-between">
-                        <div className="space-y-1">
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between">
+                      <div className="space-y-1">
                           <p className="text-sm font-medium text-gray-500">Store Views</p>
                           <div className="text-2xl font-semibold">{metrics.totalStoreViews.toLocaleString()}</div>
-                        </div>
-                        <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
+                      </div>
+                      <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
                           <ShoppingCart className="h-5 w-5 text-blue-500" />
-                        </div>
                       </div>
-                      <div className="mt-4 flex items-center text-xs">
-                        <div className="text-green-600 flex items-center">
-                          <ArrowUp className="h-3 w-3 mr-1" />
+                    </div>
+                    <div className="mt-4 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
                           <span>15%</span>
-                        </div>
-                        <span className="text-gray-500 ml-1.5">vs. previous period</span>
                       </div>
-                    </CardContent>
-                  </Card>
-                </>
-              )}
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
             </div>
           </div>
           
@@ -1198,16 +1279,16 @@ export default function DashboardPage() {
                                       Redeemed{' '}
                                       {(() => {
                                         console.log("Rendering redemption link for:", {
-                                          rewardId: activity.rewardId,
-                                          rewardName: activity.rewardName
+                                        rewardId: activity.rewardId,
+                                        rewardName: activity.rewardName
                                         });
                                         return (
-                                          <Link 
-                                            href={`/store/${activity.rewardId}`}
-                                            className="text-blue-600 hover:text-blue-700 hover:underline"
-                                          >
-                                            {activity.rewardName}
-                                          </Link>
+                                        <Link 
+                                          href={`/store/${activity.rewardId}`}
+                                          className="text-blue-600 hover:text-blue-700 hover:underline"
+                                        >
+                                          {activity.rewardName}
+                                        </Link>
                                         );
                                       })()}
                                       {activity.points > 0 && ` (${activity.points} points)`}

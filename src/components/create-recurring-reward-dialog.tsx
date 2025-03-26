@@ -2,7 +2,7 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Coffee, Percent, ChevronRight, ArrowLeft, Loader2, CheckCircle } from "lucide-react"
+import { Coffee, Percent, ChevronRight, ArrowLeft, Loader2, CheckCircle, ShoppingBag } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
@@ -18,6 +18,7 @@ import { collection, query, where, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { playSuccessSound } from '@/lib/audio'
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { CreateTransactionRewardDialog } from "@/components/create-transaction-reward-dialog"
 
 interface CreateRecurringRewardDialogProps {
   open: boolean
@@ -42,6 +43,7 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
   })
   const [showVoucherInfo, setShowVoucherInfo] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
+  const [showTransactionReward, setShowTransactionReward] = useState(false)
 
   const options = [
     {
@@ -55,6 +57,15 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
       description: "Set up an automatically recurring voucher reward",
       icon: Percent,
       action: () => setScreen('discount')
+    },
+    {
+      title: "Transaction-Based Reward",
+      description: "Reward customers based on number of transactions",
+      icon: ShoppingBag,
+      action: () => {
+        onOpenChange(false)
+        setShowTransactionReward(true)
+      }
     }
   ]
 
@@ -135,6 +146,7 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
     }
     
     setLoading(true)
+    setShowConfirmation(false) // Close the confirmation dialog
 
     try {
       // Call the voucher function
@@ -144,7 +156,7 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
       const merchantId = user.uid
       console.log("Using merchantId:", merchantId)
       
-      // Structure the data as a plain JavaScript object (no quotes needed)
+      // Structure the data as a plain JavaScript object
       const functionData = {
         data: {
           merchantId: merchantId,
@@ -174,11 +186,21 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
       
     } catch (error: any) {
       console.error("Error creating voucher:", error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create recurring voucher",
-        variant: "destructive"
-      })
+      
+      // Check for specific error message about existing voucher program
+      if (error.message && error.message.includes("Voucher Program Already Exists")) {
+        toast({
+          title: "Program Already Exists",
+          description: "A voucher program already exists for this merchant. You cannot create multiple voucher programs.",
+          variant: "destructive"
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to create recurring voucher",
+          variant: "destructive"
+        })
+      }
     } finally {
       setLoading(false)
     }
@@ -283,28 +305,16 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {screen === 'options' ? (
-              <>
-                <span className="text-[#007AFF]">Create</span> Recurring Reward
-              </>
-            ) : screen === 'coffee' ? (
-              <div className="flex items-center">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="mr-2 -ml-2 h-8 w-8"
-                  onClick={() => setScreen('options')}
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-[#007AFF]">Configure</span>{' '}Coffee Program
-              </div>
-            ) : (
-              <div className="flex items-center justify-between w-full">
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {screen === 'options' ? (
+                <>
+                  <span className="text-[#007AFF]">Create</span> Recurring Reward
+                </>
+              ) : screen === 'coffee' ? (
                 <div className="flex items-center">
                   <Button
                     variant="ghost"
@@ -314,290 +324,309 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
-                  <span className="text-[#007AFF]">Configure</span>&nbsp;Recurring Voucher
+                  <span className="text-[#007AFF]">Configure</span>{' '}Coffee Program
                 </div>
-                
-                <Popover>
-                  <PopoverTrigger asChild>
+              ) : (
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center">
                     <Button
-                      variant="outline"
-                      type="button"
+                      variant="ghost"
                       size="sm"
-                      className="text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100 hover:text-blue-700"
+                      className="mr-2 -ml-2 h-8 w-8"
+                      onClick={() => setScreen('options')}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      How it works
+                      <ArrowLeft className="h-4 w-4" />
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent side="bottom" align="end" className="w-80 p-0 z-50" sideOffset={5}>
-                    <div className="bg-gradient-to-br from-blue-50 to-blue-100/70 p-4 text-sm rounded-md">
-                      <h3 className="font-semibold text-blue-800 mb-2 flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    <span className="text-[#007AFF]">Configure</span>&nbsp;Recurring Voucher
+                  </div>
+                  
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        type="button"
+                        size="sm"
+                        className="text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100 hover:text-blue-700"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        About Recurring Vouchers
-                      </h3>
-                      <p className="text-blue-700 mb-3">
-                        Recurring vouchers automatically reward customers as they reach spending milestones at your business.
-                      </p>
-                      <div className="space-y-2 text-blue-700">
-                        <div className="flex items-start gap-2">
-                          <div className="min-w-[20px] font-bold text-blue-500">•</div>
-                          <p>Each voucher has the same value but requires progressively higher spending to unlock</p>
-                        </div>
-                        <div className="flex items-start gap-2">
-                          <div className="min-w-[20px] font-bold text-blue-500">•</div>
-                          <p>If you set <span className="font-medium text-blue-800">$10 voucher</span> with <span className="font-medium text-blue-800">$100 spend required</span> and <span className="font-medium text-blue-800">5 vouchers</span>, customers will get:</p>
-                        </div>
-                        <div className="pl-7 space-y-1.5 bg-white/50 p-2 rounded border border-blue-200/50 my-1">
-                          <p className="flex items-center">
-                            <span className="text-blue-500 mr-2">1.</span> 
-                            <span>First $10 voucher after spending $100</span>
-                          </p>
-                          <p className="flex items-center">
-                            <span className="text-blue-500 mr-2">2.</span> 
-                            <span>Second $10 voucher after spending $200</span>
-                          </p>
-                          <p className="flex items-center">
-                            <span className="text-blue-500 mr-2">3.</span> 
-                            <span>Third $10 voucher after spending $300, and so on</span>
-                          </p>
-                        </div>
-                        <div className="flex items-start gap-2">
-                          <div className="min-w-[20px] font-bold text-blue-500">•</div>
-                          <p>Vouchers appear automatically in customer accounts when they qualify</p>
+                        How it works
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent side="bottom" align="end" className="w-80 p-0 z-50" sideOffset={5}>
+                      <div className="bg-gradient-to-br from-blue-50 to-blue-100/70 p-4 text-sm rounded-md">
+                        <h3 className="font-semibold text-blue-800 mb-2 flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                          </svg>
+                          About Recurring Vouchers
+                        </h3>
+                        <p className="text-blue-700 mb-3">
+                          Recurring vouchers automatically reward customers as they reach spending milestones at your business.
+                        </p>
+                        <div className="space-y-2 text-blue-700">
+                          <div className="flex items-start gap-2">
+                            <div className="min-w-[20px] font-bold text-blue-500">•</div>
+                            <p>Each voucher has the same value but requires progressively higher spending to unlock</p>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <div className="min-w-[20px] font-bold text-blue-500">•</div>
+                            <p>If you set <span className="font-medium text-blue-800">$10 voucher</span> with <span className="font-medium text-blue-800">$100 spend required</span> and <span className="font-medium text-blue-800">5 vouchers</span>, customers will get:</p>
+                          </div>
+                          <div className="pl-7 space-y-1.5 bg-white/50 p-2 rounded border border-blue-200/50 my-1">
+                            <p className="flex items-center">
+                              <span className="text-blue-500 mr-2">1.</span> 
+                              <span>First $10 voucher after spending $100</span>
+                            </p>
+                            <p className="flex items-center">
+                              <span className="text-blue-500 mr-2">2.</span> 
+                              <span>Second $10 voucher after spending $200</span>
+                            </p>
+                            <p className="flex items-center">
+                              <span className="text-blue-500 mr-2">3.</span> 
+                              <span>Third $10 voucher after spending $300, and so on</span>
+                            </p>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <div className="min-w-[20px] font-bold text-blue-500">•</div>
+                            <p>Vouchers appear automatically in customer accounts when they qualify</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            )}
-          </DialogTitle>
-        </DialogHeader>
-
-        {screen === 'options' ? (
-          <div className="py-4 min-h-[300px]">
-            <div className="grid gap-3">
-              {options.map((option) => (
-                <Card 
-                  key={option.title}
-                  className="group cursor-pointer transition-all hover:shadow-sm hover:border-[#007AFF]/30"
-                  onClick={option.action}
-                >
-                  <div className="p-4 flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-md bg-[#007AFF]/10 flex items-center justify-center flex-shrink-0">
-                      <option.icon className="h-4 w-4 text-[#007AFF]" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-medium truncate">
-                        {option.title}
-                      </h3>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {option.description}
-                      </p>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-[#007AFF] transition-colors" />
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </div>
-        ) : screen === 'coffee' ? (
-          <div className="py-4 min-h-[300px] space-y-6">
-            <div className="space-y-4">
-              <div className="grid gap-2">
-                <Label>PIN Code</Label>
-                <Input
-                  type="text"
-                  maxLength={4}
-                  value={formData.pin}
-                  onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
-                  placeholder="Enter 4-digit PIN"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Staff will enter this PIN when redeeming free coffees
-                </p>
-              </div>
-
-              <div className="grid gap-2">
-                <Label>First Free Coffee Timing</Label>
-                <RadioGroup
-                  value={formData.freeRewardTiming}
-                  onValueChange={(value: 'before' | 'after') => 
-                    setFormData({ ...formData, freeRewardTiming: value })
-                  }
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="after" id="after" />
-                    <Label htmlFor="after">After first transaction</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="before" id="before" />
-                    <Label htmlFor="before">Before first transaction</Label>
-                  </div>
-                </RadioGroup>
-                <p className="text-sm text-muted-foreground">
-                  Choose when customers receive their first free coffee
-                </p>
-              </div>
-
-              <div className="grid gap-2">
-                <Label>Frequency</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={formData.frequency}
-                  onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}
-                  placeholder="Enter number of transactions"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Number of transactions required between free coffees
-                </p>
-              </div>
-
-              <div className="grid gap-2">
-                <Label>Number of Rewards</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={formData.levels}
-                  onChange={(e) => setFormData({ ...formData, levels: e.target.value })}
-                  placeholder="Enter number of rewards"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Total number of free coffees in the program
-                </p>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="py-2 space-y-4">
-            <div className="space-y-3">
-              <div className="grid gap-2">
-                <Label>Reward Name</Label>
-                <Input
-                  type="text"
-                  value={formData.rewardName}
-                  onChange={(e) => setFormData({ ...formData, rewardName: e.target.value })}
-                  placeholder="Enter reward name"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label>Description</Label>
-                <Textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Describe the recurring voucher"
-                  rows={3}
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label>PIN Code</Label>
-                <Input
-                  type="text"
-                  maxLength={4}
-                  value={formData.pin}
-                  onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
-                  placeholder="Enter 4-digit PIN"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Staff will enter this PIN when redeeming vouchers
-                </p>
-              </div>
-
-              <div className="grid gap-1">
-                <Label>Total Spend Required ($)</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={formData.spendRequired}
-                  onChange={(e) => setFormData({ ...formData, spendRequired: e.target.value })}
-                  placeholder="Enter amount"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Amount needed to qualify for this voucher
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label>Voucher Amount ($)</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={formData.discountAmount}
-                    onChange={(e) => setFormData({ ...formData, discountAmount: e.target.value })}
-                    placeholder="Enter voucher amount"
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    Amount of voucher
-                  </p>
+                    </PopoverContent>
+                  </Popover>
                 </div>
-
-                <div className="grid gap-2">
-                  <Label>Number of Vouchers</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={formData.iterations}
-                    onChange={(e) => setFormData({ ...formData, iterations: e.target.value })}
-                    placeholder="Enter number of vouchers"
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    How many to create
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="border-t pt-4 flex justify-end gap-2">
-          <Button 
-            variant="outline" 
-            onClick={() => {
-              if (screen === 'options') {
-                onOpenChange(false)
-              } else {
-                setScreen('options')
-              }
-            }}
-          >
-            {screen === 'options' ? 'Cancel' : 'Back'}
-          </Button>
-          {screen === 'coffee' && (
-            <Button 
-              onClick={saveCoffeeProgram} 
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                'Create Program'
               )}
-            </Button>
-          )}
-          {screen === 'discount' && (
-            <Button 
-              onClick={handleCreateClick} 
-              disabled={loading}
-              className="bg-[#007AFF] hover:bg-[#0071E3] text-white"
-            >
-              Create Recurring Voucher
-            </Button>
-          )}
-        </div>
+            </DialogTitle>
+          </DialogHeader>
 
-        {showConfirmation && <ConfirmationDialog />}
-      </DialogContent>
-    </Dialog>
+          {screen === 'options' ? (
+            <div className="py-4 min-h-[300px]">
+              <div className="grid gap-3">
+                {options.map((option) => (
+                  <Card 
+                    key={option.title}
+                    className="group cursor-pointer transition-all hover:shadow-sm hover:border-[#007AFF]/30"
+                    onClick={option.action}
+                  >
+                    <div className="p-4 flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-md bg-[#007AFF]/10 flex items-center justify-center flex-shrink-0">
+                        <option.icon className="h-4 w-4 text-[#007AFF]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-medium truncate">
+                          {option.title}
+                        </h3>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {option.description}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-[#007AFF] transition-colors" />
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          ) : screen === 'coffee' ? (
+            <div className="py-4 min-h-[300px] space-y-6">
+              <div className="space-y-4">
+                <div className="grid gap-2">
+                  <Label>PIN Code</Label>
+                  <Input
+                    type="text"
+                    maxLength={4}
+                    value={formData.pin}
+                    onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+                    placeholder="Enter 4-digit PIN"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Staff will enter this PIN when redeeming free coffees
+                  </p>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>First Free Coffee Timing</Label>
+                  <RadioGroup
+                    value={formData.freeRewardTiming}
+                    onValueChange={(value: 'before' | 'after') => 
+                      setFormData({ ...formData, freeRewardTiming: value })
+                    }
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="after" id="after" />
+                      <Label htmlFor="after">After first transaction</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="before" id="before" />
+                      <Label htmlFor="before">Before first transaction</Label>
+                    </div>
+                  </RadioGroup>
+                  <p className="text-sm text-muted-foreground">
+                    Choose when customers receive their first free coffee
+                  </p>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Frequency</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={formData.frequency}
+                    onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}
+                    placeholder="Enter number of transactions"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Number of transactions required between free coffees
+                  </p>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Number of Rewards</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={formData.levels}
+                    onChange={(e) => setFormData({ ...formData, levels: e.target.value })}
+                    placeholder="Enter number of rewards"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Total number of free coffees in the program
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="py-2 space-y-4">
+              <div className="space-y-3">
+                <div className="grid gap-2">
+                  <Label>Reward Name</Label>
+                  <Input
+                    type="text"
+                    value={formData.rewardName}
+                    onChange={(e) => setFormData({ ...formData, rewardName: e.target.value })}
+                    placeholder="Enter reward name"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Description</Label>
+                  <Textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Describe the recurring voucher"
+                    rows={3}
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>PIN Code</Label>
+                  <Input
+                    type="text"
+                    maxLength={4}
+                    value={formData.pin}
+                    onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+                    placeholder="Enter 4-digit PIN"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Staff will enter this PIN when redeeming vouchers
+                  </p>
+                </div>
+
+                <div className="grid gap-1">
+                  <Label>Total Spend Required ($)</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={formData.spendRequired}
+                    onChange={(e) => setFormData({ ...formData, spendRequired: e.target.value })}
+                    placeholder="Enter amount"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Amount needed to qualify for this voucher
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Voucher Amount ($)</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={formData.discountAmount}
+                      onChange={(e) => setFormData({ ...formData, discountAmount: e.target.value })}
+                      placeholder="Enter voucher amount"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Amount of voucher
+                    </p>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label>Number of Vouchers</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={formData.iterations}
+                      onChange={(e) => setFormData({ ...formData, iterations: e.target.value })}
+                      placeholder="Enter number of vouchers"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      How many to create
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="border-t pt-4 flex justify-end gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                if (screen === 'options') {
+                  onOpenChange(false)
+                } else {
+                  setScreen('options')
+                }
+              }}
+            >
+              {screen === 'options' ? 'Cancel' : 'Back'}
+            </Button>
+            {screen === 'coffee' && (
+              <Button 
+                onClick={saveCoffeeProgram} 
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create Program'
+                )}
+              </Button>
+            )}
+            {screen === 'discount' && (
+              <Button 
+                onClick={handleCreateClick} 
+                disabled={loading}
+                className="bg-[#007AFF] hover:bg-[#0071E3] text-white"
+              >
+                Create Recurring Voucher
+              </Button>
+            )}
+          </div>
+
+          {showConfirmation && <ConfirmationDialog />}
+        </DialogContent>
+      </Dialog>
+      
+      <CreateTransactionRewardDialog 
+        open={showTransactionReward} 
+        onOpenChange={setShowTransactionReward} 
+      />
+    </>
   )
 } 

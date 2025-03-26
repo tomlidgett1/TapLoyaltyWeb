@@ -56,11 +56,6 @@ const navItems = [
     icon: Store,
     subItems: [
       {
-        title: "Overview",
-        href: "/store",
-        icon: ShoppingBag
-      },
-      {
         title: "Activity",
         href: "/store/activity",
         icon: Clock

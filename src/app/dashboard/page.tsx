@@ -21,7 +21,7 @@ import {
   Clock,
   Star,
   ChevronRight,
-  BarChart,
+  BarChart as BarChartIcon,
   Eye,
   Server
 } from "lucide-react"
@@ -36,6 +36,7 @@ import { toast } from "@/components/ui/use-toast"
 import { TapAiButton } from "@/components/tap-ai-button"
 import { PageTransition } from "@/components/page-transition"
 import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banner-preview"
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 type TimeframeType = "today" | "yesterday" | "7days" | "30days"
 
@@ -55,8 +56,17 @@ export default function DashboardPage() {
     customerGrowth: 0,
     totalPointsIssued: 0,
     redemptionRate: 0,
-    avgOrderValue: 0
+    avgOrderValue: 0,
+    totalTransactions: 0,
+    totalRedemptions: 0,
+    activeRewards: 0,
+    totalBannerImpressions: 0,
+    totalStoreViews: 0
   })
+  const [histogramData, setHistogramData] = useState<any[]>([])
+  const [chartTimeframe, setChartTimeframe] = useState<"7days" | "30days" | "90days">("30days")
+  const [chartLoading, setChartLoading] = useState(false)
+  const [chartReady, setChartReady] = useState(false)
 
   const getDateRange = (tf: TimeframeType): { start: Date; end: Date } => {
     const now = new Date()
@@ -464,12 +474,52 @@ export default function DashboardPage() {
         const previousTotalCustomers = customersSnapshot2.docs.length
         const customerGrowth = ((totalCustomers - previousTotalCustomers) / previousTotalCustomers) * 100
         
+        // Fetch active rewards
+        const rewardsRef = collection(db, 'rewards')
+        const activeRewardsQuery = query(
+          rewardsRef,
+          where('merchantId', '==', user.uid),
+          where('active', '==', true)
+        )
+        const activeRewardsSnapshot = await getDocs(activeRewardsQuery)
+        const activeRewards = activeRewardsSnapshot.docs.length
+        
+        // Fetch banner impressions
+        const bannersRef = collection(db, 'banners')
+        const bannersQuery = query(
+          bannersRef,
+          where('merchantId', '==', user.uid)
+        )
+        const bannersSnapshot = await getDocs(bannersQuery)
+        const totalBannerImpressions = bannersSnapshot.docs.reduce(
+          (total, doc) => total + (doc.data().impressions || 0), 
+          0
+        )
+        
+        // Fetch store views
+        const storeViewsRef = collection(db, 'analytics')
+        const storeViewsQuery = query(
+          storeViewsRef,
+          where('merchantId', '==', user.uid),
+          where('timestamp', '>=', start),
+          where('timestamp', '<=', end),
+          where('type', '==', 'storeView')
+        )
+        const storeViewsSnapshot = await getDocs(storeViewsQuery)
+        const totalStoreViews = storeViewsSnapshot.docs.length
+        
+        // Update metrics state with all values
         setMetrics({
           totalCustomers,
           customerGrowth,
           totalPointsIssued,
           redemptionRate,
-          avgOrderValue
+          avgOrderValue,
+          totalTransactions: transactionsSnapshot.docs.length,
+          totalRedemptions,
+          activeRewards,
+          totalBannerImpressions,
+          totalStoreViews
         })
       } catch (error) {
         console.error('Error fetching metrics:', error)
@@ -487,6 +537,127 @@ export default function DashboardPage() {
       fetchMetrics()
     }
   }, [user?.uid, timeframe])
+
+  useEffect(() => {
+    const fetchHistogramData = async () => {
+      if (!user?.uid) return
+      
+      try {
+        // Set chart loading to true and chart ready to false
+        setChartLoading(true)
+        setChartReady(false)
+        
+        // Get date range based on selected timeframe
+        const end = new Date()
+        const start = new Date()
+        
+        // Set the start date based on the selected timeframe
+        if (chartTimeframe === "7days") {
+          start.setDate(start.getDate() - 7)
+        } else if (chartTimeframe === "30days") {
+          start.setDate(start.getDate() - 30)
+        } else if (chartTimeframe === "90days") {
+          start.setDate(start.getDate() - 90)
+        }
+        
+        // Create an array of all dates in the selected timeframe
+        const days = chartTimeframe === "7days" ? 7 : chartTimeframe === "30days" ? 30 : 90;
+        const dateArray = Array.from({ length: days }, (_, i) => {
+          const date = new Date()
+          date.setDate(date.getDate() - (days - 1) + i)
+          return {
+            date: format(date, 'MMM dd'),
+            fullDate: date,
+            transactions: 0,
+            redemptions: 0
+          }
+        })
+        
+        // Fetch transactions for the selected timeframe
+        const transactionsRef = collection(db, 'merchants', user.uid, 'transactions')
+        const transactionsQuery = query(
+          transactionsRef,
+          where('createdAt', '>=', start),
+          where('createdAt', '<=', end),
+          orderBy('createdAt', 'asc')
+        )
+        
+        // Fetch redemptions for the selected timeframe
+        const redemptionsRef = collection(db, 'redemptions')
+        const redemptionsQuery = query(
+          redemptionsRef,
+          where('merchantId', '==', user.uid),
+          where('redemptionDate', '>=', start),
+          where('redemptionDate', '<=', end),
+          orderBy('redemptionDate', 'asc')
+        )
+        
+        const [transactionsSnapshot, redemptionsSnapshot] = await Promise.all([
+          getDocs(transactionsQuery),
+          getDocs(redemptionsQuery)
+        ])
+        
+        console.log(`Found ${transactionsSnapshot.docs.length} transactions and ${redemptionsSnapshot.docs.length} redemptions`);
+        
+        // Process transactions data
+        transactionsSnapshot.docs.forEach(doc => {
+          const data = doc.data()
+          if (data.createdAt) {
+            const transactionDate = data.createdAt.toDate()
+            const dateStr = format(transactionDate, 'MMM dd')
+            
+            // Find the matching date in our array and increment the transactions count
+            const dateEntry = dateArray.find(d => d.date === dateStr)
+            if (dateEntry) {
+              dateEntry.transactions += 1
+            }
+          }
+        })
+        
+        // Process redemptions data
+        redemptionsSnapshot.docs.forEach(doc => {
+          const data = doc.data()
+          if (data.redemptionDate) {
+            const redemptionDate = data.redemptionDate.toDate()
+            const dateStr = format(redemptionDate, 'MMM dd')
+            
+            // Find the matching date in our array and increment the redemptions count
+            const dateEntry = dateArray.find(d => d.date === dateStr)
+            if (dateEntry) {
+              dateEntry.redemptions += 1
+            }
+          }
+        })
+        
+        // Set the histogram data
+        setHistogramData(dateArray)
+        
+        // Short delay before showing the chart to ensure smooth transition
+        setTimeout(() => {
+          setChartLoading(false)
+          setChartReady(true)
+        }, 300)
+        
+      } catch (error) {
+        console.error('Error fetching histogram data:', error)
+        toast({
+          title: "Error",
+          description: "Failed to load chart data. Please refresh the page.",
+          variant: "destructive"
+        })
+        setChartLoading(false)
+      }
+    }
+    
+    if (user?.uid) {
+      fetchHistogramData()
+    }
+    
+    // Reset chart ready state when timeframe changes
+    return () => {
+      setChartReady(false)
+    }
+  }, [user?.uid, chartTimeframe])
 
   // Format date for display
   const formatDate = (date: Date) => {
@@ -572,190 +743,340 @@ export default function DashboardPage() {
             </div>
           </div>
           
-          {/* Metrics section - conditionally render based on metricsType */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-            {metricsType === "consumer" ? (
-              <>
-                {/* Consumer metrics */}
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-gray-500">Total Customers</p>
-                        <div className="text-2xl font-semibold">{metrics.totalCustomers}</div>
-                      </div>
-                      <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
-                        <Users className="h-5 w-5 text-blue-500" />
-                      </div>
+          {/* Chart and Metrics side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Histogram Chart on the left - takes up 2/3 of the space */}
+            <Card className="rounded-lg border border-gray-200 overflow-hidden lg:col-span-2">
+              <CardHeader className="py-4 px-6 bg-gray-50 border-b border-gray-100">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle className="text-base font-medium text-gray-900">Activity Overview</CardTitle>
+                    <p className="text-sm text-gray-500 mt-0.5">Transactions and redemptions over time</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-xs text-gray-500">Show:</div>
+                    <div className="flex rounded-md overflow-hidden border border-gray-200">
+                      <button 
+                        onClick={() => setChartTimeframe("7days")}
+                        className={`px-2 py-1 text-xs transition-all duration-300 ease-in-out ${
+                          chartTimeframe === "7days" 
+                            ? "bg-blue-50 text-blue-600 font-medium" 
+                            : "bg-white text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        7 Days
+                      </button>
+                      <button 
+                        onClick={() => setChartTimeframe("30days")}
+                        className={`px-2 py-1 text-xs ${chartTimeframe === "30days" 
+                          ? "bg-blue-50 text-blue-600 font-medium" 
+                          : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                      >
+                        30 Days
+                      </button>
+                      <button 
+                        onClick={() => setChartTimeframe("90days")}
+                        className={`px-2 py-1 text-xs ${chartTimeframe === "90days" 
+                          ? "bg-blue-50 text-blue-600 font-medium" 
+                          : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                      >
+                        90 Days
+                      </button>
                     </div>
-                    <div className="mt-4 flex items-center text-xs">
-                      <div className={cn(
-                        "flex items-center",
-                        metrics.customerGrowth > 0 ? "text-green-600" : "text-red-600"
-                      )}>
-                        {metrics.customerGrowth > 0 ? (
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-4">
+                {chartLoading ? (
+                  <div className="h-80 flex items-center justify-center">
+                    <div className="text-center text-sm text-gray-500">
+                      Updating chart...
+                    </div>
+                  </div>
+                ) : histogramData.length === 0 ? (
+                  <div className="h-80 flex items-center justify-center">
+                    <div className="text-center">
+                      <BarChartIcon className="h-12 w-12 mx-auto text-gray-400" />
+                      <h3 className="mt-2 text-sm font-medium">No data available</h3>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Activity data will appear here as customers interact with your store
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div 
+                    className={`h-80 transition-opacity duration-500 ease-in-out ${
+                      chartReady ? 'opacity-100' : 'opacity-0'
+                    }`}
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={histogramData}
+                        margin={{ top: 5, right: 10, left: -15, bottom: 30 }}
+                        barGap={4}
+                      >
+                        <defs>
+                          <linearGradient id="colorTransactions" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.9}/>
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.6}/>
+                          </linearGradient>
+                          <linearGradient id="colorRedemptions" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.9}/>
+                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.6}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                        <XAxis 
+                          dataKey="date" 
+                          angle={-45} 
+                          textAnchor="end" 
+                          height={40}
+                          tick={{ fontSize: 11, fill: '#6b7280' }}
+                          tickLine={false}
+                          axisLine={{ stroke: '#e5e7eb' }}
+                        />
+                        <YAxis 
+                          tick={{ fontSize: 11, fill: '#6b7280' }}
+                          tickLine={false}
+                          axisLine={{ stroke: '#e5e7eb' }}
+                          tickFormatter={(value) => value === 0 ? '0' : value}
+                        />
+                        <Tooltip 
+                          formatter={(value, name, props) => {
+                            // Debug the incoming name parameter
+                            console.log("Tooltip formatter received name:", name);
+                            
+                            // Explicitly check the name parameter and return the correct display name
+                            if (name === "transactions") {
+                              return [value, "Transactions"];
+                            } else if (name === "redemptions") {
+                              return [value, "Redemptions"];
+                            } else {
+                              // Fallback for any other case
+                              return [value, name];
+                            }
+                          }}
+                          labelFormatter={(label) => `Date: ${label}`}
+                          contentStyle={{ 
+                            backgroundColor: 'rgba(255, 255, 255, 0.98)', 
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.03)',
+                            border: 'none',
+                            padding: '10px 14px',
+                            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif',
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            letterSpacing: '-0.01em'
+                          }}
+                          itemStyle={{
+                            padding: '4px 0',
+                            color: '#374151'
+                          }}
+                          labelStyle={{
+                            fontWeight: 600,
+                            marginBottom: '6px',
+                            color: '#111827',
+                            fontSize: '13px'
+                          }}
+                          // This ensures all items in the payload are shown
+                          itemSorter={() => 0}
+                          isAnimationActive={false}
+                          cursor={{ stroke: '#e5e7eb', strokeWidth: 1, strokeDasharray: '4 4' }}
+                        />
+                        <Legend 
+                          wrapperStyle={{ 
+                            paddingTop: 15,
+                            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif',
+                            fontSize: 14,  // Increased from 12
+                            fontWeight: 500
+                          }}
+                          iconType="circle"
+                          iconSize={10}  // Increased from 8
+                          formatter={(value) => {
+                            // Use SF Pro font and better styling with larger text
+                            return (
+                              <span style={{ 
+                                color: value === "Transactions" ? "#3b82f6" : "#8b5cf6", 
+                                padding: "0 12px",  // Increased from 8px
+                                fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif',
+                                fontWeight: 500,
+                                letterSpacing: '-0.01em',
+                                fontSize: '14px'  // Explicitly set font size
+                              }}>
+                                {value}
+                              </span>
+                            );
+                          }}
+                          layout="horizontal"
+                          verticalAlign="bottom"
+                          align="center"
+                        />
+                        <Bar 
+                          dataKey="transactions" 
+                          name="Transactions" 
+                          fill="url(#colorTransactions)" 
+                          radius={[4, 4, 0, 0]} 
+                          maxBarSize={30}
+                          animationDuration={1500}
+                        />
+                        <Bar 
+                          dataKey="redemptions" 
+                          name="Redemptions" 
+                          fill="url(#colorRedemptions)" 
+                          radius={[4, 4, 0, 0]} 
+                          maxBarSize={30}
+                          animationDuration={1500}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            
+            {/* Key Metrics on the right - takes up 1/3 of the space */}
+            <div className="space-y-4">
+              {metricsType === "consumer" ? (
+                <>
+                  {/* Consumer metrics - stacked vertically */}
+                  <Card className="rounded-lg border border-gray-200">
+                    <CardContent className="p-6">
+                      <div className="flex justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-gray-500">Total Customers</p>
+                          <div className="text-2xl font-semibold">{metrics.totalCustomers}</div>
+                        </div>
+                        <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
+                          <Users className="h-5 w-5 text-blue-500" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center text-xs">
+                        <div className={cn(
+                          "flex items-center",
+                          metrics.customerGrowth > 0 ? "text-green-600" : "text-red-600"
+                        )}>
+                          {metrics.customerGrowth > 0 ? (
+                            <ArrowUp className="h-3 w-3 mr-1" />
+                          ) : (
+                            <ArrowDown className="h-3 w-3 mr-1" />
+                          )}
+                          <span>{Math.abs(metrics.customerGrowth)}%</span>
+                        </div>
+                        <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="rounded-lg border border-gray-200">
+                    <CardContent className="p-6">
+                      <div className="flex justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-gray-500">Average Spend</p>
+                          <div className="text-2xl font-semibold">${metrics.avgOrderValue.toFixed(2)}</div>
+                        </div>
+                        <div className="h-10 w-10 rounded-full bg-green-50 flex items-center justify-center">
+                          <DollarSign className="h-5 w-5 text-green-500" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center text-xs">
+                        <div className="text-green-600 flex items-center">
                           <ArrowUp className="h-3 w-3 mr-1" />
-                        ) : (
-                          <ArrowDown className="h-3 w-3 mr-1" />
-                        )}
-                        <span>{Math.abs(metrics.customerGrowth)}%</span>
+                          <span>5.2%</span>
+                        </div>
+                        <span className="text-gray-500 ml-1.5">vs. previous period</span>
                       </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-gray-500">Average Spend</p>
-                        <div className="text-2xl font-semibold">${metrics.avgOrderValue.toFixed(2)}</div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="rounded-lg border border-gray-200">
+                    <CardContent className="p-6">
+                      <div className="flex justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-gray-500">Total Transactions</p>
+                          <div className="text-2xl font-semibold">{metrics.totalTransactions || 0}</div>
+                        </div>
+                        <div className="h-10 w-10 rounded-full bg-amber-50 flex items-center justify-center">
+                          <ShoppingCart className="h-5 w-5 text-amber-500" />
+                        </div>
                       </div>
-                      <div className="h-10 w-10 rounded-full bg-green-50 flex items-center justify-center">
-                        <DollarSign className="h-5 w-5 text-green-500" />
+                      <div className="mt-4 flex items-center text-xs">
+                        <div className="text-green-600 flex items-center">
+                          <ArrowUp className="h-3 w-3 mr-1" />
+                          <span>8.7%</span>
+                        </div>
+                        <span className="text-gray-500 ml-1.5">vs. previous period</span>
                       </div>
-                    </div>
-                    <div className="mt-4 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        <span>5.2%</span>
+                    </CardContent>
+                  </Card>
+                </>
+              ) : (
+                <>
+                  {/* Platform metrics - stacked vertically */}
+                  <Card className="rounded-lg border border-gray-200">
+                    <CardContent className="p-6">
+                      <div className="flex justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-gray-500">Active Rewards</p>
+                          <div className="text-2xl font-semibold">{metrics.activeRewards}</div>
+                        </div>
+                        <div className="h-10 w-10 rounded-full bg-amber-50 flex items-center justify-center">
+                          <Gift className="h-5 w-5 text-amber-500" />
+                        </div>
                       </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-gray-500">Total Transactions</p>
-                        <div className="text-2xl font-semibold">{metrics.totalTransactions || 0}</div>
+                      <div className="mt-4 flex items-center text-xs">
+                        <div className="text-green-600 flex items-center">
+                          <ArrowUp className="h-3 w-3 mr-1" />
+                          <span>8%</span>
+                        </div>
+                        <span className="text-gray-500 ml-1.5">vs. previous period</span>
                       </div>
-                      <div className="h-10 w-10 rounded-full bg-amber-50 flex items-center justify-center">
-                        <ShoppingCart className="h-5 w-5 text-amber-500" />
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="rounded-lg border border-gray-200">
+                    <CardContent className="p-6">
+                      <div className="flex justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-gray-500">Banner Impressions</p>
+                          <div className="text-2xl font-semibold">{metrics.totalBannerImpressions.toLocaleString()}</div>
+                        </div>
+                        <div className="h-10 w-10 rounded-full bg-purple-50 flex items-center justify-center">
+                          <Eye className="h-5 w-5 text-purple-500" />
+                        </div>
                       </div>
-                    </div>
-                    <div className="mt-4 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        <span>8.7%</span>
+                      <div className="mt-4 flex items-center text-xs">
+                        <div className="text-green-600 flex items-center">
+                          <ArrowUp className="h-3 w-3 mr-1" />
+                          <span>12%</span>
+                        </div>
+                        <span className="text-gray-500 ml-1.5">vs. previous period</span>
                       </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-gray-500">Total Redemptions</p>
-                        <div className="text-2xl font-semibold">{metrics.totalRedemptions || 0}</div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="rounded-lg border border-gray-200">
+                    <CardContent className="p-6">
+                      <div className="flex justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-gray-500">Store Views</p>
+                          <div className="text-2xl font-semibold">{metrics.totalStoreViews.toLocaleString()}</div>
+                        </div>
+                        <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
+                          <ShoppingCart className="h-5 w-5 text-blue-500" />
+                        </div>
                       </div>
-                      <div className="h-10 w-10 rounded-full bg-purple-50 flex items-center justify-center">
-                        <Gift className="h-5 w-5 text-purple-500" />
+                      <div className="mt-4 flex items-center text-xs">
+                        <div className="text-green-600 flex items-center">
+                          <ArrowUp className="h-3 w-3 mr-1" />
+                          <span>15%</span>
+                        </div>
+                        <span className="text-gray-500 ml-1.5">vs. previous period</span>
                       </div>
-                    </div>
-                    <div className="mt-4 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        <span>12.3%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            ) : (
-              <>
-                {/* Platform metrics */}
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-gray-500">Active Merchants</p>
-                        <div className="text-2xl font-semibold">127</div>
-                      </div>
-                      <div className="h-10 w-10 rounded-full bg-purple-50 flex items-center justify-center">
-                        <ShoppingCart className="h-5 w-5 text-purple-500" />
-                      </div>
-                    </div>
-                    <div className="mt-4 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        <span>12%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-gray-500">Total Rewards</p>
-                        <div className="text-2xl font-semibold">3,842</div>
-                      </div>
-                      <div className="h-10 w-10 rounded-full bg-amber-50 flex items-center justify-center">
-                        <Gift className="h-5 w-5 text-amber-500" />
-                      </div>
-                    </div>
-                    <div className="mt-4 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        <span>8%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-gray-500">API Requests</p>
-                        <div className="text-2xl font-semibold">1.2M</div>
-                      </div>
-                      <div className="h-10 w-10 rounded-full bg-green-50 flex items-center justify-center">
-                        <Zap className="h-5 w-5 text-green-500" />
-                      </div>
-                    </div>
-                    <div className="mt-4 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        <span>23%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-gray-500">System Uptime</p>
-                        <div className="text-2xl font-semibold">99.98%</div>
-                      </div>
-                      <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
-                        <Server className="h-5 w-5 text-blue-500" />
-                      </div>
-                    </div>
-                    <div className="mt-4 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        <span>0.1%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+            </div>
           </div>
           
           {/* Recent Activity and Popular Rewards - Side by side */}
@@ -875,17 +1196,20 @@ export default function DashboardPage() {
                                     <Gift className="h-3 w-3" />
                                     <span>
                                       Redeemed{' '}
-                                      {console.log("Rendering redemption link for:", {
-                                        rewardId: activity.rewardId,
-                                        rewardName: activity.rewardName
-                                      }) && (
-                                        <Link 
-                                          href={`/store/${activity.rewardId}`}
-                                          className="text-blue-600 hover:text-blue-700 hover:underline"
-                                        >
-                                          {activity.rewardName}
-                                        </Link>
-                                      )}
+                                      {(() => {
+                                        console.log("Rendering redemption link for:", {
+                                          rewardId: activity.rewardId,
+                                          rewardName: activity.rewardName
+                                        });
+                                        return (
+                                          <Link 
+                                            href={`/store/${activity.rewardId}`}
+                                            className="text-blue-600 hover:text-blue-700 hover:underline"
+                                          >
+                                            {activity.rewardName}
+                                          </Link>
+                                        );
+                                      })()}
                                       {activity.points > 0 && ` (${activity.points} points)`}
                                     </span>
                                   </div>
@@ -1135,6 +1459,8 @@ export function LightspeedCallbackPage() {
 
   useEffect(() => {
     const handleOAuthCallback = async () => {
+      if (!searchParams) return;
+      
       const code = searchParams.get('code')
       const state = searchParams.get('state')
       const errorParam = searchParams.get('error')
@@ -1242,14 +1568,14 @@ export function LightspeedCallbackPage() {
       }
     }
 
-    // If the URL has ?code= or ?error=, handle the callback
-    if (searchParams.has('code') || searchParams.has('error')) {
+    // Check if searchParams exists before using it
+    if (searchParams && (searchParams.has('code') || searchParams.has('error'))) {
       handleOAuthCallback()
     }
   }, [router, searchParams])
 
   // If no OAuth parameters, show the dashboard
-  if (!searchParams.has('code') && !searchParams.has('error')) {
+  if (!searchParams || (!searchParams.has('code') && !searchParams.has('error'))) {
     return null // Let the main dashboard component render
   }
 

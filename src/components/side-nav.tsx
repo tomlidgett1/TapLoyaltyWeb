@@ -23,7 +23,10 @@ import {
   Clock,
   Settings,
   Sparkles,
-  MoreVertical
+  MoreVertical,
+  CheckCircle,
+  XCircle,
+  ChevronRight
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -43,6 +46,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { TapAiButton } from "@/components/tap-ai-button"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/use-toast"
+import { collection, getDocs, query, where, limit } from "firebase/firestore"
 
 const navItems = [
   {
@@ -125,6 +129,13 @@ const navItems = [
   }
 ]
 
+interface ChecklistItem {
+  id: string;
+  title: string;
+  completed: boolean;
+  href: string;
+}
+
 export function SideNav() {
   const pathname = usePathname()
   const router = useRouter()
@@ -135,6 +146,13 @@ export function SideNav() {
   const [loading, setLoading] = useState(true)
   const [openItems, setOpenItems] = useState<Record<string, boolean>>({})
   const [merchantData, setMerchantData] = useState(null)
+  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([
+    { id: 'reward', title: 'Create a reward', completed: false, href: '/create' },
+    { id: 'banner', title: 'Create a banner', completed: false, href: '/store/banners' },
+    { id: 'points', title: 'Set up a points rule', completed: false, href: '/store/points-rules' },
+    { id: 'customer', title: 'Add a customer', completed: false, href: '/customers' }
+  ])
+  const [showChecklist, setShowChecklist] = useState(true)
 
   useEffect(() => {
     // Initialize open state based on current path
@@ -214,6 +232,58 @@ export function SideNav() {
     
     fetchMerchantData()
   }, [user])
+
+  useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      if (!user?.uid) return;
+      
+      try {
+        // Check if rewards exist
+        const rewardsRef = collection(db, 'merchants', user.uid, 'rewards');
+        const rewardsSnapshot = await getDocs(rewardsRef);
+        const hasRewards = !rewardsSnapshot.empty;
+        
+        // Check if banners exist
+        const bannersRef = collection(db, 'merchants', user.uid, 'banners');
+        const bannersSnapshot = await getDocs(bannersRef);
+        const hasBanners = !bannersSnapshot.empty;
+        
+        // Check if points rules exist
+        const pointsRulesRef = collection(db, 'merchants', user.uid, 'pointsRules');
+        const pointsRulesSnapshot = await getDocs(pointsRulesRef);
+        const hasPointsRules = !pointsRulesSnapshot.empty;
+        
+        // Check if customers exist
+        const customersQuery = query(
+          collection(db, 'customers'),
+          where('merchantId', '==', user.uid),
+          limit(1)
+        );
+        const customersSnapshot = await getDocs(customersQuery);
+        const hasCustomers = !customersSnapshot.empty;
+        
+        // Update checklist items
+        setChecklistItems(prev => prev.map(item => {
+          if (item.id === 'reward') return { ...item, completed: hasRewards };
+          if (item.id === 'banner') return { ...item, completed: hasBanners };
+          if (item.id === 'points') return { ...item, completed: hasPointsRules };
+          if (item.id === 'customer') return { ...item, completed: hasCustomers };
+          return item;
+        }));
+        
+        // Hide checklist if all items are completed
+        if (hasRewards && hasBanners && hasPointsRules && hasCustomers) {
+          // Don't hide immediately, maybe after a few days
+          // For now, we'll keep it visible
+        }
+        
+      } catch (error) {
+        console.error("Error checking onboarding status:", error);
+      }
+    };
+    
+    checkOnboardingStatus();
+  }, [user?.uid]);
 
   const handleLogout = async () => {
     try {
@@ -344,6 +414,55 @@ export function SideNav() {
           })}
         </ul>
       </nav>
+      
+      {/* Onboarding Checklist */}
+      {showChecklist && (
+        <div className="px-3 py-2 mx-2 mb-3 bg-blue-50 rounded-lg">
+          <Collapsible defaultOpen={true}>
+            <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-medium text-blue-700">
+              <div className="flex items-center">
+                <Sparkles className="h-4 w-4 mr-2 text-blue-500" />
+                <span>Getting Started</span>
+              </div>
+              <ChevronUp className="h-4 w-4 text-blue-500" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2">
+              <div className="space-y-2">
+                {checklistItems.map(item => (
+                  <Link 
+                    key={item.id}
+                    href={item.href}
+                    className="flex items-center justify-between p-1.5 text-xs rounded-md hover:bg-blue-100 transition-colors"
+                  >
+                    <span className="text-gray-700">{item.title}</span>
+                    {item.completed ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-gray-400" />
+                    )}
+                  </Link>
+                ))}
+                
+                <div className="pt-1 mt-1 border-t border-blue-200">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-blue-700 font-medium">
+                      {checklistItems.filter(item => item.completed).length} of {checklistItems.length} completed
+                    </span>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 px-2 text-xs text-blue-700 hover:bg-blue-100 hover:text-blue-800"
+                      onClick={() => setShowChecklist(false)}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+      )}
       
       {/* Profile section at bottom */}
       <div className="mt-auto border-t pt-4 pb-4">

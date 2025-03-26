@@ -2,7 +2,7 @@
 
 import { SideNav } from "@/components/side-nav"
 import { usePathname } from "next/navigation"
-import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap } from "lucide-react"
+import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useState, useEffect } from "react"
@@ -23,6 +23,16 @@ import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
 import { SendBroadcastDialog } from "@/components/send-broadcast-dialog"
 import { CreatePointsRuleDialog } from "@/components/create-points-rule-dialog"
+import { useAuth } from "@/contexts/auth-context"
+import { db } from "@/lib/firebase"
+import { collection, query, where, getDocs, Timestamp } from "firebase/firestore"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
 
 interface Notification {
   id: string
@@ -72,6 +82,17 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [showRewardDialog, setShowRewardDialog] = useState(false)
   const [showBroadcastDialog, setShowBroadcastDialog] = useState(false)
   const [showPointsRuleDialog, setShowPointsRuleDialog] = useState(false)
+  
+  // Add state for the recurring reward dialog
+  const [showRecurringRewardDialog, setShowRecurringRewardDialog] = useState(false)
+  
+  // Add these states for the metrics
+  const [metrics, setMetrics] = useState({
+    totalTransactions: 0,
+    totalRedemptions: 0
+  })
+  const [metricsLoading, setMetricsLoading] = useState(true)
+  const { user } = useAuth()
   
   useEffect(() => {
     // Check if current path is onboarding
@@ -149,6 +170,58 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     
     setSelectedRewards(mockSelectedRewards)
   }, [pathname])
+
+  // Add this useEffect to fetch the metrics
+  useEffect(() => {
+    const fetchTodayMetrics = async () => {
+      if (!user?.uid) return
+      
+      try {
+        setMetricsLoading(true)
+        
+        // Get today's start and end
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const tomorrow = new Date(today)
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        
+        // Fetch today's transactions
+        const transactionsRef = collection(db, 'merchants', user.uid, 'transactions')
+        const transactionsQuery = query(
+          transactionsRef,
+          where('createdAt', '>=', today),
+          where('createdAt', '<', tomorrow)
+        )
+        
+        // Fetch today's redemptions
+        const redemptionsRef = collection(db, 'redemptions')
+        const redemptionsQuery = query(
+          redemptionsRef,
+          where('merchantId', '==', user.uid),
+          where('redemptionDate', '>=', today),
+          where('redemptionDate', '<', tomorrow)
+        )
+        
+        const [transactionsSnapshot, redemptionsSnapshot] = await Promise.all([
+          getDocs(transactionsQuery),
+          getDocs(redemptionsQuery)
+        ])
+        
+        setMetrics({
+          totalTransactions: transactionsSnapshot.docs.length,
+          totalRedemptions: redemptionsSnapshot.docs.length
+        })
+      } catch (error) {
+        console.error('Error fetching today metrics:', error)
+      } finally {
+        setMetricsLoading(false)
+      }
+    }
+    
+    if (user?.uid && !isOnboarding) {
+      fetchTodayMetrics()
+    }
+  }, [user?.uid, isOnboarding])
 
   const markAsRead = (id: string) => {
     setNotifications(prev => 
@@ -305,6 +378,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   <Gift className="h-4 w-4 mr-2" />
                   New Reward
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowRecurringRewardDialog(true)}>
+                  <Coffee className="h-4 w-4 mr-2" />
+                  Create Program
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowBannerDialog(true)}>
                   <Image className="h-4 w-4 mr-2" />
                   New Banner
@@ -319,6 +396,47 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            
+            {/* Add the metrics here */}
+            {!isOnboarding && (
+              <div className="flex items-center gap-3">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-2 px-3 h-9 bg-blue-50 rounded-md border border-blue-100 cursor-default">
+                        <ShoppingCart className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
+                        <div className="flex items-center">
+                          <p className="text-xs font-medium text-gray-500 mr-1.5">Transactions:</p>
+                          <p className="text-sm font-semibold text-blue-700">
+                            {metricsLoading ? "..." : metrics.totalTransactions}
+                          </p>
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">Today</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-2 px-3 h-9 bg-purple-50 rounded-md border border-purple-100 cursor-default">
+                        <Gift className="h-3.5 w-3.5 text-purple-600 flex-shrink-0" />
+                        <div className="flex items-center">
+                          <p className="text-xs font-medium text-gray-500 mr-1.5">Redemptions:</p>
+                          <p className="text-sm font-semibold text-purple-700">
+                            {metricsLoading ? "..." : metrics.totalRedemptions}
+                          </p>
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">Today</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            )}
           </div>
           
           <div className="flex items-center gap-4">
@@ -464,6 +582,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <CreatePointsRuleDialog 
         open={showPointsRuleDialog} 
         onOpenChange={setShowPointsRuleDialog}
+      />
+      <CreateRecurringRewardDialog
+        open={showRecurringRewardDialog}
+        onOpenChange={setShowRecurringRewardDialog}
       />
     </div>
   )

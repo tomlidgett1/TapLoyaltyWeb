@@ -1160,12 +1160,40 @@ export default function DashboardPage() {
             </div>
           </div>
           
+          {/* Key Metrics Highlights - Smaller and more discrete */}
+          <div className="flex gap-4 mt-4 mb-2">
+            {/* Total Transactions Highlight */}
+            <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 rounded-lg border border-blue-100">
+              <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                <ShoppingCart className="h-4 w-4 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500">Today's Transactions</p>
+                <p className="text-lg font-semibold text-blue-700">
+                  {loading ? "..." : metrics.totalTransactions || 0}
+                </p>
+              </div>
+            </div>
+
+            {/* Total Redemptions Highlight */}
+            <div className="flex items-center gap-3 px-4 py-2 bg-purple-50 rounded-lg border border-purple-100">
+              <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center">
+                <Gift className="h-4 w-4 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500">Today's Redemptions</p>
+                <p className="text-lg font-semibold text-purple-700">
+                  {loading ? "..." : metrics.totalRedemptions || 0}
+                </p>
+              </div>
+            </div>
+          </div>
+          
           {/* Recent Activity and Popular Rewards - Side by side */}
           <div className="grid grid-cols-2 gap-6 mt-6">
             {/* Recent Activity - New Design */}
             <Card className="rounded-lg border border-gray-200 overflow-hidden">
-              <CardHeader className="py-4 px-6 bg-gray-50 border-b border-gray-100">
-                <div className="flex justify-between items-center">
+              <CardHeader className="py-3 px-6 bg-gray-50 border-b border-gray-100 flex flex-row justify-between items-center">
                   <div>
                     <CardTitle className="text-base font-medium text-gray-900">Recent Activity</CardTitle>
                     <p className="text-sm text-gray-500 mt-0.5">Latest customer transactions and redemptions</p>
@@ -1173,42 +1201,31 @@ export default function DashboardPage() {
                   <Button 
                     variant="ghost" 
                     size="sm"
-                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50/50 h-8 px-2"
+                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50/50 h-8 px-2 ml-auto"
                     asChild
                   >
-                    <Link href="/customers" className="flex items-center gap-1">
+                  <Link href="/store/activity" className="flex items-center gap-1">
                       View all
                       <ChevronRight className="h-3 w-3" />
                     </Link>
                   </Button>
-                </div>
               </CardHeader>
-              <CardContent className="p-0 bg-white">
-                <div className="divide-y divide-gray-100">
+              <CardContent className="p-0">
                   {loading ? (
-                    <div className="p-4 text-center">
-                      <div className="flex justify-center">
-                        <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
-                      </div>
+                  <div className="flex items-center justify-center py-8">
+                    <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
                     </div>
                   ) : recentActivity.length === 0 ? (
-                    <div className="p-4 text-center">
-                      <div className="flex flex-col items-center justify-center">
-                        <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                          <Zap className="h-5 w-5 text-muted-foreground" />
-                        </div>
-                        <h3 className="mt-2 text-sm font-medium">No recent activity</h3>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Activity will appear here as customers interact
-                        </p>
-                      </div>
+                  <div className="py-6 text-center">
+                    <Clock className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">No recent activity</p>
                     </div>
                   ) : (
-                    <div className="divide-y divide-gray-100">
+                  <div className="divide-y">
                       {recentActivity.map((activity) => (
-                        <div key={activity.id} className="px-4 py-3 hover:bg-gray-50/50 transition-colors">
-                          <div className="flex items-start gap-3">
-                            {/* Left side - Customer Avatar - Smaller */}
+                      <div key={activity.id} className="px-6 py-2.5 hover:bg-gray-50">
+                        <div className="flex items-center gap-3">
+                          {/* Left side - Customer Avatar */}
                             <div className="flex-shrink-0">
                               <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
                                 {activity.customer?.profilePicture ? (
@@ -1216,21 +1233,7 @@ export default function DashboardPage() {
                                     src={activity.customer.profilePicture} 
                                     alt={activity.customer.name}
                                     className="h-full w-full object-cover"
-                                    onError={() => {
-                                      setRecentActivity(prev => 
-                                        prev.map(act => 
-                                          act.id === activity.id 
-                                            ? {
-                                                ...act,
-                                                customer: {
-                                                  ...act.customer,
-                                                  profilePicture: null
-                                                }
-                                              }
-                                            : act
-                                        )
-                                      )
-                                    }}
+                                  onError={() => {/* error handling */}}
                                   />
                                 ) : (
                                   <Users className="h-4 w-4 text-gray-400" />
@@ -1239,64 +1242,32 @@ export default function DashboardPage() {
                             </div>
 
                             {/* Right side - Activity Details - More Compact */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
+                          <div className="flex-1 min-w-0 flex items-center justify-between">
+                            <div>
                                   <p className="font-medium text-sm text-gray-900">{activity.customer.name}</p>
-                                  <span className="text-gray-300">•</span>
-                                  <span className="text-xs text-gray-500">{formatTimeAgo(activity.timestamp)}</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  {activity.type === "transaction" ? (
-                                    <div className="px-2 py-0.5 rounded-md bg-green-50 text-green-700 text-xs font-medium">
-                                      ${activity.amount}
-                                    </div>
-                                  ) : (
-                                    <div className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 text-xs font-medium">
-                                      {activity.points} points
-                                    </div>
-                                  )}
-                                  <Badge variant="outline" className={cn(
-                                    "rounded-md px-2 py-0.5 text-xs",
-                                    activity.status?.toLowerCase() === "completed" && "bg-green-50 text-green-700 border-green-200",
-                                    activity.status?.toLowerCase() === "pending" && "bg-amber-50 text-amber-700 border-amber-200",
-                                    activity.status?.toLowerCase() === "failed" && "bg-red-50 text-red-700 border-red-200"
-                                  )}>
-                                    {activity.status}
-                                  </Badge>
-                                </div>
-                              </div>
                               <div className="flex items-center gap-1 text-xs text-gray-500">
                                 {activity.type === "transaction" ? (
                                   <div className="flex items-center gap-1">
                                     <ShoppingCart className="h-3 w-3" />
-                                    <span>Made a purchase</span>
+                                    <span>Purchase</span>
                                   </div>
                                 ) : (
                                   <div className="flex items-center gap-1">
                                     <Gift className="h-3 w-3" />
-                                    <span>
-                                      Redeemed{' '}
-                                      {(() => {
-                                        console.log("Rendering redemption link for:", {
-                                        rewardId: activity.rewardId,
-                                        rewardName: activity.rewardName
-                                        });
-                                        return (
-                                        <Link 
-                                          href={`/store/${activity.rewardId}`}
-                                          className="text-blue-600 hover:text-blue-700 hover:underline"
-                                        >
-                                          {activity.rewardName}
-                                        </Link>
-                                        );
-                                      })()}
-                                      {activity.points > 0 && ` (${activity.points} points)`}
-                                    </span>
+                                    <span>Redeemed {activity.rewardName}</span>
                                   </div>
                                 )}
-                                <span className="text-gray-300">•</span>
-                                <span>{formatTimeAgo(activity.timestamp)}</span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-medium">
+                                {activity.type === "transaction" 
+                                  ? `$${activity.amount.toFixed(2)}` 
+                                  : `${activity.points} pts`}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatTimeAgo(activity.timestamp)}
+                              </p>
                               </div>
                             </div>
                           </div>
@@ -1304,14 +1275,12 @@ export default function DashboardPage() {
                       ))}
                     </div>
                   )}
-                </div>
               </CardContent>
             </Card>
 
             {/* Popular Rewards */}
             <Card className="rounded-lg border border-gray-200 overflow-hidden">
-              <CardHeader className="py-4 px-6 bg-gray-50 border-b border-gray-100">
-                <div className="flex justify-between items-center">
+              <CardHeader className="py-3 px-6 bg-gray-50 border-b border-gray-100 flex flex-row justify-between items-center">
                   <div>
                     <CardTitle className="text-base font-medium text-gray-900">Popular Rewards</CardTitle>
                     <p className="text-sm text-gray-500 mt-0.5">Most redeemed rewards by customers</p>
@@ -1319,7 +1288,7 @@ export default function DashboardPage() {
                   <Button 
                     variant="ghost" 
                     size="sm"
-                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50/50 h-8 px-2"
+                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50/50 h-8 px-2 ml-auto"
                     asChild
                   >
                     <Link href="/store/rewards" className="flex items-center gap-1">
@@ -1327,59 +1296,46 @@ export default function DashboardPage() {
                       <ChevronRight className="h-3 w-3" />
                     </Link>
                   </Button>
-                </div>
               </CardHeader>
-              <CardContent className="p-0 bg-white">
+              <CardContent className="p-0">
                 {loading ? (
-                  <div className="p-4 text-center text-gray-500">Loading rewards...</div>
+                  <div className="flex items-center justify-center py-8">
+                    <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+                  </div>
                 ) : popularRewards.length === 0 ? (
-                  <div className="p-4 text-center text-gray-500">No rewards found</div>
+                  <div className="py-6 text-center">
+                    <Gift className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">No rewards data available</p>
+                  </div>
                 ) : (
-                  <div className="grid grid-cols-1 divide-y divide-gray-100">
+                  <div className="divide-y">
                     {popularRewards.map((reward) => (
-                      <Link 
-                        key={reward.id} 
-                        href={`/store/${reward.id}`}
-                        className="block hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="px-6 py-3 flex items-center gap-3">
-                          <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
-                            <p className="text-sm font-semibold text-blue-600">
-                              #{popularRewards.indexOf(reward) + 1}
-                            </p>
+                      <div key={reward.id} className="px-6 py-2.5 hover:bg-gray-50">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-md bg-purple-50 flex items-center justify-center">
+                              <Gift className="h-4 w-4 text-purple-500" />
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-center">
-                              <div className="truncate">
-                                <p className="text-sm font-medium truncate">
-                                  {reward.rewardName || reward.name}
-                                </p>
-                                <div className="flex items-center gap-2 mt-2">
-                                  <p className="text-xs text-gray-500">
-                                    {reward.pointsCost > 0 ? `${reward.pointsCost} points` : 'Punch card'}
-                                  </p>
-                                  {reward.lastRedeemedAt && (
-                                    <>
-                                      <span className="text-xs text-gray-400">•</span>
-                                      <p className="text-xs text-gray-500">
-                                        Last redeemed {formatDistanceToNow(reward.lastRedeemedAt, { addSuffix: true })}
-                                      </p>
-                                    </>
-                                  )}
+                            <div>
+                              <p className="font-medium text-sm">{reward.name}</p>
+                              <p className="text-xs text-gray-500">{reward.pointsCost} points</p>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="rounded-md px-2 py-0.5 text-xs bg-blue-50 text-blue-700 border-blue-200">
-                                  {reward.redemptionCount} redeemed
-                                </Badge>
-                                <Badge variant="outline" className="rounded-md px-2 py-0.5 text-xs bg-gray-50 text-gray-600 border-gray-200">
-                                  {reward.impressions} views
-                                </Badge>
+                          <div className="text-right">
+                            <p className="text-sm font-medium">{reward.redemptionCount} redeemed</p>
+                            <div className="flex items-center justify-end gap-1 text-xs">
+                              {reward.trend === "up" ? (
+                                <ArrowUp className="h-3 w-3 text-green-500" />
+                              ) : (
+                                <ArrowDown className="h-3 w-3 text-red-500" />
+                              )}
+                              <span className={reward.trend === "up" ? "text-green-500" : "text-red-500"}>
+                                {reward.changePercentage}%
+                              </span>
                               </div>
                             </div>
                           </div>
                         </div>
-                      </Link>
                     ))}
                   </div>
                 )}

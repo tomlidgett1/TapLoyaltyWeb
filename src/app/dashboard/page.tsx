@@ -703,6 +703,47 @@ export default function DashboardPage() {
     return formatDistanceToNow(date, { addSuffix: true })
   }
 
+  // Custom tooltip component for the chart
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-sm" style={{ fontFamily: 'SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif' }}>
+          <p className="text-sm font-medium mb-1">{label}</p>
+          {payload.map((entry: any, index: number) => (
+            <div key={`item-${index}`} className="flex items-center gap-2 text-sm">
+              <div 
+                className="h-3 w-3 rounded-sm" 
+                style={{ backgroundColor: entry.color }}
+              />
+              <span className="font-medium">{entry.name}:</span>
+              <span>{entry.value}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  // Custom legend component
+  const CustomLegend = (props: any) => {
+    const { payload } = props;
+    
+    return (
+      <div className="flex justify-center gap-6 mt-2" style={{ fontFamily: 'SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif' }}>
+        {payload.map((entry: any, index: number) => (
+          <div key={`item-${index}`} className="flex items-center gap-1.5">
+            <div 
+              className="h-3 w-3 rounded-sm" 
+              style={{ backgroundColor: entry.color }}
+            />
+            <span className="text-sm font-medium">{entry.value}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <PageTransition>
@@ -728,14 +769,6 @@ export default function DashboardPage() {
                   Here's an overview of your business
                 </p>
               </div>
-              
-              <Button 
-                className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-                onClick={() => router.push('/create')}
-              >
-                <PlusCircle className="h-4 w-4" />
-                <span>New Reward</span>
-              </Button>
             </div>
 
             {/* Update the tabs layout to be side-by-side with a separator */}
@@ -744,7 +777,7 @@ export default function DashboardPage() {
               <Tabs 
                 defaultValue="platform" 
                 className="flex-shrink-0"
-                onValueChange={(value) => setMetricsType(value)}
+                onValueChange={(value) => setMetricsType(value as "consumer" | "platform")}
               >
                 <TabsList>
                   <TabsTrigger value="platform" className="flex items-center gap-2">
@@ -777,474 +810,322 @@ export default function DashboardPage() {
             </div>
           </div>
           
-          {/* Chart and Metrics side by side */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Histogram Chart on the left - takes up 2/3 of the space */}
-            <Card className="rounded-lg border border-gray-200 overflow-hidden lg:col-span-2">
-              <CardHeader className="py-4 px-6 bg-gray-50 border-b border-gray-100">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle className="text-base font-medium text-gray-900">Activity Overview</CardTitle>
-                    <p className="text-sm text-gray-500 mt-0.5">Transactions and redemptions over time</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-xs text-gray-500">Show:</div>
-                    <div className="flex rounded-md overflow-hidden border border-gray-200">
-                      <button 
-                        onClick={() => setChartTimeframe("7days")}
-                        className={`px-2 py-1 text-xs transition-all duration-300 ease-in-out ${
-                          chartTimeframe === "7days" 
-                            ? "bg-blue-50 text-blue-600 font-medium" 
-                            : "bg-white text-gray-600 hover:bg-gray-50"
-                        }`}
-                      >
-                        7 Days
-                      </button>
-                      <button 
-                        onClick={() => setChartTimeframe("30days")}
-                        className={`px-2 py-1 text-xs ${chartTimeframe === "30days" 
-                          ? "bg-blue-50 text-blue-600 font-medium" 
-                          : "bg-white text-gray-600 hover:bg-gray-50"}`}
-                      >
-                        30 Days
-                      </button>
-                      <button 
-                        onClick={() => setChartTimeframe("90days")}
-                        className={`px-2 py-1 text-xs ${chartTimeframe === "90days" 
-                          ? "bg-blue-50 text-blue-600 font-medium" 
-                          : "bg-white text-gray-600 hover:bg-gray-50"}`}
-                      >
-                        90 Days
-                      </button>
+          {/* Metrics section - wrapped in proper Tabs component */}
+          <Tabs defaultValue="platform" value={metricsType as string}>
+            <TabsContent value="platform" className="mt-0">
+              <div className="grid grid-cols-4 gap-4">
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-3">
+                    <div className="flex justify-between">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium text-gray-500">Total Customers</p>
+                        <div className="text-lg font-semibold">{metrics.totalCustomers}</div>
+                      </div>
+                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
+                        <Users className="h-4 w-4 text-blue-500" />
+                      </div>
                     </div>
-                  </div>
+                    <div className="mt-1 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        <span>{metrics.customerGrowth}%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-3">
+                    <div className="flex justify-between">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium text-gray-500">Active Rewards</p>
+                        <div className="text-lg font-semibold">{metrics.activeRewards}</div>
+                      </div>
+                      <div className="h-8 w-8 rounded-full bg-purple-50 flex items-center justify-center">
+                        <Gift className="h-4 w-4 text-purple-500" />
+                      </div>
+                    </div>
+                    <div className="mt-1 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        <span>2.1%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-3">
+                    <div className="flex justify-between">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium text-gray-500">Total Points Issued</p>
+                        <div className="text-lg font-semibold">{metrics.totalPointsIssued}</div>
+                      </div>
+                      <div className="h-8 w-8 rounded-full bg-amber-50 flex items-center justify-center">
+                        <Zap className="h-4 w-4 text-amber-500" />
+                      </div>
+                    </div>
+                    <div className="mt-1 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        <span>12.5%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-3">
+                    <div className="flex justify-between">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium text-gray-500">Redemption Rate</p>
+                        <div className="text-lg font-semibold">{metrics.redemptionRate}%</div>
+                      </div>
+                      <div className="h-8 w-8 rounded-full bg-green-50 flex items-center justify-center">
+                        <ShoppingCart className="h-4 w-4 text-green-500" />
+                      </div>
+                    </div>
+                    <div className="mt-1 flex items-center text-xs">
+                      <div className="text-red-600 flex items-center">
+                        <ArrowDown className="h-3 w-3 mr-1" />
+                        <span>1.2%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="consumer" className="mt-0">
+              <div className="grid grid-cols-4 gap-4">
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-3">
+                    <div className="flex justify-between">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium text-gray-500">Active Customers</p>
+                        <div className="text-lg font-semibold">{metrics.activeCustomers}</div>
+                      </div>
+                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
+                        <Users className="h-4 w-4 text-blue-500" />
+                      </div>
+                    </div>
+                    <div className="mt-1 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        <span>4.3%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-3">
+                    <div className="flex justify-between">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium text-gray-500">Total Transactions</p>
+                        <div className="text-lg font-semibold">{metrics.totalTransactions}</div>
+                      </div>
+                      <div className="h-8 w-8 rounded-full bg-green-50 flex items-center justify-center">
+                        <ShoppingCart className="h-4 w-4 text-green-500" />
+                      </div>
+                    </div>
+                    <div className="mt-1 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        <span>8.2%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-3">
+                    <div className="flex justify-between">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium text-gray-500">Total Redemptions</p>
+                        <div className="text-lg font-semibold">{metrics.totalRedemptions}</div>
+                      </div>
+                      <div className="h-8 w-8 rounded-full bg-purple-50 flex items-center justify-center">
+                        <Gift className="h-4 w-4 text-purple-500" />
+                      </div>
+                    </div>
+                    <div className="mt-1 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        <span>7.3%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-3">
+                    <div className="flex justify-between">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium text-gray-500">Avg Order Value</p>
+                        <div className="text-lg font-semibold">${metrics.avgOrderValue}</div>
+                      </div>
+                      <div className="h-8 w-8 rounded-full bg-amber-50 flex items-center justify-center">
+                        <DollarSign className="h-4 w-4 text-amber-500" />
+                      </div>
+                    </div>
+                    <div className="mt-1 flex items-center text-xs">
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        <span>3.1%</span>
+                      </div>
+                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          {/* Activity Overview and Recent Activity in a side-by-side layout */}
+          <div className="grid grid-cols-12 gap-6">
+            {/* Activity Overview Graph - Takes slightly less width */}
+            <Card className="col-span-7 rounded-lg border border-gray-200 overflow-hidden">
+              <CardHeader className="py-3 px-6 bg-gray-50 border-b border-gray-100 flex flex-row justify-between items-center rounded-t-lg">
+                <div>
+                  <CardTitle className="text-base font-medium text-gray-900">Activity Overview</CardTitle>
+                  <p className="text-sm text-gray-500 mt-0.5">Transactions and redemptions over time</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className={cn(
+                      "h-8 text-xs",
+                      chartTimeframe === "7days" && "bg-blue-50 text-blue-600 border-blue-200"
+                    )}
+                    onClick={() => setChartTimeframe("7days")}
+                  >
+                    7 Days
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className={cn(
+                      "h-8 text-xs",
+                      chartTimeframe === "30days" && "bg-blue-50 text-blue-600 border-blue-200"
+                    )}
+                    onClick={() => setChartTimeframe("30days")}
+                  >
+                    30 Days
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className={cn(
+                      "h-8 text-xs",
+                      chartTimeframe === "90days" && "bg-blue-50 text-blue-600 border-blue-200"
+                    )}
+                    onClick={() => setChartTimeframe("90days")}
+                  >
+                    90 Days
+                  </Button>
                 </div>
               </CardHeader>
-              <CardContent className="p-4">
+              <CardContent className="p-6">
                 {chartLoading ? (
-                  <div className="h-80 flex items-center justify-center">
-                    <div className="text-center text-sm text-gray-500">
-                      Updating chart...
-                    </div>
+                  <div className="flex items-center justify-center h-[300px]">
+                    <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
                   </div>
-                ) : histogramData.length === 0 ? (
-                  <div className="h-80 flex items-center justify-center">
-                    <div className="text-center">
-                      <BarChartIcon className="h-12 w-12 mx-auto text-gray-400" />
-                      <h3 className="mt-2 text-sm font-medium">No data available</h3>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Activity data will appear here as customers interact with your store
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div 
-                    className={`h-80 transition-opacity duration-500 ease-in-out ${
-                      chartReady ? 'opacity-100' : 'opacity-0'
-                    }`}
-                  >
+                ) : chartReady ? (
+                  <div className="h-[300px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={histogramData}
-                        margin={{ top: 5, right: 10, left: -15, bottom: 30 }}
-                        barGap={4}
-                      >
-                        <defs>
-                          <linearGradient id="colorTransactions" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.9}/>
-                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.6}/>
-                          </linearGradient>
-                          <linearGradient id="colorRedemptions" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.9}/>
-                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.6}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                      <BarChart data={histogramData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis 
                           dataKey="date" 
-                          angle={-45} 
-                          textAnchor="end" 
-                          height={40}
-                          tick={{ fontSize: 11, fill: '#6b7280' }}
+                          tick={{ fontSize: 12, fontFamily: 'SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif' }} 
                           tickLine={false}
-                          axisLine={{ stroke: '#e5e7eb' }}
+                          axisLine={{ stroke: '#E5E7EB' }}
                         />
                         <YAxis 
-                          tick={{ fontSize: 11, fill: '#6b7280' }}
+                          tick={{ fontSize: 12, fontFamily: 'SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif' }} 
                           tickLine={false}
-                          axisLine={{ stroke: '#e5e7eb' }}
-                          tickFormatter={(value) => value === 0 ? '0' : value}
+                          axisLine={{ stroke: '#E5E7EB' }}
                         />
-                        <Tooltip 
-                          formatter={(value, name, props) => {
-                            // Debug the incoming name parameter
-                            console.log("Tooltip formatter received name:", name);
-                            
-                            // Explicitly check the name parameter and return the correct display name
-                            if (name === "transactions") {
-                              return [value, "Transactions"];
-                            } else if (name === "redemptions") {
-                              return [value, "Redemptions"];
-                            } else {
-                              // Fallback for any other case
-                              return [value, name];
-                            }
-                          }}
-                          labelFormatter={(label) => `Date: ${label}`}
-                          contentStyle={{ 
-                            backgroundColor: 'rgba(255, 255, 255, 0.98)', 
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.03)',
-                            border: 'none',
-                            padding: '10px 14px',
-                            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif',
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            letterSpacing: '-0.01em'
-                          }}
-                          itemStyle={{
-                            padding: '4px 0',
-                            color: '#374151'
-                          }}
-                          labelStyle={{
-                            fontWeight: 600,
-                            marginBottom: '6px',
-                            color: '#111827',
-                            fontSize: '13px'
-                          }}
-                          // This ensures all items in the payload are shown
-                          itemSorter={() => 0}
-                          isAnimationActive={false}
-                          cursor={{ stroke: '#e5e7eb', strokeWidth: 1, strokeDasharray: '4 4' }}
-                        />
-                        <Legend 
-                          wrapperStyle={{ 
-                            paddingTop: 15,
-                            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif',
-                            fontSize: 14,  // Increased from 12
-                            fontWeight: 500
-                          }}
-                          iconType="circle"
-                          iconSize={10}  // Increased from 8
-                          formatter={(value) => {
-                            // Use SF Pro font and better styling with larger text
-                            return (
-                              <span style={{ 
-                                color: value === "Transactions" ? "#3b82f6" : "#8b5cf6", 
-                                padding: "0 12px",  // Increased from 8px
-                                fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif',
-                                fontWeight: 500,
-                                letterSpacing: '-0.01em',
-                                fontSize: '14px'  // Explicitly set font size
-                              }}>
-                                {value}
-                              </span>
-                            );
-                          }}
-                          layout="horizontal"
-                          verticalAlign="bottom"
-                          align="center"
-                        />
-                        <Bar 
-                          dataKey="transactions" 
-                          name="Transactions" 
-                          fill="url(#colorTransactions)" 
-                          radius={[4, 4, 0, 0]} 
-                          maxBarSize={30}
-                          animationDuration={1500}
-                        />
-                        <Bar 
-                          dataKey="redemptions" 
-                          name="Redemptions" 
-                          fill="url(#colorRedemptions)" 
-                          radius={[4, 4, 0, 0]} 
-                          maxBarSize={30}
-                          animationDuration={1500}
-                        />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Legend content={<CustomLegend />} />
+                        <Bar dataKey="transactions" name="Transactions" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="redemptions" name="Redemptions" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-[300px] text-center">
+                    <BarChartIcon className="h-12 w-12 text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">No activity data available</p>
+                    <p className="text-sm text-muted-foreground mt-1">Start recording transactions to see data</p>
                   </div>
                 )}
               </CardContent>
             </Card>
-            
-            {/* Key Metrics on the right - takes up 1/3 of the space */}
-            <div className="space-y-4">
-            {metricsType === "consumer" ? (
-              <>
-                  {/* Consumer metrics - compact stacked layout */}
-                  <div className="space-y-2">
-                    {/* Active Customers */}
-                <Card className="rounded-lg border border-gray-200">
-                      <CardContent className="p-3">
-                    <div className="flex justify-between">
-                          <div className="space-y-0.5">
-                            <p className="text-sm font-medium text-gray-500">Active Customers</p>
-                            <div className="text-lg font-semibold">{metrics.activeCustomers}</div>
-                      </div>
-                          <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
-                            <Users className="h-4 w-4 text-blue-500" />
-                      </div>
-                    </div>
-                        <div className="mt-1 flex items-center text-xs">
-                      <div className={cn(
-                        "flex items-center",
-                        metrics.customerGrowth > 0 ? "text-green-600" : "text-red-600"
-                      )}>
-                        {metrics.customerGrowth > 0 ? (
-                          <ArrowUp className="h-3 w-3 mr-1" />
-                        ) : (
-                          <ArrowDown className="h-3 w-3 mr-1" />
-                        )}
-                        <span>{Math.abs(metrics.customerGrowth)}%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                    {/* Total Transactions */}
-                <Card className="rounded-lg border border-gray-200">
-                      <CardContent className="p-3">
-                    <div className="flex justify-between">
-                          <div className="space-y-0.5">
-                            <p className="text-sm font-medium text-gray-500">Total Transactions</p>
-                            <div className="text-lg font-semibold">{metrics.totalTransactions || 0}</div>
-                      </div>
-                          <div className="h-8 w-8 rounded-full bg-amber-50 flex items-center justify-center">
-                            <ShoppingCart className="h-4 w-4 text-amber-500" />
-                      </div>
-                    </div>
-                        <div className="mt-1 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                            <span>8.7%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                    {/* Total Redemptions */}
-                <Card className="rounded-lg border border-gray-200">
-                      <CardContent className="p-3">
-                    <div className="flex justify-between">
-                          <div className="space-y-0.5">
-                            <p className="text-sm font-medium text-gray-500">Total Redemptions</p>
-                            <div className="text-lg font-semibold">{metrics.totalRedemptions}</div>
-                      </div>
-                          <div className="h-8 w-8 rounded-full bg-purple-50 flex items-center justify-center">
-                            <Gift className="h-4 w-4 text-purple-500" />
-                      </div>
-                    </div>
-                        <div className="mt-1 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                            <span>7.3%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                    {/* Customers with Rewards */}
-                <Card className="rounded-lg border border-gray-200">
-                      <CardContent className="p-3">
-                    <div className="flex justify-between">
-                          <div className="space-y-0.5">
-                            <p className="text-sm font-medium text-gray-500">Customers with Rewards</p>
-                            <div className="text-lg font-semibold">{metrics.customersWithRedeemableRewards}</div>
-                      </div>
-                          <div className="h-8 w-8 rounded-full bg-purple-50 flex items-center justify-center">
-                            <Gift className="h-4 w-4 text-purple-500" />
-                      </div>
-                    </div>
-                        <div className="mt-1 flex items-center text-xs">
-                          <div className="text-gray-600 flex items-center">
-                            <span>{((metrics.customersWithRedeemableRewards / metrics.totalCustomers) * 100).toFixed(1)}%</span>
-                      </div>
-                          <span className="text-gray-500 ml-1.5">of total customers</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                    
-                    {/* Customers without Rewards */}
-                <Card className="rounded-lg border border-gray-200">
-                      <CardContent className="p-3">
-                    <div className="flex justify-between">
-                          <div className="space-y-0.5">
-                            <p className="text-sm font-medium text-gray-500">Customers without Rewards</p>
-                            <div className="text-lg font-semibold">{metrics.customersWithoutRedeemableRewards}</div>
-                      </div>
-                          <div className="h-8 w-8 rounded-full bg-red-50 flex items-center justify-center">
-                            <Users className="h-4 w-4 text-red-500" />
-                      </div>
-                    </div>
-                        <div className="mt-1 flex items-center text-xs">
-                          <div className="text-gray-600 flex items-center">
-                            <span>{((metrics.customersWithoutRedeemableRewards / metrics.totalCustomers) * 100).toFixed(1)}%</span>
-                      </div>
-                          <span className="text-gray-500 ml-1.5">of total customers</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* Platform metrics - stacked vertically */}
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between">
-                      <div className="space-y-1">
-                          <p className="text-sm font-medium text-gray-500">Active Rewards</p>
-                          <div className="text-2xl font-semibold">{metrics.activeRewards}</div>
-                      </div>
-                      <div className="h-10 w-10 rounded-full bg-amber-50 flex items-center justify-center">
-                        <Gift className="h-5 w-5 text-amber-500" />
-                      </div>
-                    </div>
-                    <div className="mt-4 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        <span>8%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between">
-                      <div className="space-y-1">
-                          <p className="text-sm font-medium text-gray-500">Banner Impressions</p>
-                          <div className="text-2xl font-semibold">{metrics.totalBannerImpressions.toLocaleString()}</div>
-                      </div>
-                        <div className="h-10 w-10 rounded-full bg-purple-50 flex items-center justify-center">
-                          <Eye className="h-5 w-5 text-purple-500" />
-                      </div>
-                    </div>
-                    <div className="mt-4 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                          <span>12%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between">
-                      <div className="space-y-1">
-                          <p className="text-sm font-medium text-gray-500">Store Views</p>
-                          <div className="text-2xl font-semibold">{metrics.totalStoreViews.toLocaleString()}</div>
-                      </div>
-                      <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
-                          <ShoppingCart className="h-5 w-5 text-blue-500" />
-                      </div>
-                    </div>
-                    <div className="mt-4 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                          <span>15%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-            </div>
-          </div>
-          
-          {/* Key Metrics Highlights - Smaller and more discrete */}
-          <div className="flex gap-4 mt-4 mb-2">
-            {/* Total Transactions Highlight */}
-            <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 rounded-lg border border-blue-100">
-              <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                <ShoppingCart className="h-4 w-4 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500">Today's Transactions</p>
-                <p className="text-lg font-semibold text-blue-700">
-                  {loading ? "..." : metrics.totalTransactions || 0}
-                </p>
-              </div>
-            </div>
 
-            {/* Total Redemptions Highlight */}
-            <div className="flex items-center gap-3 px-4 py-2 bg-purple-50 rounded-lg border border-purple-100">
-              <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center">
-                <Gift className="h-4 w-4 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500">Today's Redemptions</p>
-                <p className="text-lg font-semibold text-purple-700">
-                  {loading ? "..." : metrics.totalRedemptions || 0}
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          {/* Recent Activity and Popular Rewards - Side by side */}
-          <div className="grid grid-cols-2 gap-6 mt-6">
-            {/* Recent Activity - New Design */}
-            <Card className="rounded-lg border border-gray-200 overflow-hidden">
+            {/* Recent Activity - Takes slightly more width */}
+            <Card className="col-span-5 rounded-lg border border-gray-200 overflow-hidden">
               <CardHeader className="py-3 px-6 bg-gray-50 border-b border-gray-100 flex flex-row justify-between items-center">
-                  <div>
-                    <CardTitle className="text-base font-medium text-gray-900">Recent Activity</CardTitle>
-                    <p className="text-sm text-gray-500 mt-0.5">Latest customer transactions and redemptions</p>
-                  </div>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
+                <div>
+                  <CardTitle className="text-base font-medium text-gray-900">Recent Activity</CardTitle>
+                  <p className="text-sm text-gray-500 mt-0.5">Latest transactions and redemptions</p>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
                   className="text-blue-600 hover:text-blue-700 hover:bg-blue-50/50 h-8 px-2 ml-auto"
-                    asChild
-                  >
+                  asChild
+                >
                   <Link href="/store/activity" className="flex items-center gap-1">
-                      View all
-                      <ChevronRight className="h-3 w-3" />
-                    </Link>
-                  </Button>
+                    View all
+                    <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </Button>
               </CardHeader>
               <CardContent className="p-0">
-                  {loading ? (
+                {loading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
-                    </div>
-                  ) : recentActivity.length === 0 ? (
+                  </div>
+                ) : recentActivity.length === 0 ? (
                   <div className="py-6 text-center">
                     <Clock className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
                     <p className="text-sm text-muted-foreground">No recent activity</p>
-                    </div>
-                  ) : (
+                  </div>
+                ) : (
                   <div className="divide-y">
-                      {recentActivity.map((activity) => (
+                    {recentActivity.map((activity) => (
                       <div key={activity.id} className="px-6 py-2.5 hover:bg-gray-50">
                         <div className="flex items-center gap-3">
                           {/* Left side - Customer Avatar */}
-                            <div className="flex-shrink-0">
-                              <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
-                                {activity.customer?.profilePicture ? (
-                                  <img 
-                                    src={activity.customer.profilePicture} 
-                                    alt={activity.customer.name}
-                                    className="h-full w-full object-cover"
+                          <div className="flex-shrink-0">
+                            <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
+                              {activity.customer?.profilePicture ? (
+                                <img 
+                                  src={activity.customer.profilePicture} 
+                                  alt={activity.customer.name}
+                                  className="h-full w-full object-cover"
                                   onError={() => {/* error handling */}}
-                                  />
-                                ) : (
-                                  <Users className="h-4 w-4 text-gray-400" />
-                                )}
-                              </div>
+                                />
+                              ) : (
+                                <Users className="h-4 w-4 text-gray-400" />
+                              )}
                             </div>
+                          </div>
 
-                            {/* Right side - Activity Details - More Compact */}
+                          {/* Right side - Activity Details - More Compact */}
                           <div className="flex-1 min-w-0 flex items-center justify-between">
                             <div>
-                                  <p className="font-medium text-sm text-gray-900">{activity.customer.name}</p>
+                              <p className="font-medium text-sm text-gray-900">{activity.customer.name}</p>
                               <div className="flex items-center gap-1 text-xs text-gray-500">
                                 {activity.type === "transaction" ? (
                                   <div className="flex items-center gap-1">
@@ -1268,80 +1149,80 @@ export default function DashboardPage() {
                               <p className="text-xs text-muted-foreground">
                                 {formatTimeAgo(activity.timestamp)}
                               </p>
-                              </div>
                             </div>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-              </CardContent>
-            </Card>
-
-            {/* Popular Rewards */}
-            <Card className="rounded-lg border border-gray-200 overflow-hidden">
-              <CardHeader className="py-3 px-6 bg-gray-50 border-b border-gray-100 flex flex-row justify-between items-center">
-                  <div>
-                    <CardTitle className="text-base font-medium text-gray-900">Popular Rewards</CardTitle>
-                    <p className="text-sm text-gray-500 mt-0.5">Most redeemed rewards by customers</p>
-                  </div>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50/50 h-8 px-2 ml-auto"
-                    asChild
-                  >
-                    <Link href="/store/rewards" className="flex items-center gap-1">
-                      View all
-                      <ChevronRight className="h-3 w-3" />
-                    </Link>
-                  </Button>
-              </CardHeader>
-              <CardContent className="p-0">
-                {loading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
-                  </div>
-                ) : popularRewards.length === 0 ? (
-                  <div className="py-6 text-center">
-                    <Gift className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">No rewards data available</p>
-                  </div>
-                ) : (
-                  <div className="divide-y">
-                    {popularRewards.map((reward) => (
-                      <div key={reward.id} className="px-6 py-2.5 hover:bg-gray-50">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-md bg-purple-50 flex items-center justify-center">
-                              <Gift className="h-4 w-4 text-purple-500" />
-                          </div>
-                            <div>
-                              <p className="font-medium text-sm">{reward.name}</p>
-                              <p className="text-xs text-gray-500">{reward.pointsCost} points</p>
-                                </div>
-                              </div>
-                          <div className="text-right">
-                            <p className="text-sm font-medium">{reward.redemptionCount} redeemed</p>
-                            <div className="flex items-center justify-end gap-1 text-xs">
-                              {reward.trend === "up" ? (
-                                <ArrowUp className="h-3 w-3 text-green-500" />
-                              ) : (
-                                <ArrowDown className="h-3 w-3 text-red-500" />
-                              )}
-                              <span className={reward.trend === "up" ? "text-green-500" : "text-red-500"}>
-                                {reward.changePercentage}%
-                              </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                      </div>
                     ))}
                   </div>
                 )}
               </CardContent>
             </Card>
           </div>
+
+          {/* Popular Rewards section - Full width */}
+          <Card className="rounded-lg border border-gray-200 overflow-hidden">
+            <CardHeader className="py-3 px-6 bg-gray-50 border-b border-gray-100 flex flex-row justify-between items-center">
+              <div>
+                <CardTitle className="text-base font-medium text-gray-900">Popular Rewards</CardTitle>
+                <p className="text-sm text-gray-500 mt-0.5">Most redeemed rewards by customers</p>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50/50 h-8 px-2 ml-auto"
+                asChild
+              >
+                <Link href="/store/rewards" className="flex items-center gap-1">
+                  View all
+                  <ChevronRight className="h-3 w-3" />
+                </Link>
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+                </div>
+              ) : popularRewards.length === 0 ? (
+                <div className="py-6 text-center">
+                  <Gift className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">No rewards data available</p>
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {popularRewards.map((reward) => (
+                    <div key={reward.id} className="px-6 py-2.5 hover:bg-gray-50">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-md bg-purple-50 flex items-center justify-center">
+                            <Gift className="h-4 w-4 text-purple-500" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">{reward.name}</p>
+                            <p className="text-xs text-gray-500">{reward.pointsCost} points</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium">{reward.redemptionCount} redeemed</p>
+                          <div className="flex items-center justify-end gap-1 text-xs">
+                            {reward.trend === "up" ? (
+                              <ArrowUp className="h-3 w-3 text-green-500" />
+                            ) : (
+                              <ArrowDown className="h-3 w-3 text-red-500" />
+                            )}
+                            <span className={reward.trend === "up" ? "text-green-500" : "text-red-500"}>
+                              {reward.changePercentage}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Live and Scheduled Banners Section */}
           {(activeBanners.length > 0 || scheduledBanners.length > 0) && (

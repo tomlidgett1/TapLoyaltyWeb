@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { db } from "@/lib/firebase"
-import { doc, getDoc, collection, getDocs, query, limit, orderBy, updateDoc } from "firebase/firestore"
+import { doc, getDoc, collection, getDocs, query, limit, orderBy, updateDoc, where } from "firebase/firestore"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -61,17 +61,20 @@ interface RewardDetails {
 }
 
 interface Redemption {
-  id: string
-  customerName: string
-  customerId: string
-  redemptionDate: {
-    seconds: number
-    nanoseconds: number
-  }
-  pointsUsed?: number
-  status: 'completed' | 'pending' | 'cancelled'
-  transactionAmount?: number
-  location?: string
+  id: string;
+  customerName?: string;
+  customerId: string;
+  profilePictureUrl?: string;
+  redemptionDate: string | {
+    seconds: number;
+    nanoseconds: number;
+  };
+  pointsUsed?: number;
+  status: 'successful' | 'completed' | 'pending' | 'cancelled';
+  merchantId?: string;
+  redemptionId?: string;
+  rewardId?: string;
+  rewardName?: string;
 }
 
 interface MockRedemption extends Redemption {
@@ -285,10 +288,14 @@ export function RewardDetailsPage() {
       try {
         setRedemptionsLoading(true);
         
-        // Try to fetch real redemption data
-        // This is a placeholder - adjust the collection path as needed
-        const redemptionsRef = collection(db, 'merchants', user.uid, 'rewards', id as string, 'redemptions');
-        const redemptionsQuery = query(redemptionsRef, orderBy('redeemedAt', 'desc'), limit(10));
+        // Fetch from top-level redemptions collection
+        const redemptionsRef = collection(db, 'redemptions');
+        const redemptionsQuery = query(
+          redemptionsRef, 
+          where('rewardId', '==', id),
+          orderBy('redemptionDate', 'desc'), 
+          limit(10)
+        );
         
         const redemptionsSnapshot = await getDocs(redemptionsQuery);
         const redemptionData = redemptionsSnapshot.docs.map(doc => ({
@@ -296,11 +303,33 @@ export function RewardDetailsPage() {
           ...doc.data()
         }));
         
+        // Fetch customer details for each redemption
+        const enhancedRedemptions = await Promise.all(
+          redemptionData.map(async (redemption) => {
+            if (redemption.customerId) {
+              try {
+                const customerDoc = await getDoc(doc(db, 'customers', redemption.customerId));
+                if (customerDoc.exists()) {
+                  const customerData = customerDoc.data();
+                  return {
+                    ...redemption,
+                    customerName: customerData.fullName || customerData.name || customerData.displayName || 'Unknown Customer',
+                    profilePictureUrl: customerData.profilePictureUrl || null
+                  };
+                }
+              } catch (error) {
+                console.error("Error fetching customer details:", error);
+              }
+            }
+            return redemption;
+          })
+        );
+        
         // If no real data is found, use mock data
-        if (redemptionData.length === 0 && reward) {
+        if (enhancedRedemptions.length === 0 && reward) {
           setRedemptions(generateMockRedemptions());
         } else {
-          setRedemptions(redemptionData);
+          setRedemptions(enhancedRedemptions);
         }
       } catch (error) {
         console.error("Error fetching redemptions:", error);
@@ -709,14 +738,22 @@ export function RewardDetailsPage() {
                         <TableCell>
                           <div className="flex flex-col">
                             <span className="font-medium">
-                              {redemption.redemptionDate?.seconds 
-                                ? new Date(redemption.redemptionDate.seconds * 1000).toLocaleDateString()
+                              {redemption.redemptionDate 
+                                ? new Date(
+                                    typeof redemption.redemptionDate === 'string' 
+                                      ? redemption.redemptionDate 
+                                      : redemption.redemptionDate.seconds * 1000
+                                  ).toLocaleDateString()
                                 : 'Unknown date'
                               }
                             </span>
                             <span className="text-sm text-muted-foreground">
-                              {redemption.redemptionDate?.seconds
-                                ? new Date(redemption.redemptionDate.seconds * 1000).toLocaleTimeString()
+                              {redemption.redemptionDate
+                                ? new Date(
+                                    typeof redemption.redemptionDate === 'string' 
+                                      ? redemption.redemptionDate 
+                                      : redemption.redemptionDate.seconds * 1000
+                                  ).toLocaleTimeString()
                                 : 'Unknown time'
                               }
                             </span>
@@ -724,16 +761,24 @@ export function RewardDetailsPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                              <Users className="h-4 w-4 text-muted-foreground" />
-                            </div>
+                            {redemption.profilePictureUrl ? (
+                              <img 
+                                src={redemption.profilePictureUrl} 
+                                alt={redemption.customerName || 'Customer'} 
+                                className="h-8 w-8 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                                <Users className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            )}
                             <span>{redemption.customerName || 'Unknown Customer'}</span>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="inline-block px-3 py-1 rounded-md border border-slate-200 shadow-sm bg-white">
                             <span className="text-indigo-600 font-medium">
-                              {(redemption.pointsUsed ?? 0).toLocaleString()} points
+                              {(redemption.pointsUsed ?? redemption.pointsUsed ?? 0).toLocaleString()} points
                             </span>
                           </div>
                         </TableCell>
@@ -742,7 +787,7 @@ export function RewardDetailsPage() {
                             variant="outline" 
                             className={cn(
                               "rounded-md px-2 py-1",
-                              redemption.status === 'completed' 
+                              redemption.status === 'successful' || redemption.status === 'completed'
                                 ? "bg-blue-50 text-blue-700 border-blue-200" 
                                 : redemption.status === 'pending'
                                 ? "bg-gray-100 text-gray-600 border-gray-200"

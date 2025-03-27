@@ -23,7 +23,8 @@ import {
   ChevronRight,
   BarChart as BarChartIcon,
   Eye,
-  Server
+  Server,
+  Ticket
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -291,12 +292,13 @@ export default function DashboardPage() {
           const data = doc.data()
           return {
             id: doc.id,
-            name: data.name || 'Unnamed Reward',
-            rewardName: data.rewardName || data.name || 'Unnamed Reward',
+            name: data.rewardName || 'Unnamed Reward',
+            rewardName: data.rewardName || 'Unnamed Reward',
             redemptionCount: data.redemptionCount || 0,
             impressions: data.impressions || 0,
             pointsCost: data.pointsCost || 0,
             type: data.type || 'item',
+            programtype: data.programtype || null,
             conversionRate: data.conversionRate || 0,
             lastRedeemedAt: data.lastRedeemedAt?.toDate() || null
           }
@@ -314,6 +316,7 @@ export default function DashboardPage() {
               impressions: 1000,
               pointsCost: 100,
               type: "item",
+              programtype: "coffee",
               conversionRate: 0.78
             },
             {
@@ -1196,11 +1199,47 @@ export default function DashboardPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className="h-8 w-8 rounded-md bg-purple-50 flex items-center justify-center">
-                            <Gift className="h-4 w-4 text-purple-500" />
+                            {reward.programtype === 'coffee' ? (
+                              <Coffee className="h-4 w-4 text-blue-600" />
+                            ) : reward.programtype === 'voucher' ? (
+                              <Ticket className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <Gift className="h-4 w-4 text-purple-500" />
+                            )}
                           </div>
                           <div>
-                            <p className="font-medium text-sm">{reward.name}</p>
-                            <p className="text-xs text-gray-500">{reward.pointsCost} points</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-sm">{reward.rewardName}</p>
+                              {reward.programtype === 'coffee' && (
+                                <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-md border border-blue-200 flex items-center">
+                                  <Coffee className="h-3 w-3 mr-1" />
+                                  Coffee Card
+                                </span>
+                              )}
+                              {reward.programtype === 'voucher' && (
+                                <span className="px-1.5 py-0.5 bg-green-50 text-green-700 text-xs rounded-md border border-green-200 flex items-center">
+                                  <Ticket className="h-3 w-3 mr-1" />
+                                  Voucher
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
+                              <p>{reward.pointsCost} points</p>
+                              
+                              {/* Add impressions with eye icon */}
+                              <div className="flex items-center gap-1">
+                                <Eye className="h-3 w-3 text-gray-400" />
+                                <span>{reward.impressions || 0} views</span>
+                              </div>
+                              
+                              {/* Add last redeemed time with clock icon */}
+                              {reward.lastRedeemedAt && (
+                                <div className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3 text-gray-400" />
+                                  <span>{formatDistanceToNow(reward.lastRedeemedAt, { addSuffix: true })}</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                         <div className="text-right">

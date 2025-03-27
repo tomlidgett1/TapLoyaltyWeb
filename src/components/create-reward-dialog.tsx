@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { useState, useEffect } from "react"
-import { CalendarIcon, Clock, HelpCircle, Users, UserCheck, UserCog, ShoppingCart, DollarSign, UserPlus, X, BugPlay, FileText, Eye, ListChecks, AlertTriangle, ChevronRight, Edit as EditIcon, CheckCircle, ClipboardCheck, User } from "lucide-react"
+import { CalendarIcon, Clock, HelpCircle, Users, UserCheck, UserCog, ShoppingCart, DollarSign, UserPlus, X, BugPlay, FileText, Eye, ListChecks, AlertTriangle, ChevronRight, Edit as EditIcon, CheckCircle, ClipboardCheck, User, Sparkles } from "lucide-react"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format } from "date-fns"
@@ -27,6 +27,7 @@ import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { collection, addDoc, updateDoc, doc, setDoc } from "firebase/firestore"
+import { getFunctions, httpsCallable } from "firebase/functions"
 
 interface CreateRewardDialogProps {
   open: boolean
@@ -148,6 +149,11 @@ export function CreateRewardDialog({
       endDate: ""
     }
   })
+
+  // Add new state for AI creator
+  const [aiPrompt, setAiPrompt] = useState("")
+  const [isAiCreatorOpen, setIsAiCreatorOpen] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
 
   const { user } = useAuth()
 
@@ -697,6 +703,492 @@ export function CreateRewardDialog({
   // Update the button text based on editing mode
   const submitButtonText = isEditing ? 'Update Reward' : 'Create Reward';
 
+  // Update the handleAiGeneration function to handle both formats
+  const handleAiGeneration = async () => {
+    if (!aiPrompt.trim()) {
+      toast({
+        title: "Empty Prompt",
+        description: "Please enter a description of the reward you want to create.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      setIsGenerating(true)
+      
+      // Determine if we're in development mode
+      const isDevelopment = process.env.NODE_ENV === 'development';
+      
+      // Choose the appropriate endpoint
+      const endpoint = isDevelopment
+        ? '/api/ai-assistant-proxy' // Local proxy
+        : 'https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/aiAssistant'; // Production
+      
+      // Call the API with a simpler prompt
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          message: `Create a reward based on this description: ${aiPrompt}. Include all relevant details like name, description, points cost, visibility, conditions, and limitations.`,
+          threadId: null
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to get AI response: ${response.status}`);
+      }
+      
+      const responseData = await response.json();
+      console.log("AI Response:", responseData);
+      
+      if (responseData && responseData.content) {
+        try {
+          console.log("Full AI response content:", responseData.content);
+          
+          // Try to extract JSON from the response
+          const jsonMatch = responseData.content.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            try {
+              // Try to parse the JSON
+              const jsonData = JSON.parse(jsonMatch[0]);
+              console.log("Parsed JSON data:", jsonData);
+              
+              // Add this debugging code right after parsing the JSON
+              console.log("Limitations from JSON:", jsonData.limitations);
+
+              // Map the JSON data to our form structure
+              const updatedFormData = {
+                ...formData,
+                // Basic details
+                rewardName: jsonData.rewardName || jsonData.name || formData.rewardName,
+                description: jsonData.description || formData.description,
+                pointsCost: (jsonData.pointsCost || jsonData.points_required || "").toString(),
+                type: jsonData.type || "discount",
+                isActive: jsonData.isActive !== false,
+                
+                // Visibility - default to "all" if not specified
+                rewardVisibility: jsonData.rewardVisibility || jsonData.visibility || "all",
+                
+                // Delayed visibility
+                delayedVisibility: !!jsonData.delayedVisibility,
+                delayedVisibilityType: jsonData.delayedVisibility?.type || formData.delayedVisibilityType,
+                delayedVisibilityTransactions: jsonData.delayedVisibility?.value?.toString() || 
+                                             jsonData.delayedVisibility?.transactions?.toString() || 
+                                             formData.delayedVisibilityTransactions,
+                delayedVisibilitySpend: jsonData.delayedVisibility?.spend?.toString() || formData.delayedVisibilitySpend,
+                
+                // Additional fields for specific reward types
+                voucherAmount: (jsonData.voucherAmount || "").toString(),
+                itemName: jsonData.itemName || "",
+                
+                // Conditions
+                conditions: {
+                  ...formData.conditions,
+                  useTransactionRequirements: false,
+                  minimumTransactions: "",
+                  maximumTransactions: "",
+                  useSpendingRequirements: false,
+                  minimumLifetimeSpend: "",
+                  minimumPointsBalance: "",
+                  useTimeRequirements: false,
+                  daysSinceJoined: "",
+                  daysSinceLastVisit: "",
+                  newCustomer: false
+                },
+                
+                // Limitations
+                limitations: {
+                  ...formData.limitations,
+                  totalRedemptionLimit: "",
+                  perCustomerLimit: "",
+                  useTimeRestrictions: false,
+                  startTime: "",
+                  endTime: "",
+                  dayRestrictions: []
+                }
+              };
+              
+              // Process conditions if they exist
+              if (jsonData.conditions) {
+                // Handle array format
+                if (Array.isArray(jsonData.conditions)) {
+                  updatedFormData.conditions.useTransactionRequirements = true;
+                  updatedFormData.conditions.useSpendingRequirements = true;
+                  updatedFormData.conditions.useTimeRequirements = true;
+                  
+                  jsonData.conditions.forEach(condition => {
+                    if (condition.type === "minimumTransactions") {
+                      updatedFormData.conditions.minimumTransactions = condition.value.toString();
+                    } else if (condition.type === "maximumTransactions") {
+                      updatedFormData.conditions.maximumTransactions = condition.value.toString();
+                    } else if (condition.type === "minimumLifetimeSpend") {
+                      updatedFormData.conditions.minimumLifetimeSpend = condition.value.toString();
+                    } else if (condition.type === "minimumPointsBalance") {
+                      updatedFormData.conditions.minimumPointsBalance = condition.value.toString();
+                    } else if (condition.type === "daysSinceJoined") {
+                      updatedFormData.conditions.daysSinceJoined = condition.value.toString();
+                    } else if (condition.type === "daysSinceLastVisit") {
+                      updatedFormData.conditions.daysSinceLastVisit = condition.value.toString();
+                    } else if (condition.type === "newCustomer") {
+                      updatedFormData.conditions.newCustomer = condition.value === true;
+                    }
+                  });
+                } 
+                // Handle object format
+                else {
+                  updatedFormData.conditions.useTransactionRequirements = !!(jsonData.conditions.minimumTransactions || jsonData.conditions.maximumTransactions);
+                  updatedFormData.conditions.minimumTransactions = (jsonData.conditions.minimumTransactions || "").toString();
+                  updatedFormData.conditions.maximumTransactions = (jsonData.conditions.maximumTransactions || "").toString();
+                  
+                  updatedFormData.conditions.useSpendingRequirements = !!(jsonData.conditions.minimumLifetimeSpend || jsonData.conditions.minimumPointsBalance);
+                  updatedFormData.conditions.minimumLifetimeSpend = (jsonData.conditions.minimumLifetimeSpend || "").toString();
+                  updatedFormData.conditions.minimumPointsBalance = (jsonData.conditions.minimumPointsBalance || "").toString();
+                  
+                  updatedFormData.conditions.useTimeRequirements = !!(jsonData.conditions.daysSinceJoined || jsonData.conditions.daysSinceLastVisit);
+                  updatedFormData.conditions.daysSinceJoined = (jsonData.conditions.daysSinceJoined || "").toString();
+                  updatedFormData.conditions.daysSinceLastVisit = (jsonData.conditions.daysSinceLastVisit || "").toString();
+                  
+                  updatedFormData.conditions.newCustomer = jsonData.conditions.newCustomer === true;
+                }
+              }
+              
+              // Process limitations if they exist
+              if (jsonData.limitations) {
+                // Handle array format
+                if (Array.isArray(jsonData.limitations)) {
+                  // First set default values
+                  updatedFormData.limitations.useTimeRestrictions = false;
+                  
+                  jsonData.limitations.forEach(limitation => {
+                    console.log("Processing limitation:", limitation);
+                    
+                    if (limitation.type === "customerLimit") {
+                      updatedFormData.limitations.perCustomerLimit = limitation.value.toString();
+                    } else if (limitation.type === "totalRedemptionLimit") {
+                      updatedFormData.limitations.totalRedemptionLimit = limitation.value.toString();
+                    } else if (limitation.type === "timeOfDay") {
+                      // Set the flag first
+                      updatedFormData.limitations.useTimeRestrictions = true;
+                      
+                      console.log("Found timeOfDay limitation:", limitation);
+                      console.log("Value type:", typeof limitation.value);
+                      console.log("Value content:", limitation.value);
+                      
+                      // Handle different value formats
+                      if (limitation.value && typeof limitation.value === 'object') {
+                        // Direct property access with fallbacks
+                        const startTime = limitation.value.startTime || "";
+                        const endTime = limitation.value.endTime || "";
+                        
+                        // Format time strings to match the expected format in the form
+                        updatedFormData.limitations.startTime = formatTimeString(startTime);
+                        updatedFormData.limitations.endTime = formatTimeString(endTime);
+                        
+                        console.log("Set time from object:", 
+                          updatedFormData.limitations.startTime, 
+                          updatedFormData.limitations.endTime
+                        );
+                      } else if (typeof limitation.value === 'string') {
+                        // Parse string format
+                        const timeMatch = limitation.value.match(/(\d+:\d+(?:\s*[AP]M)?)\s*-\s*(\d+:\d+(?:\s*[AP]M)?)/i);
+                        if (timeMatch) {
+                          updatedFormData.limitations.startTime = formatTimeString(timeMatch[1]);
+                          updatedFormData.limitations.endTime = formatTimeString(timeMatch[2]);
+                        }
+                      }
+                    } else if (limitation.type === "daysOfWeek") {
+                      updatedFormData.limitations.useTimeRestrictions = true;
+                      updatedFormData.limitations.dayRestrictions = Array.isArray(limitation.value) ? limitation.value : [];
+                    }
+                  });
+                  
+                  // Final check of time restrictions
+                  console.log("Final time restrictions settings:", {
+                    useTimeRestrictions: updatedFormData.limitations.useTimeRestrictions,
+                    startTime: `"${updatedFormData.limitations.startTime}"`, // Add quotes to see whitespace
+                    endTime: `"${updatedFormData.limitations.endTime}"`,     // Add quotes to see whitespace
+                    dayRestrictions: updatedFormData.limitations.dayRestrictions
+                  });
+                } 
+                // Handle object format
+                else {
+                  updatedFormData.limitations.totalRedemptionLimit = (jsonData.limitations.totalRedemptionLimit || "").toString();
+                  updatedFormData.limitations.perCustomerLimit = (jsonData.limitations.perCustomerLimit || "").toString();
+                  
+                  // Check for time restrictions in various formats
+                  const hasTimeRestrictions = !!(
+                    jsonData.limitations.startTime || 
+                    jsonData.limitations.endTime || 
+                    jsonData.limitations.timeOfDay ||
+                    (jsonData.limitations.dayRestrictions && jsonData.limitations.dayRestrictions.length > 0)
+                  );
+                  
+                  updatedFormData.limitations.useTimeRestrictions = hasTimeRestrictions;
+                  
+                  // Handle timeOfDay object if present
+                  if (jsonData.limitations.timeOfDay && typeof jsonData.limitations.timeOfDay === 'object') {
+                    updatedFormData.limitations.startTime = jsonData.limitations.timeOfDay.startTime || "";
+                    updatedFormData.limitations.endTime = jsonData.limitations.timeOfDay.endTime || "";
+                  } else {
+                    updatedFormData.limitations.startTime = jsonData.limitations.startTime || "";
+                    updatedFormData.limitations.endTime = jsonData.limitations.endTime || "";
+                  }
+                  
+                  updatedFormData.limitations.dayRestrictions = jsonData.limitations.dayRestrictions || [];
+                  
+                  console.log("Set time restrictions (object format):", 
+                    updatedFormData.limitations.useTimeRestrictions,
+                    updatedFormData.limitations.startTime, 
+                    updatedFormData.limitations.endTime,
+                    updatedFormData.limitations.dayRestrictions
+                  );
+                }
+              }
+              
+              // Update the delayed visibility settings
+              if (jsonData.delayedVisibility) {
+                console.log("Found delayedVisibility:", jsonData.delayedVisibility);
+                
+                // Set the flag first
+                updatedFormData.delayedVisibility = true;
+                
+                // Get the type and value
+                const visibilityType = jsonData.delayedVisibility.type || "";
+                const visibilityValue = jsonData.delayedVisibility.value || "";
+                
+                console.log("Visibility type:", visibilityType);
+                console.log("Visibility value:", visibilityValue);
+                
+                // Map the type to our form format
+                if (visibilityType.toLowerCase().includes("transaction")) {
+                  updatedFormData.delayedVisibilityType = "transactions";
+                  updatedFormData.delayedVisibilityTransactions = visibilityValue.toString();
+                } else if (visibilityType.toLowerCase().includes("spend") || 
+                           visibilityType.toLowerCase().includes("total")) {
+                  updatedFormData.delayedVisibilityType = "spend";
+                  updatedFormData.delayedVisibilitySpend = visibilityValue.toString();
+                } else {
+                  // Default to transactions if type is unclear
+                  updatedFormData.delayedVisibilityType = "transactions";
+                  updatedFormData.delayedVisibilityTransactions = visibilityValue.toString();
+                }
+                
+                console.log("Set delayed visibility settings:", {
+                  delayedVisibility: updatedFormData.delayedVisibility,
+                  delayedVisibilityType: updatedFormData.delayedVisibilityType,
+                  delayedVisibilityTransactions: updatedFormData.delayedVisibilityTransactions,
+                  delayedVisibilitySpend: updatedFormData.delayedVisibilitySpend
+                });
+              }
+              
+              setFormData(updatedFormData);
+              
+              toast({
+                title: "Reward Generated",
+                description: "AI has created a reward based on your description. You can now review and edit it.",
+              });
+              
+              // Move to the first step to show the generated reward
+              setCurrentStep(1);
+              
+            } catch (jsonError) {
+              console.error("Error parsing JSON:", jsonError);
+              // Fall back to key-value extraction
+              extractKeyValueData(responseData.content);
+            }
+          } else {
+            // No JSON found, use key-value extraction
+            extractKeyValueData(responseData.content);
+          }
+        } catch (parseError) {
+          console.error("Error parsing AI response:", parseError);
+          toast({
+            title: "Parsing Error",
+            description: "Could not parse the AI response into a reward. Please try again with a clearer description.",
+            variant: "destructive"
+          });
+        }
+      }
+      
+      // Close the AI creator popover
+      setIsAiCreatorOpen(false);
+      
+    } catch (error) {
+      console.error("Error generating reward with AI:", error)
+      toast({
+        title: "Generation Failed",
+        description: "Failed to generate reward. Please try again or create manually.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  // Helper function to extract data from key-value format
+  const extractKeyValueData = (content: string) => {
+    // Extract key-value pairs using regex
+    const extractValue = (key: string, defaultValue: string = "") => {
+      const regex = new RegExp(`${key}:\\s*([^\\n]+)`, 'i');
+      const match = content.match(regex);
+      return match ? match[1].trim() : defaultValue;
+    };
+    
+    // Extract array values
+    const extractArray = (key: string) => {
+      const regex = new RegExp(`${key}:\\s*([^\\n]+)`, 'i');
+      const match = content.match(regex);
+      if (!match) return [];
+      return match[1].split(',').map(item => item.trim());
+    };
+    
+    // Extract boolean values
+    const extractBoolean = (key: string) => {
+      const value = extractValue(key, "").toLowerCase();
+      return value === 'yes' || value === 'true' || value === '1';
+    };
+    
+    // Create a reward data object from the extracted values
+    const rewardData = {
+      name: extractValue('NAME', "AI Generated Reward"),
+      description: extractValue('DESCRIPTION', "Generated from your description"),
+      points_required: parseInt(extractValue('POINTS_REQUIRED', "100")) || 100,
+      type: extractValue('TYPE', "discount"),
+      visibility: extractValue('VISIBILITY', "all"),
+      voucher_amount: extractValue('VOUCHER_AMOUNT', ""),
+      item_name: extractValue('ITEM_NAME', ""),
+      
+      // Add delayed visibility fields
+      delayed_visibility: extractBoolean('DELAYED_VISIBILITY'),
+      delayed_visibility_type: extractValue('DELAYED_VISIBILITY_TYPE', "transactions"),
+      delayed_visibility_transactions: extractValue('DELAYED_VISIBILITY_TRANSACTIONS', ""),
+      delayed_visibility_spend: extractValue('DELAYED_VISIBILITY_SPEND', ""),
+      
+      // Add active period fields
+      has_active_period: extractBoolean('ACTIVE_PERIOD'),
+      active_period_start_date: extractValue('ACTIVE_PERIOD_START_DATE', ""),
+      active_period_end_date: extractValue('ACTIVE_PERIOD_END_DATE', ""),
+      
+      conditions: {
+        minimum_transactions: extractValue('MINIMUM_TRANSACTIONS', ""),
+        maximum_transactions: extractValue('MAXIMUM_TRANSACTIONS', ""),
+        minimum_lifetime_spend: extractValue('MINIMUM_LIFETIME_SPEND', ""),
+        minimum_points_balance: extractValue('MINIMUM_POINTS_BALANCE', ""),
+        days_since_joined: extractValue('DAYS_SINCE_JOINED', ""),
+        days_since_last_visit: extractValue('DAYS_SINCE_LAST_VISIT', ""),
+        new_customer: extractBoolean('NEW_CUSTOMER')
+      },
+      
+      limitations: {
+        total_redemption_limit: extractValue('TOTAL_REDEMPTION_LIMIT', ""),
+        per_customer_limit: extractValue('PER_CUSTOMER_LIMIT', ""),
+        use_time_restrictions: extractBoolean('TIME_RESTRICTIONS'),
+        time_restrictions: {
+          start_time: extractValue('START_TIME', ""),
+          end_time: extractValue('END_TIME', ""),
+          days: extractArray('DAY_RESTRICTIONS')
+        }
+      }
+    };
+    
+    console.log("Extracted key-value data:", rewardData);
+    
+    // Map the extracted data to our form structure
+    const updatedFormData = {
+      ...formData,
+      // Basic details
+      rewardName: rewardData.name,
+      description: rewardData.description,
+      pointsCost: rewardData.points_required.toString(),
+      type: rewardData.type,
+      
+      // Visibility - default to "all" if not specified
+      rewardVisibility: rewardData.visibility || "all",
+      
+      // Delayed visibility
+      delayedVisibility: rewardData.delayed_visibility,
+      delayedVisibilityType: rewardData.delayed_visibility_type,
+      delayedVisibilityTransactions: rewardData.delayed_visibility_transactions,
+      delayedVisibilitySpend: rewardData.delayed_visibility_spend,
+      
+      // Active period
+      hasActivePeriod: rewardData.has_active_period,
+      activePeriod: {
+        startDate: rewardData.active_period_start_date,
+        endDate: rewardData.active_period_end_date
+      },
+      
+      // Additional fields for specific reward types
+      voucherAmount: rewardData.voucher_amount,
+      itemName: rewardData.item_name,
+      
+      // Conditions
+      conditions: {
+        ...formData.conditions,
+        useTransactionRequirements: !!(rewardData.conditions.minimum_transactions || rewardData.conditions.maximum_transactions),
+        minimumTransactions: rewardData.conditions.minimum_transactions,
+        maximumTransactions: rewardData.conditions.maximum_transactions,
+        
+        useSpendingRequirements: !!(rewardData.conditions.minimum_lifetime_spend || rewardData.conditions.minimum_points_balance),
+        minimumLifetimeSpend: rewardData.conditions.minimum_lifetime_spend,
+        minimumPointsBalance: rewardData.conditions.minimum_points_balance,
+        
+        useTimeRequirements: !!(rewardData.conditions.days_since_joined || rewardData.conditions.days_since_last_visit),
+        daysSinceJoined: rewardData.conditions.days_since_joined,
+        daysSinceLastVisit: rewardData.conditions.days_since_last_visit,
+        
+        newCustomer: rewardData.conditions.new_customer
+      },
+      
+      // Limitations
+      limitations: {
+        ...formData.limitations,
+        totalRedemptionLimit: rewardData.limitations.total_redemption_limit,
+        perCustomerLimit: rewardData.limitations.per_customer_limit,
+        
+        useTimeRestrictions: rewardData.limitations.use_time_restrictions,
+        startTime: rewardData.limitations.time_restrictions.start_time,
+        endTime: rewardData.limitations.time_restrictions.end_time,
+        dayRestrictions: rewardData.limitations.time_restrictions.days
+      }
+    };
+    
+    setFormData(updatedFormData);
+    
+    toast({
+      title: "Reward Generated",
+      description: "AI has created a reward based on your description. You can now review and edit it.",
+    });
+    
+    // Move to the first step to show the generated reward
+    setCurrentStep(1);
+  };
+
+  // Add a helper function to properly format time strings
+  function formatTimeString(timeStr: string): string {
+    if (!timeStr) return "";
+    
+    // If it's already in the right format with AM/PM, return it
+    if (/\d+:\d+\s*[AP]M/i.test(timeStr)) {
+      return timeStr;
+    }
+    
+    // Try to convert 24-hour format to 12-hour format with AM/PM
+    try {
+      const [hours, minutes] = timeStr.split(':').map(part => parseInt(part, 10));
+      if (isNaN(hours) || isNaN(minutes)) return timeStr;
+      
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const hours12 = hours % 12 || 12; // Convert 0 to 12 for 12 AM
+      
+      return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+    } catch (e) {
+      console.error("Error formatting time:", e);
+      return timeStr;
+    }
+  }
+
   return (
     <Dialog 
       open={open} 
@@ -710,6 +1202,25 @@ export function CreateRewardDialog({
           outline: none !important;
           box-shadow: none !important;
           border-color: #007AFF !important;
+          border-width: 1px !important;
+        }
+        
+        /* Set default border for all inputs to be light and thin */
+        .dialog-content input,
+        .dialog-content textarea,
+        .dialog-content select {
+          border-width: 1px !important;
+          border-color: #E2E8F0 !important;
+          transition: border-color 0.2s ease-in-out;
+        }
+        
+        /* Remove any heavy shadows that might be present */
+        .dialog-content input:focus-visible,
+        .dialog-content textarea:focus-visible,
+        .dialog-content select:focus-visible {
+          box-shadow: none !important;
+          outline: none !important;
+          ring-width: 0 !important;
         }
       `}</style>
       <DialogContent 
@@ -752,6 +1263,54 @@ export function CreateRewardDialog({
                   Test Fill
                 </Button>
               )}
+              
+              {/* TapAI Button - updated from Smart Creator */}
+              <Popover open={isAiCreatorOpen} onOpenChange={setIsAiCreatorOpen}>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="bg-[#E8F2FF] text-[#007AFF] hover:bg-[#D1E5FF]"
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    TapAI
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <h4 className="font-medium">TapAI Reward Creator</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Describe the reward you want to create and our AI will generate it for you.
+                      </p>
+                    </div>
+                    <Textarea
+                      placeholder="E.g., Create a birthday discount reward that gives 20% off to customers during their birthday month"
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      className="min-h-[100px]"
+                    />
+                    <Button 
+                      className="w-full bg-[#007AFF] hover:bg-[#0062CC]" 
+                      onClick={handleAiGeneration}
+                      disabled={isGenerating}
+                    >
+                      {isGenerating ? (
+                        <>
+                          <span className="mr-2">Generating...</span>
+                          <span className="animate-spin">⏳</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Generate Reward
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+              
               <Button 
                 variant="outline" 
                 size="sm"

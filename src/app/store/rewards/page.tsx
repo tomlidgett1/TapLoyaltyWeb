@@ -54,7 +54,7 @@ import { format, formatDistanceToNow } from "date-fns"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, getDocs, query, where, orderBy, doc, updateDoc, deleteDoc } from "firebase/firestore"
+import { collection, getDocs, query, where, orderBy, doc, updateDoc, deleteDoc, getDoc } from "firebase/firestore"
 import { toast } from "@/components/ui/use-toast"
 import { safelyGetDate } from "@/lib/utils"
 import { TapAiDialog } from "@/components/tap-ai-dialog"
@@ -91,7 +91,7 @@ import {
 
 // Types
 type RewardCategory = "all" | "individual" | "customer-specific" | "programs"
-type SortField = "rewardName" | "type" | "pointsCost" | "redemptionCount" | "createdAt" | "lastRedeemed" | "isActive"
+type SortField = "rewardName" | "type" | "pointsCost" | "redemptionCount" | "redeemableCustomers" | "impressions" | "createdAt" | "lastRedeemed" | "isActive"
 type SortDirection = "asc" | "desc"
 
 interface Reward {
@@ -122,6 +122,7 @@ interface Reward {
   lastRedeemed?: Date | null
   programName?: string
   impressions?: number
+  redeemableCustomers: number
 }
 
 // Add a nicer loading state to the rewards page
@@ -207,6 +208,52 @@ const getRewardTypeIcon = (type: string) => {
   }
 };
 
+// Add a function to count redeemable rewards by customers
+const fetchRedeemableCount = async (rewardId: string, merchantId: string) => {
+  console.log(`Fetching redeemable count for reward ${rewardId}`);
+  
+  try {
+    // Step 1: Get all customers for this merchant
+    const merchantCustomersRef = collection(db, 'merchants', merchantId, 'customers');
+    const merchantCustomersSnapshot = await getDocs(merchantCustomersRef);
+    
+    console.log(`Found ${merchantCustomersSnapshot.size} merchant customers`);
+    
+    // Keep track of customers with redeemable status
+    let redeemableCount = 0;
+    let processedCustomers = 0;
+    
+    // Step 2: For each customer, check if they have this reward as redeemable
+    for (const customerDoc of merchantCustomersSnapshot.docs) {
+      const customerId = customerDoc.id;
+      processedCustomers++;
+      
+      // Step 3: Check the redeemable status in the top-level customer rewards collection
+      const customerRewardRef = doc(db, 'customers', customerId, 'rewards', rewardId);
+      const customerRewardSnap = await getDoc(customerRewardRef);
+      
+      if (customerRewardSnap.exists()) {
+        const rewardData = customerRewardSnap.data();
+        if (rewardData.redeemable === true) {
+          redeemableCount++;
+          console.log(`Customer ${customerId} has reward ${rewardId} redeemable`);
+        }
+      }
+      
+      // Add debug logging for every 10 customers
+      if (processedCustomers % 10 === 0) {
+        console.log(`Processed ${processedCustomers}/${merchantCustomersSnapshot.size} customers, found ${redeemableCount} redeemable`);
+      }
+    }
+    
+    console.log(`Total redeemable count for reward ${rewardId}: ${redeemableCount}`);
+    return redeemableCount;
+  } catch (error) {
+    console.error(`Error fetching redeemable count for reward ${rewardId}:`, error);
+    return 0;
+  }
+};
+
 export default function RewardsPage() {
   const router = useRouter()
   const { user } = useAuth()
@@ -254,6 +301,7 @@ export default function RewardsPage() {
         
         const rewardsData: any[] = []
         
+        // First pass to get basic reward data
         querySnapshot.forEach(doc => {
           try {
             const data = doc.data()
@@ -276,14 +324,41 @@ export default function RewardsPage() {
               updatedAt,
               lastRedeemed,
               isActive: !!data.isActive,
-              impressions: data.impressions || 0
+              impressions: data.impressions || 0,
+              redeemableCustomers: 0 // Initialize with 0
             });
           } catch (err) {
             console.error("Error processing document:", err, "Document ID:", doc.id);
           }
         });
         
+        // Set initial data
         setRewards(rewardsData);
+        setLoading(false);
+        
+        // Then fetch redeemable counts in background
+        const updateRedeemableCounts = async () => {
+          console.log("Fetching redeemable counts for all rewards");
+          const updatedRewardsData = [...rewardsData];
+          
+          // Process in batches to avoid overwhelming Firestore
+          const batchSize = 5;
+          for (let i = 0; i < updatedRewardsData.length; i += batchSize) {
+            const batch = updatedRewardsData.slice(i, i + batchSize);
+            await Promise.all(
+              batch.map(async (reward, index) => {
+                const redeemableCount = await fetchRedeemableCount(reward.id, user.uid);
+                updatedRewardsData[i + index].redeemableCustomers = redeemableCount;
+              })
+            );
+            // Update state after each batch
+            setRewards([...updatedRewardsData]);
+            console.log(`Processed batch ${i / batchSize + 1}/${Math.ceil(updatedRewardsData.length / batchSize)}`);
+          }
+        };
+        
+        updateRedeemableCounts();
+        
       } catch (error) {
         console.error("Error fetching rewards:", error);
         toast({
@@ -291,7 +366,6 @@ export default function RewardsPage() {
           description: "Failed to load rewards. Please try again.",
           variant: "destructive"
         });
-      } finally {
         setLoading(false);
       }
     }
@@ -337,6 +411,9 @@ export default function RewardsPage() {
           break;
         case "redemptionCount":
           comparison = (a.redemptionCount || 0) - (b.redemptionCount || 0);
+          break;
+        case "redeemableCustomers":
+          comparison = (a.redeemableCustomers || 0) - (b.redeemableCustomers || 0);
           break;
         case "impressions":
           comparison = (a.impressions || 0) - (b.impressions || 0);
@@ -405,12 +482,30 @@ export default function RewardsPage() {
           return sortDirection === "asc"
             ? (a.redemptionCount || 0) - (b.redemptionCount || 0)
             : (b.redemptionCount || 0) - (a.redemptionCount || 0);
+        } else if (sortField === "redeemableCustomers") {
+          return sortDirection === "asc"
+            ? (a.redeemableCustomers || 0) - (b.redeemableCustomers || 0)
+            : (b.redeemableCustomers || 0) - (a.redeemableCustomers || 0);
+        } else if (sortField === "impressions") {
+          return sortDirection === "asc"
+            ? (a.impressions || 0) - (b.impressions || 0)
+            : (b.impressions || 0) - (a.impressions || 0);
         } else if (sortField === "createdAt") {
           const aTime = a.createdAt ? a.createdAt.getTime() : 0;
           const bTime = b.createdAt ? b.createdAt.getTime() : 0;
           return sortDirection === "asc"
             ? aTime - bTime
             : bTime - aTime;
+        } else if (sortField === "lastRedeemed") {
+          const aRedeemed = a.lastRedeemed ? a.lastRedeemed.getTime() : 0;
+          const bRedeemed = b.lastRedeemed ? b.lastRedeemed.getTime() : 0;
+          return sortDirection === "asc"
+            ? aRedeemed - bRedeemed
+            : bRedeemed - aRedeemed;
+        } else if (sortField === "isActive") {
+          return sortDirection === "asc"
+            ? (a.isActive ? 1 : 0) - (b.isActive ? 1 : 0)
+            : (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0);
         }
         return 0;
       });
@@ -468,6 +563,19 @@ export default function RewardsPage() {
                       {sortField === "redemptionCount" && (
                         sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
                       )}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-center">
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => handleSort("redeemableCustomers")}
+                      className="flex items-center gap-1 px-0 font-medium mx-auto"
+                    >
+                      Redeemable
+                      {sortField === "redeemableCustomers" && (
+                        sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                      <HelpCircle className="h-3 w-3 text-muted-foreground ml-1" />
                     </Button>
                   </TableHead>
                   <TableHead className="text-center">
@@ -660,6 +768,20 @@ export default function RewardsPage() {
                         <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                           {reward.redemptionCount || 0}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                {reward.redeemableCustomers || 0}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              <p className="text-xs">Number of customers who can redeem this reward</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
@@ -1674,6 +1796,19 @@ export default function RewardsPage() {
                       <TableHead className="text-center">
                         <Button 
                           variant="ghost" 
+                          onClick={() => handleSort("redeemableCustomers")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Redeemable
+                          {sortField === "redeemableCustomers" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                          <HelpCircle className="h-3 w-3 text-muted-foreground ml-1" />
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
                           onClick={() => handleSort("impressions")}
                           className="flex items-center gap-1 px-0 font-medium mx-auto"
                         >
@@ -1815,7 +1950,7 @@ export default function RewardsPage() {
                                     <div className="flex items-center justify-center gap-1">
                                       {reward.programtype 
                                         ? <Award className="h-4 w-4" />
-                                      : <Gift className="h-4 w-4" />}
+                                        : <Gift className="h-4 w-4" />}
                                       <span>
                                         {reward.programtype 
                                           ? "Program" 
@@ -1846,6 +1981,20 @@ export default function RewardsPage() {
                             <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                               {reward.redemptionCount || 0}
                             </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                    {reward.redeemableCustomers || 0}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p className="text-xs">Number of customers who can redeem this reward</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </TableCell>
                           <TableCell className="text-center">
                             <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
@@ -1980,6 +2129,19 @@ export default function RewardsPage() {
                           {sortField === "redemptionCount" && (
                             sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
                           )}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("redeemableCustomers")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Redeemable
+                          {sortField === "redeemableCustomers" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                          <HelpCircle className="h-3 w-3 text-muted-foreground ml-1" />
                         </Button>
                       </TableHead>
                       <TableHead className="text-center">
@@ -2172,6 +2334,20 @@ export default function RewardsPage() {
                             <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                               {reward.redemptionCount || 0}
                             </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                    {reward.redeemableCustomers || 0}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p className="text-xs">Number of customers who can redeem this reward</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </TableCell>
                           <TableCell className="text-center">
                             <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">

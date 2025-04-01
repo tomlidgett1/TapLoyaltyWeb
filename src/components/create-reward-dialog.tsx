@@ -28,6 +28,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { collection, addDoc, updateDoc, doc, setDoc } from "firebase/firestore"
 import { getFunctions, httpsCallable } from "firebase/functions"
+import { useRouter } from "next/navigation"
 
 interface CreateRewardDialogProps {
   open: boolean
@@ -45,6 +46,8 @@ interface FormData {
   description: string
   type: string
   rewardVisibility: string
+  specificCustomerId?: string  // Add this property to fix the type error
+  specificCustomerName?: string // Add this property for consistency
   pin: string
   pointsCost: string
   isActive: boolean
@@ -98,6 +101,8 @@ export function CreateRewardDialog({
   customerId,
   customerName
 }: CreateRewardDialogProps) {
+  // Add the router
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1)
   const { toast } = useToast()
   const [formData, setFormData] = useState<FormData>({
@@ -106,6 +111,8 @@ export function CreateRewardDialog({
     description: "",
     type: "",
     rewardVisibility: "all",
+    specificCustomerId: customerId,
+    specificCustomerName: customerName,
     pin: "",
     pointsCost: "",
     isActive: true,
@@ -493,7 +500,8 @@ export function CreateRewardDialog({
       // Also update the customerVisibility field
       const customerVisibility = customerId ? 'specific' : 'all';
 
-      const rewardData = {
+      // Create the base reward data object
+      const rewardData: any = {
         rewardName: formData.rewardName,
         description: formData.description,
         programtype: "points",
@@ -516,8 +524,12 @@ export function CreateRewardDialog({
         uniqueCustomersCount: 0,
         lastRedeemedAt: null,
         uniqueCustomerIds,
-        specificCustomerId: customerId,
         customerVisibility
+      }
+
+      // Only add specificCustomerId if it exists and is not undefined
+      if (customerId) {
+        rewardData.specificCustomerId = customerId;
       }
 
       // Debug the final rewardData
@@ -546,6 +558,9 @@ export function CreateRewardDialog({
           title: "Reward Updated",
           description: "Your reward has been successfully updated.",
         });
+        
+        // Close the dialog
+        onOpenChange(false);
       } 
       // Otherwise, create a new document in both collections
       else {
@@ -581,24 +596,15 @@ export function CreateRewardDialog({
           title: "Reward Created",
           description: "Your new reward has been successfully created.",
         });
-
-        // Log the final result
-        console.log("REWARD SAVED SUCCESSFULLY!");
-        console.log("Final uniqueCustomerIds:", uniqueCustomerIds);
-
-        // Comment out the dialog close and redirect to see the logs
-        // onOpenChange(false);
-
-        // Optional: Add a button to manually close the dialog after viewing logs
-        toast({
-          title: "Debug Mode",
-          description: "Check console logs and click 'Close' when done.",
-          action: <Button onClick={() => onOpenChange(false)}>Close</Button>
-        });
-
-        // if (isEditing) {
-        //   window.location.reload();
-        // }
+        
+        // Close the dialog
+        onOpenChange(false);
+        
+        // Redirect to the reward details page
+        if (newRewardRef && newRewardRef.id) {
+          // Navigate to the reward details page
+          router.push(`/store/${newRewardRef.id}`);
+        }
       }
     } catch (error) {
       console.error("Error saving reward:", error);
@@ -817,7 +823,7 @@ export function CreateRewardDialog({
                   updatedFormData.conditions.useSpendingRequirements = true;
                   updatedFormData.conditions.useTimeRequirements = true;
                   
-                  jsonData.conditions.forEach(condition => {
+                  jsonData.conditions.forEach((condition: { type: string; value: any }) => {
                     if (condition.type === "minimumTransactions") {
                       updatedFormData.conditions.minimumTransactions = condition.value.toString();
                     } else if (condition.type === "maximumTransactions") {
@@ -860,7 +866,7 @@ export function CreateRewardDialog({
                   // First set default values
                   updatedFormData.limitations.useTimeRestrictions = false;
                   
-                  jsonData.limitations.forEach(limitation => {
+                  jsonData.limitations.forEach((limitation: { type: string; value: any }) => {
                     console.log("Processing limitation:", limitation);
                     
                     if (limitation.type === "customerLimit") {
@@ -1619,7 +1625,10 @@ export function CreateRewardDialog({
                           ...formData,
                           conditions: {
                             ...formData.conditions,
-                            useTransactionRequirements: checked
+                            useTransactionRequirements: checked,
+                            // Clear values when toggled off
+                            minimumTransactions: checked ? formData.conditions.minimumTransactions : "",
+                            maximumTransactions: checked ? formData.conditions.maximumTransactions : ""
                           }
                         })}
                       />
@@ -1674,7 +1683,10 @@ export function CreateRewardDialog({
                           ...formData,
                           conditions: {
                             ...formData.conditions,
-                            useSpendingRequirements: checked
+                            useSpendingRequirements: checked,
+                            // Clear values when toggled off
+                            minimumLifetimeSpend: checked ? formData.conditions.minimumLifetimeSpend : "",
+                            minimumPointsBalance: checked ? formData.conditions.minimumPointsBalance : ""
                           }
                         })}
                       />
@@ -1729,7 +1741,10 @@ export function CreateRewardDialog({
                           ...formData,
                           conditions: {
                             ...formData.conditions,
-                            useTimeRequirements: checked
+                            useTimeRequirements: checked,
+                            // Clear values when toggled off
+                            daysSinceJoined: checked ? formData.conditions.daysSinceJoined : "",
+                            daysSinceLastVisit: checked ? formData.conditions.daysSinceLastVisit : ""
                           }
                         })}
                       />
@@ -1852,7 +1867,11 @@ export function CreateRewardDialog({
                           ...formData,
                           limitations: {
                             ...formData.limitations,
-                            useTimeRestrictions: checked
+                            useTimeRestrictions: checked,
+                            // Clear values when toggled off
+                            startTime: checked ? formData.limitations.startTime : "",
+                            endTime: checked ? formData.limitations.endTime : "",
+                            dayRestrictions: checked ? formData.limitations.dayRestrictions : []
                           }
                         })}
                       />

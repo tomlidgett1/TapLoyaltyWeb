@@ -72,6 +72,7 @@ interface FormData {
     minimumPointsBalance: string
     membershipLevel: string
     newCustomer: boolean
+    useMembershipRequirements: boolean
   }
 
   // Limitations
@@ -137,6 +138,7 @@ export function CreateRewardDialog({
       minimumPointsBalance: "",
       membershipLevel: "",
       newCustomer: false,
+      useMembershipRequirements: false
     },
 
     // Limitations
@@ -1809,6 +1811,56 @@ export function CreateRewardDialog({
                       })}
                     />
                   </div>
+
+                  {/* Add this to the conditions section in step 3 (after the "New Customer Only" switch) */}
+
+                  <div className="border-b pb-2 pt-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-base font-medium">Membership Level Requirements</Label>
+                      <Switch
+                        checked={formData.conditions.useMembershipRequirements}
+                        onCheckedChange={(checked) => setFormData({
+                          ...formData,
+                          conditions: {
+                            ...formData.conditions,
+                            useMembershipRequirements: checked,
+                            // Clear value when toggled off
+                            membershipLevel: checked ? formData.conditions.membershipLevel : ""
+                          }
+                        })}
+                      />
+                    </div>
+                  </div>
+
+                  {formData.conditions.useMembershipRequirements && (
+                    <div className="grid gap-2">
+                      <Label>Required Membership Level</Label>
+                      <Select
+                        value={formData.conditions.membershipLevel}
+                        onValueChange={(value) => setFormData({
+                          ...formData,
+                          conditions: {
+                            ...formData.conditions,
+                            membershipLevel: value
+                          }
+                        })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select membership level" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="bronze">Bronze</SelectItem>
+                          <SelectItem value="silver">Silver</SelectItem>
+                          <SelectItem value="gold">Gold</SelectItem>
+                          <SelectItem value="platinum">Platinum</SelectItem>
+                          <SelectItem value="vip">VIP</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-500">
+                        Only customers with this membership level or higher will see this reward
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </TabsContent>

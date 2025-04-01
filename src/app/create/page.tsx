@@ -1,13 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
 import { CreatePointsRuleDialog } from "@/components/create-points-rule-dialog"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
 import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { SendBroadcastDialog } from "@/components/send-broadcast-dialog"
+import { IntroductoryRewardDialog } from "@/components/introductory-reward-dialog"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/contexts/auth-context"
+import { db } from "@/lib/firebase"
+import { doc, getDoc } from "firebase/firestore"
 import { 
   Gift, 
   Zap, 
@@ -19,16 +23,39 @@ import {
   CalendarClock,
   HelpCircle,
   Store,
-  Plus
+  Plus,
+  Sparkles
 } from "lucide-react"
 
 export default function CreatePage() {
   const router = useRouter()
+  const { user } = useAuth()
   const [createRewardOpen, setCreateRewardOpen] = useState(false)
   const [createRecurringOpen, setCreateRecurringOpen] = useState(false)
   const [createRuleOpen, setCreateRuleOpen] = useState(false)
   const [createBannerOpen, setCreateBannerOpen] = useState(false)
   const [broadcastDialogOpen, setBroadcastDialogOpen] = useState(false)
+  const [introRewardOpen, setIntroRewardOpen] = useState(false)
+  const [hasIntroReward, setHasIntroReward] = useState(false)
+
+  // Check if merchant already has an introductory reward
+  useEffect(() => {
+    const checkIntroReward = async () => {
+      if (!user?.uid) return
+      
+      try {
+        const merchantRef = doc(db, 'merchants', user.uid)
+        const merchantDoc = await getDoc(merchantRef)
+        const merchantData = merchantDoc.data()
+        
+        setHasIntroReward(!!merchantData?.hasIntroductoryReward)
+      } catch (error) {
+        console.error("Error checking introductory reward status:", error)
+      }
+    }
+    
+    checkIntroReward()
+  }, [user?.uid])
 
   const createOptions = [
     {
@@ -51,7 +78,16 @@ export default function CreatePage() {
           icon: CalendarClock,
           iconColor: "text-[#007AFF]",
           action: () => setCreateRecurringOpen(true)
-        }
+        },
+        // Only show the Introductory Reward option if the merchant doesn't have one yet
+        ...(!hasIntroReward ? [{
+          title: "Introductory Reward",
+          description: "Create a special welcome reward for new customers, funded by Tap Loyalty",
+          icon: Sparkles,
+          iconColor: "text-[#007AFF]",
+          action: () => setIntroRewardOpen(true),
+          highlight: true // Add a property to highlight this option
+        }] : [])
       ]
     },
     {
@@ -122,11 +158,28 @@ export default function CreatePage() {
                 <div 
                   key={i}
                   onClick={item.action}
-                  className="group relative overflow-hidden bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer hover:border-[#007AFF]/30"
+                  className={cn(
+                    "group relative overflow-hidden bg-white border rounded-xl shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer",
+                    item.highlight 
+                      ? "border-blue-300 bg-gradient-to-r from-blue-50 to-indigo-50" 
+                      : "border-gray-200 hover:border-[#007AFF]/30"
+                  )}
                 >
+                  {item.highlight && (
+                    <div className="absolute top-0 right-0">
+                      <div className="bg-blue-600 text-white text-xs font-medium px-2 py-0.5 rounded-bl-lg">
+                        Special
+                      </div>
+                    </div>
+                  )}
                   <div className="p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <div className="p-1.5 rounded-lg bg-gray-50 group-hover:bg-[#007AFF]/5 transition-colors">
+                      <div className={cn(
+                        "p-1.5 rounded-lg transition-colors",
+                        item.highlight 
+                          ? "bg-blue-100" 
+                          : "bg-gray-50 group-hover:bg-[#007AFF]/5"
+                      )}>
                         <item.icon className="h-4 w-4 text-[#007AFF]" />
                       </div>
                       <div className="h-7 w-7 rounded-full bg-gray-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity group-hover:bg-[#007AFF]/10">
@@ -168,6 +221,11 @@ export default function CreatePage() {
       <SendBroadcastDialog
         open={broadcastDialogOpen}
         onOpenChange={setBroadcastDialogOpen}
+      />
+      
+      <IntroductoryRewardDialog
+        open={introRewardOpen}
+        onOpenChange={setIntroRewardOpen}
       />
     </div>
   )

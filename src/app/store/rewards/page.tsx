@@ -88,6 +88,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { IntroductoryRewardDialog } from "@/components/introductory-reward-dialog"
 
 // Types
 type RewardCategory = "all" | "individual" | "customer-specific" | "programs"
@@ -288,6 +289,8 @@ export default function RewardsPage() {
   })
   const [showCustomDateRange, setShowCustomDateRange] = useState(false)
   const [rewardToDelete, setRewardToDelete] = useState<string | null>(null)
+  const [isIntroRewardDialogOpen, setIsIntroRewardDialogOpen] = useState(false)
+  const [hasIntroReward, setHasIntroReward] = useState(false)
 
   useEffect(() => {
     const fetchRewards = async () => {
@@ -372,6 +375,24 @@ export default function RewardsPage() {
     
     fetchRewards()
   }, [user])
+
+  useEffect(() => {
+    const checkIntroReward = async () => {
+      if (!user?.uid) return
+      
+      try {
+        const merchantRef = doc(db, 'merchants', user.uid)
+        const merchantDoc = await getDoc(merchantRef)
+        const merchantData = merchantDoc.data()
+        
+        setHasIntroReward(!!merchantData?.hasIntroductoryReward)
+      } catch (error) {
+        console.error("Error checking introductory reward status:", error)
+      }
+    }
+    
+    checkIntroReward()
+  }, [user?.uid])
 
   // Update the filtering logic to filter by category
 
@@ -1540,14 +1561,27 @@ export default function RewardsPage() {
               Help Guide
             </Button>
             
-            <Button 
-              variant="default" 
-              className="h-9 gap-2 rounded-md bg-[#0066ff] hover:bg-[#0052cc] text-white"
-              onClick={() => router.push('/create')}
-            >
-              <Plus className="h-4 w-4" />
-              Create Reward
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="default" 
+                className="h-9 gap-2 rounded-md bg-[#0066ff] hover:bg-[#0052cc] text-white"
+                onClick={() => router.push('/create')}
+              >
+                <Plus className="h-4 w-4" />
+                Create Reward
+              </Button>
+              
+              {!hasIntroReward && (
+                <Button 
+                  variant="outline" 
+                  className="gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 text-blue-700 hover:bg-blue-100 hover:text-blue-800"
+                  onClick={() => setIsIntroRewardDialogOpen(true)}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Create Introductory Reward
+                </Button>
+              )}
+            </div>
           </div>
         </div>
         
@@ -2465,6 +2499,12 @@ export default function RewardsPage() {
         </div>
       </DialogContent>
     </Dialog>
+    
+    {/* Introductory Reward Dialog */}
+    <IntroductoryRewardDialog 
+      open={isIntroRewardDialogOpen} 
+      onOpenChange={setIsIntroRewardDialogOpen} 
+    />
   </div>
 )
 } 

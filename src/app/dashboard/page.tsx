@@ -24,7 +24,8 @@ import {
   BarChart as BarChartIcon,
   Eye,
   Server,
-  Ticket
+  Ticket,
+  Lightbulb
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -38,6 +39,13 @@ import { TapAiButton } from "@/components/tap-ai-button"
 import { PageTransition } from "@/components/page-transition"
 import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banner-preview"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 type TimeframeType = "today" | "yesterday" | "7days" | "30days"
 
@@ -71,6 +79,10 @@ export default function DashboardPage() {
   const [chartTimeframe, setChartTimeframe] = useState<"7days" | "30days" | "90days">("30days")
   const [chartLoading, setChartLoading] = useState(false)
   const [chartReady, setChartReady] = useState(false)
+  const [insightDialogOpen, setInsightDialogOpen] = useState(false)
+  const [insightLoading, setInsightLoading] = useState(false)
+  const [insightData, setInsightData] = useState<any>(null)
+  const [insightError, setInsightError] = useState<string | null>(null)
 
   const getDateRange = (tf: TimeframeType): { start: Date; end: Date } => {
     const now = new Date()
@@ -696,6 +708,75 @@ export default function DashboardPage() {
     }
   }, [user?.uid, chartTimeframe])
 
+  const fetchMerchantInsights = async () => {
+    if (!user?.uid) {
+      toast({
+        title: "Error",
+        description: "User ID not found. Please log in again.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      setInsightLoading(true)
+      setInsightError(null)
+      setInsightDialogOpen(true)
+
+      // For testing, use a mock response instead of making an actual API call
+      // Remove this in production and use the actual API call
+      setTimeout(() => {
+        const mockData = {
+          summary: "Your business is showing positive growth with increasing customer engagement. Points redemption has increased by 15% in the last 30 days.",
+          insights: [
+            "Customer retention rate has improved by 12% compared to last month.",
+            "Your most popular reward 'Free Coffee' has a 78% redemption rate.",
+            "Tuesday and Thursday are your busiest days with 30% more transactions.",
+            "Customers who redeem rewards spend on average 25% more on their next visit."
+          ],
+          recommendations: [
+            "Consider adding a special promotion for Mondays to increase traffic on slower days.",
+            "Your 10% discount reward has lower engagement - try increasing its visibility or adjusting the point cost.",
+            "Customers with over 500 points rarely redeem them. Consider sending a targeted reminder."
+          ]
+        };
+        
+        setInsightData(mockData);
+        setInsightLoading(false);
+      }, 2000);
+
+      // Comment out the actual API call for now
+      /*
+      const response = await fetch('https://us-central1-your-project-id.cloudfunctions.net/merchantInsightAnalysis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ merchantId: user.uid }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to fetch insights')
+      }
+
+      const data = await response.json()
+      setInsightData(data)
+      */
+    } catch (error) {
+      console.error('Error fetching merchant insights:', error)
+      setInsightError(error instanceof Error ? error.message : 'An unknown error occurred')
+      toast({
+        title: "Error",
+        description: "Failed to fetch merchant insights. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      // This is now handled in the setTimeout for the mock data
+      // setInsightLoading(false)
+    }
+  }
+
   // Format date for display
   const formatDate = (date: Date) => {
     return format(date, "MMM d, yyyy")
@@ -772,6 +853,22 @@ export default function DashboardPage() {
                   Here's an overview of your business
                 </p>
               </div>
+              
+              {/* Add the Insights button here */}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-9 gap-2 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                onClick={fetchMerchantInsights}
+                disabled={insightLoading}
+              >
+                {insightLoading ? (
+                  <div className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin mr-2"></div>
+                ) : (
+                  <Lightbulb className="h-4 w-4" />
+                )}
+                Get Business Insights
+              </Button>
             </div>
 
             {/* Update the tabs layout to be side-by-side with a separator */}
@@ -1343,6 +1440,89 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Insights Dialog */}
+      <Dialog open={insightDialogOpen} onOpenChange={setInsightDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lightbulb className="h-5 w-5 text-amber-500" />
+              Business Insights
+            </DialogTitle>
+            <DialogDescription>
+              AI-powered analysis of your business performance
+            </DialogDescription>
+          </DialogHeader>
+          
+          {insightLoading ? (
+            <div className="flex flex-col items-center justify-center py-8">
+              <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin mb-4"></div>
+              <p className="text-sm text-muted-foreground">Analyzing your business data...</p>
+            </div>
+          ) : insightError ? (
+            <div className="py-6">
+              <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
+                <p className="text-red-800 text-sm">{insightError}</p>
+              </div>
+              <Button 
+                variant="outline" 
+                onClick={fetchMerchantInsights} 
+                className="w-full"
+              >
+                Try Again
+              </Button>
+            </div>
+          ) : insightData ? (
+            <div className="space-y-4 py-2">
+              {/* Summary */}
+              {insightData.summary && (
+                <div className="bg-blue-50 border border-blue-100 rounded-md p-4">
+                  <h3 className="font-medium text-blue-800 mb-1">Summary</h3>
+                  <p className="text-sm text-blue-700">{insightData.summary}</p>
+                </div>
+              )}
+              
+              {/* Insights List */}
+              {insightData.insights && insightData.insights.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="font-medium">Key Insights</h3>
+                  <div className="space-y-2">
+                    {insightData.insights.map((insight: string, index: number) => (
+                      <div key={index} className="flex gap-2 items-start">
+                        <div className="h-5 w-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <span className="text-green-700 text-xs font-medium">{index + 1}</span>
+                        </div>
+                        <p className="text-sm">{insight}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Recommendations */}
+              {insightData.recommendations && insightData.recommendations.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="font-medium">Recommendations</h3>
+                  <div className="space-y-2">
+                    {insightData.recommendations.map((rec: string, index: number) => (
+                      <div key={index} className="flex gap-2 items-start">
+                        <div className="h-5 w-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <Star className="h-3 w-3 text-amber-600" />
+                        </div>
+                        <p className="text-sm">{rec}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="py-6 text-center">
+              <p className="text-sm text-muted-foreground">No insights available</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </PageTransition>
   )
 }

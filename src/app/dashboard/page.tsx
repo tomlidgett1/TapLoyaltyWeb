@@ -718,62 +718,48 @@ export default function DashboardPage() {
       return
     }
 
+    console.log("Fetching merchant insights for user:", user.uid);
+    
     try {
-      setInsightLoading(true)
-      setInsightError(null)
-      setInsightDialogOpen(true)
+      setInsightLoading(true);
+      setInsightError(null);
+      setInsightDialogOpen(true);
+      console.log("Dialog opened:", insightDialogOpen);
 
-      // For testing, use a mock response instead of making an actual API call
-      // Remove this in production and use the actual API call
-      setTimeout(() => {
-        const mockData = {
-          summary: "Your business is showing positive growth with increasing customer engagement. Points redemption has increased by 15% in the last 30 days.",
-          insights: [
-            "Customer retention rate has improved by 12% compared to last month.",
-            "Your most popular reward 'Free Coffee' has a 78% redemption rate.",
-            "Tuesday and Thursday are your busiest days with 30% more transactions.",
-            "Customers who redeem rewards spend on average 25% more on their next visit."
-          ],
-          recommendations: [
-            "Consider adding a special promotion for Mondays to increase traffic on slower days.",
-            "Your 10% discount reward has lower engagement - try increasing its visibility or adjusting the point cost.",
-            "Customers with over 500 points rarely redeem them. Consider sending a targeted reminder."
-          ]
-        };
-        
-        setInsightData(mockData);
-        setInsightLoading(false);
-      }, 2000);
-
-      // Comment out the actual API call for now
-      /*
-      const response = await fetch('https://us-central1-your-project-id.cloudfunctions.net/merchantInsightAnalysis', {
+      // Call the actual Cloud Function URL
+      const response = await fetch('https://merchantinsightanalysis-galv2k5a4q-uc.a.run.app', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ merchantId: user.uid }),
-      })
+      });
 
+      console.log("Response status:", response.status);
+      
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to fetch insights')
+        const errorText = await response.text();
+        console.error("Error response:", errorText);
+        throw new Error(`Failed to fetch insights: ${response.status} ${errorText}`);
       }
 
-      const data = await response.json()
-      setInsightData(data)
-      */
+      const data = await response.json();
+      console.log("Received data:", data);
+      console.log("Data type:", typeof data);
+      console.log("Insights type:", data.insights ? typeof data.insights : "undefined");
+      console.log("Recommendations type:", data.recommendations ? typeof data.recommendations : "undefined");
+      setInsightData(data);
+      setInsightLoading(false);
+      
     } catch (error) {
-      console.error('Error fetching merchant insights:', error)
-      setInsightError(error instanceof Error ? error.message : 'An unknown error occurred')
+      console.error('Error fetching merchant insights:', error);
+      setInsightError(error instanceof Error ? error.message : 'An unknown error occurred');
       toast({
         title: "Error",
         description: "Failed to fetch merchant insights. Please try again.",
         variant: "destructive"
-      })
-    } finally {
-      // This is now handled in the setTimeout for the mock data
-      // setInsightLoading(false)
+      });
+      setInsightLoading(false);
     }
   }
 
@@ -859,7 +845,10 @@ export default function DashboardPage() {
                 variant="outline" 
                 size="sm" 
                 className="h-9 gap-2 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                onClick={fetchMerchantInsights}
+                onClick={() => {
+                  console.log("Button clicked");
+                  fetchMerchantInsights();
+                }}
                 disabled={insightLoading}
               >
                 {insightLoading ? (
@@ -1441,88 +1430,117 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Insights Dialog */}
-      <Dialog open={insightDialogOpen} onOpenChange={setInsightDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Lightbulb className="h-5 w-5 text-amber-500" />
-              Business Insights
-            </DialogTitle>
-            <DialogDescription>
-              AI-powered analysis of your business performance
-            </DialogDescription>
-          </DialogHeader>
-          
-          {insightLoading ? (
-            <div className="flex flex-col items-center justify-center py-8">
-              <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin mb-4"></div>
-              <p className="text-sm text-muted-foreground">Analyzing your business data...</p>
-            </div>
-          ) : insightError ? (
-            <div className="py-6">
-              <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
-                <p className="text-red-800 text-sm">{insightError}</p>
-              </div>
-              <Button 
-                variant="outline" 
-                onClick={fetchMerchantInsights} 
-                className="w-full"
+      {/* Alternative to Dialog - Simple conditional rendering */}
+      {insightDialogOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold flex items-center gap-2">
+                <Lightbulb className="h-5 w-5 text-amber-500" />
+                Business Insights
+              </h2>
+              <button 
+                onClick={() => setInsightDialogOpen(false)}
+                className="text-gray-500 hover:text-gray-700"
               >
-                Try Again
-              </Button>
+                ✕
+              </button>
             </div>
-          ) : insightData ? (
-            <div className="space-y-4 py-2">
-              {/* Summary */}
-              {insightData.summary && (
-                <div className="bg-blue-50 border border-blue-100 rounded-md p-4">
-                  <h3 className="font-medium text-blue-800 mb-1">Summary</h3>
-                  <p className="text-sm text-blue-700">{insightData.summary}</p>
+            
+            <p className="text-sm text-gray-500 mb-4">
+              AI-powered analysis of your business performance
+            </p>
+            
+            {insightLoading ? (
+              <div className="flex flex-col items-center justify-center py-8">
+                <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin mb-4"></div>
+                <p className="text-sm text-muted-foreground">Analyzing your business data...</p>
+              </div>
+            ) : insightError ? (
+              <div className="py-6">
+                <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
+                  <p className="text-red-800 text-sm">{insightError}</p>
                 </div>
-              )}
-              
-              {/* Insights List */}
-              {insightData.insights && insightData.insights.length > 0 && (
-                <div className="space-y-3">
-                  <h3 className="font-medium">Key Insights</h3>
-                  <div className="space-y-2">
-                    {insightData.insights.map((insight: string, index: number) => (
-                      <div key={index} className="flex gap-2 items-start">
-                        <div className="h-5 w-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <span className="text-green-700 text-xs font-medium">{index + 1}</span>
-                        </div>
-                        <p className="text-sm">{insight}</p>
-                      </div>
-                    ))}
+                <Button 
+                  variant="outline" 
+                  onClick={() => fetchMerchantInsights()} 
+                  className="w-full"
+                >
+                  Try Again
+                </Button>
+              </div>
+            ) : insightData ? (
+              <div className="space-y-4 py-2">
+                {/* Summary */}
+                {insightData.summary && (
+                  <div className="bg-blue-50 border border-blue-100 rounded-md p-4">
+                    <h3 className="font-medium text-blue-800 mb-1">Summary</h3>
+                    <p className="text-sm text-blue-700">{insightData.summary}</p>
                   </div>
-                </div>
-              )}
-              
-              {/* Recommendations */}
-              {insightData.recommendations && insightData.recommendations.length > 0 && (
-                <div className="space-y-3">
-                  <h3 className="font-medium">Recommendations</h3>
-                  <div className="space-y-2">
-                    {insightData.recommendations.map((rec: string, index: number) => (
-                      <div key={index} className="flex gap-2 items-start">
-                        <div className="h-5 w-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <Star className="h-3 w-3 text-amber-600" />
+                )}
+                
+                {/* Insights List */}
+                {insightData.insights && Array.isArray(insightData.insights) && insightData.insights.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="font-medium">Key Insights</h3>
+                    <div className="space-y-2">
+                      {insightData.insights.map((insight: string, index: number) => (
+                        <div key={index} className="flex gap-2 items-start">
+                          <div className="h-5 w-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-green-700 text-xs font-medium">{index + 1}</span>
+                          </div>
+                          <p className="text-sm">{insight}</p>
                         </div>
-                        <p className="text-sm">{rec}</p>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="py-6 text-center">
-              <p className="text-sm text-muted-foreground">No insights available</p>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+                )}
+                
+                {/* If insights is a string instead of an array */}
+                {insightData.insights && typeof insightData.insights === 'string' && (
+                  <div className="space-y-3">
+                    <h3 className="font-medium">Key Insights</h3>
+                    <div className="bg-green-50 border border-green-100 rounded-md p-4">
+                      <p className="text-sm text-green-700">{insightData.insights}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Recommendations - also add Array check */}
+                {insightData.recommendations && Array.isArray(insightData.recommendations) && insightData.recommendations.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="font-medium">Recommendations</h3>
+                    <div className="space-y-2">
+                      {insightData.recommendations.map((rec: string, index: number) => (
+                        <div key={index} className="flex gap-2 items-start">
+                          <div className="h-5 w-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <Star className="h-3 w-3 text-amber-600" />
+                          </div>
+                          <p className="text-sm">{rec}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* If recommendations is a string instead of an array */}
+                {insightData.recommendations && typeof insightData.recommendations === 'string' && (
+                  <div className="space-y-3">
+                    <h3 className="font-medium">Recommendations</h3>
+                    <div className="bg-amber-50 border border-amber-100 rounded-md p-4">
+                      <p className="text-sm text-amber-700">{insightData.recommendations}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="py-6 text-center">
+                <p className="text-sm text-muted-foreground">No insights available</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </PageTransition>
   )
 }

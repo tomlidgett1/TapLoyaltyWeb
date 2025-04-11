@@ -20,6 +20,20 @@ interface CreateTransactionRewardDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
+// Add interface to fix type errors
+interface FunctionData {
+  merchantId: string;
+  pin: string;
+  name: string;
+  description: string;
+  active: boolean;
+  transactionThreshold: number;
+  rewardType: 'dollar_voucher' | 'free_item';
+  iterations: number;
+  voucherAmount?: number;
+  freeItemName?: string;
+}
+
 export function CreateTransactionRewardDialog({ open, onOpenChange }: CreateTransactionRewardDialogProps) {
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
@@ -90,31 +104,30 @@ export function CreateTransactionRewardDialog({ open, onOpenChange }: CreateTran
       const merchantId = user.uid
       console.log("Using merchantId:", merchantId)
       
-      // Structure the data as expected by the function
-      const functionData = {
-        data: {
-          merchantId: merchantId,
-          pin: formData.pin,
-          name: formData.rewardName,
-          description: formData.description || "",
-          active: formData.isActive,
-          transactionThreshold: parseInt(formData.transactionThreshold),
-          rewardType: formData.rewardType,
-          iterations: parseInt(formData.iterations)
-        }
+      // Structure the data with proper typing
+      const data: FunctionData = {
+        merchantId: merchantId,
+        pin: formData.pin,
+        name: formData.rewardName,
+        description: formData.description || "",
+        active: formData.isActive,
+        transactionThreshold: parseInt(formData.transactionThreshold),
+        rewardType: formData.rewardType,
+        iterations: parseInt(formData.iterations)
       }
 
       // Add reward type specific fields
       if (formData.rewardType === 'dollar_voucher') {
-        functionData.data.voucherAmount = parseInt(formData.voucherAmount)
+        data.voucherAmount = parseInt(formData.voucherAmount)
       } else if (formData.rewardType === 'free_item') {
-        functionData.data.freeItemName = formData.freeItemName
+        data.freeItemName = formData.freeItemName
       }
 
       // Log the complete data object to verify all fields
-      console.log("Sending data to recurring reward function:", JSON.stringify(functionData, null, 2))
+      console.log("Sending data to recurring reward function:", JSON.stringify(data, null, 2))
       
       // Call the function with the data
+      const functionData = { data }
       const result = await recurringReward(functionData)
       console.log("Recurring reward function result:", result)
       
@@ -340,15 +353,27 @@ export function CreateTransactionRewardDialog({ open, onOpenChange }: CreateTran
         </DialogHeader>
 
         <div className="py-2 space-y-4 min-h-[400px]">
+          {/* Add instruction panel */}
+          <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
+            <h3 className="text-sm font-medium text-blue-800 mb-1">Transaction Reward Setup</h3>
+            <p className="text-xs text-blue-700">
+              Create rewards that customers earn automatically as they make more transactions at your business. 
+              These rewards incentivize repeat visits and build customer loyalty over time.
+            </p>
+          </div>
+          
           <div className="space-y-3">
             <div className="grid gap-2">
-              <Label>Reward Name</Label>
+              <Label>Reward Name <span className="text-red-500">*</span></Label>
               <Input
                 type="text"
                 value={formData.rewardName}
                 onChange={(e) => setFormData({ ...formData, rewardName: e.target.value })}
-                placeholder="Enter reward name"
+                placeholder="e.g., Loyal Customer Reward"
               />
+              <p className="text-xs text-muted-foreground">
+                Choose a name that clearly explains the benefit to customers
+              </p>
             </div>
 
             <div className="grid gap-2">
@@ -356,103 +381,136 @@ export function CreateTransactionRewardDialog({ open, onOpenChange }: CreateTran
               <Textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Describe the transaction-based reward"
+                placeholder="e.g., Earn special rewards as you visit our store more often"
                 rows={3}
               />
+              <p className="text-xs text-muted-foreground">
+                Help customers understand how to earn these rewards
+              </p>
             </div>
 
             <div className="grid gap-2">
-              <Label>PIN Code</Label>
+              <Label>PIN Code <span className="text-red-500">*</span></Label>
               <Input
                 type="text"
                 maxLength={4}
                 value={formData.pin}
                 onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
-                placeholder="Enter 4-digit PIN"
+                placeholder="Enter 4-digit PIN (e.g., 1234)"
               />
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Staff will enter this PIN when redeeming rewards
               </p>
             </div>
 
-            <div className="grid gap-2">
-              <Label>Reward Type</Label>
+            <div className="border-t pt-4 mt-2">
+              <Label className="text-base font-medium mb-3 block">Reward Type <span className="text-red-500">*</span></Label>
               <RadioGroup
                 value={formData.rewardType}
                 onValueChange={(value: 'dollar_voucher' | 'free_item') => 
                   setFormData({ ...formData, rewardType: value })
                 }
-                className="flex space-x-4"
+                className="flex flex-col space-y-3 mt-2"
               >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="dollar_voucher" id="dollar_voucher" />
-                  <Label htmlFor="dollar_voucher">Dollar Voucher</Label>
+                <div className="flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 cursor-pointer" onClick={() => setFormData({ ...formData, rewardType: 'dollar_voucher' })}>
+                  <RadioGroupItem value="dollar_voucher" id="dollar_voucher" className="mt-1" />
+                  <div>
+                    <Label htmlFor="dollar_voucher" className="font-medium">Dollar Voucher</Label>
+                    <p className="text-xs text-gray-500 mt-1">Reward customers with a fixed dollar amount they can spend</p>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="free_item" id="free_item" />
-                  <Label htmlFor="free_item">Free Item</Label>
+                <div className="flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 cursor-pointer" onClick={() => setFormData({ ...formData, rewardType: 'free_item' })}>
+                  <RadioGroupItem value="free_item" id="free_item" className="mt-1" />
+                  <div>
+                    <Label htmlFor="free_item" className="font-medium">Free Item</Label>
+                    <p className="text-xs text-gray-500 mt-1">Reward customers with a specific free product</p>
+                  </div>
                 </div>
               </RadioGroup>
             </div>
 
             {formData.rewardType === 'dollar_voucher' && (
-              <div className="grid gap-2">
-                <Label>Voucher Amount ($)</Label>
+              <div className="grid gap-2 mt-4 border-l-2 border-blue-100 pl-4">
+                <Label>Voucher Amount ($) <span className="text-red-500">*</span></Label>
                 <Input
                   type="number"
                   min="1"
                   value={formData.voucherAmount}
                   onChange={(e) => setFormData({ ...formData, voucherAmount: e.target.value })}
-                  placeholder="Enter voucher amount"
+                  placeholder="e.g., 10"
                 />
-                <p className="text-sm text-muted-foreground">
-                  Dollar amount of the voucher
+                <p className="text-xs text-muted-foreground">
+                  Dollar value of each reward voucher
                 </p>
               </div>
             )}
 
             {formData.rewardType === 'free_item' && (
-              <div className="grid gap-2">
-                <Label>Free Item Name</Label>
+              <div className="grid gap-2 mt-4 border-l-2 border-blue-100 pl-4">
+                <Label>Free Item Name <span className="text-red-500">*</span></Label>
                 <Input
                   type="text"
                   value={formData.freeItemName}
                   onChange={(e) => setFormData({ ...formData, freeItemName: e.target.value })}
-                  placeholder="Enter free item name"
+                  placeholder="e.g., Coffee, Dessert, Appetizer"
                 />
-                <p className="text-sm text-muted-foreground">
-                  Name of the free item (e.g. "Coffee", "Dessert")
+                <p className="text-xs text-muted-foreground">
+                  Name of the free item customers will receive
                 </p>
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 mt-4">
               <div className="grid gap-2">
-                <Label>Transaction Threshold</Label>
+                <Label>Transaction Threshold <span className="text-red-500">*</span></Label>
                 <Input
                   type="number"
                   min="1"
                   value={formData.transactionThreshold}
                   onChange={(e) => setFormData({ ...formData, transactionThreshold: e.target.value })}
-                  placeholder="Enter number of transactions"
+                  placeholder="e.g., 5"
                 />
-                <p className="text-sm text-muted-foreground">
-                  Transactions needed for first reward
+                <p className="text-xs text-muted-foreground">
+                  Number of transactions for first reward and between subsequent rewards
                 </p>
               </div>
 
               <div className="grid gap-2">
-                <Label>Number of Levels</Label>
+                <Label>Number of Levels <span className="text-red-500">*</span></Label>
                 <Input
                   type="number"
                   min="1"
                   value={formData.iterations}
                   onChange={(e) => setFormData({ ...formData, iterations: e.target.value })}
-                  placeholder="Enter number of reward levels"
+                  placeholder="e.g., 10"
                 />
-                <p className="text-sm text-muted-foreground">
-                  How many levels to create
+                <p className="text-xs text-muted-foreground">
+                  Total number of reward levels to create
                 </p>
+              </div>
+            </div>
+            
+            {/* Add summary section */}
+            <div className="border-t pt-4 mt-3">
+              <h4 className="text-sm font-medium mb-2">Program Summary</h4>
+              <div className="bg-gray-50 p-3 rounded-md">
+                <p className="text-sm mb-2">
+                  With these settings, customers will:
+                </p>
+                <ul className="text-sm space-y-1 pl-5 list-disc">
+                  <li>
+                    Earn their first reward after {formData.transactionThreshold} transactions
+                  </li>
+                  <li>
+                    Receive {formData.rewardType === 'dollar_voucher' ? `a $${formData.voucherAmount} voucher` : `a free ${formData.freeItemName || 'item'}`} at each level
+                  </li>
+                  <li>
+                    Unlock new rewards every {formData.transactionThreshold} transactions, up to {formData.iterations} levels
+                  </li>
+                  <li>
+                    Need {parseInt(formData.transactionThreshold) * parseInt(formData.iterations)} total transactions to reach the final level
+                  </li>
+                </ul>
               </div>
             </div>
           </div>
@@ -467,7 +525,13 @@ export function CreateTransactionRewardDialog({ open, onOpenChange }: CreateTran
           </Button>
           <Button 
             onClick={handleCreateClick} 
-            disabled={loading}
+            disabled={loading || 
+              !formData.rewardName || 
+              !formData.pin || 
+              !formData.transactionThreshold || 
+              (formData.rewardType === 'dollar_voucher' && !formData.voucherAmount) ||
+              (formData.rewardType === 'free_item' && !formData.freeItemName)
+            }
             className="bg-[#007AFF] hover:bg-[#0071E3] text-white"
           >
             Create Transaction Reward

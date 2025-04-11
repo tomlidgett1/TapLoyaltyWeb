@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { db } from "@/lib/firebase"
-import { doc, getDoc, collection, getDocs, query, limit, orderBy, updateDoc, where } from "firebase/firestore"
+import { doc, getDoc, collection, getDocs, query, limit, orderBy, updateDoc, where, deleteDoc } from "firebase/firestore"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { formatDistanceToNow } from "date-fns"
 import { 
   ArrowLeft, Calendar, Clock, Gift, Tag, Users, Zap, 
-  ChevronRight, BarChart, Award, CheckCircle, AlertCircle, Edit, Eye, Copy
+  ChevronRight, BarChart, Award, CheckCircle, AlertCircle, Edit, Eye, Copy, Trash
 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
@@ -21,6 +21,8 @@ import { CreateRewardDialog } from "@/components/create-reward-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDate } from '@/lib/date-utils'
 import { cn } from "@/lib/utils"
+import { Switch } from "@/components/ui/switch"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 interface Condition {
   type: string
@@ -98,6 +100,8 @@ export function RewardDetailsPage() {
   const [redemptionsLoading, setRedemptionsLoading] = useState(true)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false)
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
+  const [isToggling, setIsToggling] = useState(false)
 
   console.log("RewardDetailsPage rendering with:", {
     params,
@@ -386,11 +390,11 @@ export function RewardDetailsPage() {
     }
   };
 
-  // Update the createRewardDialogData object to properly map conditions and limitations
+  // Update the createRewardDialogData object to properly map the reward type
   const createRewardDialogData = reward ? {
     rewardName: reward.rewardName || '',
     description: reward.description || '',
-    type: reward.rewardType || 'individual',
+    type: reward.rewardType || reward.category || 'discount',
     rewardVisibility: 'all',
     pin: reward.pin || '',
     pointsCost: reward.pointsCost?.toString() || '0',
@@ -480,17 +484,50 @@ export function RewardDetailsPage() {
             </Button>
 
             <div className="flex items-center gap-2">
-              <Badge 
-                variant="outline" 
-                className={cn(
-                  "rounded-md h-8 px-3 flex items-center",
-                  reward.status === 'active' ? 
-                    "bg-green-50 text-green-700 border-green-200" : 
-                    "bg-gray-100 text-gray-700 border-gray-200"
-                )}
-              >
-                {capitalize(reward.status)}
-              </Badge>
+              <div className="flex items-center mr-2">
+                <span className="mr-2 text-sm text-gray-600">Active</span>
+                <Switch 
+                  checked={reward.status === 'active'} 
+                  onCheckedChange={async (checked) => {
+                    if (!user?.uid || !id) return;
+                    try {
+                      setIsToggling(true);
+                      // Update the reward status in Firestore
+                      const rewardRef = doc(db, 'merchants', user.uid, 'rewards', id);
+                      await updateDoc(rewardRef, {
+                        status: checked ? 'active' : 'inactive',
+                        updatedAt: new Date().toISOString()
+                      });
+                      
+                      // Also update in top-level rewards collection
+                      const globalRewardRef = doc(db, 'rewards', id);
+                      await updateDoc(globalRewardRef, {
+                        status: checked ? 'active' : 'inactive',
+                        updatedAt: new Date().toISOString()
+                      });
+                      
+                      // Update the local state
+                      setReward(prev => prev ? {...prev, status: checked ? 'active' : 'inactive'} : null);
+                      
+                      showToast({
+                        title: "Success",
+                        description: `Reward ${checked ? 'activated' : 'deactivated'} successfully.`,
+                      });
+                    } catch (error) {
+                      console.error("Error updating reward status:", error);
+                      showToast({
+                        title: "Error",
+                        description: "Failed to update reward status. Please try again.",
+                        variant: "destructive"
+                      });
+                    } finally {
+                      setIsToggling(false);
+                    }
+                  }}
+                  disabled={isToggling}
+                  className="data-[state=checked]:bg-green-500"
+                />
+              </div>
               <Button 
                 size="sm" 
                 variant="outline"
@@ -500,9 +537,23 @@ export function RewardDetailsPage() {
                 <Copy className="h-4 w-4" />
                 Duplicate
               </Button>
-              <Button size="sm" className="gap-2" onClick={() => setIsEditModalOpen(true)}>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="gap-2 border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700" 
+                onClick={() => setIsEditModalOpen(true)}
+              >
                 <Edit className="h-4 w-4" />
                 Edit
+              </Button>
+              <Button 
+                size="sm" 
+                variant="outline"
+                className="gap-2 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700" 
+                onClick={() => setIsDeleteConfirmOpen(true)}
+              >
+                <Trash className="h-4 w-4" />
+                Delete
               </Button>
             </div>
           </div>
@@ -826,6 +877,67 @@ export function RewardDetailsPage() {
         }}
         isEditing={false}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600">Delete Reward</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this reward? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="bg-red-50 border border-red-100 rounded-md p-4 text-sm text-red-800">
+              <strong>Warning:</strong> Deleting this reward will:
+              <ul className="list-disc ml-5 mt-2 space-y-1">
+                <li>Remove it from all customer accounts</li>
+                <li>Make it unavailable for future redemptions</li>
+                <li>Delete all associated analytics data</li>
+              </ul>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={async () => {
+                if (!user?.uid || !id) return;
+                try {
+                  // Delete from merchant's rewards subcollection
+                  const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', id);
+                  await deleteDoc(merchantRewardRef);
+                  
+                  // Also delete from top-level rewards collection
+                  const globalRewardRef = doc(db, 'rewards', id);
+                  await deleteDoc(globalRewardRef);
+                  
+                  showToast({
+                    title: "Reward Deleted",
+                    description: "The reward has been successfully deleted.",
+                  });
+                  
+                  // Navigate back to rewards list
+                  router.push('/store');
+                } catch (error) {
+                  console.error("Error deleting reward:", error);
+                  showToast({
+                    title: "Error",
+                    description: "Failed to delete reward. Please try again.",
+                    variant: "destructive"
+                  });
+                } finally {
+                  setIsDeleteConfirmOpen(false);
+                }
+              }}
+            >
+              Delete Reward
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

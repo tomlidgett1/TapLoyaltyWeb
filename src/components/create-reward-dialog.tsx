@@ -1323,16 +1323,6 @@ export function CreateRewardDialog({
               )}
             </div>
             <div className="flex items-center gap-2 pt-1">
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-green-100 text-green-800 hover:bg-green-200"
-                onClick={() => setIsBasicWizardOpen(true)}
-              >
-                <FileText className="h-4 w-4 mr-2" />
-                Basic Version
-              </Button>
-              
               {process.env.NODE_ENV === 'development' && (
                 <Button
                   variant="outline"

@@ -60,32 +60,17 @@ interface RewardDetails {
   impressioncustomercount: number
   pin: string
   uniqueCustomersCount: number
+  customers?: string[]
 }
 
 interface Redemption {
   id: string;
+  customerId?: string;
   customerName?: string;
-  customerId: string;
   profilePictureUrl?: string;
-  redemptionDate: string | {
-    seconds: number;
-    nanoseconds: number;
-  };
+  redemptionDate?: any; // Using any for now to handle different timestamp formats
+  status?: string;
   pointsUsed?: number;
-  status: 'successful' | 'completed' | 'pending' | 'cancelled';
-  merchantId?: string;
-  redemptionId?: string;
-  rewardId?: string;
-  rewardName?: string;
-}
-
-interface MockRedemption extends Redemption {
-  customerEmail?: string | null
-  customerPhone?: string | null
-  redeemedAt?: string
-  locationName?: string
-  points?: string | number
-  isMockData?: boolean
 }
 
 export function RewardDetailsPage() {
@@ -244,48 +229,6 @@ export function RewardDetailsPage() {
   }, [id, user?.uid])
 
   useEffect(() => {
-    const generateMockRedemptions = (): Redemption[] => {
-      const statuses = ['completed', 'pending', 'cancelled'];
-      const locations = ['Main Store', 'Online', 'Downtown Branch', 'Mall Location'];
-      const names = [
-        'John Smith', 'Emma Johnson', 'Michael Brown', 'Olivia Davis', 
-        'James Wilson', 'Sophia Taylor', 'William Anderson', 'Ava Thomas',
-        'Alexander Jackson', 'Isabella White', 'Daniel Harris', 'Mia Martin'
-      ];
-      
-      // Generate random dates between 1-30 days ago
-      const getRandomDate = () => {
-        const now = new Date();
-        const daysAgo = Math.floor(Math.random() * 30) + 1;
-        now.setDate(now.getDate() - daysAgo);
-        return now.toISOString();
-      };
-      
-      const mockData = Array.from({ length: 10 }, (_, i) => ({
-        id: `mock-${i + 1}`,
-        customerName: names[Math.floor(Math.random() * names.length)],
-        customerEmail: i % 2 === 0 ? `customer${i + 1}@example.com` : null,
-        customerPhone: i % 2 === 1 ? `+1 555-${String(1000 + i).padStart(4, '0')}` : null,
-        redeemedAt: getRandomDate(),
-        status: statuses[Math.floor(Math.random() * statuses.length)],
-        locationName: locations[Math.floor(Math.random() * locations.length)],
-        points: reward?.pointsCost || 100,
-        isMockData: true
-      }));
-      
-      return mockData.map(mock => ({
-        id: mock.id,
-        customerName: mock.customerName,
-        customerId: 'mock-customer-id',
-        redemptionDate: {
-          seconds: new Date(mock.redeemedAt).getTime() / 1000,
-          nanoseconds: 0
-        },
-        pointsUsed: typeof mock.points === 'string' ? parseInt(mock.points) : mock.points,
-        status: mock.status as 'completed' | 'pending' | 'cancelled'
-      }));
-    };
-
     async function fetchRedemptions() {
       if (!user?.uid || !id) return;
       
@@ -309,7 +252,7 @@ export function RewardDetailsPage() {
         
         // Fetch customer details for each redemption
         const enhancedRedemptions = await Promise.all(
-          redemptionData.map(async (redemption) => {
+          redemptionData.map(async (redemption: any) => {
             if (redemption.customerId) {
               try {
                 const customerDoc = await getDoc(doc(db, 'customers', redemption.customerId));
@@ -317,30 +260,22 @@ export function RewardDetailsPage() {
                   const customerData = customerDoc.data();
                   return {
                     ...redemption,
-                    customerName: customerData.fullName || customerData.name || customerData.displayName || 'Unknown Customer',
+                    customerName: customerData.name || customerData.fullName || 'Unknown Customer',
                     profilePictureUrl: customerData.profilePictureUrl || null
                   };
                 }
               } catch (error) {
-                console.error("Error fetching customer details:", error);
+                console.error("Error fetching customer data:", error);
               }
             }
             return redemption;
           })
         );
         
-        // If no real data is found, use mock data
-        if (enhancedRedemptions.length === 0 && reward) {
-          setRedemptions(generateMockRedemptions());
-        } else {
-          setRedemptions(enhancedRedemptions);
-        }
+        setRedemptions(enhancedRedemptions as Redemption[]);
       } catch (error) {
         console.error("Error fetching redemptions:", error);
-        // If there's an error, still show mock data for demo purposes
-        if (reward) {
-          setRedemptions(generateMockRedemptions());
-        }
+        setRedemptions([]);
       } finally {
         setRedemptionsLoading(false);
       }
@@ -395,7 +330,7 @@ export function RewardDetailsPage() {
     rewardName: reward.rewardName || '',
     description: reward.description || '',
     type: reward.rewardType || reward.category || 'discount',
-    rewardVisibility: 'all',
+    rewardVisibility: reward.customers && reward.customers.length > 0 ? 'specific' : 'all',
     pin: reward.pin || '',
     pointsCost: reward.pointsCost?.toString() || '0',
     isActive: reward.status === 'active',
@@ -406,6 +341,10 @@ export function RewardDetailsPage() {
     itemName: '',
     voucherAmount: '',
     spendThreshold: '',
+    
+    // Add customer-specific data
+    specificCustomerIds: reward.customers || [],
+    specificCustomerNames: [], // We don't have the names in the reward data
     
     // Map conditions array to object structure
     conditions: {
@@ -470,19 +409,18 @@ export function RewardDetailsPage() {
   return (
     <div className="min-h-screen bg-gray-50/50">
       {/* Top Navigation */}
-      <div className="sticky top-0 z-10 bg-white border-b">
-        <div className="container max-w-6xl py-4">
-          <div className="flex items-center justify-between">
+      <div className="border-b bg-white sticky top-0 z-10">
+        <div className="px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto">
+          <div className="flex items-center justify-between py-4">
             <Button 
               variant="ghost" 
-              size="sm"
-              onClick={() => router.back()}
-              className="gap-2"
+              className="gap-2" 
+              onClick={() => router.push('/store')}
             >
               <ArrowLeft className="h-4 w-4" />
-              Back
+              Back to Rewards
             </Button>
-
+            
             <div className="flex items-center gap-2">
               <div className="flex items-center mr-2">
                 <span className="mr-2 text-sm text-gray-600">Active</span>
@@ -560,12 +498,19 @@ export function RewardDetailsPage() {
         </div>
       </div>
 
-      <div className="container max-w-6xl py-8 space-y-6">
+      <div className="py-8 space-y-6 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto">
         {/* Hero Section */}
         <div className="bg-white rounded-md border shadow-sm p-6">
           <div className="flex items-start justify-between">
             <div className="space-y-1">
-              <h1 className="text-2xl font-semibold">{reward.rewardName}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-semibold">{reward.rewardName}</h1>
+                {reward.customers && reward.customers.length > 0 && (
+                  <Badge className="bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200">
+                    Customer Specific
+                  </Badge>
+                )}
+              </div>
               <p className="text-gray-500">{reward.description}</p>
             </div>
             <div className="bg-primary/5 px-6 py-3 rounded-md text-center">
@@ -680,6 +625,28 @@ export function RewardDetailsPage() {
                 </div>
               </div>
             </div>
+            
+            {/* Add Customer-specific section if applicable */}
+            {reward.customers && reward.customers.length > 0 && (
+              <div className="mt-6 pt-6 border-t">
+                <div className="flex items-center gap-2 mb-4">
+                  <Users className="h-5 w-5 text-purple-600" />
+                  <h2 className="font-medium text-purple-800">Customer-Specific Reward</h2>
+                </div>
+                <div className="bg-purple-50 border border-purple-100 rounded-md p-4">
+                  <p className="text-sm text-purple-800 mb-2">
+                    This reward is only visible to {reward.customers.length} specific customer{reward.customers.length !== 1 ? 's' : ''}:
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {reward.customers.map((customerId, index) => (
+                      <div key={index} className="px-3 py-1 bg-white border border-purple-200 rounded-md text-sm">
+                        {customerId}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

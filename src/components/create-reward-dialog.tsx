@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { useState, useEffect } from "react"
-import { CalendarIcon, Clock, HelpCircle, Users, UserCheck, UserCog, ShoppingCart, DollarSign, UserPlus, X, BugPlay, FileText, Eye, ListChecks, AlertTriangle, ChevronRight, Edit as EditIcon, CheckCircle, ClipboardCheck, User, Sparkles, Info, ShoppingBag, Award, Lock } from "lucide-react"
+import { CalendarIcon, Clock, HelpCircle, Users, UserCheck, UserCog, ShoppingCart, DollarSign, UserPlus, X, BugPlay, FileText, Eye, ListChecks, AlertTriangle, ChevronRight, Edit as EditIcon, CheckCircle, ClipboardCheck, User, Sparkles, Info, ShoppingBag, Award, Lock, Search } from "lucide-react"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format } from "date-fns"
@@ -26,7 +26,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, addDoc, updateDoc, doc, setDoc } from "firebase/firestore"
+import { collection, addDoc, updateDoc, doc, setDoc, query, getDocs, orderBy, limit, where } from "firebase/firestore"
 import { getFunctions, httpsCallable } from "firebase/functions"
 import { useRouter } from "next/navigation"
 import { BasicRewardWizard } from "./basic-reward-wizard"
@@ -48,8 +48,8 @@ interface FormData {
   description: string
   type: string
   rewardVisibility: string
-  specificCustomerId?: string  // Add this property to fix the type error
-  specificCustomerName?: string // Add this property for consistency
+  specificCustomerIds?: string[]
+  specificCustomerNames?: string[]
   pin: string
   pointsCost: string
   isActive: boolean
@@ -84,7 +84,7 @@ interface FormData {
     useTimeRestrictions: boolean
     startTime: string
     endTime: string
-    dayRestrictions: Array<string>  // Using explicit Array type instead of string[]
+    dayRestrictions: string[]  // Change from Array<string> to string[]
   }
 
   // New fields for Active Period
@@ -114,8 +114,8 @@ export function CreateRewardDialog({
     description: "",
     type: "",
     rewardVisibility: "all",
-    specificCustomerId: customerId,
-    specificCustomerName: customerName,
+    specificCustomerIds: customerId ? [customerId] : [],
+    specificCustomerNames: customerName ? [customerName] : [],
     pin: "",
     pointsCost: "",
     isActive: true,
@@ -138,7 +138,7 @@ export function CreateRewardDialog({
       daysSinceLastVisit: "7",
       minimumLifetimeSpend: "500",
       minimumPointsBalance: "200",
-      membershipLevel: "silver",
+      membershipLevel: "bronze", // Changed from empty string to "bronze"
       newCustomer: false,
       useMembershipRequirements: false
     },
@@ -166,6 +166,11 @@ export function CreateRewardDialog({
   const [isAiCreatorOpen, setIsAiCreatorOpen] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isBasicWizardOpen, setIsBasicWizardOpen] = useState(false)
+  
+  // Add state for customer dropdown
+  const [customers, setCustomers] = useState<Array<{id: string, name: string, email?: string, pointsBalance?: number, lifetimeTransactionCount?: number}>>([])
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false)
+  const [selectedCustomers, setSelectedCustomers] = useState<Array<{id: string, name: string}>>([])
 
   const { user } = useAuth()
 
@@ -176,11 +181,114 @@ export function CreateRewardDialog({
       setFormData({
         ...formData,
         rewardVisibility: 'specific',
-        specificCustomerId: customerId,
-        specificCustomerName: customerName
+        specificCustomerIds: customerId ? [customerId] : [],
+        specificCustomerNames: customerName ? [customerName] : []
       })
     }
   }, [defaultValues, customerId, customerName])
+  
+  // Add effect to fetch customers when "specific" visibility is selected
+  useEffect(() => {
+    console.log("DEBUG: Visibility effect triggered", {
+      visibility: formData.rewardVisibility,
+      customersCount: customers.length,
+      isLoading: isLoadingCustomers,
+      userId: user?.uid
+    });
+    
+    if (formData.rewardVisibility === 'specific' && customers.length === 0 && !isLoadingCustomers && user?.uid) {
+      console.log("DEBUG: Conditions met, calling fetchMerchantCustomers");
+      fetchMerchantCustomers();
+    } else {
+      console.log("DEBUG: Skipping customer fetch, conditions not met");
+    }
+  }, [formData.rewardVisibility, customers.length, user?.uid]);
+  
+  // Function to fetch merchant's customers - updated with correct path and field name
+  const fetchMerchantCustomers = async () => {
+    if (!user?.uid) {
+      console.log("DEBUG: fetchMerchantCustomers - No user ID available");
+      return;
+    }
+    
+    console.log("DEBUG: Starting fetchMerchantCustomers", {
+      merchantId: user.uid,
+      currentCustomers: customers.length
+    });
+    
+    setIsLoadingCustomers(true);
+    try {
+      // Try the correct subcollection path with the fullName field
+      console.log("DEBUG: Trying merchants/{merchantId}/customers subcollection with fullName field");
+      const subcollectionQuery = query(
+        collection(db, 'merchants', user.uid, 'customers'),
+        orderBy('fullName', 'asc'), // Use fullName instead of name
+        limit(100)
+      );
+      
+      const subcollectionSnapshot = await getDocs(subcollectionQuery);
+      console.log("DEBUG: Subcollection query complete, docs count:", subcollectionSnapshot.docs.length);
+      
+      if (subcollectionSnapshot.docs.length > 0) {
+        const customersData = subcollectionSnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            name: data.fullName || data.name || 'Unnamed Customer',
+            email: data.email,
+            pointsBalance: data.pointsBalance || 0,
+            lifetimeTransactionCount: data.lifetimeTransactionCount || 0
+          };
+        });
+        
+        console.log("DEBUG: Processed customer data from subcollection:", customersData);
+        setCustomers(customersData);
+      } else {
+        // If that fails, try without the orderBy (in case the field doesn't exist)
+        console.log("DEBUG: No customers found with fullName field, trying without orderBy");
+        const unorderedQuery = query(
+          collection(db, 'merchants', user.uid, 'customers'),
+          limit(100)
+        );
+        
+        const unorderedSnapshot = await getDocs(unorderedQuery);
+        console.log("DEBUG: Unordered query complete, docs count:", unorderedSnapshot.docs.length);
+        
+        if (unorderedSnapshot.docs.length > 0) {
+          // Log the first document to see its structure
+          console.log("DEBUG: First customer document structure:", unorderedSnapshot.docs[0].data());
+          
+          const customersData = unorderedSnapshot.docs.map(doc => {
+            const data = doc.data();
+            // Try different possible field names for the customer name
+            const customerName = data.fullName || data.name || data.displayName || data.customerName || 'Unnamed Customer';
+            return {
+              id: doc.id,
+              name: customerName,
+              email: data.email,
+              pointsBalance: data.pointsBalance || 0,
+              lifetimeTransactionCount: data.lifetimeTransactionCount || 0
+            };
+          });
+          
+          console.log("DEBUG: Processed customer data without ordering:", customersData);
+          setCustomers(customersData);
+        } else {
+          console.log("DEBUG: No customers found in any location");
+        }
+      }
+    } catch (error) {
+      console.error("DEBUG: Error fetching customers:", error);
+      toast({
+        title: "Error",
+        description: "Could not load customers. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingCustomers(false);
+      console.log("DEBUG: fetchMerchantCustomers complete");
+    }
+  };
 
   const rewardExamples = [
     {
@@ -352,8 +460,8 @@ export function CreateRewardDialog({
     try {
       console.log("FORM DATA AT START OF SAVE:", {
         rewardVisibility: formData.rewardVisibility,
-        specificCustomerId: formData.specificCustomerId,
-        customerName: customerName
+        specificCustomerIds: formData.specificCustomerIds,
+        customerNames: formData.specificCustomerNames
       });
 
       // Transform conditions into array of objects
@@ -405,10 +513,10 @@ export function CreateRewardDialog({
       if (formData.conditions.newCustomer) {
         // Only add newCustomer condition if it's not from the New Customers Only visibility setting
         if (formData.rewardVisibility !== 'new') {
-          conditions.push({
-            type: "newCustomer",
-            value: 1
-          })
+        conditions.push({
+          type: "newCustomer",
+          value: 1
+        })
         }
       }
 
@@ -456,11 +564,11 @@ export function CreateRewardDialog({
         ? Math.max(1, Number(formData.limitations.perCustomerLimit)) 
         : 1;
       
-      limitations.push({
-        type: "customerLimit",
+        limitations.push({
+          type: "customerLimit",
         value: perCustomerLimit
       });
-      
+
       // Time restrictions
       if (formData.limitations.useTimeRestrictions) {
         if (formData.limitations.startTime || formData.limitations.endTime) {
@@ -504,13 +612,19 @@ export function CreateRewardDialog({
       // Create uniqueCustomerIds object for specific customer
       console.log("BEFORE creating uniqueCustomerIds:");
       console.log("rewardVisibility:", formData.rewardVisibility);
-      console.log("specificCustomerId:", formData.specificCustomerId);
-      console.log("customerName:", customerName);
+      console.log("specificCustomerIds:", formData.specificCustomerIds);
+      console.log("customerNames:", formData.specificCustomerNames);
 
-      // Force the customer ID to be used regardless of visibility setting
+      // Handle multiple specific customers if available
       let uniqueCustomerIds = {};
-      if (customerId) {
-        // Use the prop directly instead of formData
+      if (formData.specificCustomerIds && formData.specificCustomerIds.length > 0) {
+        formData.specificCustomerIds.forEach(id => {
+          uniqueCustomerIds[id] = true;
+        });
+        console.log(`Setting uniqueCustomerIds for ${formData.specificCustomerIds.length} customers`);
+      } 
+      // Fall back to the single customerId prop if available
+      else if (customerId) {
         uniqueCustomerIds = { [customerId]: true };
         console.log(`Setting uniqueCustomerIds.${customerId} = true`);
       }
@@ -554,7 +668,8 @@ export function CreateRewardDialog({
         pointsCost: Math.max(0, Number(formData.pointsCost)),
         // Update visibility values
         rewardVisibility: formData.rewardVisibility === 'all' ? 'global' : 
-                          formData.rewardVisibility === 'specific' ? 'specific' : 'conditional',
+                          formData.rewardVisibility === 'specific' ? 'specific' : 
+                          formData.rewardVisibility === 'new' ? 'new' : 'conditional',
         // Add newcx flag for New Customers Only visibility
         newcx: formData.rewardVisibility === 'new',
         voucherAmount: Number(formData.voucherAmount) || 0,
@@ -576,9 +691,35 @@ export function CreateRewardDialog({
         // customerVisibility field removed as it's redundant
       }
 
-      // Only add specificCustomerId if it exists and is not undefined
-      if (customerId) {
-        rewardData.specificCustomerId = customerId;
+      // Handle specific customer visibility case
+      if (formData.rewardVisibility === 'specific' && formData.specificCustomerIds && formData.specificCustomerIds.length > 0) {
+        // Only store the customer names for display purposes
+        rewardData.specificCustomerNames = formData.specificCustomerNames;
+        
+        // Store customer IDs in an array called "customers"
+        rewardData.customers = formData.specificCustomerIds;
+        
+        console.log(`Setting customers array with ${formData.specificCustomerIds.length} customers:`, formData.specificCustomerIds);
+        
+        // Remove the specificCustomerIds array from the final data
+        delete rewardData.specificCustomerIds;
+        
+        // Also remove uniqueCustomerIds if it exists
+        delete rewardData.uniqueCustomerIds;
+      }
+      // Fall back to the single customerId prop if available
+      else if (customerId) {
+        // Only store the customer name for display purposes
+        rewardData.specificCustomerNames = customerName ? [customerName] : [];
+        
+        // Store the single customer ID in the customers array
+        rewardData.customers = [customerId];
+        
+        console.log(`Setting customers array with single customer:`, [customerId]);
+        
+        // Don't include specificCustomerIds in the final data
+        // Also remove uniqueCustomerIds if it exists
+        delete rewardData.uniqueCustomerIds;
       }
 
       // Debug the final rewardData
@@ -672,7 +813,7 @@ export function CreateRewardDialog({
       case 'new': return 'New Customers Only';
       case 'returning': return 'Returning Customers Only';
       case 'vip': return 'VIP Customers Only';
-      case 'specific': return `${customerName} Only`;
+      case 'specific': return `${formData.specificCustomerNames?.join(', ') || "Not specified"} Only`;
       default: return 'All Customers';
     }
   }
@@ -1247,6 +1388,61 @@ export function CreateRewardDialog({
     }
   }
 
+  // Add this useEffect to initialize selectedCustomers when editing a customer-specific reward
+  useEffect(() => {
+    // Check if we're editing a reward with specific customers
+    if (defaultValues && 
+        defaultValues.rewardVisibility === 'specific' && 
+        defaultValues.specificCustomerIds && 
+        defaultValues.specificCustomerIds.length > 0) {
+      
+      // First, ensure we have the customers data
+      if (customers.length === 0) {
+        fetchMerchantCustomers();
+      }
+      
+      // Map the customer IDs to customer objects
+      // For now, we'll just use the IDs since we don't have names yet
+      const initialSelectedCustomers = defaultValues.specificCustomerIds.map(id => ({
+        id,
+        name: defaultValues.specificCustomerNames?.find((_name, index) => 
+          index === defaultValues.specificCustomerIds.indexOf(id)
+        ) || `Customer ${id}`
+      }));
+      
+      console.log("Initializing selected customers:", initialSelectedCustomers);
+      setSelectedCustomers(initialSelectedCustomers);
+    }
+  }, [defaultValues]);
+
+  // Also add this useEffect to update selectedCustomers when customers data is loaded
+  useEffect(() => {
+    // If we have customer IDs but no names, try to find the names from loaded customers
+    if (formData.rewardVisibility === 'specific' && 
+        formData.specificCustomerIds && 
+        formData.specificCustomerIds.length > 0 &&
+        customers.length > 0) {
+      
+      // Update selected customers with names from loaded customer data
+      const updatedSelectedCustomers = formData.specificCustomerIds.map(id => {
+        const customer = customers.find(c => c.id === id);
+        return {
+          id,
+          name: customer?.name || `Customer ${id}`
+        };
+      });
+      
+      console.log("Updating selected customers with names:", updatedSelectedCustomers);
+      setSelectedCustomers(updatedSelectedCustomers);
+      
+      // Also update the form data with customer names
+      setFormData({
+        ...formData,
+        specificCustomerNames: updatedSelectedCustomers.map(c => c.name)
+      });
+    }
+  }, [customers, formData.specificCustomerIds]);
+
   return (
     <Dialog 
       open={open} 
@@ -1462,34 +1658,36 @@ export function CreateRewardDialog({
                     
                     <div className="p-4">
                       <div className="space-y-4">
-                        <div className="grid gap-2">
-                          <div className="flex items-center justify-between">
-                            <Label>Reward Name <span className="text-red-500">*</span></Label>
-                            <div className="flex items-center gap-2">
-                              <Label className="text-sm text-gray-600">Active</Label>
-                              <Switch
-                                checked={formData.isActive}
-                                onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
-                              />
+                        <div className="grid gap-4">
+                          <div className="grid gap-2">
+                            <div className="flex items-center justify-between">
+                              <Label>Reward Name <span className="text-red-500">*</span></Label>
+                              <div className="flex items-center gap-2">
+                                <Label className="text-sm text-gray-600">Active</Label>
+                                <Switch
+                                  checked={formData.isActive}
+                                  onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
+                                />
+                              </div>
                             </div>
+                            <Input
+                              value={formData.rewardName}
+                              onChange={(e) => setFormData({ ...formData, rewardName: e.target.value })}
+                              placeholder="Enter a clear, concise name (e.g., 'Free Coffee Reward')"
+                            />
+                            <p className="text-xs text-gray-500">Choose a name customers will easily understand</p>
                           </div>
-                          <Input
-                            value={formData.rewardName}
-                            onChange={(e) => setFormData({ ...formData, rewardName: e.target.value })}
-                            placeholder="Enter a clear, concise name (e.g., 'Free Coffee Reward')"
-                          />
-                          <p className="text-xs text-gray-500">Choose a name customers will easily understand</p>
-                        </div>
                         
-                        <div className="grid gap-2">
-                          <Label>Description <span className="text-red-500">*</span></Label>
-                          <Textarea
-                            value={formData.description}
-                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            placeholder="Explain what customers will receive when they redeem this reward"
-                            className="min-h-[100px]"
-                          />
-                          <p className="text-xs text-gray-500">Provide clear details about the reward and any important conditions</p>
+                          <div className="grid gap-2">
+                            <Label>Description <span className="text-red-500">*</span></Label>
+                            <Textarea
+                              value={formData.description}
+                              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                              placeholder="Explain what customers will receive when they redeem this reward"
+                              className="min-h-[100px]"
+                            />
+                            <p className="text-xs text-gray-500">Provide clear details about the reward and any important conditions</p>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1507,36 +1705,36 @@ export function CreateRewardDialog({
                     <div className="p-4">
                       <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-6">
-                          <div className="grid gap-2">
-                            <Label>Reward Type</Label>
-                            <Select
-                              value={formData.type}
-                              onValueChange={(value) => setFormData({ ...formData, type: value })}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select reward type" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="discount">Discount</SelectItem>
-                                <SelectItem value="freeItem">Free Item</SelectItem>
-                                <SelectItem value="voucher">Gift Voucher</SelectItem>
-                                <SelectItem value="other">Other</SelectItem>
-                              </SelectContent>
-                            </Select>
+                  <div className="grid gap-2">
+                    <Label>Reward Type</Label>
+                    <Select
+                      value={formData.type}
+                      onValueChange={(value) => setFormData({ ...formData, type: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select reward type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="discount">Discount</SelectItem>
+                        <SelectItem value="freeItem">Free Item</SelectItem>
+                        <SelectItem value="voucher">Gift Voucher</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
                             <p className="text-xs text-gray-500">Choose the type of reward to offer</p>
-                          </div>
+                  </div>
                           
-                          <div className="grid gap-2">
+                  <div className="grid gap-2">
                             <Label>Points Cost <span className="text-red-500">*</span></Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={formData.pointsCost}
-                              onChange={(e) => setFormData({ ...formData, pointsCost: e.target.value })}
+                    <Input
+                      type="number"
+                      min="0"
+                      value={formData.pointsCost}
+                      onChange={(e) => setFormData({ ...formData, pointsCost: e.target.value })}
                               placeholder="e.g., 100"
-                            />
+                    />
                             <p className="text-xs text-gray-500">Points customers will spend to redeem</p>
-                          </div>
+                  </div>
                         </div>
                         
                         {/* Add reward type specific input fields */}
@@ -1597,17 +1795,17 @@ export function CreateRewardDialog({
                     <div className="p-4">
                       <div className="grid gap-2 max-w-md">
                         <Label>PIN Code (4 digits) <span className="text-red-500">*</span></Label>
-                        <Input
-                          maxLength={4}
-                          value={formData.pin}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
-                            setFormData({ ...formData, pin: value })
-                          }}
+                    <Input
+                      maxLength={4}
+                      value={formData.pin}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
+                        setFormData({ ...formData, pin: value })
+                      }}
                           placeholder="4-digit PIN (e.g., 1234)"
-                        />
+                    />
                         <p className="text-xs text-gray-500">Staff will use this PIN during redemption</p>
-                      </div>
+                  </div>
                     </div>
                   </div>
                 </div>
@@ -1679,52 +1877,204 @@ export function CreateRewardDialog({
                         }}
                         className="space-y-3"
                       >
-                        <div className="flex items-center space-x-3 border rounded-md p-3 hover:bg-gray-50">
-                          <RadioGroupItem value="all" id="all-customers" />
-                          <div className="flex-1">
-                            <Label htmlFor="all-customers" className="font-medium cursor-pointer">All Customers</Label>
-                            <p className="text-sm text-gray-500 mt-1">
-                              This reward will be visible to all your customers (subject to any conditions)
-                            </p>
+                        <label htmlFor="all-customers" className="block w-full cursor-pointer">
+                          <div className={`flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 transition-all duration-200 ${formData.rewardVisibility === 'all' ? 'bg-blue-50 border-blue-200 shadow-sm' : ''}`}>
+                            <RadioGroupItem value="all" id="all-customers" className="mt-1" />
+                            <div className="flex-1">
+                              <p className={`font-medium transition-colors duration-200 ${formData.rewardVisibility === 'all' ? 'text-blue-700' : ''}`}>All Customers</p>
+                              <p className="text-sm text-gray-500 mt-1">
+                                This reward will be visible to all your customers (subject to any conditions)
+                              </p>
+                            </div>
                           </div>
-                        </div>
+                        </label>
                         
-                        <div className="flex items-center space-x-3 border rounded-md p-3 hover:bg-gray-50">
-                          <RadioGroupItem value="new" id="new-customers" />
-                          <div className="flex-1">
-                            <Label htmlFor="new-customers" className="font-medium cursor-pointer">New Customers Only</Label>
-                            <p className="text-sm text-gray-500 mt-1">
-                              Only customers who just joined your loyalty program will see this reward
-                            </p>
+                        <label htmlFor="new-customers" className="block w-full cursor-pointer">
+                          <div className={`flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 transition-all duration-200 ${formData.rewardVisibility === 'new' ? 'bg-blue-50 border-blue-200 shadow-sm' : ''}`}>
+                            <RadioGroupItem value="new" id="new-customers" className="mt-1" />
+                            <div className="flex-1">
+                              <p className={`font-medium transition-colors duration-200 ${formData.rewardVisibility === 'new' ? 'text-blue-700' : ''}`}>New Customers Only</p>
+                              <p className="text-sm text-gray-500 mt-1">
+                                Only customers who just joined your loyalty program will see this reward
+                              </p>
+                            </div>
                           </div>
-                        </div>
+                        </label>
                         
-                        <div className="flex items-center space-x-3 border rounded-md p-3 hover:bg-gray-50">
-                          <RadioGroupItem value="specific" id="specific-customer" />
-                          <div className="flex-1">
-                            <Label htmlFor="specific-customer" className="font-medium cursor-pointer">Specific Customer</Label>
-                            <p className="text-sm text-gray-500 mt-1">
-                              Choose a specific customer who can see this reward
-                            </p>
+                        <label htmlFor="specific-customer" className="block w-full cursor-pointer">
+                          <div className={`flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 transition-all duration-200 ${formData.rewardVisibility === 'specific' ? 'bg-blue-50 border-blue-200 shadow-sm' : ''}`}>
+                            <RadioGroupItem value="specific" id="specific-customer" className="mt-1" />
+                            <div className="flex-1">
+                              <p className={`font-medium transition-colors duration-200 ${formData.rewardVisibility === 'specific' ? 'text-blue-700' : ''}`}>Specific Customer</p>
+                              <p className="text-sm text-gray-500 mt-1">
+                                Choose a specific customer who can see this reward
+                              </p>
+                            </div>
                           </div>
-                        </div>
+                        </label>
                       </RadioGroup>
                       
                       {formData.rewardVisibility === 'specific' && (
                         <div className="mt-4 border-l-2 border-blue-100 pl-4 py-2">
-                          <Label className="mb-2">Select Customer</Label>
-                          {customerId ? (
-                            <div className="flex items-center gap-2 bg-blue-50 p-3 rounded-md border border-blue-100">
-                              <User className="h-5 w-5 text-blue-500" />
-                              <div>
-                                <p className="font-medium">{customerName || 'Selected Customer'}</p>
-                                <p className="text-xs text-gray-500">{customerId}</p>
+                          <div className="flex items-center justify-between mb-2">
+                            <Label>Select Customers</Label>
+                            <div className="text-xs text-blue-600">
+                              {selectedCustomers.length} selected
+                            </div>
+                          </div>
+                          
+                          {isLoadingCustomers ? (
+                            <div className="flex items-center gap-2 py-2">
+                              <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                              <p className="text-sm text-gray-600">Loading customers...</p>
+                            </div>
+                          ) : customers.length > 0 ? (
+                            <div className="space-y-4">
+                              <div className="text-xs text-gray-500 mb-2">
+                                DEBUG: {customers.length} customers loaded
                               </div>
+                              
+                              {/* Customer search input */}
+                              <div className="relative">
+                                <Input
+                                  type="text"
+                                  placeholder="Search customers..."
+                                  className="pl-8"
+                                  onChange={(e) => {
+                                    // Add customer search functionality here
+                                    console.log("Searching for:", e.target.value);
+                                  }}
+                                />
+                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+                              </div>
+                              
+                              {/* Customer list with checkboxes */}
+                              <div className="border rounded-md max-h-[300px] overflow-y-auto">
+                                {customers.map((customer) => (
+                                  <div 
+                                    key={customer.id} 
+                                    className="flex items-start p-3 border-b last:border-b-0 hover:bg-gray-50"
+                                  >
+                                    <Checkbox
+                                      id={`customer-${customer.id}`}
+                                      checked={selectedCustomers.some(c => c.id === customer.id)}
+                                      onCheckedChange={(checked) => {
+                                        if (checked) {
+                                          // Add customer to selection
+                                          const newSelectedCustomers = [...selectedCustomers, { 
+                                            id: customer.id, 
+                                            name: customer.name 
+                                          }];
+                                          setSelectedCustomers(newSelectedCustomers);
+                                          
+                                          // Update form data with all selected customers
+                                          setFormData({
+                                            ...formData,
+                                            specificCustomerIds: newSelectedCustomers.map(c => c.id),
+                                            specificCustomerNames: newSelectedCustomers.map(c => c.name)
+                                          });
+                                          
+                                          console.log("Added customer to selection:", customer);
+                                        } else {
+                                          // Remove customer from selection
+                                          const newSelectedCustomers = selectedCustomers.filter(
+                                            c => c.id !== customer.id
+                                          );
+                                          setSelectedCustomers(newSelectedCustomers);
+                                          
+                                          // Update form data with remaining selected customers
+                                          setFormData({
+                                            ...formData,
+                                            specificCustomerIds: newSelectedCustomers.map(c => c.id),
+                                            specificCustomerNames: newSelectedCustomers.map(c => c.name)
+                                          });
+                                          
+                                          console.log("Removed customer from selection:", customer);
+                                        }
+                                      }}
+                                      className="mt-1 mr-3"
+                                    />
+                                    <div className="flex-1">
+                                      <label 
+                                        htmlFor={`customer-${customer.id}`}
+                                        className="flex flex-col cursor-pointer"
+                                      >
+                                        <span className="font-medium">{customer.name}</span>
+                                        {customer.email && (
+                                          <span className="text-xs text-gray-500">{customer.email}</span>
+                                        )}
+                                        <div className="flex gap-4 mt-1">
+                                          <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
+                                            {customer.pointsBalance} points
+                                          </span>
+                                          <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">
+                                            {customer.lifetimeTransactionCount} transactions
+                                          </span>
+                                        </div>
+                                      </label>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                              
+                              {/* Selected customers summary */}
+                              {selectedCustomers.length > 0 && (
+                                <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
+                                  <h4 className="text-sm font-medium text-blue-800 mb-2">Selected Customers ({selectedCustomers.length})</h4>
+                                  <div className="flex flex-wrap gap-2">
+                                    {selectedCustomers.map(customer => (
+                                      <div key={customer.id} className="bg-white border border-blue-200 rounded-full px-3 py-1 text-sm flex items-center gap-1">
+                                        <span>{customer.name}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            // Remove this customer from selection
+                                            const newSelectedCustomers = selectedCustomers.filter(
+                                              c => c.id !== customer.id
+                                            );
+                                            setSelectedCustomers(newSelectedCustomers);
+                                            
+                                            // Update form data
+                                            setFormData({
+                                              ...formData,
+                                              specificCustomerIds: newSelectedCustomers.map(c => c.id),
+                                              specificCustomerNames: newSelectedCustomers.map(c => c.name)
+                                            });
+                                          }}
+                                          className="text-gray-400 hover:text-red-500"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              <p className="text-xs text-gray-500">
+                                Only selected customers will see this reward in their account
+                              </p>
                             </div>
                           ) : (
-                            <p className="text-sm text-amber-600">
-                              You must select a customer from the reward detail page after creating the reward.
-                            </p>
+                            <div className="space-y-3">
+                              <p className="text-sm text-amber-600">
+                                No customers found. Make sure you have customers in your loyalty program.
+                              </p>
+                              <div className="text-xs text-gray-500 mb-2">
+                                DEBUG: User ID: {user?.uid || "No user ID"}
+                              </div>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => {
+                                  console.log("DEBUG: Manual retry for loading customers");
+                                  fetchMerchantCustomers();
+                                }}
+                                className="text-blue-600 border-blue-200"
+                              >
+                                Retry Loading Customers
+                              </Button>
+                            </div>
                           )}
                         </div>
                       )}
@@ -1738,7 +2088,7 @@ export function CreateRewardDialog({
                         <Lock className="h-5 w-5 text-blue-600" />
                         <h3 className="font-medium">Progressive Unlock</h3>
                       </div>
-                      <Switch
+                    <Switch
                         checked={formData.delayedVisibility}
                         onCheckedChange={(checked) => setFormData({
                           ...formData,
@@ -1749,8 +2099,8 @@ export function CreateRewardDialog({
                         })}
                         disabled={formData.rewardVisibility === 'new'}
                         className="data-[state=checked]:bg-blue-600"
-                      />
-                    </div>
+                    />
+                  </div>
                     
                     {formData.delayedVisibility && (
                       <div className="p-4">
@@ -1827,8 +2177,8 @@ export function CreateRewardDialog({
                         <CalendarIcon className="h-5 w-5 text-blue-600" />
                         <h3 className="font-medium">Active Period</h3>
                       </div>
-                      <Switch
-                        checked={formData.hasActivePeriod}
+                    <Switch
+                      checked={formData.hasActivePeriod}
                         onCheckedChange={(checked) => setFormData({
                           ...formData,
                           hasActivePeriod: checked,
@@ -1841,10 +2191,10 @@ export function CreateRewardDialog({
                           }
                         })}
                         className="data-[state=checked]:bg-blue-600"
-                      />
-                    </div>
+                    />
+                  </div>
                     
-                    {formData.hasActivePeriod && (
+                  {formData.hasActivePeriod && (
                       <div className="p-4">
                         <p className="text-sm text-gray-600 mb-4">
                           Set a date range when this reward is active and can be redeemed.
@@ -1852,82 +2202,82 @@ export function CreateRewardDialog({
                         
                         <div className="grid grid-cols-2 gap-6">
                           <div className="space-y-2">
-                            <Label>Start Date</Label>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
+                        <Label>Start Date</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
                                   className={`w-full justify-start text-left font-normal ${!formData.activePeriod.startDate && "text-muted-foreground"}`}
-                                >
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
                                   {formData.activePeriod.startDate ? formatDate(formData.activePeriod.startDate) : "Select date"}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0">
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
                                 <CalendarComponent
-                                  mode="single"
-                                  selected={formData.activePeriod.startDate ? new Date(formData.activePeriod.startDate) : undefined}
-                                  onSelect={(date) => {
+                              mode="single"
+                              selected={formData.activePeriod.startDate ? new Date(formData.activePeriod.startDate) : undefined}
+                              onSelect={(date) => {
                                     const dateString = date ? date.toISOString().split('T')[0] : '';
-                                    setFormData({
-                                      ...formData,
-                                      activePeriod: {
-                                        ...formData.activePeriod,
+                                  setFormData({
+                                    ...formData,
+                                    activePeriod: {
+                                      ...formData.activePeriod,
                                         startDate: dateString
-                                      }
+                                    }
                                     });
-                                  }}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                             <p className="text-xs text-gray-500">
                               When this reward becomes available to redeem
                             </p>
-                          </div>
+                      </div>
                           
                           <div className="space-y-2">
-                            <Label>End Date</Label>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
+                        <Label>End Date</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
                                   className={`w-full justify-start text-left font-normal ${!formData.activePeriod.endDate && "text-muted-foreground"}`}
-                                >
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
                                   {formData.activePeriod.endDate ? formatDate(formData.activePeriod.endDate) : "Select date"}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0">
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
                                 <CalendarComponent
-                                  mode="single"
-                                  selected={formData.activePeriod.endDate ? new Date(formData.activePeriod.endDate) : undefined}
-                                  onSelect={(date) => {
+                              mode="single"
+                              selected={formData.activePeriod.endDate ? new Date(formData.activePeriod.endDate) : undefined}
+                              onSelect={(date) => {
                                     const dateString = date ? date.toISOString().split('T')[0] : '';
-                                    setFormData({
-                                      ...formData,
-                                      activePeriod: {
-                                        ...formData.activePeriod,
+                                  setFormData({
+                                    ...formData,
+                                    activePeriod: {
+                                      ...formData.activePeriod,
                                         endDate: dateString
-                                      }
+                                    }
                                     });
-                                  }}
+                              }}
                                   disabled={(date) =>
                                     formData.activePeriod.startDate
                                       ? date < new Date(formData.activePeriod.startDate)
                                       : false
                                   }
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                             <p className="text-xs text-gray-500">
                               When this reward expires and can no longer be redeemed
                             </p>
                           </div>
-                        </div>
                       </div>
-                    )}
+                    </div>
+                  )}
                   </div>
                 </div>
               </div>
@@ -1942,7 +2292,7 @@ export function CreateRewardDialog({
                     Set specific requirements that determine which customers can access this reward.
                   </p>
                 </div>
-
+                  
                 {/* New Customer Card - Always visible at the top */}
                 <div className="bg-white border rounded-lg shadow-sm mb-6 overflow-hidden">
                   <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
@@ -2032,7 +2382,7 @@ export function CreateRewardDialog({
                         className="data-[state=checked]:bg-blue-600"
                       />
                     </div>
-                    
+                  
                     {formData.conditions.useTransactionRequirements && (
                       <div className="p-4">
                         <p className="text-sm text-gray-600 mb-4">
@@ -2076,7 +2426,7 @@ export function CreateRewardDialog({
                               placeholder="e.g., 20"
                             />
                             <p className="text-xs text-gray-500 min-h-[2.5rem]">
-                              Maximum number of purchases allowed (leave empty for no limit)
+                              Maximum purchases limit (leave empty for no limit)
                             </p>
                           </div>
                         </div>
@@ -2106,7 +2456,7 @@ export function CreateRewardDialog({
                         className="data-[state=checked]:bg-blue-600"
                       />
                     </div>
-                    
+                  
                     {formData.conditions.useSpendingRequirements && (
                       <div className="p-4">
                         <p className="text-sm text-gray-600 mb-4">
@@ -2158,7 +2508,7 @@ export function CreateRewardDialog({
                     )}
                   </div>
                   
-                  {/* Time-Based Card */}
+                  {/* Time Requirements Card */}
                   <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -2180,7 +2530,7 @@ export function CreateRewardDialog({
                         className="data-[state=checked]:bg-blue-600"
                       />
                     </div>
-                    
+                  
                     {formData.conditions.useTimeRequirements && (
                       <div className="p-4">
                         <p className="text-sm text-gray-600 mb-4">
@@ -2231,7 +2581,7 @@ export function CreateRewardDialog({
                       </div>
                     )}
                   </div>
-                  
+
                   {/* Membership Level Card */}
                   <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
@@ -2323,9 +2673,9 @@ export function CreateRewardDialog({
                       <div className="flex items-center gap-2">
                         <ListChecks className="h-5 w-5 text-blue-600" />
                         <h3 className="font-medium">Redemption Limits</h3>
-                      </div>
                     </div>
-                    
+                  </div>
+                  
                     <div className="p-4">
                       <p className="text-sm text-gray-600 mb-4">
                         Control how many times this reward can be redeemed globally and per customer.
@@ -2333,38 +2683,38 @@ export function CreateRewardDialog({
                       
                       <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-2">
-                          <Label>Total Redemption Limit</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={formData.limitations.totalRedemptionLimit}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              limitations: {
-                                ...formData.limitations,
-                                totalRedemptionLimit: e.target.value
-                              }
-                            })}
+                    <Label>Total Redemption Limit</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={formData.limitations.totalRedemptionLimit}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        limitations: {
+                          ...formData.limitations,
+                          totalRedemptionLimit: e.target.value
+                        }
+                      })}
                             placeholder="e.g., 100"
-                          />
+                    />
                           <p className="text-xs text-gray-500">
                             Maximum number of times this reward can be redeemed by all customers combined
                           </p>
-                        </div>
-                        
+                  </div>
+                  
                         <div className="space-y-2">
-                          <Label>Per Customer Limit</Label>
-                          <Input
-                            type="number"
+                    <Label>Per Customer Limit</Label>
+                    <Input
+                      type="number"
                             min="1"
-                            value={formData.limitations.perCustomerLimit}
+                      value={formData.limitations.perCustomerLimit}
                             onChange={(e) => {
                               const value = e.target.value;
                               const validValue = value === '' ? '1' : Math.max(1, parseInt(value) || 1).toString();
                               setFormData({
-                                ...formData,
-                                limitations: {
-                                  ...formData.limitations,
+                        ...formData,
+                        limitations: {
+                          ...formData.limitations,
                                   perCustomerLimit: validValue
                                 }
                               })
@@ -2400,9 +2750,9 @@ export function CreateRewardDialog({
                         })}
                         className="data-[state=checked]:bg-blue-600"
                       />
-                    </div>
-                    
-                    {formData.limitations.useTimeRestrictions && (
+                  </div>
+                  
+                  {formData.limitations.useTimeRestrictions && (
                       <div className="p-4">
                         <p className="text-sm text-gray-600 mb-4">
                           Restrict when this reward can be redeemed based on time of day and days of the week.
@@ -2411,97 +2761,97 @@ export function CreateRewardDialog({
                         <div className="space-y-6">
                           <div className="grid grid-cols-2 gap-6">
                             <div className="space-y-2">
-                              <Label>Start Time</Label>
-                              <Select
-                                value={formData.limitations.startTime}
-                                onValueChange={(value) => setFormData({
-                                  ...formData,
+                        <Label>Start Time</Label>
+                        <Select
+                          value={formData.limitations.startTime}
+                          onValueChange={(value) => setFormData({
+                            ...formData,
                                   limitations: { ...formData.limitations, startTime: value }
-                                })}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select start time" />
-                                </SelectTrigger>
-                                <SelectContent>
+                          })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select start time" />
+                          </SelectTrigger>
+                          <SelectContent>
                                   {Array.from({ length: 24 }, (_, i) => {
-                                    const hour = i % 12 || 12
+                              const hour = i % 12 || 12
                                     const period = i >= 12 ? 'PM' : 'AM'
-                                    return (
+                              return (
                                       <SelectItem key={`${hour}:00 ${period}`} value={`${hour}:00 ${period}`}>
-                                        {`${hour}:00 ${period}`}
-                                      </SelectItem>
-                                    )
-                                  })}
-                                </SelectContent>
-                              </Select>
+                                  {`${hour}:00 ${period}`}
+                                </SelectItem>
+                              )
+                            })}
+                          </SelectContent>
+                        </Select>
                               <p className="text-xs text-gray-500">
                                 Reward can only be redeemed after this time
                               </p>
-                            </div>
-                            
+                      </div>
+                      
                             <div className="space-y-2">
-                              <Label>End Time</Label>
-                              <Select
-                                value={formData.limitations.endTime}
-                                onValueChange={(value) => setFormData({
-                                  ...formData,
+                        <Label>End Time</Label>
+                        <Select
+                          value={formData.limitations.endTime}
+                          onValueChange={(value) => setFormData({
+                            ...formData,
                                   limitations: { ...formData.limitations, endTime: value }
-                                })}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select end time" />
-                                </SelectTrigger>
-                                <SelectContent>
+                          })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select end time" />
+                          </SelectTrigger>
+                          <SelectContent>
                                   {Array.from({ length: 24 }, (_, i) => {
-                                    const hour = i % 12 || 12
+                              const hour = i % 12 || 12
                                     const period = i >= 12 ? 'PM' : 'AM'
-                                    return (
+                              return (
                                       <SelectItem key={`${hour}:00 ${period}`} value={`${hour}:00 ${period}`}>
-                                        {`${hour}:00 ${period}`}
-                                      </SelectItem>
-                                    )
-                                  })}
-                                </SelectContent>
-                              </Select>
+                                  {`${hour}:00 ${period}`}
+                                </SelectItem>
+                              )
+                            })}
+                          </SelectContent>
+                        </Select>
                               <p className="text-xs text-gray-500">
                                 Reward can only be redeemed before this time
                               </p>
                             </div>
-                          </div>
-                          
+                      </div>
+                      
                           <div className="space-y-3">
                             <Label>Available Days</Label>
-                            <div className="flex flex-wrap gap-2">
-                              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => (
-                                <Button
-                                  key={day}
-                                  type="button"
-                                  variant={formData.limitations.dayRestrictions.includes(day) ? "default" : "outline"}
+                        <div className="flex flex-wrap gap-2">
+                          {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => (
+                            <Button
+                              key={day}
+                              type="button"
+                              variant={formData.limitations.dayRestrictions.includes(day) ? "default" : "outline"}
                                   className={`h-9 ${formData.limitations.dayRestrictions.includes(day) ? "bg-blue-600 hover:bg-blue-700" : ""}`}
-                                  onClick={() => {
-                                    const newDays = formData.limitations.dayRestrictions.includes(day)
-                                      ? formData.limitations.dayRestrictions.filter(d => d !== day)
-                                      : [...formData.limitations.dayRestrictions, day]
-                                    setFormData({
-                                      ...formData,
-                                      limitations: {
-                                        ...formData.limitations,
-                                        dayRestrictions: newDays
-                                      }
-                                    })
-                                  }}
-                                >
-                                  {day.substring(0, 3)}
-                                </Button>
-                              ))}
-                            </div>
+                              onClick={() => {
+                                const newDays = formData.limitations.dayRestrictions.includes(day)
+                                  ? formData.limitations.dayRestrictions.filter(d => d !== day)
+                                  : [...formData.limitations.dayRestrictions, day]
+                                setFormData({
+                                  ...formData,
+                                  limitations: {
+                                    ...formData.limitations,
+                                    dayRestrictions: newDays
+                                  }
+                                })
+                              }}
+                            >
+                              {day.substring(0, 3)}
+                            </Button>
+                          ))}
+                        </div>
                             <p className="text-xs text-gray-500">
                               Select the days of the week when this reward can be redeemed
                             </p>
-                          </div>
+                      </div>
                         </div>
                       </div>
-                    )}
+                  )}
                   </div>
                 </div>
               </div>
@@ -2521,38 +2871,38 @@ export function CreateRewardDialog({
                   {/* Basic Details Review Card */}
                   <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
                         <FileText className="h-5 w-5 text-blue-600" />
                         <h3 className="font-medium">Basic Details</h3>
                       </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
                         className="h-7 px-2 text-blue-600 hover:bg-blue-50"
                         onClick={() => setCurrentStep(1)}
-                      >
-                        <EditIcon className="h-4 w-4 mr-1" />
-                        Edit
-                      </Button>
-                    </div>
+                    >
+                      <EditIcon className="h-4 w-4 mr-1" />
+                      Edit
+                    </Button>
+                  </div>
                     
                     <div className="p-4">
                       <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-1">
+                      <div className="space-y-1">
                           <p className="text-sm text-gray-500">Reward Name</p>
                           <p className="font-medium">{formData.rewardName || "Not set"}</p>
-                        </div>
-                        <div className="space-y-1">
+                      </div>
+                      <div className="space-y-1">
                           <p className="text-sm text-gray-500">Status</p>
                           <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${formData.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
                             {formData.isActive ? "Active" : "Inactive"}
-                          </div>
+                      </div>
                         </div>
                         <div className="space-y-1 col-span-2">
                           <p className="text-sm text-gray-500">Description</p>
                           <p className="text-sm">{formData.description || "Not set"}</p>
-                        </div>
-                        <div className="space-y-1">
+                      </div>
+                      <div className="space-y-1">
                           <p className="text-sm text-gray-500">Reward Type</p>
                           <p className="font-medium">
                             {formData.type === 'discount' ? 'Discount' : 
@@ -2564,16 +2914,16 @@ export function CreateRewardDialog({
                         <div className="space-y-1">
                           <p className="text-sm text-gray-500">Points Cost</p>
                           <p className="font-medium">{formData.pointsCost || "Not set"}</p>
-                        </div>
+                      </div>
                         <div className="space-y-1">
                           <p className="text-sm text-gray-500">PIN Code</p>
                           <p className="font-medium">{formData.pin || "Not set"}</p>
-                        </div>
+                    </div>
                         {formData.type === 'discount' && (
                           <div className="space-y-1">
                             <p className="text-sm text-gray-500">Discount</p>
                             <p className="font-medium">{formData.voucherAmount}%</p>
-                          </div>
+                    </div>
                         )}
                         {formData.type === 'freeItem' && (
                           <div className="space-y-1">
@@ -2588,43 +2938,43 @@ export function CreateRewardDialog({
                           </div>
                         )}
                       </div>
-                    </div>
                   </div>
-                  
+                </div>
+
                   {/* Visibility Review Card */}
                   <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
                         <Eye className="h-5 w-5 text-blue-600" />
                         <h3 className="font-medium">Visibility Settings</h3>
                       </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
                         className="h-7 px-2 text-blue-600 hover:bg-blue-50"
                         onClick={() => setCurrentStep(2)}
-                      >
-                        <EditIcon className="h-4 w-4 mr-1" />
-                        Edit
-                      </Button>
-                    </div>
+                    >
+                      <EditIcon className="h-4 w-4 mr-1" />
+                      Edit
+                    </Button>
+                  </div>
                     
                     <div className="p-4">
                       <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-6">
-                          <div className="space-y-1">
+                      <div className="space-y-1">
                             <p className="text-sm text-gray-500">Visible To</p>
                             <p className="font-medium">
                               {getVisibilityText(formData.rewardVisibility)}
                             </p>
-                          </div>
+                      </div>
                           
                           {formData.rewardVisibility === 'specific' && (
-                            <div className="space-y-1">
+                        <div className="space-y-1">
                               <p className="text-sm text-gray-500">Specific Customer</p>
-                              <p className="font-medium">{customerName || customerId || "Not specified"}</p>
-                            </div>
-                          )}
+                              <p className="font-medium">{formData.specificCustomerNames?.join(', ') || "Not specified"}</p>
+                        </div>
+                      )}
                           
                           <div className="space-y-1">
                             <p className="text-sm text-gray-500">Progressive Unlock</p>
@@ -2638,8 +2988,8 @@ export function CreateRewardDialog({
                               ) : (
                                 "Immediately visible"
                               )}
-                            </p>
-                          </div>
+                        </p>
+                      </div>
                           
                           <div className="space-y-1">
                             <p className="text-sm text-gray-500">Active Period</p>
@@ -2657,26 +3007,26 @@ export function CreateRewardDialog({
                           </div>
                         </div>
                       </div>
-                    </div>
                   </div>
-                  
+                </div>
+
                   {/* Conditions Review Card */}
                   <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
                         <ListChecks className="h-5 w-5 text-blue-600" />
                         <h3 className="font-medium">Conditions</h3>
                       </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
                         className="h-7 px-2 text-blue-600 hover:bg-blue-50"
                         onClick={() => setCurrentStep(3)}
-                      >
-                        <EditIcon className="h-4 w-4 mr-1" />
-                        Edit
-                      </Button>
-                    </div>
+                    >
+                      <EditIcon className="h-4 w-4 mr-1" />
+                      Edit
+                    </Button>
+                  </div>
                     
                     <div className="p-4">
                       {formData.rewardVisibility === 'new' ? (
@@ -2713,15 +3063,15 @@ export function CreateRewardDialog({
                                     <p className="text-sm text-gray-500">Minimum Transactions</p>
                                     <p className="font-medium">
                                       {formData.conditions.minimumTransactions ? `${formData.conditions.minimumTransactions} purchases` : "Not set"}
-                                    </p>
-                                  </div>
+                          </p>
+                        </div>
                                   <div className="space-y-1">
                                     <p className="text-sm text-gray-500">Maximum Transactions</p>
                                     <p className="font-medium">
                                       {formData.conditions.maximumTransactions ? `${formData.conditions.maximumTransactions} purchases` : "No limit"}
                                     </p>
-                                  </div>
-                                </div>
+                  </div>
+                </div>
                               )}
                               
                               {formData.conditions.useSpendingRequirements && (
@@ -2776,24 +3126,24 @@ export function CreateRewardDialog({
                   {/* Limitations Review Card */}
                   <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
                         <AlertTriangle className="h-5 w-5 text-blue-600" />
                         <h3 className="font-medium">Limitations</h3>
                       </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
                         className="h-7 px-2 text-blue-600 hover:bg-blue-50"
                         onClick={() => setCurrentStep(4)}
-                      >
-                        <EditIcon className="h-4 w-4 mr-1" />
-                        Edit
-                      </Button>
-                    </div>
+                    >
+                      <EditIcon className="h-4 w-4 mr-1" />
+                      Edit
+                    </Button>
+                  </div>
                     
                     <div className="p-4">
                       <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-1">
                             <p className="text-sm text-gray-500">Total Redemption Limit</p>
                             <p className="font-medium">
@@ -2804,9 +3154,9 @@ export function CreateRewardDialog({
                             <p className="text-sm text-gray-500">Per Customer Limit</p>
                             <p className="font-medium">
                               {formData.limitations.perCustomerLimit ? `${formData.limitations.perCustomerLimit} per customer` : "1 per customer"}
-                            </p>
-                          </div>
-                        </div>
+                              </p>
+                            </div>
+                      </div>
                         
                         {formData.limitations.useTimeRestrictions && (
                           <div>
@@ -2834,7 +3184,7 @@ export function CreateRewardDialog({
                                   <p className="text-sm">
                                     Available on: {formData.limitations.dayRestrictions.join(', ')}
                                   </p>
-                                </div>
+                  </div>
                               )}
                             </div>
                           </div>
@@ -2884,6 +3234,14 @@ export function CreateRewardDialog({
               >
                 Cancel
               </Button>
+              {currentStep > 1 && (
+                <Button 
+                  variant="outline" 
+                  onClick={() => handleStepChange(currentStep - 1)}
+                >
+                  Back
+                </Button>
+              )}
               <Button 
                 onClick={async () => {
                   if (currentStep < 5) {

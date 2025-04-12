@@ -39,9 +39,9 @@ import {
 import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, getDoc } from "firebase/firestore"
+import { doc, getDoc, DocumentData } from "firebase/firestore"
 import { signOut } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+import { auth, Auth } from "@/lib/firebase"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { TapAiButton } from "@/components/tap-ai-button"
 import { Button } from "@/components/ui/button"
@@ -68,6 +68,11 @@ const navItems = [
         title: "Rewards",
         href: "/store/rewards",
         icon: Gift
+      },
+      {
+        title: "Memberships",
+        href: "/store/memberships",
+        icon: CreditCard
       },
       {
         title: "Points Rules",
@@ -136,8 +141,15 @@ interface ChecklistItem {
   href: string;
 }
 
+interface MerchantData {
+  logoUrl?: string;
+  tradingName?: string;
+  businessEmail?: string;
+  [key: string]: any;
+}
+
 export function SideNav() {
-  const pathname = usePathname()
+  const pathname = usePathname() || ""
   const router = useRouter()
   const { user } = useAuth()
   const [merchantName, setMerchantName] = useState("My Business")
@@ -145,7 +157,7 @@ export function SideNav() {
   const [initials, setInitials] = useState("MB")
   const [loading, setLoading] = useState(true)
   const [openItems, setOpenItems] = useState<Record<string, boolean>>({})
-  const [merchantData, setMerchantData] = useState(null)
+  const [merchantData, setMerchantData] = useState<MerchantData | null>(null)
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([
     { id: 'reward', title: 'Create a reward', completed: false, href: '/create' },
     { id: 'banner', title: 'Create a banner', completed: false, href: '/store/banners' },
@@ -180,7 +192,7 @@ export function SideNav() {
         const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
         
         if (merchantDoc.exists()) {
-          const data = merchantDoc.data()
+          const data = merchantDoc.data() as MerchantData
           console.log("Merchant data:", data)
           
           // Log all fields to see what's available
@@ -287,7 +299,7 @@ export function SideNav() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth)
+      await signOut(auth as Auth)
       router.push('/login')
     } catch (error) {
       console.error("Error signing out:", error)

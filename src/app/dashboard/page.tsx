@@ -46,6 +46,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { CreateRewardDialog } from "@/components/create-reward-dialog"
 
 type TimeframeType = "today" | "yesterday" | "7days" | "30days"
 
@@ -83,6 +84,9 @@ export default function DashboardPage() {
   const [insightLoading, setInsightLoading] = useState(false)
   const [insightData, setInsightData] = useState<any>(null)
   const [insightError, setInsightError] = useState<string | null>(null)
+  const [topViewingCustomers, setTopViewingCustomers] = useState<any[]>([])
+  const [isRewardDialogOpen, setIsRewardDialogOpen] = useState(false)
+  const [selectedCustomer, setSelectedCustomer] = useState<{id: string, name: string} | null>(null)
 
   const getDateRange = (tf: TimeframeType): { start: Date; end: Date } => {
     const now = new Date()
@@ -498,20 +502,11 @@ export default function DashboardPage() {
         const transactionsSnapshot = await getDocs(transactionsQuery)
         const totalPointsIssued = transactionsSnapshot.docs.reduce((total, doc) => total + (doc.data().amount || 0), 0)
         
-        // Fetch redemption rate
-        const redemptionsQuery = query(
-          collection(db, 'redemptions'),
-          where('merchantId', '==', user.uid),
-          where('createdAt', '>=', start),
-          where('createdAt', '<=', end)
-        )
-        const redemptionsSnapshot = await getDocs(redemptionsQuery)
-        const totalRedemptions = redemptionsSnapshot.docs.length
-        const redemptionRate = totalRedemptions / totalCustomers
-        
-        // Fetch average order value
-        const totalAmount = transactionsSnapshot.docs.reduce((total, doc) => total + (doc.data().amount || 0), 0)
-        const avgOrderValue = totalAmount / totalCustomers
+        // Fetch store views
+        const storeViewsRef = collection(db, 'merchants', user.uid, 'storeViews')
+        const storeViewsQuery = query(storeViewsRef)
+        const storeViewsSnapshot = await getDocs(storeViewsQuery)
+        const totalStoreViews = storeViewsSnapshot.docs.length
         
         // Calculate customer growth
         const customersRef2 = collection(db, 'customers')
@@ -542,17 +537,18 @@ export default function DashboardPage() {
           0
         )
         
-        // Fetch store views
-        const storeViewsRef = collection(db, 'analytics')
-        const storeViewsQuery = query(
-          storeViewsRef,
-          where('merchantId', '==', user.uid),
-          where('timestamp', '>=', start),
-          where('timestamp', '<=', end),
-          where('type', '==', 'storeView')
+        // Fetch average order value
+        const totalAmount = transactionsSnapshot.docs.reduce((total, doc) => total + (doc.data().amount || 0), 0)
+        const avgOrderValue = totalAmount / totalCustomers
+        
+        // Fetch redemptions data
+        const redemptionsRef = collection(db, 'redemptions')
+        const redemptionsQuery = query(
+          redemptionsRef,
+          where('merchantId', '==', user.uid)
         )
-        const storeViewsSnapshot = await getDocs(storeViewsQuery)
-        const totalStoreViews = storeViewsSnapshot.docs.length
+        const redemptionsSnapshot = await getDocs(redemptionsQuery)
+        const totalRedemptions = redemptionsSnapshot.docs.length
         
         // Update metrics state with all values
         setMetrics({
@@ -560,13 +556,12 @@ export default function DashboardPage() {
           activeCustomers,
           customerGrowth,
           totalPointsIssued,
-          redemptionRate,
+          totalStoreViews,
           avgOrderValue,
           totalTransactions: transactionsSnapshot.docs.length,
           totalRedemptions,
           activeRewards,
           totalBannerImpressions,
-          totalStoreViews,
           customersWithRedeemableRewards,
           customersWithoutRedeemableRewards
         })
@@ -707,6 +702,79 @@ export default function DashboardPage() {
       setChartReady(false)
     }
   }, [user?.uid, chartTimeframe])
+
+  useEffect(() => {
+    const fetchTopViewingCustomers = async () => {
+      if (!user?.uid) return
+      
+      try {
+        // Fetch store views
+        const storeViewsRef = collection(db, 'merchants', user.uid, 'storeViews')
+        const storeViewsQuery = query(storeViewsRef, orderBy('timestamp', 'desc'), limit(20))
+        const storeViewsSnapshot = await getDocs(storeViewsQuery)
+        
+        // Count views by customer
+        const customerViewCounts: Record<string, {count: number, lastView: Date}> = {}
+        
+        storeViewsSnapshot.docs.forEach(doc => {
+          const data = doc.data()
+          if (data.customerId) {
+            if (!customerViewCounts[data.customerId]) {
+              customerViewCounts[data.customerId] = {
+                count: 0,
+                lastView: data.timestamp?.toDate() || new Date()
+              }
+            }
+            customerViewCounts[data.customerId].count++
+          }
+        })
+        
+        // Convert to array and sort by count
+        const sortedCustomers = Object.entries(customerViewCounts)
+          .map(([customerId, data]) => ({
+            id: customerId,
+            viewCount: data.count,
+            lastView: data.lastView,
+            name: 'Loading...',
+            email: '',
+            pointsBalance: 0
+          }))
+          .sort((a, b) => b.viewCount - a.viewCount)
+          .slice(0, 5)
+        
+        // Fetch customer details
+        const enhancedCustomers = await Promise.all(
+          sortedCustomers.map(async (customer) => {
+            try {
+              const customerDoc = await getDoc(doc(db, 'customers', customer.id))
+              if (customerDoc.exists()) {
+                const data = customerDoc.data()
+                return {
+                  ...customer,
+                  name: data.fullName || data.name || 'Unknown Customer',
+                  email: data.email || '',
+                  pointsBalance: data.pointsBalance || 0
+                }
+              }
+              return customer
+            } catch (error) {
+              console.error('Error fetching customer details:', error)
+              return customer
+            }
+          })
+        )
+        
+        setTopViewingCustomers(enhancedCustomers)
+        
+      } catch (error) {
+        console.error('Error fetching top viewing customers:', error)
+      }
+    }
+    
+    if (user?.uid) {
+      fetchTopViewingCustomers()
+    }
+  }, [user?.uid, timeframe])
 
   const fetchMerchantInsights = async () => {
     if (!user?.uid) {
@@ -970,17 +1038,17 @@ export default function DashboardPage() {
                   <CardContent className="p-3">
                     <div className="flex justify-between">
                       <div className="space-y-0.5">
-                        <p className="text-sm font-medium text-gray-500">Redemption Rate</p>
-                        <div className="text-lg font-semibold">{metrics.redemptionRate}%</div>
+                        <p className="text-sm font-medium text-gray-500">Store Views</p>
+                        <div className="text-lg font-semibold">{metrics.totalStoreViews}</div>
                       </div>
-                      <div className="h-8 w-8 rounded-full bg-green-50 flex items-center justify-center">
-                        <ShoppingCart className="h-4 w-4 text-green-500" />
+                      <div className="h-8 w-8 rounded-full bg-indigo-50 flex items-center justify-center">
+                        <Eye className="h-4 w-4 text-indigo-500" />
                       </div>
                     </div>
                     <div className="mt-1 flex items-center text-xs">
-                      <div className="text-red-600 flex items-center">
-                        <ArrowDown className="h-3 w-3 mr-1" />
-                        <span>1.2%</span>
+                      <div className="text-green-600 flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1" />
+                        <span>5.2%</span>
                       </div>
                       <span className="text-gray-500 ml-1.5">vs. previous period</span>
                     </div>
@@ -1249,105 +1317,161 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          {/* Popular Rewards section - Full width */}
-          <Card className="rounded-lg border border-gray-200 overflow-hidden">
-            <CardHeader className="py-3 px-6 bg-gray-50 border-b border-gray-100 flex flex-row justify-between items-center">
-              <div>
-                <CardTitle className="text-base font-medium text-gray-900">Popular Rewards</CardTitle>
-                <p className="text-sm text-gray-500 mt-0.5">Most redeemed rewards by customers</p>
-              </div>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50/50 h-8 px-2 ml-auto"
-                asChild
-              >
-                <Link href="/store/rewards" className="flex items-center gap-1">
-                  View all
-                  <ChevronRight className="h-3 w-3" />
-                </Link>
-              </Button>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+          {/* Top Viewing Customers */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card className="rounded-lg border border-gray-200 overflow-hidden">
+              <CardHeader className="py-3 px-6 bg-gray-50 border-b border-gray-100 flex flex-row justify-between items-center">
+                <div>
+                  <CardTitle className="text-base font-medium text-gray-900">Top Store Visitors</CardTitle>
+                  <p className="text-sm text-gray-500 mt-0.5">Customers who view your store most frequently</p>
                 </div>
-              ) : popularRewards.length === 0 ? (
-                <div className="py-6 text-center">
-                  <Gift className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">No rewards data available</p>
-                </div>
-              ) : (
-                <div className="divide-y">
-                  {popularRewards.map((reward) => (
-                    <div key={reward.id} className="px-6 py-2.5 hover:bg-gray-50">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="h-8 w-8 rounded-md bg-purple-50 flex items-center justify-center">
-                            {reward.programtype === 'coffee' ? (
-                              <Coffee className="h-4 w-4 text-blue-600" />
-                            ) : reward.programtype === 'voucher' ? (
-                              <Ticket className="h-4 w-4 text-green-600" />
-                            ) : (
-                              <Gift className="h-4 w-4 text-purple-500" />
-                            )}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium text-sm">{reward.rewardName}</p>
-                              {reward.programtype === 'coffee' && (
-                                <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-md border border-blue-200 flex items-center">
-                                  <Coffee className="h-3 w-3 mr-1" />
-                                  Coffee Card
-                                </span>
-                              )}
-                              {reward.programtype === 'voucher' && (
-                                <span className="px-1.5 py-0.5 bg-green-50 text-green-700 text-xs rounded-md border border-green-200 flex items-center">
-                                  <Ticket className="h-3 w-3 mr-1" />
-                                  Voucher
-                                </span>
-                              )}
+              </CardHeader>
+              <CardContent className="p-0">
+                {topViewingCustomers.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <Users className="h-10 w-10 text-gray-300 mb-2" />
+                    <p className="text-sm text-gray-500">No store visitors data available yet</p>
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {topViewingCustomers.map((customer) => (
+                      <div key={customer.id} className="px-6 py-3 hover:bg-gray-50">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-full bg-gray-100 flex items-center justify-center">
+                              <Users className="h-5 w-5 text-gray-500" />
                             </div>
-                            <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
-                              <p>{reward.pointsCost} points</p>
-                              
-                              {/* Add impressions with eye icon */}
-                              <div className="flex items-center gap-1">
-                                <Eye className="h-3 w-3 text-gray-400" />
-                                <span>{reward.impressions || 0} views</span>
+                            <div>
+                              <p className="font-medium text-sm">{customer.name}</p>
+                              <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
+                                <p>{customer.viewCount} views</p>
+                                <p>Last visit: {formatDistanceToNow(customer.lastView, { addSuffix: true })}</p>
                               </div>
-                              
-                              {/* Add last redeemed time with clock icon */}
-                              {reward.lastRedeemedAt && (
-                                <div className="flex items-center gap-1">
-                                  <Clock className="h-3 w-3 text-gray-400" />
-                                  <span>{formatDistanceToNow(reward.lastRedeemedAt, { addSuffix: true })}</span>
-                                </div>
-                              )}
                             </div>
                           </div>
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="h-8 gap-1"
+                            onClick={() => {
+                              setSelectedCustomer({
+                                id: customer.id,
+                                name: customer.name
+                              })
+                              setIsRewardDialogOpen(true)
+                            }}
+                          >
+                            <Gift className="h-3.5 w-3.5" />
+                            Create Reward
+                          </Button>
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium">{reward.redemptionCount} redeemed</p>
-                          <div className="flex items-center justify-end gap-1 text-xs">
-                            {reward.trend === "up" ? (
-                              <ArrowUp className="h-3 w-3 text-green-500" />
-                            ) : (
-                              <ArrowDown className="h-3 w-3 text-red-500" />
-                            )}
-                            <span className={reward.trend === "up" ? "text-green-500" : "text-red-500"}>
-                              {reward.changePercentage}%
-                            </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Popular Rewards */}
+            <Card className="rounded-lg border border-gray-200 overflow-hidden">
+              <CardHeader className="py-3 px-6 bg-gray-50 border-b border-gray-100 flex flex-row justify-between items-center">
+                <div>
+                  <CardTitle className="text-base font-medium text-gray-900">Popular Rewards</CardTitle>
+                  <p className="text-sm text-gray-500 mt-0.5">Most redeemed rewards by customers</p>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50/50 h-8 px-2 ml-auto"
+                  asChild
+                >
+                  <Link href="/store/rewards" className="flex items-center gap-1">
+                    View all
+                    <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </Button>
+              </CardHeader>
+              <CardContent className="p-0">
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+                  </div>
+                ) : popularRewards.length === 0 ? (
+                  <div className="py-6 text-center">
+                    <Gift className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">No rewards data available</p>
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {popularRewards.map((reward) => (
+                      <div key={reward.id} className="px-6 py-2.5 hover:bg-gray-50">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-md bg-purple-50 flex items-center justify-center">
+                              {reward.programtype === 'coffee' ? (
+                                <Coffee className="h-4 w-4 text-blue-600" />
+                              ) : reward.programtype === 'voucher' ? (
+                                <Ticket className="h-4 w-4 text-green-600" />
+                              ) : (
+                                <Gift className="h-4 w-4 text-purple-500" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-sm">{reward.rewardName}</p>
+                                {reward.programtype === 'coffee' && (
+                                  <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-md border border-blue-200 flex items-center">
+                                    <Coffee className="h-3 w-3 mr-1" />
+                                    Coffee Card
+                                  </span>
+                                )}
+                                {reward.programtype === 'voucher' && (
+                                  <span className="px-1.5 py-0.5 bg-green-50 text-green-700 text-xs rounded-md border border-green-200 flex items-center">
+                                    <Ticket className="h-3 w-3 mr-1" />
+                                    Voucher
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
+                                <p>{reward.pointsCost} points</p>
+                                
+                                {/* Add impressions with eye icon */}
+                                <div className="flex items-center gap-1">
+                                  <Eye className="h-3 w-3 text-gray-400" />
+                                  <span>{reward.impressions || 0} views</span>
+                                </div>
+                                
+                                {/* Add last redeemed time with clock icon */}
+                                {reward.lastRedeemedAt && (
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3 text-gray-400" />
+                                    <span>{formatDistanceToNow(reward.lastRedeemedAt, { addSuffix: true })}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-medium">{reward.redemptionCount} redeemed</p>
+                            <div className="flex items-center justify-end gap-1 text-xs">
+                              {reward.trend === "up" ? (
+                                <ArrowUp className="h-3 w-3 text-green-500" />
+                              ) : (
+                                <ArrowDown className="h-3 w-3 text-red-500" />
+                              )}
+                              <span className={reward.trend === "up" ? "text-green-500" : "text-red-500"}>
+                                {reward.changePercentage}%
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Live and Scheduled Banners Section */}
           {(activeBanners.length > 0 || scheduledBanners.length > 0) && (
@@ -1541,6 +1665,14 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Create Reward Dialog */}
+      <CreateRewardDialog
+        open={isRewardDialogOpen}
+        onOpenChange={setIsRewardDialogOpen}
+        customerId={selectedCustomer?.id}
+        customerName={selectedCustomer?.name}
+      />
     </PageTransition>
   )
 }

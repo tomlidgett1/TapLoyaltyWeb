@@ -616,20 +616,18 @@ export function CreateRewardDialog({
       console.log("customerNames:", formData.specificCustomerNames);
 
       // Handle multiple specific customers if available
-      let uniqueCustomerIds = {};
+      let uniqueCustomerIds = [];
       if (formData.specificCustomerIds && formData.specificCustomerIds.length > 0) {
-        formData.specificCustomerIds.forEach(id => {
-          uniqueCustomerIds[id] = true;
-        });
-        console.log(`Setting uniqueCustomerIds for ${formData.specificCustomerIds.length} customers`);
+        uniqueCustomerIds = [...formData.specificCustomerIds];
+        console.log(`Setting uniqueCustomerIds array for ${uniqueCustomerIds.length} customers`);
       } 
       // Fall back to the single customerId prop if available
       else if (customerId) {
-        uniqueCustomerIds = { [customerId]: true };
-        console.log(`Setting uniqueCustomerIds.${customerId} = true`);
+        uniqueCustomerIds = [customerId];
+        console.log(`Setting uniqueCustomerIds array with single customer: ${customerId}`);
       }
 
-      // Debug the created object
+      // Debug the created array
       debugObject(uniqueCustomerIds, "uniqueCustomerIds");
 
       // Add debug logging for conditions
@@ -704,8 +702,8 @@ export function CreateRewardDialog({
         // Remove the specificCustomerIds array from the final data
         delete rewardData.specificCustomerIds;
         
-        // Also remove uniqueCustomerIds if it exists
-        delete rewardData.uniqueCustomerIds;
+        // Keep uniqueCustomerIds for redemption tracking
+        // delete rewardData.uniqueCustomerIds; <- Remove this line
       }
       // Fall back to the single customerId prop if available
       else if (customerId) {
@@ -717,9 +715,8 @@ export function CreateRewardDialog({
         
         console.log(`Setting customers array with single customer:`, [customerId]);
         
-        // Don't include specificCustomerIds in the final data
-        // Also remove uniqueCustomerIds if it exists
-        delete rewardData.uniqueCustomerIds;
+        // Set uniqueCustomerIds as an array with the single customerId
+        rewardData.uniqueCustomerIds = [customerId];
       }
 
       // Debug the final rewardData

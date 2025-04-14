@@ -46,7 +46,8 @@ import {
   X,
   Sparkles,
   HelpCircle,
-  Package
+  Package,
+  DollarSign
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -291,6 +292,10 @@ export default function RewardsPage() {
   const [rewardToDelete, setRewardToDelete] = useState<string | null>(null)
   const [isIntroRewardDialogOpen, setIsIntroRewardDialogOpen] = useState(false)
   const [hasIntroReward, setHasIntroReward] = useState(false)
+  const [isConfirmDeleteProgramOpen, setIsConfirmDeleteProgramOpen] = useState(false)
+  const [programToDelete, setProgramToDelete] = useState<string | null>(null)
+  // Add a state to track expanded program cards
+  const [expandedPrograms, setExpandedPrograms] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     const fetchRewards = async () => {
@@ -394,9 +399,99 @@ export default function RewardsPage() {
     checkIntroReward()
   }, [user?.uid])
 
-  // Update the filtering logic to filter by category
+  // Add handleSort function before getFilteredRewards
+  const handleSort = (field: SortField) => {
+    if (field === sortField) {
+      setSortDirection(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setSortField(field)
+      setSortDirection("asc")
+    }
+  }
 
-  // First, let's modify the getFilteredRewards function
+  // Move the applyFilters function before getFilteredRewards
+  const handleStatusFilterChange = (status: string, checked: boolean) => {
+    setStatusFilters(prev => ({
+      ...prev,
+      [status.toLowerCase()]: checked
+    }))
+  }
+
+  const handleTypeFilterChange = (type: string, checked: boolean) => {
+    setTypeFilters(prev => ({
+      ...prev,
+      [type.toLowerCase()]: checked
+    }))
+  }
+
+  const applyFilters = (data: Reward[]) => {
+    return data.filter(reward => {
+      // Apply status filter
+      const isActive = reward.isActive
+      if ((isActive && !statusFilters.active) || (!isActive && !statusFilters.inactive)) {
+        return false
+      }
+
+      // Apply type filter
+      const type = reward.type?.toLowerCase() || 'other'
+      if (!typeFilters[type as keyof typeof typeFilters] && !typeFilters.other) {
+        return false
+      }
+
+      // Apply points cost filter
+      if (reward.pointsCost < pointsCostRange[0] || reward.pointsCost > pointsCostRange[1]) {
+        return false
+      }
+
+      // Apply date filter
+      if (dateFilter !== "all") {
+        const dateObj = reward.createdAt
+        
+        if (!dateObj) return false
+        
+        if (dateFilter === "custom") {
+          // Handle custom date range
+          if (customDateRange.start && !customDateRange.end) {
+            return dateObj >= customDateRange.start
+          } else if (!customDateRange.start && customDateRange.end) {
+            const endOfDay = new Date(customDateRange.end)
+            endOfDay.setHours(23, 59, 59, 999)
+            return dateObj <= endOfDay
+          } else if (customDateRange.start && customDateRange.end) {
+            const endOfDay = new Date(customDateRange.end)
+            endOfDay.setHours(23, 59, 59, 999)
+            return dateObj >= customDateRange.start && dateObj <= endOfDay
+          }
+          return true
+        } else {
+          const now = new Date()
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+          const yesterday = new Date(today)
+          yesterday.setDate(yesterday.getDate() - 1)
+          const thisWeekStart = new Date(today)
+          thisWeekStart.setDate(today.getDate() - today.getDay())
+          const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+          
+          switch (dateFilter) {
+            case "today":
+              return dateObj >= today
+            case "yesterday":
+              return dateObj >= yesterday && dateObj < today
+            case "thisWeek":
+              return dateObj >= thisWeekStart
+            case "thisMonth":
+              return dateObj >= thisMonthStart
+            default:
+              return true
+          }
+        }
+      }
+
+      return true
+    })
+  }
+
+  // Fix the missing closing parenthesis in getFilteredRewards
   const getFilteredRewards = () => {
     let filtered = rewards.filter(reward => {
       // Apply category filter
@@ -460,6 +555,14 @@ export default function RewardsPage() {
     });
   };
 
+  // Add a helper function to toggle program expansion
+  const toggleProgramExpansion = (programType: string) => {
+    setExpandedPrograms(prev => ({
+      ...prev,
+      [programType]: !prev[programType]
+    }));
+  };
+
   // Then update the filteredRewards calculation in each tab
   // For the "all" tab, we use the existing filteredRewards variable
 
@@ -468,72 +571,12 @@ export default function RewardsPage() {
     // Filter rewards by category
     const categoryFilteredRewards = rewards
       .filter(reward => {
-        // Filter by search query
-        if (searchQuery) {
-          const query = searchQuery.toLowerCase();
-          return (
-            (reward.rewardName || "").toLowerCase().includes(query) ||
-            (reward.description || "").toLowerCase().includes(query)
-          );
-        }
-        return true;
-      })
-      .filter(reward => {
-        // Filter by specific category
-        if (category === "individual") {
-          return reward.category === "individual" || (!reward.programtype && !reward.category);
-        } else if (category === "customer-specific") {
-          return reward.category === "customer-specific";
-        } else if (category === "programs") {
-          return reward.category === "program" || !!reward.programtype;
-        }
-        return false;
-      })
-      .sort((a, b) => {
-    // Sort by selected field
-        if (sortField === "rewardName") {
-          return sortDirection === "asc"
-            ? (a.rewardName || "").localeCompare(b.rewardName || "")
-            : (b.rewardName || "").localeCompare(a.rewardName || "");
-        } else if (sortField === "pointsCost") {
-          return sortDirection === "asc"
-            ? (a.pointsCost || 0) - (b.pointsCost || 0)
-            : (b.pointsCost || 0) - (a.pointsCost || 0);
-        } else if (sortField === "redemptionCount") {
-          return sortDirection === "asc"
-            ? (a.redemptionCount || 0) - (b.redemptionCount || 0)
-            : (b.redemptionCount || 0) - (a.redemptionCount || 0);
-        } else if (sortField === "redeemableCustomers") {
-          return sortDirection === "asc"
-            ? (a.redeemableCustomers || 0) - (b.redeemableCustomers || 0)
-            : (b.redeemableCustomers || 0) - (a.redeemableCustomers || 0);
-        } else if (sortField === "impressions") {
-          return sortDirection === "asc"
-            ? (a.impressions || 0) - (b.impressions || 0)
-            : (b.impressions || 0) - (a.impressions || 0);
-        } else if (sortField === "createdAt") {
-          const aTime = a.createdAt ? a.createdAt.getTime() : 0;
-          const bTime = b.createdAt ? b.createdAt.getTime() : 0;
-          return sortDirection === "asc"
-            ? aTime - bTime
-            : bTime - aTime;
-        } else if (sortField === "lastRedeemed") {
-          const aRedeemed = a.lastRedeemed ? a.lastRedeemed.getTime() : 0;
-          const bRedeemed = b.lastRedeemed ? b.lastRedeemed.getTime() : 0;
-          return sortDirection === "asc"
-            ? aRedeemed - bRedeemed
-            : bRedeemed - aRedeemed;
-        } else if (sortField === "isActive") {
-          return sortDirection === "asc"
-            ? (a.isActive ? 1 : 0) - (b.isActive ? 1 : 0)
-            : (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0);
-        }
-        return 0;
+        return reward.category === category;
       });
-      
+
     return (
-      <TabsContent key={category} value={category} className="mt-0">
-        <Card>
+      <TabsContent value={category} className="mt-0">
+        <Card className="rounded-lg overflow-hidden">
           <CardContent className="p-0">
             <Table>
               <TableHeader>
@@ -665,24 +708,11 @@ export default function RewardsPage() {
                     <TableCell colSpan={8} className="h-24 text-center">
                       <div className="flex flex-col items-center justify-center">
                         <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                          {category === "individual" ? (
-                            <Gift className="h-6 w-6 text-muted-foreground" />
-                          ) : category === "customer-specific" ? (
-                            <Users className="h-6 w-6 text-muted-foreground" />
-                          ) : (
-                            <Award className="h-6 w-6 text-muted-foreground" />
-                          )}
+                          <Gift className="h-6 w-6 text-muted-foreground" />
                         </div>
-                        <h3 className="mt-4 text-lg font-medium">
-                          No {category === "individual" ? "individual" : 
-                              category === "customer-specific" ? "customer-specific" : 
-                              "program"} rewards found
-                        </h3>
+                        <h3 className="mt-4 text-lg font-medium">No rewards found</h3>
                         <p className="text-sm text-muted-foreground mt-1">
-                          {searchQuery ? "Try adjusting your search query" : `Create your first ${
-                            category === "individual" ? "individual" : 
-                            category === "customer-specific" ? "customer-specific" : 
-                            "program"} reward`}
+                          {searchQuery ? "Try adjusting your search query" : "Create your first reward to get started"}
                         </p>
                         {!searchQuery && (
                           <Button 
@@ -690,9 +720,7 @@ export default function RewardsPage() {
                             onClick={() => router.push('/create')}
                           >
                             <Plus className="h-4 w-4" />
-                            Create {category === "individual" ? "Individual Reward" : 
-                                    category === "customer-specific" ? "Customer-Specific Reward" : 
-                                    "Program"}
+                            Create Reward
                           </Button>
                         )}
                       </div>
@@ -819,7 +847,7 @@ export default function RewardsPage() {
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge 
-                          variant={reward.isActive ? "success" : "destructive"}
+                          variant="outline"
                           className={cn(
                             reward.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"
                           )}
@@ -885,15 +913,7 @@ export default function RewardsPage() {
     );
   })}
 
-  const handleSort = (field: SortField) => {
-    if (field === sortField) {
-      setSortDirection(prev => prev === "asc" ? "desc" : "asc")
-    } else {
-      setSortField(field)
-      setSortDirection("asc")
-    }
-  }
-
+  // Add other required functions
   const toggleRewardStatus = async (rewardId: string, currentStatus: boolean) => {
     if (!user?.uid) return;
     
@@ -933,7 +953,7 @@ export default function RewardsPage() {
   }
 
   const confirmDelete = async () => {
-    if (!rewardToDelete) return
+    if (!rewardToDelete || !user) return
     
     try {
       const rewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardToDelete)
@@ -959,292 +979,7 @@ export default function RewardsPage() {
     }
   }
 
-  const formatDate = (date: Date) => {
-    return format(date, "MMM d, yyyy")
-  }
-
-  const getRewardTypeLabel = (type: string) => {
-    switch (type) {
-      case "item":
-        return "Item"
-      case "discount":
-        return "Discount"
-      case "experience":
-        return "Experience"
-      default:
-        return "Reward"
-    }
-  }
-
-  const getProgramTypeLabel = (programtype?: string) => {
-    switch (programtype) {
-      case "punch":
-        return "Punch Card"
-      case "tier":
-        return "Tier Program"
-      case "subscription":
-        return "Subscription"
-      default:
-        return "Program"
-    }
-  }
-
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case "individual":
-        return <Gift className="h-4 w-4" />
-      case "customer-specific":
-        return <User className="h-4 w-4" />
-      case "program":
-        return <Award className="h-4 w-4" />
-      default:
-        return <Gift className="h-4 w-4" />
-    }
-  }
-
-  const getCategoryLabel = (category: string) => {
-    switch (category) {
-      case "individual":
-        return "Individual"
-      case "customer-specific":
-        return "Customer-Specific"
-      case "program":
-        return "Program"
-      default:
-        return "Reward"
-    }
-  }
-
-  const SortButton = ({ field, children }: { field: SortField, children: React.ReactNode }) => (
-    <button
-      onClick={() => handleSort(field)}
-      className="flex items-center gap-1 hover:text-foreground"
-    >
-      {children}
-      {sortField === field && (
-        sortDirection === "desc" ? 
-          <ChevronDown className="h-4 w-4" /> : 
-          <ChevronUp className="h-4 w-4" />
-      )}
-    </button>
-  )
-
-  const processVoiceCommand = async (transcript: string) => {
-    setProcessingVoiceCommand(true);
-    
-    try {
-      // Show a processing toast
-      toast({
-        title: "Processing voice command",
-        description: "Please wait while we process your request...",
-      });
-      
-      // Get or create the assistant
-      const assistant = await getOrCreateAssistant();
-      
-      // Create a new thread
-      const thread = await createThread();
-      
-      // Add the user's message to the thread
-      await addMessage(thread.id, transcript);
-      
-      // Run the assistant on the thread
-      const response = await runAssistant(assistant.id, thread.id);
-      
-      // Log the entire response for debugging
-      console.log("Full assistant response:", response);
-      
-      // Check if the response contains reward data
-      if (response && response.includes('```json')) {
-        // Extract JSON data from the response
-        const jsonMatch = response.match(/```json\n([\s\S]*?)\n```/);
-        if (jsonMatch && jsonMatch[1]) {
-          try {
-            const rewardData = JSON.parse(jsonMatch[1]);
-            
-            // Log the parsed JSON data
-            console.log("Parsed reward JSON data:", rewardData);
-            
-            // Format the reward data for preview
-            const previewData = {
-              ...rewardData,
-              // Keep conditions as an array if it already is one
-              conditions: Array.isArray(rewardData.conditions) 
-                ? rewardData.conditions 
-                : [],
-              // Keep limitations as an array if it already is one
-              limitations: Array.isArray(rewardData.limitations) 
-                ? rewardData.limitations 
-                : []
-            };
-            
-            // Set the preview data directly
-            setPreviewReward(previewData);
-            
-            // Format the reward data for the create dialog
-            const formattedRewardData = {
-              rewardName: rewardData.rewardName || "",
-              description: rewardData.description || "",
-              type: rewardData.type || "standard",
-              rewardVisibility: rewardData.rewardVisibility || "all",
-              pin: rewardData.pin || "",
-              pointsCost: rewardData.pointsCost?.toString() || "0",
-              isActive: rewardData.isActive !== undefined ? rewardData.isActive : true,
-              
-              // Improved delayedVisibility handling
-              delayedVisibility: !!rewardData.delayedVisibility,
-              delayedVisibilityType: rewardData.delayedVisibility?.type || "transactions",
-              delayedVisibilityTransactions: rewardData.delayedVisibility?.type === "transactions" 
-                ? rewardData.delayedVisibility.value?.toString() || "" 
-                : "",
-              delayedVisibilitySpend: rewardData.delayedVisibility?.type === "totalLifetimeSpend" 
-                ? rewardData.delayedVisibility.value?.toString() || "" 
-                : "",
-              
-              // Other fields
-              itemName: rewardData.itemName || "",
-              voucherAmount: rewardData.voucherAmount?.toString() || "",
-              spendThreshold: rewardData.spendThreshold?.toString() || "",
-              
-              // Process conditions array into the expected object format
-              conditions: {
-                useTransactionRequirements: false,
-                useSpendingRequirements: false,
-                useTimeRequirements: false,
-                minimumTransactions: "",
-                maximumTransactions: "",
-                daysSinceJoined: "",
-                daysSinceLastVisit: "",
-                minimumLifetimeSpend: "",
-                minimumPointsBalance: "",
-                membershipLevel: "",
-                newCustomer: false,
-                
-                // Map array conditions to object properties
-                ...(Array.isArray(rewardData.conditions) 
-                  ? rewardData.conditions.reduce((acc, condition) => {
-                      if (condition.type === "minimumSpend") {
-                        acc.useSpendingRequirements = true;
-                        acc.minimumSpend = condition.amount?.toString() || condition.value?.toString() || "";
-                      }
-                      if (condition.type === "minimumLifetimeSpend") {
-                        acc.useSpendingRequirements = true;
-                        acc.minimumLifetimeSpend = condition.amount?.toString() || condition.value?.toString() || "";
-                      }
-                      if (condition.type === "minimumTransactions") {
-                        acc.useTransactionRequirements = true;
-                        acc.minimumTransactions = condition.amount?.toString() || condition.value?.toString() || "";
-                      }
-                      if (condition.type === "maximumTransactions") {
-                        acc.useTransactionRequirements = true;
-                        acc.maximumTransactions = condition.amount?.toString() || condition.value?.toString() || "";
-                      }
-                      if (condition.type === "daysSinceJoined") {
-                        acc.useTimeRequirements = true;
-                        acc.daysSinceJoined = condition.amount?.toString() || condition.value?.toString() || "";
-                      }
-                      if (condition.type === "daysSinceLastVisit") {
-                        acc.useTimeRequirements = true;
-                        acc.daysSinceLastVisit = condition.amount?.toString() || condition.value?.toString() || "";
-                      }
-                      if (condition.type === "minimumPointsBalance") {
-                        acc.minimumPointsBalance = condition.amount?.toString() || condition.value?.toString() || "";
-                      }
-                      if (condition.type === "membershipLevel") {
-                        acc.membershipLevel = condition.value?.toString() || "";
-                      }
-                      if (condition.type === "newCustomer") {
-                        acc.newCustomer = true;
-                      }
-                      return acc;
-                    }, {})
-                  : {})
-              },
-              
-              // Process limitations array into the expected object format
-              limitations: {
-                totalRedemptionLimit: "",
-                perCustomerLimit: "",
-                useTimeRestrictions: false,
-                startTime: "",
-                endTime: "",
-                dayRestrictions: [],
-                
-                // Map array limitations to object properties
-                ...(Array.isArray(rewardData.limitations) 
-                  ? rewardData.limitations.reduce((acc, limitation) => {
-                      if (limitation.type === "customerLimit") {
-                        acc.perCustomerLimit = limitation.value?.toString() || "";
-                      }
-                      if (limitation.type === "totalRedemptionLimit") {
-                        acc.totalRedemptionLimit = limitation.value?.toString() || "";
-                      }
-                      if (limitation.type === "daysOfWeek") {
-                        acc.useTimeRestrictions = true;
-                        acc.dayRestrictions = Array.isArray(limitation.value) ? limitation.value : [];
-                      }
-                      if (limitation.type === "timeOfDay" || limitation.type === "timeRestriction") {
-                        acc.useTimeRestrictions = true;
-                        if (typeof limitation.value === 'object') {
-                          acc.startTime = limitation.value.startTime || "";
-                          acc.endTime = limitation.value.endTime || "";
-                        } else if (typeof limitation.startTime === 'string' && typeof limitation.endTime === 'string') {
-                          // Handle case where startTime and endTime are direct properties
-                          acc.startTime = limitation.startTime;
-                          acc.endTime = limitation.endTime;
-                        }
-                      }
-                      return acc;
-                    }, {})
-                  : {})
-              },
-              
-              // Handle active period
-              hasActivePeriod: false,
-              activePeriod: {
-                startDate: new Date().toISOString(),
-                endDate: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString(),
-              }
-            };
-            
-            setCreateRewardData(formattedRewardData);
-            
-            toast({
-              title: "Reward created",
-              description: "Your voice command has been processed successfully.",
-            });
-          } catch (error) {
-            console.error("Error parsing JSON:", error);
-            toast({
-              title: "Error",
-              description: "Could not create reward from voice command.",
-              variant: "destructive",
-            });
-          }
-        } else {
-          console.log("No JSON data found in response");
-        }
-      } else {
-        // Handle text response
-        setVoiceCommandResult(response);
-        
-        toast({
-          title: "Command processed",
-          description: "Your voice command has been processed.",
-        });
-      }
-    } catch (error) {
-      console.error("Error processing voice command:", error);
-      toast({
-        title: "Error",
-        description: "Failed to process voice command. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setProcessingVoiceCommand(false);
-    }
-  };
-
+  // Add RewardPreview component back
   const RewardPreview = ({ reward, onClose }: { reward: any, onClose: () => void }) => {
     const [showConditions, setShowConditions] = useState(false);
     const [showLimitations, setShowLimitations] = useState(false);
@@ -1455,87 +1190,6 @@ export default function RewardsPage() {
       </div>
     );
   };
-
-  const handleStatusFilterChange = (status: string, checked: boolean) => {
-    setStatusFilters(prev => ({
-      ...prev,
-      [status.toLowerCase()]: checked
-    }))
-  }
-
-  const handleTypeFilterChange = (type: string, checked: boolean) => {
-    setTypeFilters(prev => ({
-      ...prev,
-      [type.toLowerCase()]: checked
-    }))
-  }
-
-  const applyFilters = (data: Reward[]) => {
-    return data.filter(reward => {
-      // Apply status filter
-      const isActive = reward.isActive
-      if ((isActive && !statusFilters.active) || (!isActive && !statusFilters.inactive)) {
-        return false
-      }
-
-      // Apply type filter
-      const type = reward.type?.toLowerCase() || 'other'
-      if (!typeFilters[type] && !typeFilters.other) {
-        return false
-      }
-
-      // Apply points cost filter
-      if (reward.pointsCost < pointsCostRange[0] || reward.pointsCost > pointsCostRange[1]) {
-        return false
-      }
-
-      // Apply date filter
-      if (dateFilter !== "all") {
-        const dateObj = reward.createdAt
-        
-        if (!dateObj) return false
-        
-        if (dateFilter === "custom") {
-          // Handle custom date range
-          if (customDateRange.start && !customDateRange.end) {
-            return dateObj >= customDateRange.start
-          } else if (!customDateRange.start && customDateRange.end) {
-            const endOfDay = new Date(customDateRange.end)
-            endOfDay.setHours(23, 59, 59, 999)
-            return dateObj <= endOfDay
-          } else if (customDateRange.start && customDateRange.end) {
-            const endOfDay = new Date(customDateRange.end)
-            endOfDay.setHours(23, 59, 59, 999)
-            return dateObj >= customDateRange.start && dateObj <= endOfDay
-          }
-          return true
-        } else {
-          const now = new Date()
-          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-          const yesterday = new Date(today)
-          yesterday.setDate(yesterday.getDate() - 1)
-          const thisWeekStart = new Date(today)
-          thisWeekStart.setDate(today.getDate() - today.getDay())
-          const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-          
-          switch (dateFilter) {
-            case "today":
-              return dateObj >= today
-            case "yesterday":
-              return dateObj >= yesterday && dateObj < today
-            case "thisWeek":
-              return dateObj >= thisWeekStart
-            case "thisMonth":
-              return dateObj >= thisMonthStart
-            default:
-              return true
-          }
-        }
-      }
-
-      return true
-    })
-  }
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
@@ -2045,7 +1699,7 @@ export default function RewardsPage() {
                           </TableCell>
                           <TableCell className="text-center">
                             <Badge 
-                              variant={reward.isActive ? "success" : "destructive"}
+                              variant="outline"
                               className={cn(
                                 reward.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"
                               )}
@@ -2109,402 +1763,303 @@ export default function RewardsPage() {
             </Card>
           </TabsContent>
           
-          {/* Individual tabs for each reward category */}
-          {["individual", "customer-specific", "programs"].map((category) => (
-            <TabsContent key={category} value={category} className="mt-0">
-              <Card>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[300px]">
-                          <Button 
-                            variant="ghost" 
-                            onClick={() => handleSort("rewardName")}
-                            className="flex items-center gap-1 px-0 font-medium"
-                          >
-                            Reward Name
-                          {sortField === "rewardName" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableHead>
-                      <TableHead className="text-center">
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => handleSort("type")}
-                          className="flex items-center gap-1 px-0 font-medium mx-auto"
-                        >
-                          Type
-                          {sortField === "type" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableHead>
-                      <TableHead className="text-center">
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => handleSort("pointsCost")}
-                          className="flex items-center gap-1 px-0 font-medium mx-auto"
-                        >
-                          Points
-                          {sortField === "pointsCost" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableHead>
-                      <TableHead className="text-center">
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => handleSort("redemptionCount")}
-                          className="flex items-center gap-1 px-0 font-medium mx-auto"
-                        >
-                          Redemptions
-                          {sortField === "redemptionCount" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableHead>
-                      <TableHead className="text-center">
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => handleSort("redeemableCustomers")}
-                          className="flex items-center gap-1 px-0 font-medium mx-auto"
-                        >
-                          Redeemable
-                          {sortField === "redeemableCustomers" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                          <HelpCircle className="h-3 w-3 text-muted-foreground ml-1" />
-                        </Button>
-                      </TableHead>
-                      <TableHead className="text-center">
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => handleSort("impressions")}
-                          className="flex items-center gap-1 px-0 font-medium mx-auto"
-                        >
-                          Impressions
-                          {sortField === "impressions" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                          <HelpCircle className="h-3 w-3 text-muted-foreground ml-1" />
-                        </Button>
-                      </TableHead>
-                      <TableHead className="text-center">
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => handleSort("createdAt")}
-                          className="flex items-center gap-1 px-0 font-medium mx-auto"
-                        >
-                          Created
-                          {sortField === "createdAt" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableHead>
-                      <TableHead className="text-center">
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => handleSort("lastRedeemed")}
-                          className="flex items-center gap-1 px-0 font-medium mx-auto"
-                        >
-                          Last Redeemed
-                          {sortField === "lastRedeemed" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableHead>
-                      <TableHead className="text-center">
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => handleSort("isActive")}
-                          className="flex items-center gap-1 px-0 font-medium mx-auto"
-                        >
-                          Status
-                          {sortField === "isActive" && (
-                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableHead>
-                      <TableHead className="w-[50px]"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {loading ? (
-                      <TableRow>
-                        <TableCell colSpan={8} className="h-24 text-center">
-                          <div className="flex justify-center">
-                            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : getFilteredRewards().length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={8} className="h-24 text-center">
-                          <div className="flex flex-col items-center justify-center">
-                            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                              {category === "individual" ? (
-                                <Gift className="h-6 w-6 text-muted-foreground" />
-                              ) : category === "customer-specific" ? (
-                                <Users className="h-6 w-6 text-muted-foreground" />
-                              ) : (
-                                <Award className="h-6 w-6 text-muted-foreground" />
-                              )}
-                            </div>
-                            <h3 className="mt-4 text-lg font-medium">
-                              No {category === "individual" ? "individual" : 
-                                  category === "customer-specific" ? "customer-specific" : 
-                                  "program"} rewards found
-                            </h3>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {searchQuery ? "Try adjusting your search query" : `Create your first ${
-                                category === "individual" ? "individual" : 
-                                category === "customer-specific" ? "customer-specific" : 
-                                "program"} reward`}
-                            </p>
-                            {!searchQuery && (
-                              <Button 
-                                className="mt-4 h-9 gap-2 rounded-md"
-                                onClick={() => router.push('/create')}
-                              >
-                                <Plus className="h-4 w-4" />
-                                Create {category === "individual" ? "Individual Reward" : 
-                                        category === "customer-specific" ? "Customer-Specific Reward" : 
-                                        "Program"}
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      getFilteredRewards().map((reward) => (
-                        <TableRow 
-                          key={reward.id}
-                          className="cursor-pointer hover:bg-gray-50"
-                          onClick={() => router.push(`/store/${reward.id}`)}
-                        >
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              <div className="h-9 w-9 min-w-[36px] rounded-md bg-muted flex items-center justify-center">
-                                {reward.category === "program" 
-                                      ? <Award className="h-5 w-5 text-amber-600" />
-                                    : getRewardTypeIcon(reward.type)}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="truncate flex items-center gap-1">
-                                  {reward.rewardName}
-                                  {Array.isArray(reward.conditions) && 
-                                    reward.conditions.find(c => c.type === 'maximumTransactions')?.value === 0 && (
-                                    <Badge variant="outline" className="ml-1 py-0 h-4 text-[10px] px-1.5 bg-teal-50 text-teal-700 border-teal-200">
-                                      New Customers
-                                    </Badge>
-                                  )}
-                                </div>
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <div className="text-xs text-muted-foreground line-clamp-1 cursor-help">
-                                        {reward.description}
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top">
-                                      <p className="text-xs">
-                                        {reward.programtype === "points" && "Customers redeem their points for this reward"}
-                                        {reward.programtype === "coffee" && "Part of a buy-X-get-one-free program"}
-                                        {reward.programtype === "voucher" && "A monetary voucher customers can redeem"}
-                                        {reward.programtype === "discount" && "A percentage discount on purchases"}
-                                        {!reward.programtype || reward.programtype === "individual" && "Standard individual reward"}
-                                        {reward.programName && <span className="block mt-1 font-medium">{reward.programName}</span>}
-                                      </p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Badge 
-                                    variant="outline" 
-                                    className={cn(
-                                      "rounded-md",
-                                      reward.programtype ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-purple-50 text-purple-700 border-purple-200"
+          {/* In the TabsContent for programs - look for "programs" tab and replace the entire content */}
+          <TabsContent value="programs" className="mt-0">
+            {loading ? (
+              <CardSkeleton />
+            ) : (
+              <>
+                {/* First check if there are any program rewards at all */}
+                {rewards.filter(reward => !!reward.programtype && reward.programtype !== "points").length === 0 ? (
+                  <Card>
+                    <CardContent className="p-8 flex flex-col items-center justify-center text-center">
+                      <div className="rounded-full bg-blue-50 p-3 mb-4">
+                        <Award className="h-8 w-8 text-blue-500" />
+                      </div>
+                      <h3 className="text-lg font-semibold mb-2">No Program Rewards Created</h3>
+                      <p className="text-muted-foreground mb-4 max-w-md">
+                        Program rewards help you create structured loyalty programs like coffee cards, transaction-based rewards, and recurring vouchers.
+                      </p>
+                      <Button 
+                        onClick={() => router.push('/store/rewards/create')}
+                        className="bg-[#007AFF] hover:bg-[#0063CC] text-white"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Program Reward
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <>
+                    {/* Program types grid layout */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {Array.from(new Set(rewards.filter(r => !!r.programtype && r.programtype !== "points").map(r => r.programtype))).map(programType => {
+                        if (!programType) return null;
+                        
+                        // Get all rewards of this program type
+                        const programRewards = rewards.filter(r => r.programtype === programType);
+                        if (programRewards.length === 0) return null;
+                        
+                        // Count metrics
+                        const totalRedemptions = programRewards.reduce((sum, r) => sum + (r.redemptionCount || 0), 0);
+                        const totalRedeemableCustomers = programRewards.reduce((sum, r) => sum + (r.redeemableCustomers || 0), 0);
+                        
+                        return (
+                          <Card key={programType} className="overflow-hidden flex flex-col h-full">
+                            <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b pb-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center shadow-sm">
+                                    {programType === 'coffee' ? (
+                                      <Coffee className="h-6 w-6 text-amber-600" />
+                                    ) : programType === 'dollar_voucher' ? (
+                                      <DollarSign className="h-6 w-6 text-green-600" />
+                                    ) : programType === 'recurring_reward' ? (
+                                      <Zap className="h-6 w-6 text-purple-600" />
+                                    ) : (
+                                      <Award className="h-6 w-6 text-blue-600" />
                                     )}
-                                  >
-                                    <div className="flex items-center justify-center gap-1">
-                                      {reward.programtype 
-                                        ? <Award className="h-4 w-4" />
-                                      : <Gift className="h-4 w-4" />}
-                                      <span>
-                                        {reward.programtype 
-                                          ? "Program" 
-                                          : "Individual Reward"}
-                                      </span>
-                                    </div>
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent side="top">
-                                  <p className="text-xs">
-                                    {reward.programtype === "points" && "Customers redeem their points for this reward"}
-                                    {reward.programtype === "coffee" && "Part of a buy-X-get-one-free program"}
-                                    {reward.programtype === "voucher" && "A monetary voucher customers can redeem"}
-                                    {reward.programtype === "discount" && "A percentage discount on purchases"}
-                                    {!reward.programtype || reward.programtype === "individual" && "Standard individual reward"}
-                                    {reward.programName && <span className="block mt-1 font-medium">{reward.programName}</span>}
+                                  </div>
+                                  <div>
+                                    <CardTitle className="text-lg">
+                                      {programType === 'coffee' ? "Coffee Program" : 
+                                       programType === 'dollar_voucher' ? "Recurring Voucher Program" : 
+                                       programType === 'recurring_reward' ? "Recurring Transaction Program" : 
+                                       "Loyalty Program"}
+                                    </CardTitle>
+                                    <CardDescription>
+                                      {programType === 'coffee' ? "Buy X get one free coffee program." : 
+                                       programType === 'dollar_voucher' ? "Recurring monetary vouchers for loyal customers." : 
+                                       programType === 'recurring_reward' ? "Transaction frequency program." : 
+                                       "Loyalty program rewards."}
+                                    </CardDescription>
+                                  </div>
+                                </div>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onClick={() => {
+                                        setProgramToDelete(programType);
+                                        setIsConfirmDeleteProgramOpen(true);
+                                      }}
+                                    >
+                                      <Trash className="mr-2 h-4 w-4" />
+                                      Delete Program
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="pt-4 flex-grow">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-blue-50 rounded-md p-3 text-center">
+                                  <p className="text-xs text-blue-600 font-medium mb-1">Rewards</p>
+                                  <p className="text-2xl font-semibold text-blue-700">{programRewards.length}</p>
+                                </div>
+                                <div className="bg-green-50 rounded-md p-3 text-center">
+                                  <p className="text-xs text-green-600 font-medium mb-1">Redemptions</p>
+                                  <p className="text-2xl font-semibold text-green-700">{totalRedemptions}</p>
+                                </div>
+                              </div>
+                              
+                              {programRewards.length > 0 && (
+                                <div className="mt-4 flex justify-between items-center">
+                                  <p className="text-sm text-gray-500">
+                                    {programRewards.length} rewards in this program
                                   </p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                              {reward.pointsCost}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                              {reward.redemptionCount || 0}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                    {reward.redeemableCustomers || 0}
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent side="top">
-                                  <p className="text-xs">Number of customers who can redeem this reward</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
-                              {reward.impressions || 0}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {reward.lastRedeemed 
-                              ? formatDistanceToNow(reward.lastRedeemed, { addSuffix: true })
-                              : "Never"}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge 
-                              variant={reward.isActive ? "success" : "destructive"}
-                              className={cn(
-                                reward.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    onClick={() => toggleProgramExpansion(programType)}
+                                    className="flex items-center gap-1"
+                                  >
+                                    {expandedPrograms[programType] ? (
+                                      <>
+                                        <ChevronUp className="h-4 w-4" />
+                                        Hide Rewards
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ChevronDown className="h-4 w-4" />
+                                        Show Rewards
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
                               )}
-                            >
-                              {reward.isActive ? "Live" : "Inactive"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button 
-                                  variant="ghost" 
-                                  className="h-8 w-8 p-0"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent 
-                                align="end"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <DropdownMenuItem onClick={() => router.push(`/store/${reward.id}`)}>
-                                  <Eye className="h-4 w-4 mr-2" />
-                                  View
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => router.push(`/store/${reward.id}/edit`)}>
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => toggleRewardStatus(reward.id, reward.isActive)}>
-                                  {reward.isActive ? (
-                                    <>
-                                      <Clock className="h-4 w-4 mr-2" />
-                                      Deactivate
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Zap className="h-4 w-4 mr-2" />
-                                      Activate
-                                    </>
-                                  )}
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem 
-                                  className="text-red-600"
-                                  onClick={() => deleteReward(reward.id)}
-                                >
-                                  <Trash className="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+                            </CardContent>
+                            
+                            {/* Expandable rewards section */}
+                            {expandedPrograms[programType] && (
+                              <div className="border-t">
+                                <div className="max-h-60 overflow-y-auto">
+                                  {programRewards.map(reward => (
+                                    <div 
+                                      key={reward.id} 
+                                      className="p-3 border-b last:border-b-0 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
+                                      onClick={() => router.push(`/store/${reward.id}`)}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <div className="h-8 w-8 min-w-[32px] rounded-md bg-muted flex items-center justify-center">
+                                          {getRewardTypeIcon(reward.type)}
+                                        </div>
+                                        <div>
+                                          <div className="font-medium text-sm">{reward.rewardName}</div>
+                                          <div className="text-xs text-gray-500 max-w-xs truncate">{reward.description}</div>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs">
+                                          {reward.pointsCost} points
+                                        </Badge>
+                                        <Badge 
+                                          variant="outline"
+                                          className={cn(
+                                            "text-xs",
+                                            reward.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"
+                                          )}
+                                        >
+                                          {reward.isActive ? "Active" : "Inactive"}
+                                        </Badge>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="p-3 bg-gray-50 flex justify-center">
+                                  <Button 
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => router.push('/store/rewards/create')}
+                                    className="w-full"
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Add New Reward to Program
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {/* Confirmation dialog for deleting a program */}
+                <Dialog open={isConfirmDeleteProgramOpen} onOpenChange={setIsConfirmDeleteProgramOpen}>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Delete Program</DialogTitle>
+                      <DialogDescription>
+                        Are you sure you want to delete all rewards in the {programToDelete === 'coffee' ? "Coffee Program" : 
+                          programToDelete === 'dollar_voucher' ? "Recurring Voucher Program" : 
+                          programToDelete === 'recurring_reward' ? "Recurring Transaction Program" : 
+                          "program"}? This action cannot be undone.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex justify-end gap-2">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setIsConfirmDeleteProgramOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button 
+                        variant="destructive"
+                        onClick={async () => {
+                          if (!programToDelete || !user?.uid) return;
+                          
+                          try {
+                            // Find all rewards with this program type
+                            const rewardsToDelete = rewards.filter(reward => 
+                              reward.programtype === programToDelete && reward.programtype !== "points"
+                            );
+                            
+                            // Delete each reward
+                            const deletePromises = rewardsToDelete.map(reward => {
+                              const rewardRef = doc(db, 'merchants', user.uid, 'rewards', reward.id);
+                              return deleteDoc(rewardRef);
+                            });
+                            
+                            await Promise.all(deletePromises);
+                            
+                            // Update local state
+                            setRewards(prev => prev.filter(reward => reward.programtype !== programToDelete));
+                            
+                            toast({
+                              title: "Success",
+                              description: "Program rewards deleted successfully",
+                            });
+                          } catch (error) {
+                            console.error("Error deleting program rewards:", error);
+                            toast({
+                              title: "Error",
+                              description: "Failed to delete program rewards. Please try again.",
+                              variant: "destructive"
+                            });
+                          } finally {
+                            setIsConfirmDeleteProgramOpen(false);
+                            setProgramToDelete(null);
+                          }
+                        }}
+                      >
+                        Delete Program
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </>
+            )}
           </TabsContent>
-        ))}
-      </Tabs>
-    </div>
-    
-    {/* Reward preview card */}
-    {previewReward && (
-      <RewardPreview 
-        reward={previewReward} 
-        onClose={() => setPreviewReward(null)} 
+        </Tabs>
+      </div>
+      
+      {/* Reward preview card */}
+      {previewReward && (
+        <RewardPreview 
+          reward={previewReward} 
+          onClose={() => setPreviewReward(null)} 
+        />
+      )}
+      
+      {/* Create Reward Dialog */}
+      <CreateRewardDialog
+        open={createRewardDialogOpen}
+        onOpenChange={setCreateRewardDialogOpen}
+        defaultValues={createRewardData}
       />
-    )}
-    
-    {/* Create Reward Dialog */}
-    <CreateRewardDialog
-      open={createRewardDialogOpen}
-      onOpenChange={setCreateRewardDialogOpen}
-      defaultValues={createRewardData}
-    />
-    
-    {/* Delete Confirmation Dialog */}
-    <Dialog open={!!rewardToDelete} onOpenChange={() => setRewardToDelete(null)}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-xl">Delete Reward</DialogTitle>
-          <DialogDescription className="text-red-500">
-            Are you sure you want to delete this reward? This action cannot be undone.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex justify-end space-x-2 mt-5">
-          <Button variant="outline" onClick={() => setRewardToDelete(null)}>
-            Cancel
-          </Button>
-          <Button variant="destructive" onClick={confirmDelete}>
-            Delete
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-    
-    {/* Introductory Reward Dialog */}
-    <IntroductoryRewardDialog 
-      open={isIntroRewardDialogOpen} 
-      onOpenChange={setIsIntroRewardDialogOpen} 
-    />
-  </div>
-)
+      
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!rewardToDelete} onOpenChange={() => setRewardToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Delete Reward</DialogTitle>
+            <DialogDescription className="text-red-500">
+              Are you sure you want to delete this reward? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end space-x-2 mt-5">
+            <Button variant="outline" onClick={() => setRewardToDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Introductory Reward Dialog */}
+      <IntroductoryRewardDialog 
+        open={isIntroRewardDialogOpen} 
+        onOpenChange={setIsIntroRewardDialogOpen} 
+      />
+    </div>
+  )
 } 

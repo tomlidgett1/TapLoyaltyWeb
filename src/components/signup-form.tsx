@@ -44,6 +44,7 @@ export function SignUpForm({
     legalBusinessName: "",
     tradingName: "",
     businessType: "",
+    businessPhone: "",
 
     // Address
     street: "",
@@ -108,6 +109,7 @@ export function SignUpForm({
         legalBusinessName: formData.legalBusinessName,
         tradingName: formData.tradingName,
         businessType: formData.businessType,
+        businessPhone: formData.businessPhone,
         address: {
           street: formData.street,
           suburb: formData.suburb,
@@ -232,6 +234,16 @@ export function SignUpForm({
                         id="tradingName"
                         value={formData.tradingName}
                         onChange={(e) => setFormData({...formData, tradingName: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="businessPhone">Business Phone</Label>
+                      <Input
+                        id="businessPhone"
+                        type="tel"
+                        value={formData.businessPhone}
+                        onChange={(e) => setFormData({...formData, businessPhone: e.target.value})}
                         required
                       />
                     </div>

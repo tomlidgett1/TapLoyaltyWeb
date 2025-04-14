@@ -83,6 +83,7 @@ export default function SignupPage() {
   const [legalBusinessName, setLegalBusinessName] = useState("")
   const [tradingName, setTradingName] = useState("")
   const [businessEmail, setBusinessEmail] = useState("")
+  const [businessPhone, setBusinessPhone] = useState("")
   const [businessType, setBusinessType] = useState("cafe")
   const [logoFile, setLogoFile] = useState<File | null>(null)
   
@@ -148,6 +149,7 @@ export default function SignupPage() {
         if (!tradingName) errors.push("Trading name is required")
         if (!businessEmail) errors.push("Business email is required")
         if (businessEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(businessEmail)) errors.push("Invalid business email format")
+        if (!businessPhone) errors.push("Business phone is required")
         break
         
       case 3:
@@ -348,6 +350,7 @@ export default function SignupPage() {
         merchantName: tradingName,
         abn: abn,
         businessType: businessType,
+        businessPhone: businessPhone,
         address: {
           street: street,
           suburb: suburb,
@@ -489,6 +492,24 @@ export default function SignupPage() {
                 placeholder="Name customers know you by"
                 value={tradingName}
                 onChange={(e) => setTradingName(e.target.value)}
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="businessPhone">Business Phone</Label>
+              <Input
+                id="businessPhone"
+                type="tel"
+                placeholder="Business phone number"
+                value={businessPhone}
+                onChange={(e) => {
+                  // Only allow numeric input
+                  const numericValue = e.target.value.replace(/\D/g, '');
+                  setBusinessPhone(numericValue);
+                }}
+                inputMode="numeric"
+                pattern="[0-9]*"
                 required
               />
             </div>
@@ -687,6 +708,10 @@ export default function SignupPage() {
                 onChange={(e) => setAbn(e.target.value.replace(/\D/g, '').slice(0, 11))}
                 required
               />
+              <p className="text-sm text-muted-foreground mt-1">
+                Your ABN is required for matching customer payments with your business, allowing us to accurately 
+                award loyalty points to your customers when they make purchases.
+              </p>
             </div>
             
             <div className="space-y-4">
@@ -810,6 +835,7 @@ Let's get started...
                     type="button" 
                     onClick={nextStep}
                     disabled={loading}
+                    className="bg-[#007AFF] hover:bg-[#0066CC] text-white"
                   >
                     Next
                     <ChevronRight className="h-4 w-4 ml-2" />
@@ -817,7 +843,7 @@ Let's get started...
                 ) : (
                   <Button 
                     type="submit" 
-                    className="bg-blue-600 hover:bg-blue-700"
+                    className="bg-[#007AFF] hover:bg-[#0066CC] text-white"
                     disabled={loading}
                   >
                     {loading ? (

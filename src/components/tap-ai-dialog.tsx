@@ -1759,22 +1759,31 @@ export function TapAiDialog({
 
     try {
       if (!recognitionRef.current) {
-        const SpeechRecognition = window.webkitSpeechRecognition
+        // @ts-ignore - TypeScript doesn't know about webkitSpeechRecognition
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+        if (!SpeechRecognition) {
+          throw new Error("Speech recognition not supported")
+        }
+        
         recognitionRef.current = new SpeechRecognition()
         
+        // Set to continuous to try to keep it running
         recognitionRef.current.continuous = true
         recognitionRef.current.interimResults = true
         recognitionRef.current.lang = 'en-US'
         
         recognitionRef.current.onstart = () => {
+          console.log("Speech recognition started")
           setIsRecording(true)
         }
         
         recognitionRef.current.onresult = (event) => {
+          console.log("Got speech result")
           const lastResult = Array.from(event.results).pop()
           if (lastResult) {
             const transcript = lastResult[0].transcript
             if (lastResult.isFinal) {
+              console.log("Final transcript:", transcript)
               const cleanTranscript = transcript.trim()
               setInput(prev => {
                 const prevClean = prev.trim()
@@ -1784,9 +1793,40 @@ export function TapAiDialog({
           }
         }
         
+        recognitionRef.current.onerror = (event) => {
+          console.error("Speech recognition error:", event.error)
+          // Don't stop recording on 'no-speech' errors - these are non-fatal
+          if (event.error === 'no-speech') {
+            console.log("No speech detected, continuing...")
+            return
+          }
+          
+          // For other errors, show a toast but try to keep recording if possible
+          toast({
+            title: "Speech Recognition Error",
+            description: `Error: ${event.error}. Trying to continue...`,
+            variant: "destructive"
+          })
+        }
+        
         recognitionRef.current.onend = () => {
+          console.log("Speech recognition ended, recording state:", isRecording)
+          
+          // If we're still in recording mode, immediately restart recognition
+          // This is the key to preventing automatic stopping
           if (isRecording) {
-            recognitionRef.current?.start()
+            console.log("Restarting speech recognition...")
+            try {
+              // Small timeout before restarting to avoid potential browser issues
+              setTimeout(() => {
+                if (recognitionRef.current && isRecording) {
+                  recognitionRef.current.start()
+                }
+              }, 100)
+            } catch (err) {
+              console.error("Error restarting speech recognition:", err)
+              setIsRecording(false)
+            }
           } else {
             setIsRecording(false)
           }
@@ -1794,17 +1834,25 @@ export function TapAiDialog({
       }
 
       if (isRecording) {
+        // If already recording, stop it
+        console.log("Stopping speech recognition")
         setIsRecording(false)
-        recognitionRef.current.stop()
+        if (recognitionRef.current) {
+          recognitionRef.current.stop()
+        }
       } else {
-        recognitionRef.current.start()
+        // Start recording
+        console.log("Starting speech recognition")
+        if (recognitionRef.current) {
+          recognitionRef.current.start()
+        }
       }
 
     } catch (error) {
       console.error('Speech recognition setup error:', error)
       toast({
         title: "Error",
-        description: "Failed to initialize speech recognition.",
+        description: "Failed to initialize speech recognition: " + (error instanceof Error ? error.message : String(error)),
         variant: "destructive"
       })
       setIsRecording(false)
@@ -2224,78 +2272,86 @@ export function TapAiDialog({
   };
 
   const toggleRecording = () => {
-    if (isRecording) {
-      // Stop recording
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop()
-          console.log("Speech recognition stopped")
-        } catch (error) {
-          console.error("Error stopping speech recognition:", error)
+    if (!('webkitSpeechRecognition' in window)) {
+      toast({
+        title: "Not Supported",
+        description: "Speech recognition is not supported in your browser.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Start recording
+    if (!recognitionRef.current) {
+      // Initialize speech recognition if not already done
+      // @ts-ignore
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      if (!SpeechRecognition) {
+        console.error("Speech recognition not supported in this browser")
+        toast({
+          title: "Not Supported",
+          description: "Speech recognition is not supported in your browser.",
+          variant: "destructive"
+        })
+        return
+      }
+      
+      const recognition = new SpeechRecognition()
+      recognition.continuous = false
+      recognition.interimResults = true
+      
+      recognition.onresult = (event: any) => {
+        const transcript = Array.from(event.results)
+          .map((result: any) => result[0])
+          .map((result: any) => result.transcript)
+          .join('')
+        
+        console.log("Transcript:", transcript)
+        setInput(transcript)
+      }
+      
+      recognition.onend = () => {
+        console.log("Speech recognition ended")
+        
+        // If we're still in recording mode, immediately restart recording
+        // This prevents automatic stopping after silence is detected
+        if (isRecording) {
+          console.log("Restarting speech recognition...")
+          recognition.start()
+        } else {
+          setIsRecording(false)
         }
       }
-      setIsRecording(false)
-    } else {
-      // Start recording
-      if (!recognitionRef.current) {
-        // Initialize speech recognition if not already done
-        // @ts-ignore
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-        if (!SpeechRecognition) {
-          console.error("Speech recognition not supported in this browser")
-          toast({
-            title: "Not Supported",
-            description: "Speech recognition is not supported in your browser.",
-            variant: "destructive"
-          })
+      
+      recognition.onerror = (event: any) => {
+        console.error("Speech recognition error", event.error)
+        // Don't stop recording on all errors - some are non-fatal
+        if (event.error === 'no-speech') {
+          console.log("No speech detected, continuing...")
           return
         }
         
-        const recognition = new SpeechRecognition()
-        recognition.continuous = false
-        recognition.interimResults = true
-        
-        recognition.onresult = (event: any) => {
-          const transcript = Array.from(event.results)
-            .map((result: any) => result[0])
-            .map((result: any) => result.transcript)
-            .join('')
-          
-          console.log("Transcript:", transcript)
-          setInput(transcript)
-        }
-        
-        recognition.onend = () => {
-          console.log("Speech recognition ended")
-          setIsRecording(false)
-        }
-        
-        recognition.onerror = (event: any) => {
-          console.error("Speech recognition error:", event.error)
-          setIsRecording(false)
-          toast({
-            title: "Error",
-            description: `Speech recognition error: ${event.error}`,
-            variant: "destructive"
-          })
-        }
-        
-        recognitionRef.current = recognition
-      }
-      
-      // Start the recognition
-      try {
-        recognitionRef.current.start()
-        console.log("Speech recognition started")
-        setIsRecording(true)
-      } catch (error) {
-        console.error("Error starting speech recognition:", error)
         toast({
           title: "Error",
-          description: "Failed to start speech recognition. Please try again.",
+          description: `Speech recognition error: ${event.error}`,
           variant: "destructive"
         })
+        setIsRecording(false)
       }
+      
+      recognition.lang = 'en-US'
+      
+      recognitionRef.current = recognition
+    }
+    
+    if (isRecording) {
+      // If already recording, stop it
+      recognitionRef.current.stop()
+      setIsRecording(false)
+    } else {
+      // Start recording
+      recognitionRef.current.start()
+      setIsRecording(true)
     }
   }
 
@@ -2371,6 +2427,18 @@ export function TapAiDialog({
     if (isLoading) return;
     
     console.log('handleQuickAction called with:', action);
+    
+    // For reward and banner creation, just set the input text without sending
+    if (action === "Create me a reward" || action === "Create me a banner") {
+      setInput(action);
+      // Focus the input field
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+      return;
+    }
+    
+    // For other actions, proceed with sending the message
     sendMessageToAPI(action);
   };
 
@@ -2949,21 +3017,30 @@ export function TapAiDialog({
                   disabled={loading || isLoading}
                 />
                 <div className="absolute bottom-3 left-3">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className={`h-8 rounded-lg text-xs transition-colors ${
-                      adviceButtonActive 
-                        ? "bg-blue-200 text-blue-700 hover:bg-blue-200" 
-                        : "bg-gray-100 hover:bg-blue-100"
-                    }`}
-                    onClick={() => setAdviceButtonActive(!adviceButtonActive)}
-                    disabled={loading || isLoading}
-                  >
-                    <SparklesIcon className="h-3 w-3 mr-1" />
-                    Advice
-                  </Button>
+                  <div className="flex space-x-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 rounded-lg text-xs transition-colors bg-gray-100 hover:bg-blue-100"
+                      onClick={() => handleQuickAction("Create me a reward")}
+                      disabled={loading || isLoading}
+                    >
+                      <Gift className="h-3 w-3 mr-1" />
+                      Create me a reward
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 rounded-lg text-xs transition-colors bg-gray-100 hover:bg-blue-100"
+                      onClick={() => handleQuickAction("Create me a banner")}
+                      disabled={loading || isLoading}
+                    >
+                      <BadgeCheck className="h-3 w-3 mr-1" />
+                      Create me a banner
+                    </Button>
+                  </div>
                 </div>
                 <div className="absolute bottom-3 right-3 flex items-center gap-2">
                   <Button

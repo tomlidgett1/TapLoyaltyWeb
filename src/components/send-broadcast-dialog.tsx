@@ -12,7 +12,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { Users, Send, Bell, Store, MessageSquare, Clock, Award, DollarSign, AlertTriangle, UserPlus, Repeat, TrendingUp, AlertCircle, HelpCircle } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, addDoc, Timestamp } from "firebase/firestore"
+import { collection, addDoc, Timestamp, getDocs, getDoc, doc, query, where, writeBatch } from "firebase/firestore"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AnnouncementDesignerDialog } from "@/components/announcement-designer-dialog"
 import { useRouter } from "next/navigation"
@@ -64,6 +64,15 @@ export function SendBroadcastDialog({ open, onOpenChange }: SendBroadcastDialogP
     setLoading(true)
     
     try {
+      // Get merchant data to access the merchant name
+      const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
+      if (!merchantDoc.exists()) {
+        throw new Error("Merchant data not found")
+      }
+      
+      const merchantData = merchantDoc.data()
+      const merchantName = merchantData.merchantName || merchantData.tradingName || merchantData.legalName || "Unknown Merchant"
+      
       // Create the broadcast document
       const broadcastData = {
         title,
@@ -83,9 +92,88 @@ export function SendBroadcastDialog({ open, onOpenChange }: SendBroadcastDialogP
       const broadcastsRef = collection(db, 'merchants', user.uid, 'broadcasts')
       const docRef = await addDoc(broadcastsRef, broadcastData)
       
+      // Get customers based on the selected audience
+      let customersQuery;
+      
+      // Customer collection path
+      const customersCollectionPath = collection(db, 'merchants', user.uid, 'customers')
+      
+      // Create query based on audience selection
+      if (audience === 'all') {
+        // Get all customers
+        customersQuery = query(customersCollectionPath)
+      } else if (audience === 'active') {
+        // Get customers with 'active' in their cohorts array
+        customersQuery = query(customersCollectionPath, where('cohorts', 'array-contains', 'active'))
+      } else if (audience === 'inactive') {
+        // Get customers with 'churned' in their cohorts array
+        customersQuery = query(customersCollectionPath, where('cohorts', 'array-contains', 'churned'))
+      } else if (audience === 'newCustomer') {
+        // Get customers with 'newCustomer' in their cohorts array
+        customersQuery = query(customersCollectionPath, where('cohorts', 'array-contains', 'newCustomer'))
+      } else {
+        // Default fallback - use all customers if audience value is unexpected
+        customersQuery = query(customersCollectionPath)
+      }
+      
+      const customersSnapshot = await getDocs(customersQuery)
+      
+      // For efficiency with large sets of customers, use batched writes
+      const MAX_BATCH_SIZE = 500; // Firestore limit
+      const batches = [];
+      let batch = writeBatch(db);
+      let operationCount = 0;
+      
+      // Loop through customers and add notification to each customer's subcollection
+      customersSnapshot.forEach((customerDoc) => {
+        const customerId = customerDoc.id;
+        
+        // Create notification object
+        const notification = {
+          title,
+          message,
+          createdAt: Timestamp.now(),
+          merchantId: user.uid,
+          merchantName: merchantName,
+          read: false,
+          isRead: false,
+          broadcastId: docRef.id,
+          type: 'merchantmessage',
+          // Include action and announcement if applicable
+          notificationAction,
+          ...(notificationAction === "showAnnouncement" && announcement 
+            ? { announcementData: announcement } 
+            : {})
+        };
+        
+        // Reference to the notification document to create
+        const notificationRef = doc(
+          collection(db, 'customers', customerId, 'notifications')
+        );
+        
+        // Add notification to batch
+        batch.set(notificationRef, notification);
+        operationCount++;
+        
+        // If batch reaches limit, add it to batches array and create a new batch
+        if (operationCount === MAX_BATCH_SIZE) {
+          batches.push(batch);
+          batch = writeBatch(db);
+          operationCount = 0;
+        }
+      });
+      
+      // Add the last batch if it has operations
+      if (operationCount > 0) {
+        batches.push(batch);
+      }
+      
+      // Commit all batches
+      await Promise.all(batches.map(batch => batch.commit()));
+      
       toast({
-        title: "Broadcast created",
-        description: "Your message has been scheduled for delivery to customers.",
+        title: "Broadcast sent",
+        description: `Your message has been delivered to ${customersSnapshot.size} customers.`,
       })
       
       // Reset form and close dialog
@@ -99,7 +187,7 @@ export function SendBroadcastDialog({ open, onOpenChange }: SendBroadcastDialogP
       console.error(error)
       toast({
         title: "Error",
-        description: "There was an error creating your broadcast.",
+        description: "There was an error sending your broadcast.",
         variant: "destructive"
       })
     } finally {
@@ -272,60 +360,24 @@ export function SendBroadcastDialog({ open, onOpenChange }: SendBroadcastDialogP
               </div>
               
               <div 
-                className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-all ${audience === 'segment' ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}
-                onClick={() => setAudience('segment')}
+                className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-all ${audience === 'newCustomer' ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}
+                onClick={() => setAudience('newCustomer')}
               >
-                <div className={`h-4 w-4 rounded-full flex items-center justify-center ${audience === 'segment' ? 'bg-blue-500' : 'border border-gray-300'}`}>
-                  {audience === 'segment' && <div className="h-2 w-2 rounded-full bg-white" />}
+                <div className={`h-4 w-4 rounded-full flex items-center justify-center ${audience === 'newCustomer' ? 'bg-blue-500' : 'border border-gray-300'}`}>
+                  {audience === 'newCustomer' && <div className="h-2 w-2 rounded-full bg-white" />}
                 </div>
-                <span className="text-sm">Specific segment</span>
+                <span className="text-sm">New customers</span>
               </div>
             </div>
-            
-            {audience === "segment" && (
-              <div className="mt-2">
-                <Select>
-                  <SelectTrigger className="h-9 bg-white">
-                    <SelectValue placeholder="Choose a customer segment" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="new">
-                      <div className="flex items-center gap-2">
-                        <UserPlus className="h-4 w-4 text-gray-500" />
-                        <span>New customers (last 30 days)</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="loyal">
-                      <div className="flex items-center gap-2">
-                        <Repeat className="h-4 w-4 text-gray-500" />
-                        <span>Loyal customers (5+ purchases)</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="high-value">
-                      <div className="flex items-center gap-2">
-                        <TrendingUp className="h-4 w-4 text-gray-500" />
-                        <span>High-value customers</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="at-risk">
-                      <div className="flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4 text-gray-500" />
-                        <span>At-risk customers</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
             
             <div className="bg-blue-50 border border-blue-100 rounded-md p-2.5 text-xs text-blue-800 mt-2">
               <p className="flex items-center gap-1.5">
                 <Users className="h-3.5 w-3.5 flex-shrink-0" />
                 <span>
                   {audience === "all" && "This message will be sent to all of your customers."}
-                  {audience === "active" && "This message will be sent to customers who have been active in the last 90 days."}
-                  {audience === "inactive" && "This message will be sent to customers who haven't been active in the last 90 days."}
-                  {audience === "segment" && "This message will be sent to customers in the selected segment."}
+                  {audience === "active" && "This message will be sent to customers with the 'active' cohort."}
+                  {audience === "inactive" && "This message will be sent to customers with the 'churned' cohort."}
+                  {audience === "newCustomer" && "This message will be sent to customers with the 'newCustomer' cohort."}
                 </span>
               </p>
             </div>

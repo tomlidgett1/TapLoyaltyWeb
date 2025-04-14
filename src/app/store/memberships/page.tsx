@@ -64,6 +64,7 @@ import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/components/ui/use-toast"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { CreateRewardDialog } from "@/components/create-reward-dialog"
 
 // Types for the membership conditions
 interface Condition {
@@ -160,6 +161,10 @@ export default function MembershipsPage() {
   const [loadingAllCustomers, setLoadingAllCustomers] = useState(false)
   const [showAllCustomers, setShowAllCustomers] = useState(false)
   
+  // Add new state for CreateRewardDialog
+  const [isCreateRewardOpen, setIsCreateRewardOpen] = useState(false)
+  const [selectedTierForReward, setSelectedTierForReward] = useState<string>("")
+  
   // Set up listener for memberships
   useEffect(() => {
     if (!user?.uid) return
@@ -172,8 +177,25 @@ export default function MembershipsPage() {
     const unsubscribe = onSnapshot(membershipQuery, async (snapshot) => {
       const membershipsData: Membership[] = []
       
+      // First, get all customers to count membership tiers
+      const customersRef = collection(db, 'merchants', user.uid, 'customers')
+      const customersSnapshot = await getDocs(customersRef)
+      
+      // Create a map to count customers by tier
+      const tierCounts: {[key: string]: number} = {}
+      
+      customersSnapshot.forEach(doc => {
+        const data = doc.data()
+        const tier = (data.membershipTier || 'bronze').toLowerCase()
+        tierCounts[tier] = (tierCounts[tier] || 0) + 1
+      })
+      
+      console.log("Customer tier counts:", tierCounts)
+      
       for (const doc of snapshot.docs) {
         const data = doc.data() as Membership
+        const tierName = data.name.toLowerCase()
+        
         const membership = {
           id: doc.id,
           name: data.name || "",
@@ -190,22 +212,7 @@ export default function MembershipsPage() {
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
           isActive: data.isActive !== false, // Default to true if not specified
-          customerCount: 0
-        }
-        
-        // Count customers with this membership tier
-        const customersQuery = query(
-          collection(db, 'merchants', user.uid, 'customers'),
-          where('membershipTier', '==', membership.name.toLowerCase())
-        )
-        
-        try {
-          console.log(`Counting customers for ${membership.name} tier`)
-          const customersSnapshot = await getDocs(customersQuery)
-          membership.customerCount = customersSnapshot.size
-          console.log(`Found ${membership.customerCount} customers for ${membership.name} tier`)
-        } catch (error) {
-          console.error("Error counting customers:", error)
+          customerCount: tierCounts[tierName] || 0
         }
         
         membershipsData.push(membership)
@@ -809,704 +816,773 @@ export default function MembershipsPage() {
   }
   
   return (
-    <div className="container px-6 py-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Membership Tiers</h1>
-          <p className="text-muted-foreground mt-1">
-            Create and manage membership tiers for your customers
-          </p>
-        </div>
-        
-        <Button 
-          onClick={handleCreateMembership}
-          className="bg-[#007AFF] hover:bg-[#0071e3] text-white"
-        >
-          <PlusCircle className="h-4 w-4 mr-2" />
-          Create Tier
-        </Button>
-      </div>
-      
-      {isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : memberships.length === 0 ? (
-        <div className="bg-muted/50 border rounded-lg p-8 text-center">
-          <Award className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium mb-2">No Membership Tiers</h3>
-          <p className="text-muted-foreground mb-4 max-w-md mx-auto">
-            Create membership tiers to segment your customers and offer targeted rewards.
-          </p>
+    <div className="membership-page">
+      <div className="container px-6 py-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold">Membership Tiers</h1>
+            <p className="text-muted-foreground mt-1">
+              Create and manage membership tiers for your customers
+            </p>
+          </div>
+          
           <Button 
             onClick={handleCreateMembership}
             className="bg-[#007AFF] hover:bg-[#0071e3] text-white"
           >
             <PlusCircle className="h-4 w-4 mr-2" />
-            Create Your First Tier
+            Create Tier
           </Button>
         </div>
-      ) : (
-        <>
-          <Alert className="mb-6 bg-blue-50 text-blue-800 border-blue-200">
-            <Info className="h-4 w-4 text-blue-500" />
-            <AlertTitle className="text-blue-800 font-medium">About Membership Tiers</AlertTitle>
-            <AlertDescription className="text-blue-700">
-              <p>All customers automatically start at the Bronze tier. As they meet the conditions for higher tiers, they will be automatically upgraded.</p>
-              <p className="mt-1">The Bronze tier cannot be modified as it is the default starting point for all customers.</p>
-            </AlertDescription>
-          </Alert>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {memberships.map(membership => {
-              const safeMemb = ensureConditionsFormat(membership);
-              const isExpanded = expandedTiers[safeMemb.id] || false;
-              const customers = tierCustomers[safeMemb.id] || [];
-              const isLoading = loadingTierCustomers[safeMemb.id] || false;
-              
-              return (
-                <div key={safeMemb.id} className="flex flex-col space-y-4">
-                  <Card 
-                    className={`overflow-hidden ${isBronzeTier(safeMemb) ? 'border-blue-200 bg-blue-50/30' : ''} flex flex-col h-full`}
-                  >
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          {getMembershipIcon(safeMemb.name)}
-                          <div className="flex items-center">
-                            <CardTitle>{safeMemb.name}</CardTitle>
-                            {isBronzeTier(safeMemb) && (
-                              <Badge className="ml-2 bg-blue-100 text-blue-800 border-blue-200 text-xs">
-                                Default
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                        {safeMemb.isActive ? (
-                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                            Active
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-gray-100 text-gray-700 border-gray-200">
-                            Inactive
-                          </Badge>
-                        )}
-                      </div>
-                      <CardDescription>{safeMemb.description}</CardDescription>
-                    </CardHeader>
-                    
-                    <CardContent className="flex-grow">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">Customers:</span>
-                          <div className="flex items-center">
-                            <Users className="h-4 w-4 mr-1 text-muted-foreground" />
-                            <span>{safeMemb.customerCount || 0}</span>
-                          </div>
-                        </div>
-                        
-                        <Separator />
-                        
-                        <div className="space-y-1">
-                          <h4 className="text-sm font-medium mb-2">Requirements:</h4>
-                          
-                          {safeMemb.conditions && Object.entries(safeMemb.conditions).map(([type, condition]) => {
-                            // Only show enabled conditions
-                            if (!condition.enabled) return null;
-                            
-                            return (
-                              <div 
-                                key={type} 
-                                className="flex items-center justify-between py-1"
-                              >
-                                <div className="flex items-center">
-                                  {type === "lifetimeTransactions" ? (
-                                    <ShoppingBag className="h-4 w-4 mr-2 text-muted-foreground" />
-                                  ) : type === "lifetimeSpend" ? (
-                                    <DollarSign className="h-4 w-4 mr-2 text-muted-foreground" />
-                                  ) : type === "numberOfRedemptions" ? (
-                                    <Award className="h-4 w-4 mr-2 text-muted-foreground" />
-                                  ) : (
-                                    <Info className="h-4 w-4 mr-2 text-muted-foreground" />
-                                  )}
-                                  
-                                  <span className="text-sm">
-                                    {type === "lifetimeTransactions" 
-                                      ? "Lifetime Transactions" 
-                                      : type === "lifetimeSpend"
-                                      ? "Lifetime Spend"
-                                      : type === "numberOfRedemptions"
-                                      ? "Number of Redemptions"
-                                      : type === "daysSinceJoined"
-                                      ? "Days Since Joined"
-                                      : type === "daysSinceLastVisit"
-                                      ? "Days Since Last Visit"
-                                      : type === "averageTransactionsPerWeek"
-                                      ? "Avg. Transactions Per Week"
-                                      : type}
-                                  </span>
-                                </div>
-                                
-                                <span className="font-medium">
-                                  {type === "lifetimeSpend"
-                                    ? `$${condition.value.toFixed(2)}`
-                                    : condition.value}
-                                </span>
-                              </div>
-                            );
-                          })}
-                          
-                          {(!safeMemb.conditions || Object.entries(safeMemb.conditions).filter(([_, c]) => c.enabled).length === 0) && (
-                            <div className="text-sm text-muted-foreground py-1">
-                              No active conditions
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                    
-                    <CardFooter className="mt-auto pt-2">
-                      <div className="flex justify-end items-center gap-2 w-full">
-                        {!isDefaultTier(safeMemb) && (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => handleDeleteClick(safeMemb)}
-                          >
-                            <Trash2 className="h-4 w-4 mr-1" />
-                            Delete
-                          </Button>
-                        )}
-                        {!isBronzeTier(safeMemb) && (
-                          <>
-                            {!safeMemb.isActive && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleEditMembership(safeMemb)}
-                                className="bg-blue-100 hover:bg-blue-200 text-blue-800 border-blue-200"
-                              >
-                                <PlusCircle className="h-4 w-4 mr-1" />
-                                Set Up Now
-                              </Button>
-                            )}
-                            <Button 
-                              variant="default" 
-                              size="sm" 
-                              onClick={() => handleEditMembership(safeMemb)}
-                              className="bg-[#007AFF] hover:bg-[#0071e3] text-white"
-                            >
-                              <Edit2 className="h-4 w-4 mr-1" />
-                              Edit
-                            </Button>
-                          </>
-                        )}
-                        {isBronzeTier(safeMemb) && (
-                          <div className="text-xs text-blue-600 italic">Default tier – cannot be modified</div>
-                        )}
-                      </div>
-                    </CardFooter>
-                  </Card>
-                  
-                  {/* Customer Table for this tier */}
-                  {isExpanded && (
-                    <div className="border rounded-md overflow-hidden bg-white col-span-1">
-                      <div className="p-4 bg-slate-50 border-b">
-                        <h3 className="text-sm font-medium">{safeMemb.name} Tier Customers</h3>
-                      </div>
-                      
-                      {isLoading ? (
-                        <div className="flex items-center justify-center h-40">
-                          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : customers.length === 0 ? (
-                        <div className="text-center py-8">
-                          <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                          <h3 className="text-lg font-medium mb-2">No Customers</h3>
-                          <p className="text-muted-foreground">
-                            There are no customers in this membership tier yet.
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="w-full border-collapse">
-                            <thead>
-                              <tr className="border-b bg-slate-50">
-                                <th className="text-left p-3 text-sm font-medium text-slate-700">Customer</th>
-                                <th className="text-right p-3 text-sm font-medium text-slate-700">Points</th>
-                                <th className="text-right p-3 text-sm font-medium text-slate-700">Transactions</th>
-                                <th className="text-right p-3 text-sm font-medium text-slate-700">Spend</th>
-                                <th className="text-right p-3 text-sm font-medium text-slate-700">Redemptions</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {customers.map(customer => (
-                                <tr key={customer.customerId} className="border-b hover:bg-slate-50">
-                                  <td className="p-3 text-sm font-medium">{customer.fullName}</td>
-                                  <td className="p-3 text-sm text-right">{customer.pointsBalance}</td>
-                                  <td className="p-3 text-sm text-right">{customer.lifetimeTransactionCount}</td>
-                                  <td className="p-3 text-sm text-right">${customer.totalLifetimeSpend.toFixed(2)}</td>
-                                  <td className="p-3 text-sm text-right">{customer.redemptionCount ?? 'None'}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+        
+        {isLoading ? (
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-          
-          {/* Add this after the membership grid and before the All Customers section */}
-          <div className="mt-12">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Bronze Tier Table */}
-              <Card className="overflow-hidden">
-                <CardHeader className="pb-3 bg-slate-50 border-b">
-                  <div className="flex items-center">
-                    {getMembershipIcon('bronze')}
-                    <CardTitle className="ml-2">Bronze Customers</CardTitle>
-                  </div>
-                </CardHeader>
-                
-                <CardContent className="p-0">
-                  {loadingAllCustomers ? (
-                    <div className="flex items-center justify-center h-40">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse">
-                        <thead>
-                          <tr className="border-b bg-slate-50">
-                            <th className="text-center p-3 text-sm font-medium text-slate-700">Customer</th>
-                            <th className="text-center p-3 text-sm font-medium text-slate-700">Transactions</th>
-                            <th className="text-center p-3 text-sm font-medium text-slate-700">Spend</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {allCustomers
-                            .filter(customer => customer.membershipTier.toLowerCase() === 'bronze')
-                            .slice(0, 5)
-                            .map(customer => (
-                              <tr key={customer.customerId} className="border-b hover:bg-slate-50">
-                                <td className="p-3 text-sm font-medium text-center">{customer.fullName}</td>
-                                <td className="p-3 text-sm text-center">{customer.lifetimeTransactionCount}</td>
-                                <td className="p-3 text-sm text-center">${customer.totalLifetimeSpend.toFixed(2)}</td>
-                              </tr>
-                            ))}
-                          {allCustomers.filter(customer => customer.membershipTier.toLowerCase() === 'bronze').length === 0 && (
-                            <tr>
-                              <td colSpan={3} className="p-3 text-sm text-center text-muted-foreground">
-                                No customers in Bronze tier
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-              
-              {/* Silver Tier Table */}
-              <Card className="overflow-hidden">
-                <CardHeader className="pb-3 bg-slate-50 border-b">
-                  <div className="flex items-center">
-                    {getMembershipIcon('silver')}
-                    <CardTitle className="ml-2">Silver Customers</CardTitle>
-                  </div>
-                </CardHeader>
-                
-                <CardContent className="p-0">
-                  {loadingAllCustomers ? (
-                    <div className="flex items-center justify-center h-40">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse">
-                        <thead>
-                          <tr className="border-b bg-slate-50">
-                            <th className="text-center p-3 text-sm font-medium text-slate-700">Customer</th>
-                            <th className="text-center p-3 text-sm font-medium text-slate-700">Transactions</th>
-                            <th className="text-center p-3 text-sm font-medium text-slate-700">Spend</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {allCustomers
-                            .filter(customer => customer.membershipTier.toLowerCase() === 'silver')
-                            .slice(0, 5)
-                            .map(customer => (
-                              <tr key={customer.customerId} className="border-b hover:bg-slate-50">
-                                <td className="p-3 text-sm font-medium text-center">{customer.fullName}</td>
-                                <td className="p-3 text-sm text-center">{customer.lifetimeTransactionCount}</td>
-                                <td className="p-3 text-sm text-center">${customer.totalLifetimeSpend.toFixed(2)}</td>
-                              </tr>
-                            ))}
-                          {allCustomers.filter(customer => customer.membershipTier.toLowerCase() === 'silver').length === 0 && (
-                            <tr>
-                              <td colSpan={3} className="p-3 text-sm text-center text-muted-foreground">
-                                No customers in Silver tier
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-              
-              {/* Gold Tier Table */}
-              <Card className="overflow-hidden">
-                <CardHeader className="pb-3 bg-slate-50 border-b">
-                  <div className="flex items-center">
-                    {getMembershipIcon('gold')}
-                    <CardTitle className="ml-2">Gold Customers</CardTitle>
-                  </div>
-                </CardHeader>
-                
-                <CardContent className="p-0">
-                  {loadingAllCustomers ? (
-                    <div className="flex items-center justify-center h-40">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse">
-                        <thead>
-                          <tr className="border-b bg-slate-50">
-                            <th className="text-center p-3 text-sm font-medium text-slate-700">Customer</th>
-                            <th className="text-center p-3 text-sm font-medium text-slate-700">Transactions</th>
-                            <th className="text-center p-3 text-sm font-medium text-slate-700">Spend</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {allCustomers
-                            .filter(customer => customer.membershipTier.toLowerCase() === 'gold')
-                            .slice(0, 5)
-                            .map(customer => (
-                              <tr key={customer.customerId} className="border-b hover:bg-slate-50">
-                                <td className="p-3 text-sm font-medium text-center">{customer.fullName}</td>
-                                <td className="p-3 text-sm text-center">{customer.lifetimeTransactionCount}</td>
-                                <td className="p-3 text-sm text-center">${customer.totalLifetimeSpend.toFixed(2)}</td>
-                              </tr>
-                            ))}
-                          {allCustomers.filter(customer => customer.membershipTier.toLowerCase() === 'gold').length === 0 && (
-                            <tr>
-                              <td colSpan={3} className="p-3 text-sm text-center text-muted-foreground">
-                                No customers in Gold tier
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-          
-          {/* All Customers Table */}
-          <div className="mt-12">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">All Customers</h2>
-              <Button 
-                variant="outline" 
-                onClick={toggleAllCustomers}
-                className="text-blue-600 border-blue-200 hover:bg-blue-50"
-              >
-                <Users className="h-4 w-4 mr-2" />
-                {showAllCustomers ? "Hide" : "Show"} All Customers
-              </Button>
-            </div>
-            
-            {showAllCustomers && (
-              <Card className="overflow-hidden">
-                <CardHeader className="pb-3 bg-slate-50 border-b">
-                  <CardTitle>Customer List</CardTitle>
-                  <CardDescription>
-                    All customers registered with your store
-                  </CardDescription>
-                </CardHeader>
-                
-                <CardContent className="p-0">
-                  {loadingAllCustomers ? (
-                    <div className="flex items-center justify-center h-40">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : allCustomers.length === 0 ? (
-                    <div className="text-center py-8">
-                      <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                      <h3 className="text-lg font-medium mb-2">No Customers</h3>
-                      <p className="text-muted-foreground">
-                        You don't have any customers yet.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse">
-                        <thead>
-                          <tr className="border-b bg-slate-50">
-                            <th className="text-center p-3 text-sm font-medium text-slate-700">Customer ID</th>
-                            <th className="text-center p-3 text-sm font-medium text-slate-700">Customer Name</th>
-                            <th className="text-center p-3 text-sm font-medium text-slate-700">Membership Tier</th>
-                            <th className="text-center p-3 text-sm font-medium text-slate-700">Points</th>
-                            <th className="text-center p-3 text-sm font-medium text-slate-700">Transactions</th>
-                            <th className="text-center p-3 text-sm font-medium text-slate-700">Lifetime Spend</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {allCustomers.map(customer => (
-                            <tr key={customer.customerId} className="border-b hover:bg-slate-50">
-                              <td className="p-3 text-sm text-center">{customer.customerId}</td>
-                              <td className="p-3 text-sm font-medium text-center">{customer.fullName}</td>
-                              <td className="p-3 text-sm text-center">
-                                <div className="flex items-center justify-center">
-                                  {getMembershipIcon(customer.membershipTier)}
-                                  <span className="ml-2 capitalize">{customer.membershipTier}</span>
-                                </div>
-                              </td>
-                              <td className="p-3 text-sm text-center">{customer.pointsBalance}</td>
-                              <td className="p-3 text-sm text-center">{customer.lifetimeTransactionCount}</td>
-                              <td className="p-3 text-sm text-center">${customer.totalLifetimeSpend.toFixed(2)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </>
-      )}
-      
-      {/* Create/Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[97vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedMembership ? `Edit ${selectedMembership.name}` : "Create Membership Tier"}
-            </DialogTitle>
-            <DialogDescription>
-              Set the conditions that customers must meet to qualify for this tier
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Tier Name</Label>
-              <Input 
-                id="name" 
-                value={formData.name} 
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-                placeholder="e.g. Platinum, Diamond"
-                disabled={!!selectedMembership && ['silver', 'gold'].includes(selectedMembership.name.toLowerCase())}
-              />
-              {!!selectedMembership && ['silver', 'gold'].includes(selectedMembership.name.toLowerCase()) && (
-                <p className="text-xs text-muted-foreground mt-1">Default tier names cannot be changed</p>
-              )}
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Input 
-                id="description" 
-                value={formData.description} 
-                onChange={(e) => setFormData({...formData, description: e.target.value})}
-                placeholder="Benefits of this membership tier"
-              />
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <div>
-                <Label htmlFor="isActive" className="cursor-pointer">Active Status</Label>
-                {formData.name.toLowerCase() === 'gold' && (
-                  <p className="text-xs text-muted-foreground mt-1">Gold cannot be active if Silver is inactive</p>
-                )}
-              </div>
-              <Switch 
-                id="isActive" 
-                checked={formData.isActive} 
-                onCheckedChange={(checked) => setFormData({...formData, isActive: checked})}
-              />
-            </div>
-            
-            <Separator />
-            
-            <div>
-              <h3 className="text-sm font-medium mb-3">Qualification Requirements</h3>
-              <div className="space-y-4">
-                {/* Lifetime Transactions */}
-                <div className="space-y-2 border rounded-md p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <ShoppingBag className="h-4 w-4 mr-2 text-muted-foreground" />
-                      <Label htmlFor="lifetimeTransactions">Lifetime Transactions</Label>
-                    </div>
-                    <Switch 
-                      id="lifetimeTransactionsEnabled" 
-                      checked={conditionSettings.lifetimeTransactions.enabled} 
-                      onCheckedChange={(checked) => handleConditionSettingChange("lifetimeTransactions", "enabled", checked)}
-                    />
-                  </div>
-                  
-                  {conditionSettings.lifetimeTransactions.enabled && (
-                    <div className="pt-2">
-                      <Input 
-                        id="lifetimeTransactions" 
-                        type="number" 
-                        min={0}
-                        value={conditionSettings.lifetimeTransactions.value} 
-                        onChange={(e) => handleConditionSettingChange(
-                          "lifetimeTransactions", 
-                          "value", 
-                          parseInt(e.target.value) || 0
-                        )}
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Customer qualifies after this many completed transactions
-                      </p>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Lifetime Spend */}
-                <div className="space-y-2 border rounded-md p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <DollarSign className="h-4 w-4 mr-2 text-muted-foreground" />
-                      <Label htmlFor="lifetimeSpend">Lifetime Spend</Label>
-                    </div>
-                    <Switch 
-                      id="lifetimeSpendEnabled" 
-                      checked={conditionSettings.lifetimeSpend.enabled} 
-                      onCheckedChange={(checked) => handleConditionSettingChange("lifetimeSpend", "enabled", checked)}
-                    />
-                  </div>
-                  
-                  {conditionSettings.lifetimeSpend.enabled && (
-                    <div className="pt-2">
-                      <Input 
-                        id="lifetimeSpend" 
-                        type="number" 
-                        min={0}
-                        step={0.01}
-                        value={conditionSettings.lifetimeSpend.value} 
-                        onChange={(e) => handleConditionSettingChange(
-                          "lifetimeSpend", 
-                          "value", 
-                          parseFloat(e.target.value) || 0
-                        )}
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Customer qualifies after spending this amount
-                      </p>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Number of Redemptions */}
-                <div className="space-y-2 border rounded-md p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <Award className="h-4 w-4 mr-2 text-muted-foreground" />
-                      <Label htmlFor="numberOfRedemptions">Number of Redemptions</Label>
-                    </div>
-                    <Switch 
-                      id="numberOfRedemptionsEnabled" 
-                      checked={conditionSettings.numberOfRedemptions.enabled} 
-                      onCheckedChange={(checked) => handleConditionSettingChange("numberOfRedemptions", "enabled", checked)}
-                    />
-                  </div>
-                  
-                  {conditionSettings.numberOfRedemptions.enabled && (
-                    <div className="pt-2">
-                      <Input 
-                        id="numberOfRedemptions" 
-                        type="number" 
-                        min={0}
-                        value={conditionSettings.numberOfRedemptions.value} 
-                        onChange={(e) => handleConditionSettingChange(
-                          "numberOfRedemptions", 
-                          "value", 
-                          parseInt(e.target.value) || 0
-                        )}
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Customer qualifies after redeeming this many rewards
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <div className="mt-3 text-xs text-muted-foreground">
-                <div className="flex items-center">
-                  <Info className="h-3 w-3 mr-1" />
-                  <span>Customers only need to meet ONE of the enabled conditions to qualify</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Cancel
-            </Button>
+        ) : memberships.length === 0 ? (
+          <div className="bg-muted/50 border rounded-lg p-8 text-center">
+            <Award className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">No Membership Tiers</h3>
+            <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+              Create membership tiers to segment your customers and offer targeted rewards.
+            </p>
             <Button 
-              type="submit" 
-              onClick={handleSaveMembership}
+              onClick={handleCreateMembership}
               className="bg-[#007AFF] hover:bg-[#0071e3] text-white"
             >
-              {selectedMembership ? "Save Changes" : "Create Tier"}
+              <PlusCircle className="h-4 w-4 mr-2" />
+              Create Your First Tier
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[97vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Delete Membership Tier</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete the {selectedMembership?.name} membership tier?
-              This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          
-          {selectedMembership?.customerCount && selectedMembership.customerCount > 0 ? (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Cannot Delete</AlertTitle>
-              <AlertDescription>
-                This membership tier has {selectedMembership.customerCount} customers assigned to it.
-                You need to update these customers to a different tier first.
+          </div>
+        ) : (
+          <>
+            <Alert className="mb-6 bg-blue-50 text-blue-800 border-blue-200">
+              <Info className="h-4 w-4 text-blue-500" />
+              <AlertTitle className="text-blue-800 font-medium">About Membership Tiers</AlertTitle>
+              <AlertDescription className="text-blue-700">
+                <p>All customers automatically start at the Bronze tier. As they meet the conditions for higher tiers, they will be automatically upgraded.</p>
+                <p className="mt-1">The Bronze tier cannot be modified as it is the default starting point for all customers.</p>
               </AlertDescription>
             </Alert>
-          ) : (
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {memberships.map(membership => {
+                const safeMemb = ensureConditionsFormat(membership);
+                const isExpanded = expandedTiers[safeMemb.id] || false;
+                const customers = tierCustomers[safeMemb.id] || [];
+                const isLoading = loadingTierCustomers[safeMemb.id] || false;
+                
+                return (
+                  <div key={safeMemb.id} className="flex flex-col space-y-4">
+                    <Card 
+                      className={`overflow-hidden ${isBronzeTier(safeMemb) ? 'border-blue-200 bg-blue-50/30' : ''} flex flex-col h-full`}
+                    >
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {getMembershipIcon(safeMemb.name)}
+                            <div className="flex items-center">
+                              <CardTitle>{safeMemb.name}</CardTitle>
+                              {isBronzeTier(safeMemb) && (
+                                <Badge className="ml-2 bg-blue-100 text-blue-800 border-blue-200 text-xs">
+                                  Default
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                          {safeMemb.isActive ? (
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              Active
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-gray-100 text-gray-700 border-gray-200">
+                              Inactive
+                            </Badge>
+                          )}
+                        </div>
+                        <CardDescription>{safeMemb.description}</CardDescription>
+                      </CardHeader>
+                      
+                      <CardContent className="flex-grow">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">Customers:</span>
+                            <div className="flex items-center">
+                              <Users className="h-4 w-4 mr-1 text-muted-foreground" />
+                              <span>{safeMemb.customerCount || 0}</span>
+                            </div>
+                          </div>
+                          
+                          <Separator />
+                          
+                          <div className="space-y-1">
+                            <h4 className="text-sm font-medium mb-2">Requirements:</h4>
+                            
+                            {safeMemb.conditions && Object.entries(safeMemb.conditions).map(([type, condition]) => {
+                              // Only show enabled conditions
+                              if (!condition.enabled) return null;
+                              
+                              return (
+                                <div 
+                                  key={type} 
+                                  className="flex items-center justify-between py-1"
+                                >
+                                  <div className="flex items-center">
+                                    {type === "lifetimeTransactions" ? (
+                                      <ShoppingBag className="h-4 w-4 mr-2 text-muted-foreground" />
+                                    ) : type === "lifetimeSpend" ? (
+                                      <DollarSign className="h-4 w-4 mr-2 text-muted-foreground" />
+                                    ) : type === "numberOfRedemptions" ? (
+                                      <Award className="h-4 w-4 mr-2 text-muted-foreground" />
+                                    ) : (
+                                      <Info className="h-4 w-4 mr-2 text-muted-foreground" />
+                                    )}
+                                    
+                                    <span className="text-sm">
+                                      {type === "lifetimeTransactions" 
+                                        ? "Lifetime Transactions" 
+                                        : type === "lifetimeSpend"
+                                        ? "Lifetime Spend"
+                                        : type === "numberOfRedemptions"
+                                        ? "Number of Redemptions"
+                                        : type === "daysSinceJoined"
+                                        ? "Days Since Joined"
+                                        : type === "daysSinceLastVisit"
+                                        ? "Days Since Last Visit"
+                                        : type === "averageTransactionsPerWeek"
+                                        ? "Avg. Transactions Per Week"
+                                        : type}
+                                    </span>
+                                  </div>
+                                  
+                                  <span className="font-medium">
+                                    {type === "lifetimeSpend"
+                                      ? `$${condition.value.toFixed(2)}`
+                                      : condition.value}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                            
+                            {(!safeMemb.conditions || Object.entries(safeMemb.conditions).filter(([_, c]) => c.enabled).length === 0) && (
+                              <div className="text-sm text-muted-foreground py-1">
+                                No active conditions
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                      
+                      <CardFooter className="mt-auto pt-2">
+                        <div className="flex justify-end items-center gap-2 w-full">
+                          {!isDefaultTier(safeMemb) && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => handleDeleteClick(safeMemb)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Delete
+                            </Button>
+                          )}
+                          {!isBronzeTier(safeMemb) && (
+                            <>
+                              {!safeMemb.isActive && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleEditMembership(safeMemb)}
+                                  className="bg-blue-100 hover:bg-blue-200 text-blue-800 border-blue-200"
+                                >
+                                  <PlusCircle className="h-4 w-4 mr-1" />
+                                  Set Up Now
+                                </Button>
+                              )}
+                              <Button 
+                                variant="default" 
+                                size="sm" 
+                                onClick={() => handleEditMembership(safeMemb)}
+                                className="bg-[#007AFF] hover:bg-[#0071e3] text-white"
+                              >
+                                <Edit2 className="h-4 w-4 mr-1" />
+                                Edit
+                              </Button>
+                            </>
+                          )}
+                          {isBronzeTier(safeMemb) && (
+                            <div className="text-xs text-blue-600 italic">Default tier – cannot be modified</div>
+                          )}
+                        </div>
+                      </CardFooter>
+                    </Card>
+                    
+                    {/* Customer Table for this tier */}
+                    {isExpanded && (
+                      <div className="border rounded-md overflow-hidden bg-white col-span-1">
+                        <div className="p-4 bg-slate-50 border-b">
+                          <h3 className="text-sm font-medium">{safeMemb.name} Tier Customers</h3>
+                        </div>
+                        
+                        {isLoading ? (
+                          <div className="flex items-center justify-center h-40">
+                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : customers.length === 0 ? (
+                          <div className="text-center py-8">
+                            <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                            <h3 className="text-lg font-medium mb-2">No Customers</h3>
+                            <p className="text-muted-foreground">
+                              There are no customers in this membership tier yet.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full border-collapse">
+                              <thead>
+                                <tr className="border-b bg-slate-50">
+                                  <th className="text-left p-3 text-sm font-medium text-slate-700">Customer</th>
+                                  <th className="text-right p-3 text-sm font-medium text-slate-700">Points</th>
+                                  <th className="text-right p-3 text-sm font-medium text-slate-700">Transactions</th>
+                                  <th className="text-right p-3 text-sm font-medium text-slate-700">Spend</th>
+                                  <th className="text-right p-3 text-sm font-medium text-slate-700">Redemptions</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {customers.map(customer => (
+                                  <tr key={customer.customerId} className="border-b hover:bg-slate-50">
+                                    <td className="p-3 text-sm font-medium">{customer.fullName}</td>
+                                    <td className="p-3 text-sm text-right">{customer.pointsBalance}</td>
+                                    <td className="p-3 text-sm text-right">{customer.lifetimeTransactionCount}</td>
+                                    <td className="p-3 text-sm text-right">${customer.totalLifetimeSpend.toFixed(2)}</td>
+                                    <td className="p-3 text-sm text-right">{customer.redemptionCount ?? 'None'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            
+            {/* Add this after the membership grid and before the All Customers section */}
+            <div className="mt-12">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Bronze Tier Table */}
+                <Card className="overflow-hidden">
+                  <CardHeader className="pb-3 bg-slate-50 border-b">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        {getMembershipIcon('bronze')}
+                        <CardTitle className="ml-2">Bronze Customers</CardTitle>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        onClick={() => {
+                          setSelectedTierForReward("bronze")
+                          setIsCreateRewardOpen(true)
+                        }}
+                        className="bg-[#007AFF] hover:bg-[#0071e3] text-white"
+                      >
+                        <PlusCircle className="h-4 w-4 mr-1" />
+                        Create Reward
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  
+                  <CardContent className="p-0">
+                    {loadingAllCustomers ? (
+                      <div className="flex items-center justify-center h-40">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="border-b bg-slate-50">
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Customer</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Transactions</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Spend</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Redemptions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {allCustomers
+                              .filter(customer => customer.membershipTier.toLowerCase() === 'bronze')
+                              .slice(0, 5)
+                              .map(customer => (
+                                <tr key={customer.customerId} className="border-b hover:bg-slate-50">
+                                  <td className="p-3 text-sm font-medium text-center">{customer.fullName}</td>
+                                  <td className="p-3 text-sm text-center">{customer.lifetimeTransactionCount}</td>
+                                  <td className="p-3 text-sm text-center">${customer.totalLifetimeSpend.toFixed(2)}</td>
+                                  <td className="p-3 text-sm text-center">{customer.redemptionCount ?? 0}</td>
+                                </tr>
+                              ))}
+                            {allCustomers.filter(customer => customer.membershipTier.toLowerCase() === 'bronze').length === 0 && (
+                              <tr>
+                                <td colSpan={4} className="p-3 text-sm text-center text-muted-foreground">
+                                  No customers in Bronze tier
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+                
+                {/* Silver Tier Table */}
+                <Card className="overflow-hidden">
+                  <CardHeader className="pb-3 bg-slate-50 border-b">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        {getMembershipIcon('silver')}
+                        <CardTitle className="ml-2">Silver Customers</CardTitle>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        onClick={() => {
+                          setSelectedTierForReward("silver")
+                          setIsCreateRewardOpen(true)
+                        }}
+                        className="bg-[#007AFF] hover:bg-[#0071e3] text-white"
+                      >
+                        <PlusCircle className="h-4 w-4 mr-1" />
+                        Create Reward
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  
+                  <CardContent className="p-0">
+                    {loadingAllCustomers ? (
+                      <div className="flex items-center justify-center h-40">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="border-b bg-slate-50">
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Customer</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Transactions</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Spend</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Redemptions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {allCustomers
+                              .filter(customer => customer.membershipTier.toLowerCase() === 'silver')
+                              .slice(0, 5)
+                              .map(customer => (
+                                <tr key={customer.customerId} className="border-b hover:bg-slate-50">
+                                  <td className="p-3 text-sm font-medium text-center">{customer.fullName}</td>
+                                  <td className="p-3 text-sm text-center">{customer.lifetimeTransactionCount}</td>
+                                  <td className="p-3 text-sm text-center">${customer.totalLifetimeSpend.toFixed(2)}</td>
+                                  <td className="p-3 text-sm text-center">{customer.redemptionCount ?? 0}</td>
+                                </tr>
+                              ))}
+                            {allCustomers.filter(customer => customer.membershipTier.toLowerCase() === 'silver').length === 0 && (
+                              <tr>
+                                <td colSpan={4} className="p-3 text-sm text-center text-muted-foreground">
+                                  No customers in Silver tier
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+                
+                {/* Gold Tier Table */}
+                <Card className="overflow-hidden">
+                  <CardHeader className="pb-3 bg-slate-50 border-b">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        {getMembershipIcon('gold')}
+                        <CardTitle className="ml-2">Gold Customers</CardTitle>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        onClick={() => {
+                          setSelectedTierForReward("gold")
+                          setIsCreateRewardOpen(true)
+                        }}
+                        className="bg-[#007AFF] hover:bg-[#0071e3] text-white"
+                      >
+                        <PlusCircle className="h-4 w-4 mr-1" />
+                        Create Reward
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  
+                  <CardContent className="p-0">
+                    {loadingAllCustomers ? (
+                      <div className="flex items-center justify-center h-40">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="border-b bg-slate-50">
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Customer</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Transactions</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Spend</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Redemptions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {allCustomers
+                              .filter(customer => customer.membershipTier.toLowerCase() === 'gold')
+                              .slice(0, 5)
+                              .map(customer => (
+                                <tr key={customer.customerId} className="border-b hover:bg-slate-50">
+                                  <td className="p-3 text-sm font-medium text-center">{customer.fullName}</td>
+                                  <td className="p-3 text-sm text-center">{customer.lifetimeTransactionCount}</td>
+                                  <td className="p-3 text-sm text-center">${customer.totalLifetimeSpend.toFixed(2)}</td>
+                                  <td className="p-3 text-sm text-center">{customer.redemptionCount ?? 0}</td>
+                                </tr>
+                              ))}
+                            {allCustomers.filter(customer => customer.membershipTier.toLowerCase() === 'gold').length === 0 && (
+                              <tr>
+                                <td colSpan={4} className="p-3 text-sm text-center text-muted-foreground">
+                                  No customers in Gold tier
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+            
+            {/* All Customers Table */}
+            <div className="mt-12">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold">All Customers</h2>
+                <Button 
+                  variant="outline" 
+                  onClick={toggleAllCustomers}
+                  className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  {showAllCustomers ? "Hide" : "Show"} All Customers
+                </Button>
+              </div>
+              
+              {showAllCustomers && (
+                <Card className="overflow-hidden">
+                  <CardHeader className="pb-3 bg-slate-50 border-b">
+                    <CardTitle>Customer List</CardTitle>
+                    <CardDescription>
+                      All customers registered with your store
+                    </CardDescription>
+                  </CardHeader>
+                  
+                  <CardContent className="p-0">
+                    {loadingAllCustomers ? (
+                      <div className="flex items-center justify-center h-40">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : allCustomers.length === 0 ? (
+                      <div className="text-center py-8">
+                        <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                        <h3 className="text-lg font-medium mb-2">No Customers</h3>
+                        <p className="text-muted-foreground">
+                          You don't have any customers yet.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="border-b bg-slate-50">
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Customer ID</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Customer Name</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Membership Tier</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Points</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Transactions</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Lifetime Spend</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700">Redemptions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {allCustomers.map(customer => (
+                              <tr key={customer.customerId} className="border-b hover:bg-slate-50">
+                                <td className="p-3 text-sm text-center">{customer.customerId}</td>
+                                <td className="p-3 text-sm font-medium text-center">{customer.fullName}</td>
+                                <td className="p-3 text-sm text-center">
+                                  <div className="flex items-center justify-center">
+                                    {getMembershipIcon(customer.membershipTier)}
+                                    <span className="ml-2 capitalize">{customer.membershipTier}</span>
+                                  </div>
+                                </td>
+                                <td className="p-3 text-sm text-center">{customer.pointsBalance}</td>
+                                <td className="p-3 text-sm text-center">{customer.lifetimeTransactionCount}</td>
+                                <td className="p-3 text-sm text-center">${customer.totalLifetimeSpend.toFixed(2)}</td>
+                                <td className="p-3 text-sm text-center">{customer.redemptionCount ?? 0}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </>
+        )}
+        
+        {/* Create/Edit Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-md max-h-[97vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                {selectedMembership ? `Edit ${selectedMembership.name}` : "Create Membership Tier"}
+              </DialogTitle>
+              <DialogDescription>
+                Set the conditions that customers must meet to qualify for this tier
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Tier Name</Label>
+                <Input 
+                  id="name" 
+                  value={formData.name} 
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  placeholder="e.g. Platinum, Diamond"
+                  disabled={!!selectedMembership && ['silver', 'gold'].includes(selectedMembership.name.toLowerCase())}
+                />
+                {!!selectedMembership && ['silver', 'gold'].includes(selectedMembership.name.toLowerCase()) && (
+                  <p className="text-xs text-muted-foreground mt-1">Default tier names cannot be changed</p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Input 
+                  id="description" 
+                  value={formData.description} 
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  placeholder="Benefits of this membership tier"
+                />
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="isActive" className="cursor-pointer">Active Status</Label>
+                  {formData.name.toLowerCase() === 'gold' && (
+                    <p className="text-xs text-muted-foreground mt-1">Gold cannot be active if Silver is inactive</p>
+                  )}
+                </div>
+                <Switch 
+                  id="isActive" 
+                  checked={formData.isActive} 
+                  onCheckedChange={(checked) => setFormData({...formData, isActive: checked})}
+                />
+              </div>
+              
+              <Separator />
+              
+              <div>
+                <h3 className="text-sm font-medium mb-3">Qualification Requirements</h3>
+                <div className="space-y-4">
+                  {/* Lifetime Transactions */}
+                  <div className="space-y-2 border rounded-md p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <ShoppingBag className="h-4 w-4 mr-2 text-muted-foreground" />
+                        <Label htmlFor="lifetimeTransactions">Lifetime Transactions</Label>
+                      </div>
+                      <Switch 
+                        id="lifetimeTransactionsEnabled" 
+                        checked={conditionSettings.lifetimeTransactions.enabled} 
+                        onCheckedChange={(checked) => handleConditionSettingChange("lifetimeTransactions", "enabled", checked)}
+                      />
+                    </div>
+                    
+                    {conditionSettings.lifetimeTransactions.enabled && (
+                      <div className="pt-2">
+                        <Input 
+                          id="lifetimeTransactions" 
+                          type="number" 
+                          min={0}
+                          value={conditionSettings.lifetimeTransactions.value} 
+                          onChange={(e) => handleConditionSettingChange(
+                            "lifetimeTransactions", 
+                            "value", 
+                            parseInt(e.target.value) || 0
+                          )}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Customer qualifies after this many completed transactions
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Lifetime Spend */}
+                  <div className="space-y-2 border rounded-md p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <DollarSign className="h-4 w-4 mr-2 text-muted-foreground" />
+                        <Label htmlFor="lifetimeSpend">Lifetime Spend</Label>
+                      </div>
+                      <Switch 
+                        id="lifetimeSpendEnabled" 
+                        checked={conditionSettings.lifetimeSpend.enabled} 
+                        onCheckedChange={(checked) => handleConditionSettingChange("lifetimeSpend", "enabled", checked)}
+                      />
+                    </div>
+                    
+                    {conditionSettings.lifetimeSpend.enabled && (
+                      <div className="pt-2">
+                        <Input 
+                          id="lifetimeSpend" 
+                          type="number" 
+                          min={0}
+                          step={0.01}
+                          value={conditionSettings.lifetimeSpend.value} 
+                          onChange={(e) => handleConditionSettingChange(
+                            "lifetimeSpend", 
+                            "value", 
+                            parseFloat(e.target.value) || 0
+                          )}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Customer qualifies after spending this amount
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Number of Redemptions */}
+                  <div className="space-y-2 border rounded-md p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <Award className="h-4 w-4 mr-2 text-muted-foreground" />
+                        <Label htmlFor="numberOfRedemptions">Number of Redemptions</Label>
+                      </div>
+                      <Switch 
+                        id="numberOfRedemptionsEnabled" 
+                        checked={conditionSettings.numberOfRedemptions.enabled} 
+                        onCheckedChange={(checked) => handleConditionSettingChange("numberOfRedemptions", "enabled", checked)}
+                      />
+                    </div>
+                    
+                    {conditionSettings.numberOfRedemptions.enabled && (
+                      <div className="pt-2">
+                        <Input 
+                          id="numberOfRedemptions" 
+                          type="number" 
+                          min={0}
+                          value={conditionSettings.numberOfRedemptions.value} 
+                          onChange={(e) => handleConditionSettingChange(
+                            "numberOfRedemptions", 
+                            "value", 
+                            parseInt(e.target.value) || 0
+                          )}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Customer qualifies after redeeming this many rewards
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="mt-3 text-xs text-muted-foreground">
+                  <div className="flex items-center">
+                    <Info className="h-3 w-3 mr-1" />
+                    <span>Customers only need to meet ONE of the enabled conditions to qualify</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                 Cancel
               </Button>
               <Button 
-                variant="destructive" 
-                onClick={handleDeleteMembership}
+                type="submit" 
+                onClick={handleSaveMembership}
+                className="bg-[#007AFF] hover:bg-[#0071e3] text-white"
               >
-                Delete
+                {selectedMembership ? "Save Changes" : "Create Tier"}
               </Button>
             </DialogFooter>
-          )}
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+        
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent className="sm:max-w-md max-h-[97vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Delete Membership Tier</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete the {selectedMembership?.name} membership tier?
+                This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            
+            {selectedMembership?.customerCount && selectedMembership.customerCount > 0 ? (
+              <Alert variant="destructive" className="rounded-sm">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Cannot Delete</AlertTitle>
+                <AlertDescription>
+                  This membership tier has {selectedMembership.customerCount} customers assigned to it.
+                  You need to update these customers to a different tier first.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={handleDeleteMembership}
+                >
+                  Delete
+                </Button>
+              </DialogFooter>
+            )}
+          </DialogContent>
+        </Dialog>
+        
+        {/* CreateRewardDialog */}
+        <CreateRewardDialog
+          open={isCreateRewardOpen}
+          onOpenChange={setIsCreateRewardOpen}
+          defaultValues={{
+            rewardName: "",
+            description: "",
+            pointsCost: "100",
+            isActive: true,
+            type: "discount",
+            rewardVisibility: "all",
+            conditions: {
+              useMembershipRequirements: true,
+              membershipLevel: selectedTierForReward
+            },
+            specificCustomerIds: [],
+            specificCustomerNames: []
+          }}
+        />
+      </div>
     </div>
   )
 } 

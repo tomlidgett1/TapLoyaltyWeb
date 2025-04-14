@@ -176,16 +176,41 @@ export function CreateRewardDialog({
 
   useEffect(() => {
     if (defaultValues) {
-      setFormData(defaultValues)
-    } else if (customerId) {
+      // Set initial form data from default values
       setFormData({
         ...formData,
-        rewardVisibility: 'specific',
-        specificCustomerIds: customerId ? [customerId] : [],
-        specificCustomerNames: customerName ? [customerName] : []
-      })
+        ...defaultValues,
+        // Make sure membership level is properly capitalized
+        conditions: {
+          ...formData.conditions,
+          ...defaultValues.conditions,
+          membershipLevel: defaultValues.conditions?.membershipLevel 
+            ? capitalizeFirstLetter(defaultValues.conditions.membershipLevel)
+            : ""
+        }
+      });
+      
+      // If there's a specific customer ID provided
+      if (customerId && customerName) {
+        setFormData({
+          ...formData,
+          rewardVisibility: 'specific',
+          specificCustomerIds: customerId ? [customerId] : [],
+          specificCustomerNames: customerName ? [customerName] : []
+        });
+      }
+      
+      // If there are specific customer IDs in default values
+      if (defaultValues.specificCustomerIds && defaultValues.specificCustomerIds.length > 0) {
+        setFormData({
+          ...formData,
+          rewardVisibility: 'specific',
+          specificCustomerIds: defaultValues.specificCustomerIds,
+          specificCustomerNames: defaultValues.specificCustomerNames
+        });
+      }
     }
-  }, [defaultValues, customerId, customerName])
+  }, [defaultValues, customerId, customerName]);
   
   // Add effect to fetch customers when "specific" visibility is selected
   useEffect(() => {
@@ -328,7 +353,11 @@ export function CreateRewardDialog({
     // Add null checks for all string values that might be undefined
     const nameValid = formData.rewardName?.trim() !== '';
     const descriptionValid = formData.description?.trim() !== '';
-    const pointsCostValid = formData.pointsCost?.trim() !== '';
+    
+    // Handle both string and number types for pointsCost
+    const pointsCostValid = typeof formData.pointsCost === 'string' 
+      ? formData.pointsCost.trim() !== '' 
+      : typeof formData.pointsCost === 'number';
     
     // Return validation result
     return nameValid && descriptionValid && pointsCostValid;
@@ -2614,36 +2643,32 @@ export function CreateRewardDialog({
                         </div>
                       </div>
                     ) : formData.conditions.useMembershipRequirements && (
-                      <div className="p-4">
-                        <p className="text-sm text-gray-600 mb-4">
-                          Set a minimum membership level required to access this reward.
-                        </p>
-                        
-                        <div className="grid gap-2 max-w-sm">
-                          <Label>Required Membership Level</Label>
+                      <div className="p-4 space-y-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="membershipLevel">Minimum Membership Level</Label>
                           <Select
-                            value={formData.conditions.membershipLevel}
-                            onValueChange={(value) => setFormData({
-                              ...formData,
-                              conditions: {
-                                ...formData.conditions,
-                                membershipLevel: value
-                              }
-                            })}
+                            value={formData.conditions.membershipLevel || ""}
+                            onValueChange={(value) => {
+                              setFormData({
+                                ...formData,
+                                conditions: {
+                                  ...formData.conditions,
+                                  membershipLevel: value
+                                }
+                              });
+                            }}
                           >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select minimum membership level" />
+                            <SelectTrigger id="membershipLevel">
+                              <SelectValue placeholder="Select a membership level" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="bronze">Bronze</SelectItem>
-                              <SelectItem value="silver">Silver</SelectItem>
-                              <SelectItem value="gold">Gold</SelectItem>
-                              <SelectItem value="platinum">Platinum</SelectItem>
-                              <SelectItem value="vip">VIP</SelectItem>
+                              <SelectItem value="Bronze">Bronze</SelectItem>
+                              <SelectItem value="Silver">Silver</SelectItem>
+                              <SelectItem value="Gold">Gold</SelectItem>
                             </SelectContent>
                           </Select>
-                          <p className="text-xs text-gray-500">
-                            Only customers with this membership level or higher will be eligible
+                          <p className="text-xs text-muted-foreground">
+                            Only customers at or above this membership level will see this reward
                           </p>
                         </div>
                       </div>
@@ -3292,3 +3317,8 @@ export function CreateRewardDialog({
     </Dialog>
   )
 } 
+
+// Add this helper function at the top of the file, outside the component
+function capitalizeFirstLetter(string: string) {
+  return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
+}

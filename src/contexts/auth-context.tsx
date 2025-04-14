@@ -10,8 +10,9 @@ import {
   setPersistence,
   browserLocalPersistence
 } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+import { auth, functions } from "@/lib/firebase"
 import { useRouter } from "next/navigation"
+import { httpsCallable } from "firebase/functions"
 
 interface AuthContextType {
   user: User | null
@@ -63,6 +64,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Wait for token to be set
       const token = await result.user.getIdToken()
       document.cookie = `session=${token}; path=/`
+      
+      // Call the manualUpdateCustomerCohorts Firebase function
+      try {
+        console.log('Calling manualUpdateCustomerCohorts function')
+        const updateCohorts = httpsCallable(functions, 'manualUpdateCustomerCohorts')
+        await updateCohorts({
+          "merchantId": String(result.user.uid)
+        })
+        console.log('Successfully called manualUpdateCustomerCohorts function')
+      } catch (error) {
+        console.error('Error calling manualUpdateCustomerCohorts function:', error)
+        // Continue with login flow even if the function call fails
+      }
       
       // Force a hard navigation
       window.location.href = '/dashboard'

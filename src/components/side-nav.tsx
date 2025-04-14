@@ -26,7 +26,8 @@ import {
   MoreVertical,
   CheckCircle,
   XCircle,
-  ChevronRight
+  ChevronRight,
+  ShieldCheck
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -121,6 +122,11 @@ const navItems = [
     title: "Integrations",
     href: "/integrations",
     icon: Layers
+  },
+  {
+    title: "Admin",
+    href: "/admin",
+    icon: ShieldCheck
   },
   {
     title: "Settings",

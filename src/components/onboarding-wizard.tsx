@@ -1752,7 +1752,7 @@ export function OnboardingWizard() {
                     <span className="font-bold text-[#007AFF]">Tap</span> Loyalty
                   </h2>
                 </div>
-                <p className="text-sm text-gray-500 mt-1">Business Onboarding</p>
+                <p className="text-xs text-gray-500 mt-1">Business Onboarding</p>
               </div>
               
               {/* Progress content */}
@@ -1760,8 +1760,8 @@ export function OnboardingWizard() {
                 {/* Progress bar */}
                 <div className="mb-6">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-500">Progress</span>
-                    <span className="text-sm font-medium text-[#007AFF]">Step {step} of {totalSteps}</span>
+                    <span className="text-xs font-medium text-gray-500">Progress</span>
+                    <span className="text-xs font-medium text-[#007AFF]">Step {step} of {totalSteps}</span>
                   </div>
                   <div className="h-2 bg-white rounded-full overflow-hidden">
                     <div 
@@ -1775,24 +1775,24 @@ export function OnboardingWizard() {
                 <div className="space-y-5">
                   {/* Info step status */}
                   <div className="flex items-start gap-3">
-                    <div className={`h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                       step === 1 ? "bg-[#007AFF] text-white" :
                       step > 1 ? "bg-green-100 text-green-600" :
                       "bg-white text-gray-400"
                     }`}>
                       {step > 1 ? (
-                        <Check className="h-5 w-5" />
+                        <Check className="h-4 w-4" />
                       ) : (
-                        <Sparkles className="h-5 w-5" />
+                        <Sparkles className="h-4 w-4" />
                       )}
                     </div>
                     <div className="flex-1">
-                      <p className={`text-base font-medium ${
+                      <p className={`text-sm font-medium ${
                         step >= 1 ? "text-gray-800" : "text-gray-400"
                       }`}>
                         About Tap Loyalty
                       </p>
-                      <p className="text-sm text-gray-500 mt-0.5">
+                      <p className="text-xs text-gray-500 mt-0.5">
                         Learn how the platform works
                       </p>
                     </div>
@@ -1800,30 +1800,30 @@ export function OnboardingWizard() {
                   
                   {/* Reward creation status - now step 2 */}
                   <div className="flex items-start gap-3">
-                    <div className={`h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                       step === 2 ? "bg-[#007AFF] text-white" :
                       step > 2 ? "bg-green-100 text-green-600" :
                       "bg-white text-gray-400"
                     }`}>
                       {step > 2 ? (
-                        <Check className="h-5 w-5" />
+                        <Check className="h-4 w-4" />
                       ) : (
-                        <Gift className="h-5 w-5" />
+                        <Gift className="h-4 w-4" />
                       )}
                     </div>
                     <div className="flex-1">
-                      <p className={`text-base font-medium ${
+                      <p className={`text-sm font-medium ${
                         step >= 2 ? "text-gray-800" : "text-gray-400"
                       }`}>
                         Create Rewards
                       </p>
-                      <p className="text-sm text-gray-500 mt-0.5">
+                      <p className="text-xs text-gray-500 mt-0.5">
                         Set up rewards for customers
                       </p>
                       {businessData.selectedRewards.length > 0 && (
                         <div className="mt-2">
-                          <span className="text-sm text-green-600 flex items-center gap-1">
-                            <Check className="h-4 w-4" />
+                          <span className="text-xs text-green-600 flex items-center gap-1">
+                            <Check className="h-3 w-3" />
                             {businessData.selectedRewards.length} rewards selected
                           </span>
                         </div>
@@ -1833,30 +1833,30 @@ export function OnboardingWizard() {
                   
                   {/* Points rule status - now step 3 */}
                   <div className="flex items-start gap-3">
-                    <div className={`h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                       step === 3 ? "bg-[#007AFF] text-white" :
                       step > 3 ? "bg-green-100 text-green-600" :
                       "bg-white text-gray-400"
                     }`}>
                       {step > 3 ? (
-                        <Check className="h-5 w-5" />
+                        <Check className="h-4 w-4" />
                       ) : (
-                        <BarChart className="h-5 w-5" />
+                        <BarChart className="h-4 w-4" />
                       )}
                     </div>
                     <div className="flex-1">
-                      <p className={`text-base font-medium ${
+                      <p className={`text-sm font-medium ${
                         step >= 3 ? "text-gray-800" : "text-gray-400"
                       }`}>
                         Set Up Points Rules
                       </p>
-                      <p className="text-sm text-gray-500 mt-0.5">
+                      <p className="text-xs text-gray-500 mt-0.5">
                         Define how points are earned
                       </p>
                       {selectedPointsRules.length > 0 && (
                         <div className="mt-2">
-                          <span className="text-sm text-green-600 flex items-center gap-1">
-                            <Check className="h-4 w-4" />
+                          <span className="text-xs text-green-600 flex items-center gap-1">
+                            <Check className="h-3 w-3" />
                             {selectedPointsRules.length} rules selected
                           </span>
                         </div>
@@ -1866,30 +1866,30 @@ export function OnboardingWizard() {
                   
                   {/* Banner status - now step 4 */}
                   <div className="flex items-start gap-3">
-                    <div className={`h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                       step === 4 ? "bg-[#007AFF] text-white" :
                       step > 4 ? "bg-green-100 text-green-600" :
                       "bg-white text-gray-400"
                     }`}>
                       {step > 4 ? (
-                        <Check className="h-5 w-5" />
+                        <Check className="h-4 w-4" />
                       ) : (
-                        <Image className="h-5 w-5" />
+                        <Image className="h-4 w-4" />
                       )}
                     </div>
                     <div className="flex-1">
-                      <p className={`text-base font-medium ${
+                      <p className={`text-sm font-medium ${
                         step >= 4 ? "text-gray-800" : "text-gray-400"
                       }`}>
                         Create Homepage Banner
                       </p>
-                      <p className="text-sm text-gray-500 mt-0.5">
+                      <p className="text-xs text-gray-500 mt-0.5">
                         Design a promotional banner
                       </p>
                       {businessData.bannerDetails && (
                         <div className="mt-2">
-                          <span className="text-sm text-green-600 flex items-center gap-1">
-                            <Check className="h-4 w-4" />
+                          <span className="text-xs text-green-600 flex items-center gap-1">
+                            <Check className="h-3 w-3" />
                             Banner created
                           </span>
                         </div>
@@ -2022,58 +2022,249 @@ export function OnboardingWizard() {
                         <div className="space-y-6">
                           <h3 className="text-lg font-medium text-gray-900">How Tap Loyalty Works</h3>
                           
-                          <div className="grid gap-6 md:grid-cols-3">
-                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                              <div className="flex items-center gap-2 mb-3">
-                                <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium">1</div>
-                                <h4 className="font-medium text-gray-900">Customers Visit</h4>
-                              </div>
-                              <p className="text-sm text-gray-600">
-                                Customers visit your business and earn points through the Tap app
-                              </p>
-                            </div>
+                          {/* Tabs for Consumer vs Merchant view */}
+                          <Tabs defaultValue="merchant" className="w-full">
+                            <TabsList className="grid grid-cols-2 mb-6">
+                              <TabsTrigger value="consumer">For Consumers</TabsTrigger>
+                              <TabsTrigger value="merchant">For Merchants</TabsTrigger>
+                            </TabsList>
+                            
+                            {/* Consumer Tab Content */}
+                            <TabsContent value="consumer" className="space-y-6">
+                              <div className="grid gap-6 md:grid-cols-3">
+                                <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium">1</div>
+                                    <h4 className="font-medium text-gray-900">Connect Their Bank</h4>
+                                  </div>
+                                  <p className="text-sm text-gray-600">
+                                    Customers securely link their bank accounts using Open Banking and the Consumer Data Right (CDR) for bank-level security and privacy.
+                                  </p>
+                                </div>
 
-                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                              <div className="flex items-center gap-2 mb-3">
-                                <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium">2</div>
-                                <h4 className="font-medium text-gray-900">Points Accumulate</h4>
+                                <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium">2</div>
+                                    <h4 className="font-medium text-gray-900">Shop Normally</h4>
+                                  </div>
+                                  <p className="text-sm text-gray-600">
+                                    Customers pay as usual at participating businesses. AutoTap™ technology automatically detects their transactions in real-time.
+                                  </p>
+                                </div>
+                            
+                                <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium">3</div>
+                                    <h4 className="font-medium text-gray-900">Earn & Redeem</h4>
+                                  </div>
+                                  <p className="text-sm text-gray-600">
+                                    Rewards grow automatically and can be redeemed at any participating business. Customers climb loyalty tiers for better perks.
+                                  </p>
+                                </div>
                               </div>
-                              <p className="text-sm text-gray-600">
-                                Points add up based on your custom rules and visit frequency
-                              </p>
+                              
+                              {/* AutoTap Technology section */}
+                              <div className="bg-blue-50 p-5 rounded-lg border border-blue-100">
+                                <h4 className="font-medium text-gray-900 mb-3">AutoTap™ Technology</h4>
+                                <p className="text-sm text-gray-700 mb-4">
+                                  Our proprietary AutoTap technology uses Australia's Open Banking framework to securely access customers' consented transaction data, matching their purchases at participating merchants in real-time to automatically assign rewards - no scanning required.
+                                </p>
+                                
+                                <div className="grid grid-cols-3 gap-3">
+                                  <div className="flex items-center gap-2">
+                                    <Check className="h-4 w-4 text-blue-600" />
+                                    <span className="text-sm text-gray-700">Bank-level security</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Check className="h-4 w-4 text-blue-600" />
+                                    <span className="text-sm text-gray-700">Privacy-first CDR compliance</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Check className="h-4 w-4 text-blue-600" />
+                                    <span className="text-sm text-gray-700">Zero friction</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </TabsContent>
+                            
+                            {/* Merchant Tab Content */}
+                            <TabsContent value="merchant" className="space-y-6">
+                              <div className="grid gap-6 md:grid-cols-3">
+                                <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium">1</div>
+                                    <h4 className="font-medium text-gray-900">Simple Setup</h4>
+                                  </div>
+                                  <p className="text-sm text-gray-600">
+                                    Create your merchant profile, customize your rewards, and define points rules. We'll handle all the technical integration.
+                                  </p>
+                                </div>
+
+                                <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium">2</div>
+                                    <h4 className="font-medium text-gray-900">Automatic Point Earning</h4>
+                                  </div>
+                                  <p className="text-sm text-gray-600">
+                                    When customers make purchases at your business, they automatically earn points through AutoTap™ technology with no extra hardware needed.
+                                  </p>
+                                </div>
+                            
+                                <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium">3</div>
+                                    <h4 className="font-medium text-gray-900">Build Customer Loyalty</h4>
+                                  </div>
+                                  <p className="text-sm text-gray-600">
+                                    Track customer engagement, offer special rewards, and drive repeat business through your merchant dashboard.
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              {/* Points Earning Details */}
+                              <div className="bg-blue-50 p-5 rounded-lg border border-blue-100">
+                                <h4 className="font-medium text-gray-900 mb-3">How Points Work For Your Business</h4>
+                                <p className="text-sm text-gray-700 mb-4">
+                                  By default, customers earn <span className="font-semibold">3 points for every $1 spent</span> at your business. You can create special rules for bonus points during specific times or for specific customer actions.
+                                </p>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  <div className="bg-white p-3 rounded-md border border-gray-100 shadow-sm">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <Percent className="h-4 w-4 text-blue-600" />
+                                      <h5 className="font-medium text-gray-800 text-sm">Default Multiplier</h5>
+                                    </div>
+                                    <p className="text-xs text-gray-600">
+                                      3× points for every $1 spent at your business by default.
+                                    </p>
+                                  </div>
+                                  
+                                  <div className="bg-white p-3 rounded-md border border-gray-100 shadow-sm">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <Clock className="h-4 w-4 text-blue-600" />
+                                      <h5 className="font-medium text-gray-800 text-sm">Time-Based Bonuses</h5>
+                                    </div>
+                                    <p className="text-xs text-gray-600">
+                                      Create happy hours or special days with increased point multipliers to drive traffic during slow periods.
+                                    </p>
+                                  </div>
+                                  
+                                  <div className="bg-white p-3 rounded-md border border-gray-100 shadow-sm">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <Crown className="h-4 w-4 text-blue-600" />
+                                      <h5 className="font-medium text-gray-800 text-sm">Reward Redemption</h5>
+                                    </div>
+                                    <p className="text-xs text-gray-600">
+                                      Set point thresholds for rewards and control how and when customers can redeem them at your business.
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Customer insights */}
+                              <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
+                                <h4 className="font-medium text-gray-900 mb-3">Customer Insights & Analytics</h4>
+                                <p className="text-sm text-gray-600 mb-4">
+                                  Gain valuable data about your customers' spending habits and loyalty program engagement through our comprehensive dashboard:
+                                </p>
+                                
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="flex items-center gap-2">
+                                    <Check className="h-4 w-4 text-blue-600" />
+                                    <span className="text-sm text-gray-700">Customer visit frequency</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Check className="h-4 w-4 text-blue-600" />
+                                    <span className="text-sm text-gray-700">Average transaction value</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Check className="h-4 w-4 text-blue-600" />
+                                    <span className="text-sm text-gray-700">Most popular rewards</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Check className="h-4 w-4 text-blue-600" />
+                                    <span className="text-sm text-gray-700">Customer retention metrics</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </TabsContent>
+                          </Tabs>
+                          
+                          {/* Customer Data Control section */}
+                          <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
+                            <h4 className="font-medium text-gray-900 mb-2">Customer Data Control</h4>
+                            <p className="text-sm text-gray-600 italic mb-4">We believe privacy is a fundamental right, not just a feature</p>
+                            
+                            <div className="grid md:grid-cols-3 gap-4">
+                              <div className="bg-white p-3 rounded-md border border-gray-100 shadow-sm">
+                                <h5 className="font-medium text-gray-800 text-sm mb-2">Bank-Level Security</h5>
+                                <p className="text-xs text-gray-600">
+                                  Customers' financial data is protected with AES-256 encryption and enterprise-grade security protocols. We never store their full banking credentials.
+                                </p>
+                              </div>
+                              
+                              <div className="bg-white p-3 rounded-md border border-gray-100 shadow-sm">
+                                <h5 className="font-medium text-gray-800 text-sm mb-2">Transparent Permissions</h5>
+                                <p className="text-xs text-gray-600">
+                                  We only access the data customers explicitly allow. Our permissions are clearly explained, and they can revoke access at any time.
+                                </p>
+                              </div>
+                              
+                              <div className="bg-white p-3 rounded-md border border-gray-100 shadow-sm">
+                                <h5 className="font-medium text-gray-800 text-sm mb-2">No Data Selling</h5>
+                                <p className="text-xs text-gray-600">
+                                  Unlike many loyalty programs, we never sell customers' personal data to third parties. Their information is used solely to enhance their rewards experience.
+                                </p>
+                              </div>
                             </div>
-                        
-                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                              <div className="flex items-center gap-2 mb-3">
-                                <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium">3</div>
-                                <h4 className="font-medium text-gray-900">Rewards Redeemed</h4>
+                          </div>
+                          
+                          {/* Compliance badges with actual images */}
+                          <div className="grid grid-cols-3 gap-4 pt-2">
+                            <div className="flex flex-col items-center">
+                              <div className="h-16 flex items-center justify-center mb-2">
+                                <img 
+                                  src="/accc.png" 
+                                  alt="ACCC Approved" 
+                                  width={64} 
+                                  height={64}
+                                  className="object-contain"
+                                />
                               </div>
-                              <p className="text-sm text-gray-600">
-                                Customers redeem points for rewards you've created
-                              </p>
+                              <span className="text-xs text-gray-600 text-center">ACCC Approved</span>
+                            </div>
+                            
+                            <div className="flex flex-col items-center">
+                              <div className="h-16 flex items-center justify-center mb-2">
+                                <img 
+                                  src="/cdr.png" 
+                                  alt="CDR Compliant" 
+                                  width={110} 
+                                  height={110}
+                                  className="object-contain"
+                                />
+                              </div>
+                              <span className="text-xs text-gray-600 text-center">CDR Compliant</span>
+                            </div>
+                            
+                            <div className="flex flex-col items-center">
+                              <div className="h-16 flex items-center justify-center mb-2">
+                                <img 
+                                  src="/aus.png" 
+                                  alt="Australian Owned" 
+                                  width={64} 
+                                  height={64}
+                                  className="object-contain"
+                                />
+                              </div>
+                              <span className="text-xs text-gray-600 text-center">Australian Owned</span>
                             </div>
                           </div>
                           
                           <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                            <h4 className="font-medium text-gray-900 mb-2">Benefits for Your Business</h4>
-                            <div className="grid md:grid-cols-2 gap-3">
-                              <div className="flex items-start gap-2">
-                                <ArrowUp className="h-4 w-4 text-blue-600 mt-0.5" />
-                                <span className="text-sm text-gray-700">Increased customer retention</span>
-                              </div>
-                              <div className="flex items-start gap-2">
-                                <ArrowUp className="h-4 w-4 text-blue-600 mt-0.5" />
-                                <span className="text-sm text-gray-700">Higher average purchase value</span>
-                              </div>
-                              <div className="flex items-start gap-2">
-                                <ArrowUp className="h-4 w-4 text-blue-600 mt-0.5" />
-                                <span className="text-sm text-gray-700">More frequent visits</span>
-                              </div>
-                              <div className="flex items-start gap-2">
-                                <ArrowUp className="h-4 w-4 text-blue-600 mt-0.5" />
-                                <span className="text-sm text-gray-700">Better customer insights</span>
-                              </div>
-                            </div>
+                            <p className="text-xs text-gray-600">
+                              Tap Loyalty is fully compliant with Australia's Consumer Data Right (CDR) framework and has received approval from the Australian Competition and Consumer Commission (ACCC). We adhere to strict Australian privacy laws and banking regulations, using military-grade AES-256 encryption to ensure customers' data is handled with the highest standards of security and transparency.
+                            </p>
                           </div>
                         </div>
                       )}
@@ -2115,19 +2306,30 @@ export function OnboardingWizard() {
                                 <h4 className="font-medium text-gray-900">Customer App</h4>
                               </div>
                               
-                              <ul className="space-y-3">
-                                {[
-                                  "Earn points with every visit",
-                                  "Discover local businesses",
-                                  "Redeem exciting rewards",
-                                  "Track points and progress"
-                                ].map((item, i) => (
-                                  <li key={i} className="flex items-start gap-2 text-sm">
-                                    <Check className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                                    <span className="text-gray-700">{item}</span>
-                                  </li>
-                                ))}
-                              </ul>
+                              <div className="flex flex-col items-center gap-6">
+                                <ul className="space-y-3 w-full">
+                                  {[
+                                    "Earn points with every visit",
+                                    "Discover local businesses",
+                                    "Redeem exciting rewards",
+                                    "Track points and progress"
+                                  ].map((item, i) => (
+                                    <li key={i} className="flex items-start gap-2 text-sm">
+                                      <Check className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                                      <span className="text-gray-700">{item}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                                
+                                <img 
+                                  src="/ios.png" 
+                                  alt="iOS App"
+                                  width={720} 
+                                  height={1440}
+                                  className="object-contain max-h-[720px]"
+                                  style={{ transform: 'scale(1.2)' }}
+                                />
+                              </div>
                             </div>
                           </div>
                         </div>

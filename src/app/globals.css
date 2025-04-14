@@ -137,3 +137,12 @@ body {
     display: none;  /* Chrome, Safari and Opera */
   }
 }
+
+.membership-page .rounded-lg,
+.membership-page .rounded-md,
+.membership-page [class*="card"],
+.membership-page [class*="button"],
+.membership-page [class*="alert"],
+.membership-page [class*="dialog"] {
+  border-radius: 0.25rem !important;
+}

@@ -50,18 +50,24 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
       title: "Coffee Program",
       description: "Create a buy-X-get-1-free coffee loyalty program",
       icon: Coffee,
+      image: "/rec1.png",
+      details: "Perfect for cafes, bakeries, or any business with repeat purchases. Customers earn stamps toward free items.",
       action: () => setScreen('coffee')
     },
     {
       title: "Recurring Voucher",
       description: "Set up an automatically recurring voucher reward",
       icon: Percent,
+      image: "/rec2.png",
+      details: "Great for retail and services. Customers earn dollar value vouchers at spending milestones.",
       action: () => setScreen('discount')
     },
     {
       title: "Transaction-Based Reward",
       description: "Reward customers based on number of transactions",
       icon: ShoppingBag,
+      image: "/rec1.png",
+      details: "Ideal for businesses where visit frequency matters more than spend amount. Rewards based on visit count.",
       action: () => {
         onOpenChange(false)
         setShowTransactionReward(true)
@@ -104,12 +110,7 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
       const result = await coffeeprogram(data)
       playSuccessSound()
       toast({
-        title: (
-          <div className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-green-500" />
-            <span>Success</span>
-          </div>
-        ),
+        title: "Success",
         description: "Coffee program created successfully",
       })
       onOpenChange(false)
@@ -307,7 +308,16 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-auto">
+        <DialogContent className="sm:max-w-[95%] md:max-w-[90%] lg:max-w-[1100px] h-[97vh] max-h-[97vh] overflow-auto overflow-x-hidden flex flex-col scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <style jsx global>{`
+            .scrollbar-hide::-webkit-scrollbar {
+              display: none;
+            }
+            .scrollbar-hide {
+              -ms-overflow-style: none;
+              scrollbar-width: none;
+            }
+          `}</style>
           <DialogHeader>
             <DialogTitle>
               {screen === 'options' ? (
@@ -315,16 +325,75 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                   <span className="text-[#007AFF]">Create</span> Recurring Reward
                 </>
               ) : screen === 'coffee' ? (
-                <div className="flex items-center">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="mr-2 -ml-2 h-8 w-8"
-                    onClick={() => setScreen('options')}
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                  </Button>
-                  <span className="text-[#007AFF]">Configure</span>{' '}Coffee Program
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mr-2 -ml-2 h-8 w-8"
+                      onClick={() => setScreen('options')}
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-[#007AFF]">Configure</span>{' '}Coffee Program
+                  </div>
+                  
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        type="button"
+                        size="sm"
+                        className="text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100 hover:text-blue-700"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        How it works
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent side="bottom" align="end" className="w-80 p-0 z-50" sideOffset={5}>
+                      <div className="bg-gradient-to-br from-blue-50 to-blue-100/70 p-4 text-sm rounded-md">
+                        <h3 className="font-semibold text-blue-800 mb-2 flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                          </svg>
+                          About Coffee Programs
+                        </h3>
+                        <p className="text-blue-700 mb-3">
+                          Coffee programs create digital loyalty cards that reward customers after a set number of purchases.
+                        </p>
+                        <div className="space-y-2 text-blue-700">
+                          <div className="flex items-start gap-2">
+                            <div className="min-w-[20px] font-bold text-blue-500">•</div>
+                            <p>Customers earn stamps with each qualifying purchase</p>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <div className="min-w-[20px] font-bold text-blue-500">•</div>
+                            <p>If you set <span className="font-medium text-blue-800">5 purchases</span> as the frequency and <span className="font-medium text-blue-800">5 rewards</span>, customers will get:</p>
+                          </div>
+                          <div className="pl-7 space-y-1.5 bg-white/50 p-2 rounded border border-blue-200/50 my-1">
+                            <p className="flex items-center">
+                              <span className="text-blue-500 mr-2">1.</span> 
+                              <span>First free coffee after 5 purchases</span>
+                            </p>
+                            <p className="flex items-center">
+                              <span className="text-blue-500 mr-2">2.</span> 
+                              <span>Second free coffee after 10 purchases</span>
+                            </p>
+                            <p className="flex items-center">
+                              <span className="text-blue-500 mr-2">3.</span> 
+                              <span>Third free coffee after 15 purchases, and so on</span>
+                            </p>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <div className="min-w-[20px] font-bold text-blue-500">•</div>
+                            <p>Free coffees appear automatically in customer accounts when they qualify</p>
+                          </div>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               ) : (
                 <div className="flex items-center justify-between w-full">
@@ -401,262 +470,323 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
             </DialogTitle>
           </DialogHeader>
 
-          {screen === 'options' ? (
-            <div className="py-4 min-h-[300px]">
-              <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
-                <h3 className="text-sm font-medium text-blue-800 mb-1">Select Reward Type</h3>
-                <p className="text-xs text-blue-700">
-                  Choose the type of recurring reward you want to create for your customers. Each type works differently to help boost loyalty.
-                </p>
-              </div>
-              
-              <div className="grid gap-3">
-                {options.map((option) => (
-                  <Card 
-                    key={option.title}
-                    className="group cursor-pointer transition-all hover:shadow-sm hover:border-[#007AFF]/30"
-                    onClick={option.action}
-                  >
-                    <div className="p-4 flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-md bg-[#007AFF]/10 flex items-center justify-center flex-shrink-0">
-                        <option.icon className="h-5 w-5 text-[#007AFF]" />
+          <div className="flex-1 overflow-y-auto scrollbar-hide">
+            {screen === 'options' ? (
+              <div className="py-6 min-h-[300px]">
+                <div className="bg-blue-50 p-4 rounded-md border border-blue-100 mb-6">
+                  <h3 className="text-md font-medium text-blue-800 mb-2">Select Reward Type</h3>
+                  <p className="text-sm text-blue-700">
+                    Choose the type of recurring reward you want to create for your customers. Each option shows how it appears in the customer app.
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                  {options.map((option) => (
+                    <div 
+                      key={option.title}
+                      className="group cursor-pointer transition-all hover:shadow-md border border-gray-200 rounded-xl overflow-hidden hover:border-[#007AFF] flex flex-col"
+                      onClick={option.action}
+                    >
+                      {/* Image section */}
+                      <div className="bg-gradient-to-br from-blue-50 to-gray-50 p-8 flex items-center justify-center h-[250px]">
+                        <div className="transform scale-[1.7]">
+                          <img 
+                            src={option.image} 
+                            alt={`${option.title} preview`} 
+                            className="w-auto h-auto object-contain max-h-[180px]"
+                          />
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-medium truncate">
-                          {option.title}
-                        </h3>
-                        <p className="text-xs text-muted-foreground truncate">
+                      
+                      {/* Content section */}
+                      <div className="p-6 flex-1 flex flex-col text-center">
+                        <div className="mb-4 mt-2 flex flex-col items-center">
+                          <h3 className="text-lg font-semibold text-gray-900 group-hover:text-[#007AFF] transition-colors">
+                            {option.title}
+                          </h3>
+                        </div>
+                        
+                        <p className="text-md text-gray-600 mb-4">
                           {option.description}
                         </p>
+                        
+                        <div className="bg-gray-50 p-4 rounded-md border border-gray-100 mb-6 flex-1">
+                          <p className="text-sm text-gray-700">
+                            {option.details}
+                          </p>
+                        </div>
+                        
+                        <div className="mt-auto flex justify-center">
+                          <button className="w-full py-3 px-4 rounded-md bg-blue-50 text-md text-[#007AFF] font-medium flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+                            Configure
+                            <ChevronRight className="h-5 w-5 ml-1" />
+                          </button>
+                        </div>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-[#007AFF] transition-colors" />
                     </div>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          ) : screen === 'coffee' ? (
-            <div className="py-4 min-h-[300px] space-y-6">
-              <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
-                <h3 className="text-sm font-medium text-blue-800 mb-1">Coffee Program Settings</h3>
-                <p className="text-xs text-blue-700">
-                  Create a digital "buy X get 1 free" stamp card program for coffee or other beverages. Configure how many purchases customers need to make before earning a free item.
-                </p>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="grid gap-2">
-                  <Label>PIN Code <span className="text-red-500">*</span></Label>
-                  <Input
-                    type="text"
-                    maxLength={4}
-                    value={formData.pin}
-                    onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
-                    placeholder="Enter 4-digit PIN (e.g., 1234)"
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    Staff will enter this PIN when redeeming free coffees
-                  </p>
+                  ))}
                 </div>
-
-                <div className="grid gap-2">
-                  <Label>First Free Coffee Timing</Label>
-                  <RadioGroup
-                    value={formData.freeRewardTiming}
-                    onValueChange={(value: 'before' | 'after') => 
-                      setFormData({ ...formData, freeRewardTiming: value })
-                    }
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="after" id="after" />
-                      <Label htmlFor="after">After first transaction</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="before" id="before" />
-                      <Label htmlFor="before">Before first transaction (welcome gift)</Label>
-                    </div>
-                  </RadioGroup>
-                  <p className="text-sm text-muted-foreground">
-                    Choose when customers receive their first free coffee
+              </div>
+            ) : screen === 'coffee' ? (
+              <div className="py-1 min-h-[300px] overflow-x-hidden">
+                <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
+                  <h3 className="text-sm font-medium text-blue-800 mb-1">Coffee Program Settings</h3>
+                  <p className="text-xs text-blue-700">
+                    Create a digital "buy X get 1 free" stamp card program for coffee or other beverages. Configure how many purchases customers need to make before earning a free item.
                   </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label>Frequency <span className="text-red-500">*</span></Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={formData.frequency}
-                      onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}
-                      placeholder="e.g., 5"
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      Number of purchases required between free coffees
-                    </p>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label>Number of Rewards <span className="text-red-500">*</span></Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={formData.levels}
-                      onChange={(e) => setFormData({ ...formData, levels: e.target.value })}
-                      placeholder="e.g., 5"
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      Total number of free coffees in the program
-                    </p>
-                  </div>
                 </div>
                 
-                <div className="border-t pt-4 mt-2">
-                  <h4 className="text-sm font-medium mb-2">Program Summary</h4>
-                  <div className="bg-gray-50 p-3 rounded-md">
-                    <p className="text-sm mb-2">
-                      Based on your settings, customers will:
-                    </p>
-                    <ul className="text-sm space-y-1 pl-5 list-disc">
-                      <li>
-                        {formData.freeRewardTiming === 'before' ? 
-                          "Get a free coffee immediately upon joining" : 
-                          `Get a free coffee after ${formData.frequency} purchases`}
-                      </li>
-                      <li>
-                        Earn another free coffee every {formData.frequency} purchases
-                      </li>
-                      <li>
-                        Earn up to {formData.levels} free coffees in total
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="py-2 space-y-4">
-              <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
-                <h3 className="text-sm font-medium text-blue-800 mb-1">Recurring Voucher Settings</h3>
-                <p className="text-xs text-blue-700">
-                  Create vouchers that customers earn automatically as they spend at your business. Each voucher requires the same spend amount, creating a regular reward cycle.
-                </p>
-              </div>
-              
-              <div className="space-y-3">
-                <div className="grid gap-2">
-                  <Label>Reward Name <span className="text-red-500">*</span></Label>
-                  <Input
-                    type="text"
-                    value={formData.rewardName}
-                    onChange={(e) => setFormData({ ...formData, rewardName: e.target.value })}
-                    placeholder="e.g., Loyalty Spending Voucher"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Choose a clear name that explains the value to customers
-                  </p>
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-6 overflow-hidden">
+                  {/* Left column with form inputs - takes 3/5 of the space */}
+                  <div className="md:col-span-3 space-y-4">
+                    <div className="grid gap-2">
+                      <Label>PIN Code <span className="text-red-500">*</span></Label>
+                      <Input
+                        type="text"
+                        maxLength={4}
+                        value={formData.pin}
+                        onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+                        placeholder="Enter 4-digit PIN (e.g., 1234)"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Staff will enter this PIN when redeeming free coffees
+                      </p>
+                    </div>
 
-                <div className="grid gap-2">
-                  <Label>Description</Label>
-                  <Textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="e.g., Earn $10 vouchers for every $100 you spend"
-                    rows={3}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    This helps customers understand how to earn the vouchers
-                  </p>
-                </div>
+                    <div className="grid gap-2">
+                      <Label>First Free Coffee Timing</Label>
+                      <RadioGroup
+                        value={formData.freeRewardTiming}
+                        onValueChange={(value: 'before' | 'after') => 
+                          setFormData({ ...formData, freeRewardTiming: value })
+                        }
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="after" id="after" />
+                          <Label htmlFor="after">After first transaction</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="before" id="before" />
+                          <Label htmlFor="before">Before first transaction (welcome gift)</Label>
+                        </div>
+                      </RadioGroup>
+                      <p className="text-sm text-muted-foreground">
+                        Choose when customers receive their first free coffee
+                      </p>
+                    </div>
 
-                <div className="grid gap-2">
-                  <Label>PIN Code <span className="text-red-500">*</span></Label>
-                  <Input
-                    type="text"
-                    maxLength={4}
-                    value={formData.pin}
-                    onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
-                    placeholder="Enter 4-digit PIN (e.g., 1234)"
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    Staff will enter this PIN when redeeming vouchers
-                  </p>
-                </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label>Frequency <span className="text-red-500">*</span></Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={formData.frequency}
+                          onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}
+                          placeholder="e.g., 5"
+                        />
+                        <p className="text-sm text-muted-foreground">
+                          Number of purchases required between free coffees
+                        </p>
+                      </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label>Total Spend Required ($) <span className="text-red-500">*</span></Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={formData.spendRequired}
-                      onChange={(e) => setFormData({ ...formData, spendRequired: e.target.value })}
-                      placeholder="e.g., 100"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Amount needed for each voucher
-                    </p>
+                      <div className="grid gap-2">
+                        <Label>Number of Rewards <span className="text-red-500">*</span></Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={formData.levels}
+                          onChange={(e) => setFormData({ ...formData, levels: e.target.value })}
+                          placeholder="e.g., 5"
+                        />
+                        <p className="text-sm text-muted-foreground">
+                          Total number of free coffees in the program
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-2">
+                      <h4 className="text-sm font-medium mb-2">Program Summary</h4>
+                      <div className="bg-gray-50 p-3 rounded-md">
+                        <p className="text-sm mb-2">
+                          Based on your settings, customers will:
+                        </p>
+                        <ul className="text-sm space-y-1 pl-5 list-disc">
+                          <li>
+                            {formData.freeRewardTiming === 'before' ? 
+                              "Get a free coffee immediately upon joining" : 
+                              `Get a free coffee after ${formData.frequency} purchases`}
+                          </li>
+                          <li>
+                            Earn another free coffee every {formData.frequency} purchases
+                          </li>
+                          <li>
+                            Earn up to {formData.levels} free coffees in total
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
                   </div>
                   
-                  <div className="grid gap-2">
-                    <Label>Voucher Amount ($) <span className="text-red-500">*</span></Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={formData.discountAmount}
-                      onChange={(e) => setFormData({ ...formData, discountAmount: e.target.value })}
-                      placeholder="e.g., 10"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Value of each voucher
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>Number of Vouchers <span className="text-red-500">*</span></Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={formData.iterations}
-                    onChange={(e) => setFormData({ ...formData, iterations: e.target.value })}
-                    placeholder="e.g., 5"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Total number of vouchers a customer can earn
-                  </p>
-                </div>
-                
-                <div className="border-t pt-4 mt-2">
-                  <h4 className="text-sm font-medium mb-2">Program Summary</h4>
-                  <div className="bg-gray-50 p-3 rounded-md">
-                    <p className="text-sm mb-2">
-                      Based on your settings, customers will earn:
-                    </p>
-                    <ul className="text-sm space-y-1 pl-5 list-disc">
-                      <li>
-                        ${formData.discountAmount} voucher after spending ${formData.spendRequired}
-                      </li>
-                      <li>
-                        Another ${formData.discountAmount} voucher after spending ${parseInt(formData.spendRequired) * 2}
-                      </li>
-                      <li>
-                        And so on, up to ${formData.iterations} vouchers in total
-                      </li>
-                      <li>
-                        Total potential reward value: ${parseInt(formData.discountAmount) * parseInt(formData.iterations)}
-                      </li>
-                    </ul>
+                  {/* Right column with iOS image - takes 2/5 of the space */}
+                  <div className="md:col-span-2 flex flex-col items-center">
+                    <h3 className="text-base font-bold text-gray-900 mb--1">
+                      Preview on iOS App
+                    </h3>
+                    <div className="flex items-center justify-center" style={{ height: "480px" }}>
+                      <img 
+                        src="/ios.png" 
+                        alt="Coffee Program on iOS App" 
+                        className="max-h-[460px] w-auto object-contain"
+                        style={{ transform: "scale(1.45)" }}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="py-1 min-h-[300px] overflow-x-hidden">
+                <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
+                  <h3 className="text-sm font-medium text-blue-800 mb-1">Recurring Voucher Settings</h3>
+                  <p className="text-xs text-blue-700">
+                    Create vouchers that customers earn automatically as they spend at your business. Each voucher requires the same spend amount, creating a regular reward cycle.
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-6 overflow-hidden">
+                  {/* Left column with form inputs - takes 3/5 of the space */}
+                  <div className="md:col-span-3 space-y-3">
+                    <div className="grid gap-2">
+                      <Label>Reward Name <span className="text-red-500">*</span></Label>
+                      <Input
+                        type="text"
+                        value={formData.rewardName}
+                        onChange={(e) => setFormData({ ...formData, rewardName: e.target.value })}
+                        placeholder="e.g., Loyalty Spending Voucher"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Choose a clear name that explains the value to customers
+                      </p>
+                    </div>
 
-          <div className="border-t pt-4 flex justify-end gap-2">
+                    <div className="grid gap-2">
+                      <Label>Description</Label>
+                      <Textarea
+                        value={formData.description}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        placeholder="e.g., Earn $10 vouchers for every $100 you spend"
+                        rows={3}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        This helps customers understand how to earn the vouchers
+                      </p>
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label>PIN Code <span className="text-red-500">*</span></Label>
+                      <Input
+                        type="text"
+                        maxLength={4}
+                        value={formData.pin}
+                        onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+                        placeholder="Enter 4-digit PIN (e.g., 1234)"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Staff will enter this PIN when redeeming vouchers
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label>Total Spend Required ($) <span className="text-red-500">*</span></Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={formData.spendRequired}
+                          onChange={(e) => setFormData({ ...formData, spendRequired: e.target.value })}
+                          placeholder="e.g., 100"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Amount needed for each voucher
+                        </p>
+                      </div>
+                      
+                      <div className="grid gap-2">
+                        <Label>Voucher Amount ($) <span className="text-red-500">*</span></Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={formData.discountAmount}
+                          onChange={(e) => setFormData({ ...formData, discountAmount: e.target.value })}
+                          placeholder="e.g., 10"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Value of each voucher
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label>Number of Vouchers <span className="text-red-500">*</span></Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={formData.iterations}
+                        onChange={(e) => setFormData({ ...formData, iterations: e.target.value })}
+                        placeholder="e.g., 5"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Total number of vouchers a customer can earn
+                      </p>
+                    </div>
+                    
+                    <div className="mt-2">
+                      <h4 className="text-sm font-medium mb-2">Program Summary</h4>
+                      <div className="bg-gray-50 p-3 rounded-md">
+                        <p className="text-sm mb-2">
+                          Based on your settings, customers will earn:
+                        </p>
+                        <ul className="text-sm space-y-1 pl-5 list-disc">
+                          <li>
+                            ${formData.discountAmount} voucher after spending ${formData.spendRequired}
+                          </li>
+                          <li>
+                            Another ${formData.discountAmount} voucher after spending ${parseInt(formData.spendRequired) * 2}
+                          </li>
+                          <li>
+                            And so on, up to ${formData.iterations} vouchers in total
+                          </li>
+                          <li>
+                            Total potential reward value: ${parseInt(formData.discountAmount) * parseInt(formData.iterations)}
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Right column with iOS image - takes 2/5 of the space */}
+                  <div className="md:col-span-2 flex flex-col items-center">
+                    <h3 className="text-base font-bold text-gray-900 mb--1">
+                      Preview on iOS App
+                    </h3>
+                    <div className="flex items-center justify-center" style={{ height: "480px" }}>
+                      <img 
+                        src="/ios.png" 
+                        alt="Recurring Voucher on iOS App" 
+                        className="max-h-[460px] w-auto object-contain"
+                        style={{ transform: "scale(1.45)" }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="pt-1 pb-1 flex justify-end gap-2">
             <Button 
               variant="outline" 
+              size="sm"
               onClick={() => {
                 if (screen === 'options') {
                   onOpenChange(false)
@@ -669,7 +799,8 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
             </Button>
             {screen === 'coffee' && (
               <Button 
-                onClick={saveCoffeeProgram} 
+                onClick={saveCoffeeProgram}
+                size="sm" 
                 disabled={loading || !formData.pin || !formData.frequency || !formData.levels}
                 className="bg-[#007AFF] hover:bg-[#0071E3] text-white"
               >
@@ -685,7 +816,8 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
             )}
             {screen === 'discount' && (
               <Button 
-                onClick={handleCreateClick} 
+                onClick={handleCreateClick}
+                size="sm" 
                 disabled={loading || !formData.rewardName || !formData.pin || !formData.spendRequired || !formData.discountAmount}
                 className="bg-[#007AFF] hover:bg-[#0071E3] text-white"
               >

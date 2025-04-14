@@ -276,7 +276,16 @@ export function CreateTransactionRewardDialog({ open, onOpenChange }: CreateTran
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-auto">
+      <DialogContent className="sm:max-w-[95%] md:max-w-[90%] lg:max-w-[1100px] h-[97vh] max-h-[97vh] overflow-auto overflow-x-hidden flex flex-col scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <style jsx global>{`
+          .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+          }
+          .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+          }
+        `}</style>
         <DialogHeader>
           <DialogTitle>
             <div className="flex items-center justify-between w-full">
@@ -352,179 +361,201 @@ export function CreateTransactionRewardDialog({ open, onOpenChange }: CreateTran
           </DialogTitle>
         </DialogHeader>
 
-        <div className="py-2 space-y-4 min-h-[400px]">
-          {/* Add instruction panel */}
-          <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
-            <h3 className="text-sm font-medium text-blue-800 mb-1">Transaction Reward Setup</h3>
-            <p className="text-xs text-blue-700">
-              Create rewards that customers earn automatically as they make more transactions at your business. 
-              These rewards incentivize repeat visits and build customer loyalty over time.
-            </p>
-          </div>
-          
-          <div className="space-y-3">
-            <div className="grid gap-2">
-              <Label>Reward Name <span className="text-red-500">*</span></Label>
-              <Input
-                type="text"
-                value={formData.rewardName}
-                onChange={(e) => setFormData({ ...formData, rewardName: e.target.value })}
-                placeholder="e.g., Loyal Customer Reward"
-              />
-              <p className="text-xs text-muted-foreground">
-                Choose a name that clearly explains the benefit to customers
+        <div className="flex-1 overflow-y-auto scrollbar-hide">
+          <div className="py-1 min-h-[300px] overflow-x-hidden">
+            {/* Add instruction panel */}
+            <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
+              <h3 className="text-sm font-medium text-blue-800 mb-1">Transaction Reward Setup</h3>
+              <p className="text-xs text-blue-700">
+                Create rewards that customers earn automatically as they make more transactions at your business. 
+                These rewards incentivize repeat visits and build customer loyalty over time.
               </p>
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Description</Label>
-              <Textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="e.g., Earn special rewards as you visit our store more often"
-                rows={3}
-              />
-              <p className="text-xs text-muted-foreground">
-                Help customers understand how to earn these rewards
-              </p>
-            </div>
-
-            <div className="grid gap-2">
-              <Label>PIN Code <span className="text-red-500">*</span></Label>
-              <Input
-                type="text"
-                maxLength={4}
-                value={formData.pin}
-                onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
-                placeholder="Enter 4-digit PIN (e.g., 1234)"
-              />
-              <p className="text-xs text-muted-foreground">
-                Staff will enter this PIN when redeeming rewards
-              </p>
-            </div>
-
-            <div className="border-t pt-4 mt-2">
-              <Label className="text-base font-medium mb-3 block">Reward Type <span className="text-red-500">*</span></Label>
-              <RadioGroup
-                value={formData.rewardType}
-                onValueChange={(value: 'dollar_voucher' | 'free_item') => 
-                  setFormData({ ...formData, rewardType: value })
-                }
-                className="flex flex-col space-y-3 mt-2"
-              >
-                <div className="flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 cursor-pointer" onClick={() => setFormData({ ...formData, rewardType: 'dollar_voucher' })}>
-                  <RadioGroupItem value="dollar_voucher" id="dollar_voucher" className="mt-1" />
-                  <div>
-                    <Label htmlFor="dollar_voucher" className="font-medium">Dollar Voucher</Label>
-                    <p className="text-xs text-gray-500 mt-1">Reward customers with a fixed dollar amount they can spend</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 cursor-pointer" onClick={() => setFormData({ ...formData, rewardType: 'free_item' })}>
-                  <RadioGroupItem value="free_item" id="free_item" className="mt-1" />
-                  <div>
-                    <Label htmlFor="free_item" className="font-medium">Free Item</Label>
-                    <p className="text-xs text-gray-500 mt-1">Reward customers with a specific free product</p>
-                  </div>
-                </div>
-              </RadioGroup>
-            </div>
-
-            {formData.rewardType === 'dollar_voucher' && (
-              <div className="grid gap-2 mt-4 border-l-2 border-blue-100 pl-4">
-                <Label>Voucher Amount ($) <span className="text-red-500">*</span></Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={formData.voucherAmount}
-                  onChange={(e) => setFormData({ ...formData, voucherAmount: e.target.value })}
-                  placeholder="e.g., 10"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Dollar value of each reward voucher
-                </p>
-              </div>
-            )}
-
-            {formData.rewardType === 'free_item' && (
-              <div className="grid gap-2 mt-4 border-l-2 border-blue-100 pl-4">
-                <Label>Free Item Name <span className="text-red-500">*</span></Label>
-                <Input
-                  type="text"
-                  value={formData.freeItemName}
-                  onChange={(e) => setFormData({ ...formData, freeItemName: e.target.value })}
-                  placeholder="e.g., Coffee, Dessert, Appetizer"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Name of the free item customers will receive
-                </p>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <div className="grid gap-2">
-                <Label>Transaction Threshold <span className="text-red-500">*</span></Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={formData.transactionThreshold}
-                  onChange={(e) => setFormData({ ...formData, transactionThreshold: e.target.value })}
-                  placeholder="e.g., 5"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Number of transactions for first reward and between subsequent rewards
-                </p>
-              </div>
-
-              <div className="grid gap-2">
-                <Label>Number of Levels <span className="text-red-500">*</span></Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={formData.iterations}
-                  onChange={(e) => setFormData({ ...formData, iterations: e.target.value })}
-                  placeholder="e.g., 10"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Total number of reward levels to create
-                </p>
-              </div>
             </div>
             
-            {/* Add summary section */}
-            <div className="border-t pt-4 mt-3">
-              <h4 className="text-sm font-medium mb-2">Program Summary</h4>
-              <div className="bg-gray-50 p-3 rounded-md">
-                <p className="text-sm mb-2">
-                  With these settings, customers will:
-                </p>
-                <ul className="text-sm space-y-1 pl-5 list-disc">
-                  <li>
-                    Earn their first reward after {formData.transactionThreshold} transactions
-                  </li>
-                  <li>
-                    Receive {formData.rewardType === 'dollar_voucher' ? `a $${formData.voucherAmount} voucher` : `a free ${formData.freeItemName || 'item'}`} at each level
-                  </li>
-                  <li>
-                    Unlock new rewards every {formData.transactionThreshold} transactions, up to {formData.iterations} levels
-                  </li>
-                  <li>
-                    Need {parseInt(formData.transactionThreshold) * parseInt(formData.iterations)} total transactions to reach the final level
-                  </li>
-                </ul>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-6 overflow-hidden">
+              {/* Left column with form inputs - takes 3/5 of the space */}
+              <div className="md:col-span-3 space-y-3">
+                <div className="grid gap-2">
+                  <Label>Reward Name <span className="text-red-500">*</span></Label>
+                  <Input
+                    type="text"
+                    value={formData.rewardName}
+                    onChange={(e) => setFormData({ ...formData, rewardName: e.target.value })}
+                    placeholder="e.g., Loyal Customer Reward"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Choose a name that clearly explains the benefit to customers
+                  </p>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Description</Label>
+                  <Textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="e.g., Earn special rewards as you visit our store more often"
+                    rows={3}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Help customers understand how to earn these rewards
+                  </p>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>PIN Code <span className="text-red-500">*</span></Label>
+                  <Input
+                    type="text"
+                    maxLength={4}
+                    value={formData.pin}
+                    onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+                    placeholder="Enter 4-digit PIN (e.g., 1234)"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Staff will enter this PIN when redeeming rewards
+                  </p>
+                </div>
+
+                <div className="border-t pt-4 mt-2">
+                  <Label className="text-base font-medium mb-3 block">Reward Type <span className="text-red-500">*</span></Label>
+                  <RadioGroup
+                    value={formData.rewardType}
+                    onValueChange={(value: 'dollar_voucher' | 'free_item') => 
+                      setFormData({ ...formData, rewardType: value })
+                    }
+                    className="flex flex-col space-y-3 mt-2"
+                  >
+                    <div className="flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 cursor-pointer" onClick={() => setFormData({ ...formData, rewardType: 'dollar_voucher' })}>
+                      <RadioGroupItem value="dollar_voucher" id="dollar_voucher" className="mt-1" />
+                      <div>
+                        <Label htmlFor="dollar_voucher" className="font-medium">Dollar Voucher</Label>
+                        <p className="text-xs text-gray-500 mt-1">Reward customers with a fixed dollar amount they can spend</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 cursor-pointer" onClick={() => setFormData({ ...formData, rewardType: 'free_item' })}>
+                      <RadioGroupItem value="free_item" id="free_item" className="mt-1" />
+                      <div>
+                        <Label htmlFor="free_item" className="font-medium">Free Item</Label>
+                        <p className="text-xs text-gray-500 mt-1">Reward customers with a specific free product</p>
+                      </div>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                {formData.rewardType === 'dollar_voucher' && (
+                  <div className="grid gap-2 mt-4 border-l-2 border-blue-100 pl-4">
+                    <Label>Voucher Amount ($) <span className="text-red-500">*</span></Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={formData.voucherAmount}
+                      onChange={(e) => setFormData({ ...formData, voucherAmount: e.target.value })}
+                      placeholder="e.g., 10"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Dollar value of each reward voucher
+                    </p>
+                  </div>
+                )}
+
+                {formData.rewardType === 'free_item' && (
+                  <div className="grid gap-2 mt-4 border-l-2 border-blue-100 pl-4">
+                    <Label>Free Item Name <span className="text-red-500">*</span></Label>
+                    <Input
+                      type="text"
+                      value={formData.freeItemName}
+                      onChange={(e) => setFormData({ ...formData, freeItemName: e.target.value })}
+                      placeholder="e.g., Coffee, Dessert, Appetizer"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Name of the free item customers will receive
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div className="grid gap-2">
+                    <Label>Transaction Threshold <span className="text-red-500">*</span></Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={formData.transactionThreshold}
+                      onChange={(e) => setFormData({ ...formData, transactionThreshold: e.target.value })}
+                      placeholder="e.g., 5"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Number of transactions for first reward and between subsequent rewards
+                    </p>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label>Number of Levels <span className="text-red-500">*</span></Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={formData.iterations}
+                      onChange={(e) => setFormData({ ...formData, iterations: e.target.value })}
+                      placeholder="e.g., 10"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Total number of reward levels to create
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Add summary section */}
+                <div className="border-t pt-4 mt-3">
+                  <h4 className="text-sm font-medium mb-2">Program Summary</h4>
+                  <div className="bg-gray-50 p-3 rounded-md">
+                    <p className="text-sm mb-2">
+                      With these settings, customers will:
+                    </p>
+                    <ul className="text-sm space-y-1 pl-5 list-disc">
+                      <li>
+                        Earn their first reward after {formData.transactionThreshold} transactions
+                      </li>
+                      <li>
+                        Receive {formData.rewardType === 'dollar_voucher' ? `a $${formData.voucherAmount} voucher` : `a free ${formData.freeItemName || 'item'}`} at each level
+                      </li>
+                      <li>
+                        Unlock new rewards every {formData.transactionThreshold} transactions, up to {formData.iterations} levels
+                      </li>
+                      <li>
+                        Need {parseInt(formData.transactionThreshold) * parseInt(formData.iterations)} total transactions to reach the final level
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Right column with iOS image - takes 2/5 of the space */}
+              <div className="md:col-span-2 flex flex-col items-center">
+                <h3 className="text-base font-bold text-gray-900 mb--1">
+                  Preview on iOS App
+                </h3>
+                <div className="flex items-center justify-center" style={{ height: "480px" }}>
+                  <img 
+                    src="/ios.png" 
+                    alt="Transaction Reward on iOS App" 
+                    className="max-h-[460px] w-auto object-contain"
+                    style={{ transform: "scale(1.45)" }}
+                  />
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="border-t pt-4 flex justify-end gap-2">
+        <div className="pt-1 pb-1 flex justify-end gap-2">
           <Button 
             variant="outline" 
+            size="sm"
             onClick={() => onOpenChange(false)}
           >
             Cancel
           </Button>
           <Button 
             onClick={handleCreateClick} 
+            size="sm"
             disabled={loading || 
               !formData.rewardName || 
               !formData.pin || 

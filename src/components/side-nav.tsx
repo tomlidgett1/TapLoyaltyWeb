@@ -43,7 +43,7 @@ import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, DocumentData } from "firebase/firestore"
-import { signOut } from "firebase/auth"
+import { signOut, Auth } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { TapAiButton } from "@/components/tap-ai-button"
@@ -99,6 +99,11 @@ const navItems = [
     title: "Create",
     href: "/create",
     icon: PlusCircle
+  },
+  {
+    title: "Tap Agent",
+    href: "/tap-agent",
+    icon: Sparkles
   },
   {
     title: "Customers",

@@ -73,6 +73,7 @@ export default function DashboardPage() {
     activeRewards: 0,
     totalBannerImpressions: 0,
     totalStoreViews: 0,
+    totalRewardViews: 0,
     customersWithRedeemableRewards: 0,
     customersWithoutRedeemableRewards: 0
   })
@@ -322,41 +323,9 @@ export default function DashboardPage() {
         
         console.log('Fetched rewards data:', rewardsData)
         
-        // If no rewards found and in development, use sample data
-        if (rewardsData.length === 0 && process.env.NODE_ENV === 'development') {
-          setPopularRewards([
-            {
-              id: "rew1",
-              name: "Free Coffee",
-              redemptionCount: 342,
-              impressions: 1000,
-              pointsCost: 100,
-              type: "item",
-              programtype: "coffee",
-              conversionRate: 0.78
-            },
-            {
-              id: "rew2",
-              name: "10% Off Next Purchase",
-              redemptionCount: 215,
-              impressions: 800,
-              pointsCost: 200,
-              type: "discount",
-              conversionRate: 0.65
-            },
-            {
-              id: "rew3",
-              name: "Buy 10 Get 1 Free",
-              redemptionCount: 187,
-              impressions: 700,
-              pointsCost: 0,
-              type: "program",
-              conversionRate: 0.92
-            }
-          ])
-        } else {
-          setPopularRewards(rewardsData)
-        }
+        // Set the rewards data directly, without using dummy data
+        setPopularRewards(rewardsData)
+        
       } catch (error) {
         console.error('Error fetching popular rewards:', error)
         toast({
@@ -528,6 +497,14 @@ export default function DashboardPage() {
         const activeRewardsSnapshot = await getDocs(activeRewardsQuery)
         const activeRewards = activeRewardsSnapshot.docs.length
         
+        // Calculate total reward views by summing impressions from all rewards
+        const allRewardsQuery = query(rewardsRef)
+        const allRewardsSnapshot = await getDocs(allRewardsQuery)
+        const totalRewardViews = allRewardsSnapshot.docs.reduce(
+          (total, doc) => total + (doc.data().impressions || 0), 
+          0
+        )
+        
         // Fetch banner impressions from the correct path
         const bannersRef = collection(db, 'merchants', user.uid, 'banners')
         const bannersQuery = query(bannersRef)
@@ -560,8 +537,10 @@ export default function DashboardPage() {
           avgOrderValue,
           totalTransactions: transactionsSnapshot.docs.length,
           totalRedemptions,
+          redemptionRate: 0,
           activeRewards,
           totalBannerImpressions,
+          totalRewardViews,
           customersWithRedeemableRewards,
           customersWithoutRedeemableRewards
         })
@@ -952,27 +931,7 @@ export default function DashboardPage() {
           <Tabs defaultValue="platform" value={metricsType as string}>
             <TabsContent value="platform" className="mt-0">
               <div className="grid grid-cols-4 gap-4">
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-3">
-                    <div className="flex justify-between">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-medium text-gray-500">Total Customers</p>
-                        <div className="text-lg font-semibold">{metrics.totalCustomers}</div>
-                      </div>
-                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
-                        <Users className="h-4 w-4 text-blue-500" />
-                      </div>
-                    </div>
-                    <div className="mt-1 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        <span>{metrics.customerGrowth}%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                
+                {/* First card: Active Rewards */}
                 <Card className="rounded-lg border border-gray-200">
                   <CardContent className="p-3">
                     <div className="flex justify-between">
@@ -984,16 +943,25 @@ export default function DashboardPage() {
                         <Gift className="h-4 w-4 text-blue-500" />
                       </div>
                     </div>
-                    <div className="mt-1 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        <span>2.1%</span>
+                  </CardContent>
+                </Card>
+                
+                {/* Second card: Total Reward Views */}
+                <Card className="rounded-lg border border-gray-200">
+                  <CardContent className="p-3">
+                    <div className="flex justify-between">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium text-gray-500">Total Reward Views</p>
+                        <div className="text-lg font-semibold">{metrics.totalRewardViews}</div>
                       </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
+                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
+                        <Eye className="h-4 w-4 text-blue-500" />
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
                 
+                {/* Third card: Total Points Issued */}
                 <Card className="rounded-lg border border-gray-200">
                   <CardContent className="p-3">
                     <div className="flex justify-between">
@@ -1005,16 +973,10 @@ export default function DashboardPage() {
                         <Zap className="h-4 w-4 text-blue-500" />
                       </div>
                     </div>
-                    <div className="mt-1 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        <span>12.5%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
                   </CardContent>
                 </Card>
                 
+                {/* Fourth card: Store Views */}
                 <Card className="rounded-lg border border-gray-200">
                   <CardContent className="p-3">
                     <div className="flex justify-between">
@@ -1025,13 +987,6 @@ export default function DashboardPage() {
                       <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
                         <Eye className="h-4 w-4 text-blue-500" />
                       </div>
-                    </div>
-                    <div className="mt-1 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        <span>5.2%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -1051,13 +1006,6 @@ export default function DashboardPage() {
                         <Users className="h-4 w-4 text-blue-500" />
                       </div>
                     </div>
-                    <div className="mt-1 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        <span>4.3%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
                   </CardContent>
                 </Card>
                 
@@ -1071,13 +1019,6 @@ export default function DashboardPage() {
                       <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
                         <ShoppingCart className="h-4 w-4 text-blue-500" />
                       </div>
-                    </div>
-                    <div className="mt-1 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        <span>8.2%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -1093,13 +1034,6 @@ export default function DashboardPage() {
                         <Gift className="h-4 w-4 text-blue-500" />
                       </div>
                     </div>
-                    <div className="mt-1 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        <span>7.3%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
-                    </div>
                   </CardContent>
                 </Card>
                 
@@ -1113,13 +1047,6 @@ export default function DashboardPage() {
                       <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
                         <DollarSign className="h-4 w-4 text-blue-500" />
                       </div>
-                    </div>
-                    <div className="mt-1 flex items-center text-xs">
-                      <div className="text-green-600 flex items-center">
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        <span>3.1%</span>
-                      </div>
-                      <span className="text-gray-500 ml-1.5">vs. previous period</span>
                     </div>
                   </CardContent>
                 </Card>

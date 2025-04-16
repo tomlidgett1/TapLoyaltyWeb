@@ -66,7 +66,6 @@ interface RewardConfig {
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const [searchQuery, setSearchQuery] = useState("")
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const router = useRouter()
@@ -440,31 +439,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </div>
           
           <div className="flex items-center gap-4">
-            <div className="relative w-64">
-              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search..." 
-                className="pl-8 pr-10 h-9 w-full cursor-pointer"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onClick={(e) => {
-                  e.preventDefault()
-                  // Simulate Command+K keypress
-                  const event = new KeyboardEvent('keydown', {
-                    key: 'k',
-                    metaKey: true,
-                    bubbles: true
-                  })
-                  document.dispatchEvent(event)
-                }}
-                readOnly // Make it read-only since we're using it as a button
-              />
-              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1 text-xs text-muted-foreground bg-gray-100 px-1.5 py-0.5 rounded">
-                <Command className="h-3 w-3" />
-                K
-              </div>
-            </div>
-            
             <div className="flex items-center gap-2">
               <TapAiButton
                 variant="default"

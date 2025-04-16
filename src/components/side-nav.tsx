@@ -27,7 +27,9 @@ import {
   CheckCircle,
   XCircle,
   ChevronRight,
-  ShieldCheck
+  ShieldCheck,
+  Search,
+  Command
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -42,12 +44,13 @@ import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, DocumentData } from "firebase/firestore"
 import { signOut } from "firebase/auth"
-import { auth, Auth } from "@/lib/firebase"
+import { auth } from "@/lib/firebase"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { TapAiButton } from "@/components/tap-ai-button"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/use-toast"
 import { collection, getDocs, query, where, limit } from "firebase/firestore"
+import { Input } from "@/components/ui/input"
 
 const navItems = [
   {
@@ -154,6 +157,10 @@ interface MerchantData {
   [key: string]: any;
 }
 
+interface SectionState {
+  [key: string]: boolean;
+}
+
 export function SideNav() {
   const pathname = usePathname() || ""
   const router = useRouter()
@@ -162,7 +169,6 @@ export function SideNav() {
   const [merchantEmail, setMerchantEmail] = useState("")
   const [initials, setInitials] = useState("MB")
   const [loading, setLoading] = useState(true)
-  const [openItems, setOpenItems] = useState<Record<string, boolean>>({})
   const [merchantData, setMerchantData] = useState<MerchantData | null>(null)
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([
     { id: 'reward', title: 'Create a reward', completed: false, href: '/create' },
@@ -171,20 +177,11 @@ export function SideNav() {
     { id: 'customer', title: 'Add a customer', completed: false, href: '/customers' }
   ])
   const [showChecklist, setShowChecklist] = useState(true)
-
-  useEffect(() => {
-    // Initialize open state based on current path
-    navItems.forEach(item => {
-      if (item.subItems) {
-        const isActive = item.subItems.some(subItem => 
-          pathname === subItem.href || pathname.startsWith(`${subItem.href}/`)
-        )
-        if (isActive) {
-          setOpenItems(prev => ({ ...prev, [item.title]: true }))
-        }
-      }
-    })
-  }, [pathname])
+  const [openSections, setOpenSections] = useState<SectionState>({
+    "My Store": true,
+    "Settings": true
+  })
+  const [searchQuery, setSearchQuery] = useState("")
 
   useEffect(() => {
     async function fetchMerchantData() {
@@ -305,7 +302,7 @@ export function SideNav() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth as Auth)
+      await signOut(auth)
       router.push('/login')
     } catch (error) {
       console.error("Error signing out:", error)
@@ -317,12 +314,15 @@ export function SideNav() {
     }
   }
 
-  const toggleItem = (title: string) => {
-    setOpenItems(prev => ({ ...prev, [title]: !prev[title] }))
+  const toggleSection = (section: string) => {
+    setOpenSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }))
   }
 
   return (
-    <div className="w-64 border-r h-screen flex-shrink-0 bg-white flex flex-col">
+    <div className="w-64 border-r h-screen flex-shrink-0 bg-[#FAFCFF] flex flex-col">
       <div className="h-16 border-b flex items-center px-4">
         <img
           src="/hand1.png"
@@ -341,146 +341,161 @@ export function SideNav() {
         </div>
       </div>
       
-      <nav className="p-2 flex-1 overflow-y-auto">
+      {/* Search bar with Command+K shortcut */}
+      <div className="px-3 py-3">
+        <div className="relative w-full">
+          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input 
+            placeholder="Search..." 
+            className="pl-8 pr-10 h-9 w-full cursor-pointer"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onClick={(e) => {
+              e.preventDefault()
+              // Simulate Command+K keypress
+              const event = new KeyboardEvent('keydown', {
+                key: 'k',
+                metaKey: true,
+                bubbles: true
+              })
+              document.dispatchEvent(event)
+            }}
+            readOnly // Make it read-only since we're using it as a button
+          />
+          <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1 text-xs text-muted-foreground bg-gray-100 px-1.5 py-0.5 rounded">
+            <Command className="h-3 w-3" />
+            K
+          </div>
+        </div>
+      </div>
+      
+      <nav className="px-2 py-1.5 flex-1 overflow-y-auto">
         <ul className="space-y-1">
-          {navItems.filter(item => !item.isAI).map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
-            const hasSubItems = item.subItems && item.subItems.length > 0
-            const isOpen = openItems[item.title] || false
-            
-            return (
-              <li key={item.title}>
-                {hasSubItems ? (
-                  <Collapsible open={isOpen} onOpenChange={() => toggleItem(item.title)}>
-                    <CollapsibleTrigger className="w-full">
-                      <div
-                        className={cn(
-                          "group flex items-center justify-between gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors w-full",
-                          isActive 
-                            ? "bg-[#007AFF]/10 text-[#007AFF]" 
-                            : "text-muted-foreground hover:bg-gray-100"
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          <item.icon className={cn("h-4 w-4", 
-                            isActive 
-                              ? "text-[#007AFF]" 
-                              : "text-muted-foreground group-hover:text-gray-900"
-                          )} />
-                          <span className={isActive ? "text-[#007AFF]" : "group-hover:text-gray-900"}>
-                            {item.title}
-                          </span>
-                        </div>
-                        {isOpen ? (
-                          <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </div>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <ul className="pl-9 mt-1 space-y-1">
-                        {item.subItems?.map((subItem) => {
-                          const isSubActive = pathname === subItem.href || 
-                            (subItem.href !== item.href && pathname.startsWith(`${subItem.href}/`)) ||
-                            (subItem.href === item.href && pathname === item.href);
-                          
-                          return (
-                            <li key={subItem.href}>
-                              <Link
-                                href={subItem.href}
-                                className={cn(
-                                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                                  isSubActive 
-                                    ? "bg-[#007AFF]/10 text-[#007AFF] font-medium" 
-                                    : "text-muted-foreground hover:bg-gray-100 hover:text-gray-900"
-                                )}
-                              >
-                                <subItem.icon className={cn("h-4 w-4", 
-                                  isSubActive ? "text-[#007AFF]" : "text-muted-foreground"
-                                )} />
-                                <span>{subItem.title}</span>
-                              </Link>
-                            </li>
-                          )
-                        })}
-                      </ul>
-                    </CollapsibleContent>
-                  </Collapsible>
-                ) : (
+          {/* Main pages without sub-items */}
+          {navItems
+            .filter(item => !item.isAI && !item.subItems)
+            .filter(item => item.title !== "Settings" && item.title !== "Onboarding Wizard" && item.title !== "Integrations" && item.title !== "Admin")
+            .map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+              
+              return (
+                <li key={item.title}>
                   <Link
                     href={item.href}
                     className={cn(
-                      "group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-normal transition-colors",
                       isActive 
                         ? "bg-[#007AFF]/10 text-[#007AFF]" 
-                        : "text-muted-foreground hover:bg-gray-100"
+                        : "text-gray-800 hover:bg-[#007AFF]/5"
                     )}
                   >
                     <item.icon className={cn("h-4 w-4", 
                       isActive 
                         ? "text-[#007AFF]" 
-                        : "text-muted-foreground group-hover:text-gray-900"
+                        : "text-gray-500 group-hover:text-[#007AFF]"
                     )} />
-                    <span className={isActive ? "text-[#007AFF]" : "group-hover:text-gray-900"}>
+                    <span className={isActive ? "text-[#007AFF]" : "group-hover:text-[#007AFF]"}>
                       {item.title}
                     </span>
                   </Link>
-                )}
-              </li>
-            )
+                </li>
+              )
           })}
+          
+          {/* My Store section */}
+          {navItems
+            .filter(item => item.title === "My Store")
+            .map((item) => (
+              <li key={item.title} className="mt-2">
+                <div className="px-3 mb-0.5">
+                  <button 
+                    onClick={() => toggleSection("My Store")}
+                    className="text-[10px] font-medium text-gray-500 hover:text-[#007AFF] uppercase tracking-wider"
+                  >
+                    {item.title}
+                  </button>
+                </div>
+                <Collapsible open={openSections["My Store"]}>
+                  <CollapsibleContent>
+                    <ul className="space-y-1">
+                      {item.subItems?.map((subItem) => {
+                        const isSubActive = pathname === subItem.href || 
+                          pathname.startsWith(`${subItem.href}/`);
+                        
+                        return (
+                          <li key={subItem.href}>
+                            <Link
+                              href={subItem.href}
+                              className={cn(
+                                "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-normal transition-colors",
+                                isSubActive 
+                                  ? "bg-[#007AFF]/10 text-[#007AFF]" 
+                                  : "text-gray-800 hover:bg-[#007AFF]/5"
+                              )}
+                            >
+                              <subItem.icon className={cn("h-4 w-4", 
+                                isSubActive ? "text-[#007AFF]" : "text-gray-500 group-hover:text-[#007AFF]"
+                              )} />
+                              <span className={isSubActive ? "text-[#007AFF]" : "group-hover:text-[#007AFF]"}>
+                                {subItem.title}
+                              </span>
+                            </Link>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </CollapsibleContent>
+                </Collapsible>
+              </li>
+            ))
+          }
+          
+          {/* Settings section */}
+          <li className="mt-2">
+            <div className="px-3 mb-0.5">
+              <button 
+                onClick={() => toggleSection("Settings")}
+                className="text-[10px] font-medium text-gray-500 hover:text-[#007AFF] uppercase tracking-wider"
+              >
+                Settings
+              </button>
+            </div>
+            <Collapsible open={openSections["Settings"]}>
+              <CollapsibleContent>
+                <ul className="space-y-1">
+                  {navItems
+                    .filter(item => item.title === "Settings" || item.title === "Onboarding Wizard" || item.title === "Integrations" || item.title === "Admin")
+                    .map((item) => {
+                      const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+                      
+                      return (
+                        <li key={item.title}>
+                          <Link
+                            href={item.href}
+                            className={cn(
+                              "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-normal transition-colors",
+                              isActive 
+                                ? "bg-[#007AFF]/10 text-[#007AFF]" 
+                                : "text-gray-800 hover:bg-[#007AFF]/5"
+                            )}
+                          >
+                            <item.icon className={cn("h-4 w-4", 
+                              isActive ? "text-[#007AFF]" : "text-gray-500 group-hover:text-[#007AFF]"
+                            )} />
+                            <span className={isActive ? "text-[#007AFF]" : "group-hover:text-[#007AFF]"}>
+                              {item.title}
+                            </span>
+                          </Link>
+                        </li>
+                      )
+                    })
+                  }
+                </ul>
+              </CollapsibleContent>
+            </Collapsible>
+          </li>
         </ul>
       </nav>
-      
-      {/* Onboarding Checklist */}
-      {showChecklist && (
-        <div className="px-3 py-2 mx-2 mb-3 bg-blue-50 rounded-lg">
-          <Collapsible defaultOpen={true}>
-            <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-medium text-blue-700">
-              <div className="flex items-center">
-                <Sparkles className="h-4 w-4 mr-2 text-blue-500" />
-                <span>Getting Started</span>
-              </div>
-              <ChevronUp className="h-4 w-4 text-blue-500" />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="pt-2">
-              <div className="space-y-2">
-                {checklistItems.map(item => (
-                  <Link 
-                    key={item.id}
-                    href={item.href}
-                    className="flex items-center justify-between p-1.5 text-xs rounded-md hover:bg-blue-100 transition-colors"
-                  >
-                    <span className="text-gray-700">{item.title}</span>
-                    {item.completed ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-gray-400" />
-                    )}
-                  </Link>
-                ))}
-                
-                <div className="pt-1 mt-1 border-t border-blue-200">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-blue-700 font-medium">
-                      {checklistItems.filter(item => item.completed).length} of {checklistItems.length} completed
-                    </span>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-6 px-2 text-xs text-blue-700 hover:bg-blue-100 hover:text-blue-800"
-                      onClick={() => setShowChecklist(false)}
-                    >
-                      Dismiss
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-        </div>
-      )}
       
       {/* Profile section at bottom */}
       <div className="mt-auto border-t pt-4 pb-4">

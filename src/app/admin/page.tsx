@@ -31,7 +31,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ChevronDown, Edit, MoreHorizontal, Plus, Trash, ArrowLeft, ArrowUp, ArrowDown } from "lucide-react"
+import { ChevronDown, Edit, MoreHorizontal, Plus, Trash, ArrowLeft, ArrowUp, ArrowDown, CheckCircle, XCircle, User } from "lucide-react"
 import Link from "next/link"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
@@ -51,6 +51,53 @@ import {
   TabsContent,
   TabsTrigger,
 } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+
+interface Customer {
+  id: string;
+  abn?: string;
+  ageGroup?: string;
+  badge?: number;
+  basicConsentId?: string;
+  basicUserId?: string;
+  businessPreferences?: string[];
+  consumerID?: string;
+  createdAt?: string;
+  customerId?: string;
+  email?: string;
+  fcmToken?: string;
+  firstName?: string;
+  fullName?: string;
+  gender?: string;
+  hasActiveConnection?: boolean;
+  interests?: string[];
+  lastConnectionCheck?: string;
+  lastConnectionId?: string;
+  lastKnownLocation?: {
+    latitude?: number;
+    longitude?: number;
+    suburb?: string;
+    updatedAt?: string;
+  };
+  lastName?: string;
+  lifetimeTapPoints?: number;
+  location?: {
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+    radius?: number;
+    updatedAt?: string;
+  };
+  mobileNumber?: string;
+  occupation?: string;
+  profilePictureUrl?: string;
+  referralCode?: string;
+  signInMethod?: string;
+  tapPoints?: number;
+  totalRedemptions?: number;
+  updatedAt?: string;
+  [key: string]: any;
+}
 
 interface Merchant {
   id: string;
@@ -168,15 +215,27 @@ interface Merchant {
 
 export default function AdminMerchants() {
   const router = useRouter();
+  const [currentView, setCurrentView] = useState<'merchants' | 'customers'>('merchants');
   const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [editingMerchant, setEditingMerchant] = useState<Merchant | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'standard' | 'advanced'>('standard');
+  const [editingCell, setEditingCell] = useState<{
+    merchantId: string;
+    field: string;
+    value: any;
+  } | null>(null);
   const [sortConfig, setSortConfig] = useState<{
     key: keyof Merchant | string;
+    direction: 'ascending' | 'descending';
+  } | null>(null);
+  const [customerSortConfig, setCustomerSortConfig] = useState<{
+    key: string;
     direction: 'ascending' | 'descending';
   } | null>(null);
   const [newMerchant, setNewMerchant] = useState<Partial<Merchant>>({
@@ -192,8 +251,12 @@ export default function AdminMerchants() {
   });
 
   useEffect(() => {
-    fetchMerchants();
-  }, []);
+    if (currentView === 'merchants') {
+      fetchMerchants();
+    } else {
+      fetchCustomers();
+    }
+  }, [currentView]);
 
   const fetchMerchants = async () => {
     try {
@@ -212,6 +275,91 @@ export default function AdminMerchants() {
       toast({
         title: "Error",
         description: "Failed to fetch merchants",
+        variant: "destructive"
+      });
+      setLoading(false);
+    }
+  };
+
+  const fetchCustomers = async () => {
+    try {
+      setLoading(true);
+      const customersCollection = collection(db, "customers");
+      const customersSnapshot = await getDocs(customersCollection);
+      
+      const customersList = await Promise.all(customersSnapshot.docs.map(async (docSnapshot) => {
+        const customerData = docSnapshot.data();
+        const customerId = docSnapshot.id;
+        
+        // For each customer, find their merchant-specific data for all merchants
+        const merchantCustomerRefs = collection(db, "merchants");
+        const merchantsSnapshot = await getDocs(merchantCustomerRefs);
+        
+        interface MerchantCustomerData {
+          merchantId: string;
+          merchantData: any;
+          customerData: {
+            totalLifetimeSpend?: number;
+            lifetimeTransactionCount?: number;
+            redemptionCount?: number;
+            [key: string]: any;
+          };
+        }
+        
+        const merchantsData = await Promise.all(
+          merchantsSnapshot.docs.map(async merchantDoc => {
+            // Fix the reference to use customerId instead of doc.id
+            const customerRef = doc(db, 'merchants', merchantDoc.id, 'customers', customerId);
+            const customerSnap = await getDoc(customerRef);
+            if (customerSnap.exists()) {
+              return {
+                merchantId: merchantDoc.id,
+                merchantData: merchantDoc.data(),
+                customerData: customerSnap.data()
+              } as MerchantCustomerData;
+            }
+            return null;
+          })
+        );
+        
+        // Filter out null values and get relevant stats
+        const validMerchantData = merchantsData.filter((data): data is MerchantCustomerData => data !== null);
+        
+        // Calculate aggregate statistics across all merchants
+        const totalLifetimeSpend = validMerchantData.reduce(
+          (total, data) => total + (data.customerData.totalLifetimeSpend || 0), 
+          0
+        );
+        const totalTransactions = validMerchantData.reduce(
+          (total, data) => total + (data.customerData.lifetimeTransactionCount || 0), 
+          0
+        );
+        const totalRedemptions = validMerchantData.reduce(
+          (total, data) => total + (data.customerData.redemptionCount || 0), 
+          0
+        );
+        
+        return {
+          id: customerId,
+          ...customerData,
+          totalMerchants: validMerchantData.length,
+          totalLifetimeSpend,
+          totalTransactions,
+          totalRedemptions,
+          merchantConnections: validMerchantData.map(data => ({
+            merchantId: data.merchantId,
+            merchantName: data.merchantData.tradingName || data.merchantData.merchantName,
+          }))
+        };
+      }));
+      
+      setCustomers(customersList);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error fetching customers:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch customers",
         variant: "destructive"
       });
       setLoading(false);
@@ -448,6 +596,271 @@ export default function AdminMerchants() {
     );
   };
 
+  // Add a function to handle inline cell editing
+  const handleCellEdit = (merchantId: string, field: string, value: any) => {
+    setEditingCell({
+      merchantId,
+      field,
+      value
+    });
+  };
+
+  const saveCellEdit = async () => {
+    if (!editingCell) return;
+
+    try {
+      const merchant = merchants.find(m => m.id === editingCell.merchantId);
+      if (!merchant) return;
+
+      // Handle nested fields like address.street
+      if (editingCell.field.includes('.')) {
+        const [parent, child] = editingCell.field.split('.');
+        const updatedMerchant = {
+          ...merchant,
+          [parent]: {
+            ...(merchant[parent] || {}),
+            [child]: editingCell.value
+          }
+        };
+
+        const merchantRef = doc(db, "merchants", merchant.id);
+        await updateDoc(merchantRef, updatedMerchant);
+        
+        setMerchants(merchants.map(m => 
+          m.id === merchant.id ? updatedMerchant : m
+        ));
+      } else {
+        // Handle direct fields
+        const updatedMerchant = {
+          ...merchant,
+          [editingCell.field]: editingCell.value
+        };
+
+        const merchantRef = doc(db, "merchants", merchant.id);
+        await updateDoc(merchantRef, updatedMerchant);
+        
+        setMerchants(merchants.map(m => 
+          m.id === merchant.id ? updatedMerchant : m
+        ));
+      }
+
+      toast({
+        title: "Success",
+        description: "Field updated successfully",
+      });
+    } catch (error) {
+      console.error("Error updating field:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update field",
+        variant: "destructive"
+      });
+    } finally {
+      setEditingCell(null);
+    }
+  };
+
+  const cancelCellEdit = () => {
+    setEditingCell(null);
+  };
+
+  // List of all possible merchant fields for advanced view
+  const allMerchantFields = [
+    { key: 'merchantName', label: 'Merchant Name' },
+    { key: 'merchantId', label: 'Merchant ID' },
+    { key: 'tradingName', label: 'Trading Name' },
+    { key: 'legalName', label: 'Legal Name' },
+    { key: 'businessType', label: 'Business Type' },
+    { key: 'abn', label: 'ABN' },
+    { key: 'status', label: 'Status' },
+    { key: 'logoUrl', label: 'Logo URL' },
+    { key: 'displayAddress', label: 'Display Address' },
+    { key: 'businessEmail', label: 'Business Email' },
+    { key: 'businessPhone', label: 'Business Phone' },
+    { key: 'primaryEmail', label: 'Primary Email' },
+    { key: 'address.street', label: 'Street' },
+    { key: 'address.suburb', label: 'Suburb' },
+    { key: 'address.postcode', label: 'Postcode' },
+    { key: 'address.state', label: 'State' },
+    { key: 'address.country', label: 'Country' },
+    { key: 'address.countryCode', label: 'Country Code' },
+    { key: 'address.isoCountryCode', label: 'ISO Country Code' },
+    { key: 'address.subAdministrativeArea', label: 'Sub Administrative Area' },
+    { key: 'address.subLocality', label: 'Sub Locality' },
+    { key: 'location.address', label: 'Location Address' },
+    { key: 'location.displayAddress', label: 'Location Display Address' },
+    { key: 'location.areaOfInterest', label: 'Area of Interest' },
+    { key: 'location.coordinates.latitude', label: 'Latitude' },
+    { key: 'location.coordinates.longitude', label: 'Longitude' },
+    { key: 'defaultMultiplier', label: 'Default Multiplier' },
+    { key: 'merchantPoints', label: 'Merchant Points' },
+    { key: 'pointOfSale', label: 'Point of Sale' },
+    { key: 'paymentProvider', label: 'Payment Provider' },
+    { key: 'inlandWater', label: 'Inland Water' },
+    { key: 'ocean', label: 'Ocean' },
+    { key: 'timeZone', label: 'Time Zone' },
+    { key: 'onboardingCompleted', label: 'Onboarding Completed' },
+    { key: 'onboardingCompletedAt', label: 'Onboarding Completed At' },
+    { key: 'hasIntroductoryReward', label: 'Has Introductory Reward' },
+    { key: 'introductoryRewardId', label: 'Introductory Reward ID' },
+    { key: 'representative.name', label: 'Representative Name' },
+    { key: 'representative.email', label: 'Representative Email' },
+    { key: 'representative.phone', label: 'Representative Phone' }
+  ];
+
+  // Function to get value from a merchant object using a field path (e.g., "location.coordinates.latitude")
+  const getNestedValue = (obj: any, path: string): any => {
+    const keys = path.split('.');
+    return keys.reduce((o, key) => (o || {})[key], obj);
+  };
+
+  // Function to render cell content based on field type
+  const renderCellContent = (merchant: Merchant, field: string) => {
+    const value = getNestedValue(merchant, field);
+    
+    // If this cell is being edited, show input
+    if (editingCell && editingCell.merchantId === merchant.id && editingCell.field === field) {
+      return (
+        <div className="flex items-center space-x-1">
+          <Input
+            value={editingCell.value}
+            onChange={(e) => setEditingCell({...editingCell, value: e.target.value})}
+            autoFocus
+            className="h-8 py-1"
+          />
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={saveCellEdit}
+            className="h-7 w-7 p-0"
+          >
+            <CheckCircle className="h-4 w-4 text-green-600" />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={cancelCellEdit}
+            className="h-7 w-7 p-0"
+          >
+            <XCircle className="h-4 w-4 text-red-600" />
+          </Button>
+        </div>
+      );
+    }
+    
+    // Handle different field types
+    if (field === 'logoUrl') {
+      return value ? (
+        <div className="flex items-center">
+          <div className="w-8 h-8 rounded overflow-hidden mr-2">
+            <img 
+              src={value} 
+              alt="Logo" 
+              className="w-full h-full object-cover"
+              onError={(e) => (e.target as HTMLImageElement).src = "/hand1.png"}
+            />
+          </div>
+          <span className="text-xs truncate max-w-[150px]">{value}</span>
+        </div>
+      ) : "—";
+    }
+    
+    if (typeof value === 'boolean') {
+      return (
+        <Badge variant={value ? "default" : "secondary"}>
+          {value ? "Yes" : "No"}
+        </Badge>
+      );
+    }
+    
+    if (field === 'status') {
+      return (
+        <Badge variant={value === "active" ? "default" : "secondary"}>
+          {value || "inactive"}
+        </Badge>
+      );
+    }
+    
+    // Default rendering
+    if (value === undefined || value === null) {
+      return "—";
+    }
+    
+    return String(value);
+  };
+
+  // Handle sorting for customers
+  const handleCustomerSort = (key: string) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    
+    if (customerSortConfig && customerSortConfig.key === key) {
+      direction = customerSortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+    }
+    
+    setCustomerSortConfig({ key, direction });
+  };
+
+  // Get sorted customers
+  const getSortedCustomers = (customersToSort: Customer[]) => {
+    if (!customerSortConfig) return customersToSort;
+    
+    return [...customersToSort].sort((a, b) => {
+      let aValue: any = a[customerSortConfig.key as keyof Customer] || '';
+      let bValue: any = b[customerSortConfig.key as keyof Customer] || '';
+      
+      // Handle special cases
+      if (customerSortConfig.key === 'fullName') {
+        aValue = a.fullName || `${a.firstName || ''} ${a.lastName || ''}`.trim() || '';
+        bValue = b.fullName || `${b.firstName || ''} ${b.lastName || ''}`.trim() || '';
+      }
+      
+      // Handle numeric vs string comparisons
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return customerSortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
+      }
+      
+      // Convert to string for comparison
+      aValue = String(aValue).toLowerCase();
+      bValue = String(bValue).toLowerCase();
+      
+      if (aValue < bValue) {
+        return customerSortConfig.direction === 'ascending' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return customerSortConfig.direction === 'ascending' ? 1 : -1;
+      }
+      return 0;
+    });
+  };
+
+  // Filter customers based on search term
+  const filteredCustomers = customers.filter(customer => {
+    const searchLower = searchTerm.toLowerCase();
+    const fullName = customer.fullName || `${customer.firstName || ''} ${customer.lastName || ''}`.trim();
+    
+    return (
+      fullName.toLowerCase().includes(searchLower) ||
+      (customer.email || '').toLowerCase().includes(searchLower) ||
+      (customer.mobileNumber || '').includes(searchLower) ||
+      (customer.customerId || '').toLowerCase().includes(searchLower)
+    );
+  });
+
+  // Apply sorting to filtered customers
+  const sortedCustomers = getSortedCustomers(filteredCustomers);
+
+  // Render sort icon for customer table
+  const renderCustomerSortIcon = (columnKey: string) => {
+    if (customerSortConfig?.key !== columnKey) {
+      return <ChevronDown className="h-4 w-4 ml-1 opacity-50" />;
+    }
+    return customerSortConfig.direction === 'ascending' ? (
+      <ArrowUp className="h-4 w-4 ml-1" />
+    ) : (
+      <ArrowDown className="h-4 w-4 ml-1" />
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
@@ -461,193 +874,531 @@ export default function AdminMerchants() {
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Dashboard
           </Button>
-          <h1 className="text-3xl font-bold">Merchant Management</h1>
+          <h1 className="text-3xl font-bold">Admin Portal</h1>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow mb-8">
-          <div className="flex justify-between mb-6">
-            <div className="relative w-72">
-              <Input 
-                placeholder="Search merchants..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-            </div>
-            <Button onClick={() => setIsCreateDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Merchant
-            </Button>
-          </div>
+        {/* Entity type tabs */}
+        <Tabs 
+          defaultValue="merchants" 
+          className="mb-8" 
+          onValueChange={(value) => setCurrentView(value as 'merchants' | 'customers')}
+        >
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="merchants">Merchants</TabsTrigger>
+            <TabsTrigger value="customers">Customers</TabsTrigger>
+          </TabsList>
+        </Tabs>
 
-          {loading ? (
-            <div className="flex justify-center items-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        {/* Display the appropriate content based on currentView */}
+        {currentView === 'merchants' && (
+          <div className="bg-white p-6 rounded-lg shadow mb-8">
+            <div className="flex justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <div className="relative w-72">
+                  <Input 
+                    placeholder="Search merchants..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
+                
+                <div className="flex items-center bg-gray-100 rounded-md p-1">
+                  <Button 
+                    variant={viewMode === 'standard' ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode('standard')}
+                    className="text-xs h-8"
+                  >
+                    Standard View
+                  </Button>
+                  <Button 
+                    variant={viewMode === 'advanced' ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode('advanced')}
+                    className="text-xs h-8"
+                  >
+                    Advanced View
+                  </Button>
+                </div>
+              </div>
+              
+              <Button onClick={() => setIsCreateDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Merchant
+              </Button>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead 
-                      className="w-[180px] cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleSort('merchantName')}
-                    >
-                      <div className="flex items-center">
-                        Merchant Name
-                        {renderSortIcon('merchantName')}
-                      </div>
-                    </TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleSort('merchantId')}
-                    >
-                      <div className="flex items-center">
-                        Merchant ID
-                        {renderSortIcon('merchantId')}
-                      </div>
-                    </TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleSort('businessType')}
-                    >
-                      <div className="flex items-center">
-                        Business Type
-                        {renderSortIcon('businessType')}
-                      </div>
-                    </TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleSort('abn')}
-                    >
-                      <div className="flex items-center">
-                        ABN
-                        {renderSortIcon('abn')}
-                      </div>
-                    </TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleSort('contact')}
-                    >
-                      <div className="flex items-center">
-                        Contact
-                        {renderSortIcon('contact')}
-                      </div>
-                    </TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleSort('location')}
-                    >
-                      <div className="flex items-center">
-                        Location
-                        {renderSortIcon('location')}
-                      </div>
-                    </TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleSort('status')}
-                    >
-                      <div className="flex items-center">
-                        Status
-                        {renderSortIcon('status')}
-                      </div>
-                    </TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedMerchants.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-gray-500">
-                        {searchTerm ? "No merchants match your search" : "No merchants found"}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    sortedMerchants.map((merchant) => (
-                      <TableRow key={merchant.id}>
-                        <TableCell className="font-medium">{merchant.merchantName || merchant.tradingName || "—"}</TableCell>
-                        <TableCell className="font-mono text-xs">{merchant.merchantId || "—"}</TableCell>
-                        <TableCell>{merchant.businessType || "—"}</TableCell>
-                        <TableCell>{merchant.abn || "—"}</TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div>{merchant.representative?.name || "—"}</div>
-                            <div className="text-gray-500">{merchant.primaryEmail || merchant.businessEmail || "—"}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {merchant.address?.suburb ? (
-                            <div className="text-sm">
-                              <div>{merchant.address?.street}</div>
-                              <div className="text-gray-500">
-                                {merchant.address?.suburb}, {merchant.address?.state} {merchant.address?.postcode}
-                              </div>
+
+            {loading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+              </div>
+            ) : (
+              <>
+                {viewMode === 'standard' ? (
+                  // Standard view with limited columns
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead 
+                            className="w-[180px] cursor-pointer hover:bg-gray-50"
+                            onClick={() => handleSort('merchantName')}
+                          >
+                            <div className="flex items-center">
+                              Merchant Name
+                              {renderSortIcon('merchantName')}
                             </div>
+                          </TableHead>
+                          <TableHead 
+                            className="cursor-pointer hover:bg-gray-50"
+                            onClick={() => handleSort('merchantId')}
+                          >
+                            <div className="flex items-center">
+                              Merchant ID
+                              {renderSortIcon('merchantId')}
+                            </div>
+                          </TableHead>
+                          <TableHead 
+                            className="cursor-pointer hover:bg-gray-50"
+                            onClick={() => handleSort('businessType')}
+                          >
+                            <div className="flex items-center">
+                              Business Type
+                              {renderSortIcon('businessType')}
+                            </div>
+                          </TableHead>
+                          <TableHead 
+                            className="cursor-pointer hover:bg-gray-50"
+                            onClick={() => handleSort('abn')}
+                          >
+                            <div className="flex items-center">
+                              ABN
+                              {renderSortIcon('abn')}
+                            </div>
+                          </TableHead>
+                          <TableHead 
+                            className="cursor-pointer hover:bg-gray-50"
+                            onClick={() => handleSort('contact')}
+                          >
+                            <div className="flex items-center">
+                              Contact
+                              {renderSortIcon('contact')}
+                            </div>
+                          </TableHead>
+                          <TableHead 
+                            className="cursor-pointer hover:bg-gray-50"
+                            onClick={() => handleSort('location')}
+                          >
+                            <div className="flex items-center">
+                              Location
+                              {renderSortIcon('location')}
+                            </div>
+                          </TableHead>
+                          <TableHead 
+                            className="cursor-pointer hover:bg-gray-50"
+                            onClick={() => handleSort('status')}
+                          >
+                            <div className="flex items-center">
+                              Status
+                              {renderSortIcon('status')}
+                            </div>
+                          </TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {sortedMerchants.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                              {searchTerm ? "No merchants match your search" : "No merchants found"}
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          sortedMerchants.map((merchant) => (
+                            <TableRow key={merchant.id}>
+                              <TableCell className="font-medium">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded border overflow-hidden flex-shrink-0 bg-gray-50">
+                                    {merchant.logoUrl ? (
+                                      <img 
+                                        src={merchant.logoUrl} 
+                                        alt={`${merchant.merchantName || merchant.tradingName} logo`} 
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => (e.target as HTMLImageElement).src = "/hand1.png"}
+                                      />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                          <rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect>
+                                          <circle cx="9" cy="9" r="2"></circle>
+                                          <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path>
+                                        </svg>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <span>{merchant.merchantName || merchant.tradingName || "—"}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="font-mono text-xs">{merchant.merchantId || "—"}</TableCell>
+                              <TableCell>{merchant.businessType || "—"}</TableCell>
+                              <TableCell>{merchant.abn || "—"}</TableCell>
+                              <TableCell>
+                                <div className="text-sm">
+                                  <div>{merchant.representative?.name || "—"}</div>
+                                  <div className="text-gray-500">{merchant.primaryEmail || merchant.businessEmail || "—"}</div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                {merchant.address?.suburb ? (
+                                  <div className="text-sm">
+                                    <div>{merchant.address?.street}</div>
+                                    <div className="text-gray-500">
+                                      {merchant.address?.suburb}, {merchant.address?.state} {merchant.address?.postcode}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  "—"
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  merchant.status === "active" 
+                                    ? "bg-green-100 text-green-800" 
+                                    : "bg-gray-100 text-gray-800"
+                                }`}>
+                                  {merchant.status || "inactive"}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => handleEdit(merchant)}>
+                                      <Edit className="h-4 w-4 mr-2" />
+                                      Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem 
+                                      onClick={() => handleDelete(merchant)}
+                                      className="text-red-600 focus:text-red-600"
+                                    >
+                                      <Trash className="h-4 w-4 mr-2" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem 
+                                      onClick={() => window.open(`/admin/${merchant.id}`, "_blank")}
+                                    >
+                                      View Details
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  // Advanced view with all columns
+                  <div className="overflow-x-auto">
+                    <p className="text-sm text-gray-500 mb-2">Double-click any cell to edit its value</p>
+                    <div className="border rounded-md max-h-[70vh] overflow-auto">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-white z-10">
+                          <TableRow>
+                            <TableHead className="w-[200px] sticky left-0 bg-white z-20 border-r">
+                              Merchant
+                            </TableHead>
+                            {allMerchantFields.map(field => (
+                              <TableHead 
+                                key={field.key} 
+                                className="cursor-pointer hover:bg-gray-50 whitespace-nowrap min-w-[120px]"
+                                onClick={() => handleSort(field.key)}
+                              >
+                                <div className="flex items-center">
+                                  {field.label}
+                                  {renderSortIcon(field.key)}
+                                </div>
+                              </TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {sortedMerchants.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={allMerchantFields.length + 1} className="text-center py-8 text-gray-500">
+                                {searchTerm ? "No merchants match your search" : "No merchants found"}
+                              </TableCell>
+                            </TableRow>
                           ) : (
-                            "—"
+                            sortedMerchants.map((merchant) => (
+                              <TableRow key={merchant.id}>
+                                <TableCell className="font-medium sticky left-0 bg-white z-10 border-r">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded border overflow-hidden flex-shrink-0 bg-gray-50">
+                                      {merchant.logoUrl ? (
+                                        <img 
+                                          src={merchant.logoUrl} 
+                                          alt="Logo" 
+                                          className="w-full h-full object-cover"
+                                          onError={(e) => (e.target as HTMLImageElement).src = "/hand1.png"}
+                                        />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect>
+                                            <circle cx="9" cy="9" r="2"></circle>
+                                            <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path>
+                                          </svg>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="truncate max-w-[140px]">
+                                      {merchant.merchantName || merchant.tradingName || "Unknown Merchant"}
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                
+                                {allMerchantFields.map(field => (
+                                  <TableCell 
+                                    key={`${merchant.id}-${field.key}`}
+                                    className="whitespace-nowrap"
+                                    onDoubleClick={() => handleCellEdit(
+                                      merchant.id, 
+                                      field.key, 
+                                      getNestedValue(merchant, field.key) || ""
+                                    )}
+                                  >
+                                    {renderCellContent(merchant, field.key)}
+                                  </TableCell>
+                                ))}
+                              </TableRow>
+                            ))
                           )}
-                        </TableCell>
-                        <TableCell>
-                          <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            merchant.status === "active" 
-                              ? "bg-green-100 text-green-800" 
-                              : "bg-gray-100 text-gray-800"
-                          }`}>
-                            {merchant.status || "inactive"}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => handleEdit(merchant)}>
-                                <Edit className="h-4 w-4 mr-2" />
-                                Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={() => handleDelete(merchant)}
-                                className="text-red-600 focus:text-red-600"
-                              >
-                                <Trash className="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem 
-                                onClick={() => window.open(`/admin/${merchant.id}`, "_blank")}
-                              >
-                                View Details
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Customers Table View */}
+        {currentView === 'customers' && (
+          <div className="bg-white p-6 rounded-lg shadow mb-8">
+            <div className="flex justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <div className="relative w-72">
+                  <Input 
+                    placeholder="Search customers..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead 
+                        className="w-[200px] cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCustomerSort('fullName')}
+                      >
+                        <div className="flex items-center">
+                          Customer
+                          {renderCustomerSortIcon('fullName')}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCustomerSort('email')}
+                      >
+                        <div className="flex items-center">
+                          Email
+                          {renderCustomerSortIcon('email')}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCustomerSort('mobileNumber')}
+                      >
+                        <div className="flex items-center">
+                          Phone
+                          {renderCustomerSortIcon('mobileNumber')}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCustomerSort('totalMerchants')}
+                      >
+                        <div className="flex items-center">
+                          Merchants
+                          {renderCustomerSortIcon('totalMerchants')}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCustomerSort('totalTransactions')}
+                      >
+                        <div className="flex items-center">
+                          Transactions
+                          {renderCustomerSortIcon('totalTransactions')}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCustomerSort('totalLifetimeSpend')}
+                      >
+                        <div className="flex items-center">
+                          Lifetime Spend
+                          {renderCustomerSortIcon('totalLifetimeSpend')}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCustomerSort('totalRedemptions')}
+                      >
+                        <div className="flex items-center">
+                          Redemptions
+                          {renderCustomerSortIcon('totalRedemptions')}
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedCustomers.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                          {searchTerm ? "No customers match your search" : "No customers found"}
                         </TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </div>
+                    ) : (
+                      sortedCustomers.map((customer) => (
+                        <TableRow key={customer.id}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-md bg-[#007AFF]/10 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                                {customer.profilePictureUrl ? (
+                                  <img 
+                                    src={customer.profilePictureUrl} 
+                                    alt={customer.fullName || `${customer.firstName || ''} ${customer.lastName || ''}`.trim()}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => (e.target as HTMLImageElement).src = "/hand1.png"}
+                                  />
+                                ) : (
+                                  <User className="h-5 w-5 text-[#007AFF]" />
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-medium">
+                                  {customer.fullName || `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Unknown Customer'}
+                                </div>
+                                {customer.customerId && (
+                                  <div className="text-xs text-muted-foreground font-mono">
+                                    ID: {customer.customerId}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>{customer.email || '—'}</TableCell>
+                          <TableCell>{customer.mobileNumber || '—'}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center">
+                              <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200">
+                                {customer.totalMerchants || 0}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell>{customer.totalTransactions || 0}</TableCell>
+                          <TableCell>${(customer.totalLifetimeSpend || 0).toFixed(2)}</TableCell>
+                          <TableCell>{customer.totalRedemptions || 0}</TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => router.push(`/admin/customers/${customer.id}`)}>
+                                  View Details
+                                </DropdownMenuItem>
+                                {customer.merchantConnections && customer.merchantConnections.length > 0 && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuLabel>Linked Merchants</DropdownMenuLabel>
+                                    {customer.merchantConnections.map((connection: { merchantId: string; merchantName?: string }, index: number) => (
+                                      <DropdownMenuItem 
+                                        key={index}
+                                        onClick={() => router.push(`/admin/${connection.merchantId}`)}
+                                      >
+                                        {connection.merchantName || connection.merchantId}
+                                      </DropdownMenuItem>
+                                    ))}
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Edit Merchant Dialog */}
@@ -672,6 +1423,28 @@ export default function AdminMerchants() {
               
               <TabsContent value="basic" className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <Label htmlFor="logoUrl">Logo URL</Label>
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        id="logoUrl"
+                        value={editingMerchant.logoUrl || ""}
+                        onChange={(e) => handleFieldChange("logoUrl", e.target.value)}
+                        className="flex-1"
+                      />
+                      {editingMerchant.logoUrl && (
+                        <div className="w-12 h-12 rounded border overflow-hidden flex-shrink-0">
+                          <img 
+                            src={editingMerchant.logoUrl} 
+                            alt="Logo preview" 
+                            className="w-full h-full object-cover"
+                            onError={(e) => (e.target as HTMLImageElement).src = "/hand1.png"}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
                   <div>
                     <Label htmlFor="merchantName">Merchant Name</Label>
                     <Input
@@ -1275,7 +2048,39 @@ export default function AdminMerchants() {
           </DialogHeader>
           
           <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="col-span-2 mb-2">
+              <Label htmlFor="newLogoUrl">Logo URL</Label>
+              <div className="flex gap-2 items-center">
+                <Input
+                  id="newLogoUrl"
+                  value={newMerchant.logoUrl || ""}
+                  onChange={(e) => handleNewMerchantFieldChange("logoUrl", e.target.value)}
+                  className="flex-1"
+                  placeholder="https://example.com/logo.png"
+                />
+                {newMerchant.logoUrl && (
+                  <div className="w-12 h-12 rounded border overflow-hidden flex-shrink-0">
+                    <img 
+                      src={newMerchant.logoUrl} 
+                      alt="Logo preview" 
+                      className="w-full h-full object-cover"
+                      onError={(e) => (e.target as HTMLImageElement).src = "/hand1.png"}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+            
             <div className="space-y-4">
+              <div>
+                <Label htmlFor="newMerchantName">Merchant Name</Label>
+                <Input
+                  id="newMerchantName"
+                  value={newMerchant.merchantName || ""}
+                  onChange={(e) => handleNewMerchantFieldChange("merchantName", e.target.value)}
+                />
+              </div>
+              
               <div>
                 <Label htmlFor="newTradingName">Trading Name</Label>
                 <Input

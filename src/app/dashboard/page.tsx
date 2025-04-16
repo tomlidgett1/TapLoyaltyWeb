@@ -907,25 +907,6 @@ export default function DashboardPage() {
                   Here's an overview of your business
                 </p>
               </div>
-              
-              {/* Add the Insights button here */}
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-9 gap-2 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                onClick={() => {
-                  console.log("Button clicked");
-                  fetchMerchantInsights();
-                }}
-                disabled={insightLoading}
-              >
-                {insightLoading ? (
-                  <div className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin mr-2"></div>
-                ) : (
-                  <Lightbulb className="h-4 w-4" />
-                )}
-                Get Business Insights
-              </Button>
             </div>
 
             {/* Update the tabs layout to be side-by-side with a separator */}
@@ -999,8 +980,8 @@ export default function DashboardPage() {
                         <p className="text-sm font-medium text-gray-500">Active Rewards</p>
                         <div className="text-lg font-semibold">{metrics.activeRewards}</div>
                       </div>
-                      <div className="h-8 w-8 rounded-full bg-purple-50 flex items-center justify-center">
-                        <Gift className="h-4 w-4 text-purple-500" />
+                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
+                        <Gift className="h-4 w-4 text-blue-500" />
                       </div>
                     </div>
                     <div className="mt-1 flex items-center text-xs">
@@ -1020,8 +1001,8 @@ export default function DashboardPage() {
                         <p className="text-sm font-medium text-gray-500">Total Points Issued</p>
                         <div className="text-lg font-semibold">{metrics.totalPointsIssued}</div>
                       </div>
-                      <div className="h-8 w-8 rounded-full bg-amber-50 flex items-center justify-center">
-                        <Zap className="h-4 w-4 text-amber-500" />
+                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
+                        <Zap className="h-4 w-4 text-blue-500" />
                       </div>
                     </div>
                     <div className="mt-1 flex items-center text-xs">
@@ -1041,8 +1022,8 @@ export default function DashboardPage() {
                         <p className="text-sm font-medium text-gray-500">Store Views</p>
                         <div className="text-lg font-semibold">{metrics.totalStoreViews}</div>
                       </div>
-                      <div className="h-8 w-8 rounded-full bg-indigo-50 flex items-center justify-center">
-                        <Eye className="h-4 w-4 text-indigo-500" />
+                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
+                        <Eye className="h-4 w-4 text-blue-500" />
                       </div>
                     </div>
                     <div className="mt-1 flex items-center text-xs">
@@ -1087,8 +1068,8 @@ export default function DashboardPage() {
                         <p className="text-sm font-medium text-gray-500">Total Transactions</p>
                         <div className="text-lg font-semibold">{metrics.totalTransactions}</div>
                       </div>
-                      <div className="h-8 w-8 rounded-full bg-green-50 flex items-center justify-center">
-                        <ShoppingCart className="h-4 w-4 text-green-500" />
+                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
+                        <ShoppingCart className="h-4 w-4 text-blue-500" />
                       </div>
                     </div>
                     <div className="mt-1 flex items-center text-xs">
@@ -1108,8 +1089,8 @@ export default function DashboardPage() {
                         <p className="text-sm font-medium text-gray-500">Total Redemptions</p>
                         <div className="text-lg font-semibold">{metrics.totalRedemptions}</div>
                       </div>
-                      <div className="h-8 w-8 rounded-full bg-purple-50 flex items-center justify-center">
-                        <Gift className="h-4 w-4 text-purple-500" />
+                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
+                        <Gift className="h-4 w-4 text-blue-500" />
                       </div>
                     </div>
                     <div className="mt-1 flex items-center text-xs">
@@ -1129,8 +1110,8 @@ export default function DashboardPage() {
                         <p className="text-sm font-medium text-gray-500">Avg Order Value</p>
                         <div className="text-lg font-semibold">${metrics.avgOrderValue}</div>
                       </div>
-                      <div className="h-8 w-8 rounded-full bg-amber-50 flex items-center justify-center">
-                        <DollarSign className="h-4 w-4 text-amber-500" />
+                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
+                        <DollarSign className="h-4 w-4 text-blue-500" />
                       </div>
                     </div>
                     <div className="mt-1 flex items-center text-xs">

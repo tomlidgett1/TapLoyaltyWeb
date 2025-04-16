@@ -82,17 +82,30 @@ export default function MerchantDetails({ params }: { params: { merchantId: stri
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Merchants
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold">{merchantData.tradingName || merchantData.merchantName}</h1>
-            <div className="flex items-center mt-1">
-              <Badge variant={merchantData.status === "active" ? "default" : "secondary"}>
-                {merchantData.status || "inactive"}
-              </Badge>
-              {merchantData.businessType && (
-                <span className="ml-2 text-sm text-gray-500">
-                  {merchantData.businessType}
-                </span>
-              )}
+          
+          <div className="flex items-center">
+            {merchantData.logoUrl && (
+              <div className="w-16 h-16 rounded-md overflow-hidden border mr-4 flex-shrink-0">
+                <img 
+                  src={merchantData.logoUrl} 
+                  alt={`${merchantData.merchantName || merchantData.tradingName} logo`} 
+                  className="w-full h-full object-cover"
+                  onError={(e) => (e.target as HTMLImageElement).src = "/hand1.png"}
+                />
+              </div>
+            )}
+            <div>
+              <h1 className="text-3xl font-bold">{merchantData.tradingName || merchantData.merchantName}</h1>
+              <div className="flex items-center mt-1">
+                <Badge variant={merchantData.status === "active" ? "default" : "secondary"}>
+                  {merchantData.status || "inactive"}
+                </Badge>
+                {merchantData.businessType && (
+                  <span className="ml-2 text-sm text-gray-500">
+                    {merchantData.businessType}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -2,7 +2,7 @@
 
 import { SideNav } from "@/components/side-nav"
 import { usePathname } from "next/navigation"
-import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee } from "lucide-react"
+import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useState, useEffect } from "react"
@@ -25,7 +25,7 @@ import { SendBroadcastDialog } from "@/components/send-broadcast-dialog"
 import { CreatePointsRuleDialog } from "@/components/create-points-rule-dialog"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, query, where, getDocs, Timestamp } from "firebase/firestore"
+import { collection, query, where, getDocs, Timestamp, orderBy, limit, getDoc, doc } from "firebase/firestore"
 import {
   Tooltip,
   TooltipContent,
@@ -33,14 +33,36 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
+import { setDoc, writeBatch } from "firebase/firestore"
+
+// Custom scrollbar styles
+const scrollbarStyles = `
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(0, 0, 0, 0.2);
+  }
+`;
 
 interface Notification {
   id: string
-  title: string
-  description: string
+  message: string
+  type: string
+  customerId?: string
+  dateCreated?: Date
+  idSuffix?: string
   timestamp: Date
   read: boolean
-  type: "info" | "success" | "warning" | "error"
+  customerFirstName?: string
+  customerFullName?: string
 }
 
 interface RewardConfig {
@@ -68,6 +90,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
+  const [notificationsLoading, setNotificationsLoading] = useState(true)
   const router = useRouter()
   
   const [selectedRewards, setSelectedRewards] = useState<RewardConfig[]>([])
@@ -101,35 +124,31 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     const mockNotifications: Notification[] = [
       {
         id: "1",
-        title: "New customer sign up",
-        description: "Emma Wilson just joined your loyalty program",
+        message: "New customer sign up",
         timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
         read: false,
-        type: "info"
+        type: "INFO"
       },
       {
         id: "2",
-        title: "Reward redeemed",
-        description: "Free Coffee reward was redeemed 5 times today",
+        message: "Reward redeemed",
         timestamp: new Date(Date.now() - 1000 * 60 * 120), // 2 hours ago
         read: false,
-        type: "success"
+        type: "REWARD_REDEEMED"
       },
       {
         id: "3",
-        title: "Points rule update",
-        description: "Your 'Purchase Points' rule was automatically updated",
+        message: "Points rule update",
         timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
         read: true,
-        type: "warning"
+        type: "WARNING"
       },
       {
         id: "4",
-        title: "Integration connected",
-        description: "Your POS system was successfully connected",
+        message: "Integration connected",
         timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2), // 2 days ago
         read: true,
-        type: "success"
+        type: "POINTS_AWARDED"
       }
     ]
     
@@ -222,7 +241,138 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     }
   }, [user?.uid, isOnboarding])
 
-  const markAsRead = (id: string) => {
+  // Add useEffect to fetch notifications from Firestore
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      if (!user?.uid || isOnboarding) return
+      
+      try {
+        setNotificationsLoading(true)
+        
+        // Create reference to merchant's notifications collection
+        const notificationsRef = collection(db, 'merchants', user.uid, 'notifications')
+        const notificationsQuery = query(
+          notificationsRef,
+          orderBy('dateCreated', 'desc'),
+          limit(10)
+        )
+        
+        const notificationsSnapshot = await getDocs(notificationsQuery)
+        
+        // Get notifications data
+        const notificationsData = notificationsSnapshot.docs.map(doc => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            message: data.message || 'No message provided',
+            type: data.type || 'INFO',
+            customerId: data.customerId,
+            idSuffix: data.idSuffix,
+            dateCreated: data.dateCreated?.toDate(),
+            timestamp: data.dateCreated?.toDate() || new Date(),
+            read: data.read || false
+          }
+        })
+
+        // Fetch customer data for all notifications that have a customerId
+        const customerIds = notificationsData
+          .filter(n => n.customerId)
+          .map(n => n.customerId as string);
+        
+        // Create a map to hold customer data
+        const customerData: Record<string, { fullName?: string }> = {};
+        
+        // Only fetch customer data if there are customerIds
+        if (customerIds.length > 0) {
+          // Fetch customer data in parallel
+          await Promise.all(
+            customerIds.map(async (customerId) => {
+              try {
+                // Go to top-level customers collection and get the customer document
+                const customerDoc = await getDoc(doc(db, 'customers', customerId));
+                if (customerDoc.exists()) {
+                  const data = customerDoc.data();
+                  
+                  // Extract fullName as the primary identifier 
+                  let customerName = data.fullName || null;
+                  
+                  // If no fullName, try to construct it from firstName and lastName
+                  if (!customerName && (data.firstName || data.lastName)) {
+                    customerName = `${data.firstName || ''} ${data.lastName || ''}`.trim();
+                  }
+                  
+                  // If still no name, try alternative name fields
+                  if (!customerName) {
+                    customerName = data.name || data.nickname || data.displayName;
+                  }
+                  
+                  // Never use tier values as names - if we detect a tier value or have no name, use a generic customer ID
+                  if (!customerName || customerName.toLowerCase() === 'bronze' || customerName.toLowerCase() === 'silver' 
+                      || customerName.toLowerCase() === 'gold' || customerName.toLowerCase() === 'platinum') {
+                    customerName = `Customer ${customerId.substring(0, 4)}`;
+                  }
+                  
+                  customerData[customerId] = { 
+                    fullName: customerName
+                  };
+                }
+              } catch (error) {
+                console.error(`Error fetching customer ${customerId}:`, error);
+              }
+            })
+          );
+        }
+        
+        // Attach customer names to the notifications
+        const notificationsWithCustomerNames = notificationsData.map(notification => {
+          if (notification.customerId && customerData[notification.customerId]) {
+            return {
+              ...notification,
+              customerFullName: customerData[notification.customerId].fullName
+            };
+          }
+          return notification;
+        });
+        
+        setNotifications(notificationsWithCustomerNames);
+        setUnreadCount(notificationsWithCustomerNames.filter(n => !n.read).length);
+      } catch (error) {
+        console.error('Error fetching notifications:', error)
+        // Set fallback notifications if there's an error
+        const fallbackNotifications: Notification[] = [
+          {
+            id: "fallback-1",
+            message: "Welcome to your loyalty dashboard",
+            timestamp: new Date(),
+            read: false,
+            type: "INFO"
+          }
+        ]
+        setNotifications(fallbackNotifications)
+        setUnreadCount(1)
+      } finally {
+        setNotificationsLoading(false)
+      }
+    }
+    
+    if (user?.uid) {
+      fetchNotifications()
+    }
+  }, [user?.uid, isOnboarding])
+
+  const markAsRead = async (id: string) => {
+    // Update the notification in Firestore
+    try {
+      if (user?.uid) {
+        await setDoc(doc(db, 'merchants', user.uid, 'notifications', id), {
+          read: true
+        }, { merge: true })
+      }
+    } catch (error) {
+      console.error('Error marking notification as read:', error)
+    }
+    
+    // Update local state
     setNotifications(prev => 
       prev.map(notification => 
         notification.id === id 
@@ -233,7 +383,24 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     setUnreadCount(prev => Math.max(0, prev - 1))
   }
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
+    // Update all notifications in Firestore
+    try {
+      if (user?.uid) {
+        const batch = writeBatch(db)
+        notifications.forEach(notification => {
+          if (!notification.read) {
+            const notificationRef = doc(db, 'merchants', user.uid, 'notifications', notification.id)
+            batch.update(notificationRef, { read: true })
+          }
+        })
+        await batch.commit()
+      }
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error)
+    }
+    
+    // Update local state
     setNotifications(prev => 
       prev.map(notification => ({ ...notification, read: true }))
     )
@@ -246,12 +413,16 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case "success":
+      case "SUCCESS":
+      case "REWARD_REDEEMED":
+      case "POINTS_AWARDED":
         return <Check className="h-4 w-4 text-green-500" />
-      case "warning":
+      case "WARNING":
         return <Bell className="h-4 w-4 text-amber-500" />
-      case "error":
+      case "ERROR":
         return <X className="h-4 w-4 text-red-500" />
+      case "MEMBERSHIP_TIER_UPGRADE":
+        return <Award className="h-4 w-4 text-purple-500" />
       default:
         return <Bell className="h-4 w-4 text-blue-500" />
     }
@@ -275,7 +446,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     return (
       <div className="flex h-screen overflow-hidden">
         {/* Left sidebar for progress steps */}
-        <div className="w-72 border-r border-gray-100 bg-white p-6">
+        <div className="w-72 bg-white p-6">
           <div className="flex flex-col h-full">
             <div className="mb-8">
               <h3 className="text-lg font-medium">Your details</h3>
@@ -345,8 +516,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </div>
         
         {/* Main content - wider for onboarding */}
-        <div className="flex-1 overflow-auto">
-          {children}
+        <div className="flex-1 overflow-auto bg-[#F5F5F5] p-2">
+          <div className="bg-white rounded-lg shadow-sm h-full overflow-auto">
+            {children}
+          </div>
         </div>
       </div>
     )
@@ -356,9 +529,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden">
       <SideNav />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden bg-[#F5F5F5]">
+        {/* Apply custom scrollbar styles */}
+        <style jsx global>{scrollbarStyles}</style>
+        
         {/* Top Header */}
-        <header className="h-16 border-b border-gray-100 flex items-center justify-between px-6">
+        <header className="h-16 flex items-center justify-between px-2">
           <div className="flex items-center gap-4">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -395,51 +571,26 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            
-            {/* Add the metrics here */}
-            {!isOnboarding && (
-              <div className="flex items-center gap-3">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex items-center gap-2 px-3 h-9 bg-blue-50 rounded-md border border-blue-100 cursor-default">
-                        <ShoppingCart className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
-                        <div className="flex items-center">
-                          <p className="text-xs font-medium text-gray-500 mr-1.5">Transactions:</p>
-                          <p className="text-sm font-semibold text-blue-700">
-                            {metricsLoading ? "..." : metrics.totalTransactions}
-                          </p>
-                        </div>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="text-xs">Today</p>
-                    </TooltipContent>
-                  </Tooltip>
-                  
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex items-center gap-2 px-3 h-9 bg-purple-50 rounded-md border border-purple-100 cursor-default">
-                        <Gift className="h-3.5 w-3.5 text-purple-600 flex-shrink-0" />
-                        <div className="flex items-center">
-                          <p className="text-xs font-medium text-gray-500 mr-1.5">Redemptions:</p>
-                          <p className="text-sm font-semibold text-purple-700">
-                            {metricsLoading ? "..." : metrics.totalRedemptions}
-                          </p>
-                        </div>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="text-xs">Today</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            )}
           </div>
           
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-2 bg-white hover:bg-gray-50 border-transparent"
+                asChild
+              >
+                <Link href="/tap-agent" className="flex items-center">
+                  <Bot className="h-4 w-4 text-blue-500 mr-1.5" />
+                  <div className="flex items-center">
+                    <span className="font-bold text-blue-500">Tap</span>
+                    <span className="ml-0.5 bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent font-bold">
+                      Agent
+                    </span>
+                  </div>
+                </Link>
+              </Button>
               <TapAiButton
                 variant="default"
                 size="sm"
@@ -468,7 +619,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80 rounded-md">
+              <DropdownMenuContent align="end" className="w-96 rounded-md">
                 <div className="flex items-center justify-between px-4 py-2 border-b">
                   <h3 className="font-medium">Notifications</h3>
                   {unreadCount > 0 && (
@@ -483,7 +634,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   )}
                 </div>
                 <div className="max-h-[400px] overflow-y-auto">
-                  {notifications.length === 0 ? (
+                  {notificationsLoading ? (
+                    <div className="py-6 text-center">
+                      <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto mb-2"></div>
+                      <p className="text-sm text-muted-foreground">Loading notifications...</p>
+                    </div>
+                  ) : notifications.length === 0 ? (
                     <div className="py-6 text-center">
                       <Bell className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
                       <p className="text-sm text-muted-foreground">No notifications yet</p>
@@ -504,18 +660,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-start">
-                              <h4 className="text-sm font-medium">{notification.title}</h4>
+                              <p className="text-sm font-medium">{notification.message}</p>
                               <p className="text-xs text-muted-foreground">
-                                {formatTimeAgo(notification.timestamp)}
+                                {formatTimeAgo(notification.dateCreated || notification.timestamp)}
                               </p>
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {notification.description}
-                            </p>
-                            {!notification.read && (
-                              <Badge className="mt-2 rounded-md bg-blue-50 text-blue-700 border-blue-200">
-                                New
-                              </Badge>
+                            {notification.customerId && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Customer: {notification.customerFullName || notification.customerId.substring(0, 8)}
+                              </p>
                             )}
                           </div>
                         </div>
@@ -535,8 +688,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </header>
         
         {/* Main Content */}
-        <main className="flex-1 overflow-auto">
-          {children}
+        <main className="flex-1 overflow-auto px-2 pb-2">
+          <div className="bg-white rounded-lg shadow-sm h-full overflow-auto custom-scrollbar">
+            {children}
+          </div>
         </main>
       </div>
 

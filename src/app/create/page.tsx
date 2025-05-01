@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, getDoc } from "firebase/firestore"
+import { PageTransition } from "@/components/page-transition"
 import { 
   Gift, 
   Zap, 
@@ -132,101 +133,103 @@ export default function CreatePage() {
   ]
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight">Create</h1>
-        <p className="text-gray-500 mt-2">
-          Create new rewards, points rules, and communication tools for your loyalty program
-        </p>
-      </div>
+    <PageTransition>
+      <div className="p-6">
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold tracking-tight">Create</h1>
+          <p className="text-gray-500 mt-2">
+            Create new rewards, points rules, and communication tools for your loyalty program
+          </p>
+        </div>
 
-      <div className="space-y-10">
-        {createOptions.map((section, idx) => (
-          <div key={idx} className="space-y-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className={cn("p-2 rounded-lg bg-gray-100")}>
-                <section.icon className="h-6 w-6 text-[#007AFF]" />
-              </div>
-              <div>
-                <h2 className="text-lg font-medium">{section.title}</h2>
-                <p className="text-sm text-gray-500">{section.description}</p>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {section.items.map((item, i) => (
-                <div 
-                  key={i}
-                  onClick={item.action}
-                  className={cn(
-                    "group relative overflow-hidden bg-white border rounded-xl shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer",
-                    item.highlight 
-                      ? "border-blue-300 bg-gradient-to-r from-blue-50 to-indigo-50" 
-                      : "border-gray-200 hover:border-[#007AFF]/30"
-                  )}
-                >
-                  {item.highlight && (
-                    <div className="absolute top-0 right-0">
-                      <div className="bg-blue-600 text-white text-xs font-medium px-2 py-0.5 rounded-bl-lg">
-                        Special
-                      </div>
-                    </div>
-                  )}
-                  <div className="p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className={cn(
-                        "p-1.5 rounded-lg transition-colors",
-                        item.highlight 
-                          ? "bg-blue-100" 
-                          : "bg-gray-50 group-hover:bg-[#007AFF]/5"
-                      )}>
-                        <item.icon className="h-4 w-4 text-[#007AFF]" />
-                      </div>
-                      <div className="h-7 w-7 rounded-full bg-gray-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity group-hover:bg-[#007AFF]/10">
-                        <Plus className="h-3.5 w-3.5 text-[#007AFF]" />
-                      </div>
-                    </div>
-                    <h3 className="font-medium text-base mb-0.5">{item.title}</h3>
-                    <p className="text-xs text-gray-500 line-clamp-2">{item.description}</p>
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#007AFF] opacity-0 group-hover:opacity-100 transition-opacity" />
+        <div className="space-y-10">
+          {createOptions.map((section, idx) => (
+            <div key={idx} className="space-y-4">
+              <div className="flex items-center gap-3 mb-4">
+                <div className={cn("p-2 rounded-lg bg-gray-100")}>
+                  <section.icon className="h-6 w-6 text-[#007AFF]" />
                 </div>
-              ))}
+                <div>
+                  <h2 className="text-lg font-medium">{section.title}</h2>
+                  <p className="text-sm text-gray-500">{section.description}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {section.items.map((item, i) => (
+                  <div 
+                    key={i}
+                    onClick={item.action}
+                    className={cn(
+                      "group relative overflow-hidden bg-white border rounded-xl shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer",
+                      item.highlight 
+                        ? "border-blue-300 bg-gradient-to-r from-blue-50 to-indigo-50" 
+                        : "border-gray-200 hover:border-[#007AFF]/30"
+                    )}
+                  >
+                    {item.highlight && (
+                      <div className="absolute top-0 right-0">
+                        <div className="bg-blue-600 text-white text-xs font-medium px-2 py-0.5 rounded-bl-lg">
+                          Special
+                        </div>
+                      </div>
+                    )}
+                    <div className="p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className={cn(
+                          "p-1.5 rounded-lg transition-colors",
+                          item.highlight 
+                            ? "bg-blue-100" 
+                            : "bg-gray-50 group-hover:bg-[#007AFF]/5"
+                        )}>
+                          <item.icon className="h-4 w-4 text-[#007AFF]" />
+                        </div>
+                        <div className="h-7 w-7 rounded-full bg-gray-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity group-hover:bg-[#007AFF]/10">
+                          <Plus className="h-3.5 w-3.5 text-[#007AFF]" />
+                        </div>
+                      </div>
+                      <h3 className="font-medium text-base mb-0.5">{item.title}</h3>
+                      <p className="text-xs text-gray-500 line-clamp-2">{item.description}</p>
+                    </div>
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#007AFF] opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
 
-      {/* Dialogs */}
-      <CreateRewardDialog 
-        open={createRewardOpen} 
-        onOpenChange={setCreateRewardOpen}
-      />
-      
-      <CreateRecurringRewardDialog 
-        open={createRecurringOpen}
-        onOpenChange={setCreateRecurringOpen}
-      />
-      
-      <CreatePointsRuleDialog 
-        open={createRuleOpen}
-        onOpenChange={setCreateRuleOpen}
-      />
-      
-      <CreateBannerDialog 
-        open={createBannerOpen} 
-        onOpenChange={setCreateBannerOpen} 
-      />
-      
-      <SendBroadcastDialog
-        open={broadcastDialogOpen}
-        onOpenChange={setBroadcastDialogOpen}
-      />
-      
-      <IntroductoryRewardDialog
-        open={introRewardOpen}
-        onOpenChange={setIntroRewardOpen}
-      />
-    </div>
+        {/* Dialogs */}
+        <CreateRewardDialog 
+          open={createRewardOpen} 
+          onOpenChange={setCreateRewardOpen}
+        />
+        
+        <CreateRecurringRewardDialog 
+          open={createRecurringOpen}
+          onOpenChange={setCreateRecurringOpen}
+        />
+        
+        <CreatePointsRuleDialog 
+          open={createRuleOpen}
+          onOpenChange={setCreateRuleOpen}
+        />
+        
+        <CreateBannerDialog 
+          open={createBannerOpen} 
+          onOpenChange={setCreateBannerOpen} 
+        />
+        
+        <SendBroadcastDialog
+          open={broadcastDialogOpen}
+          onOpenChange={setBroadcastDialogOpen}
+        />
+        
+        <IntroductoryRewardDialog
+          open={introRewardOpen}
+          onOpenChange={setIntroRewardOpen}
+        />
+      </div>
+    </PageTransition>
   )
 } 

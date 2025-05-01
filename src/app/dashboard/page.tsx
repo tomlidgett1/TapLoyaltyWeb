@@ -875,8 +875,8 @@ export default function DashboardPage() {
 
   return (
     <PageTransition>
-      <div className="container mx-auto p-6">
-        <div className="max-w-7xl mx-auto space-y-8">
+      <div className="p-6">
+        <div className="space-y-8">
           {/* Welcome Section with Timeframe Tabs */}
           <div className="space-y-4">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -897,11 +897,11 @@ export default function DashboardPage() {
                 onValueChange={(value) => setMetricsType(value as "consumer" | "platform")}
               >
                 <TabsList>
-                  <TabsTrigger value="platform" className="flex items-center gap-2">
+                  <TabsTrigger value="platform" className="flex items-center gap-2 data-[state=active]:text-blue-600">
                     <Server className="h-4 w-4" />
                     <span>Platform Metrics</span>
                   </TabsTrigger>
-                  <TabsTrigger value="consumer" className="flex items-center gap-2">
+                  <TabsTrigger value="consumer" className="flex items-center gap-2 data-[state=active]:text-blue-600">
                     <Users className="h-4 w-4" />
                     <span>Consumer Metrics</span>
                   </TabsTrigger>
@@ -918,10 +918,10 @@ export default function DashboardPage() {
                 onValueChange={(value) => setTimeframe(value as TimeframeType)}
               >
                 <TabsList>
-                  <TabsTrigger value="today">Today</TabsTrigger>
-                  <TabsTrigger value="yesterday">Yesterday</TabsTrigger>
-                  <TabsTrigger value="7days">Last 7 Days</TabsTrigger>
-                  <TabsTrigger value="30days">Last 30 Days</TabsTrigger>
+                  <TabsTrigger value="today" className="data-[state=active]:text-blue-600">Today</TabsTrigger>
+                  <TabsTrigger value="yesterday" className="data-[state=active]:text-blue-600">Yesterday</TabsTrigger>
+                  <TabsTrigger value="7days" className="data-[state=active]:text-blue-600">Last 7 Days</TabsTrigger>
+                  <TabsTrigger value="30days" className="data-[state=active]:text-blue-600">Last 30 Days</TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>

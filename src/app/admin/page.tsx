@@ -213,9 +213,21 @@ interface Merchant {
   [key: string]: any;
 }
 
+interface FunctionConfig {
+  name: string;
+  schedule: string;
+  timeZone: string;
+  memory: string;
+  timeoutSeconds: number;
+  secrets: string[];
+  enabled: boolean;
+  description: string;
+  code: string;
+}
+
 export default function AdminMerchants() {
   const router = useRouter();
-  const [currentView, setCurrentView] = useState<'merchants' | 'customers'>('merchants');
+  const [currentView, setCurrentView] = useState<'merchants' | 'customers' | 'functions'>('merchants');
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -248,6 +260,251 @@ export default function AdminMerchants() {
       postcode: "",
       state: ""
     }
+  });
+
+  // State for functions tab
+  const [functions, setFunctions] = useState<FunctionConfig[]>([{
+    name: "createRewards",
+    schedule: "0 */12 * * *",
+    timeZone: "Australia/Melbourne",
+    memory: "1GiB",
+    timeoutSeconds: 540,
+    secrets: ["OPENAI_API_KEY"],
+    enabled: true,
+    description: "Creates personalized rewards for customers every 12 hours",
+    code: `const { OpenAI } = await import("openai");
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const MAX_WRITES_PER_BATCH = 500;
+let batch = db.batch();
+let writes = 0;
+
+try {
+  const merchantsSnap = await db.collection("merchants").get();
+  logger.info(\`Found \${merchantsSnap.size} merchants.\`);
+
+  for (const merchantDoc of merchantsSnap.docs) {
+    const merchantId = merchantDoc.id;
+    const merchantData = merchantDoc.data();
+    const { businessInsights } = merchantData || {};
+
+    const customersSnap = await db.collection(\`merchants/\${merchantId}/customers\`).get();
+    if (customersSnap.empty) {
+      logger.info(\`Merchant \${merchantId} has no customers → skipping\`);
+      continue;
+    }
+
+    for (const customerDoc of customersSnap.docs) {
+      const customerId = customerDoc.id;
+      const customerData = customerDoc.data();
+
+      // Count existing agent rewards for this customer for this merchant
+      const rewardsSnap = await db
+        .collection(\`customers/\${customerId}/rewards\`)
+        .where("programtype", "==", "agent")
+        .where("merchantId", "==", merchantId)
+        .where("redeemable", "==", true)
+        .where("visible", "==", true)
+        .get();
+
+      if (rewardsSnap.size >= 4) {
+        logger.info(\`Customer \${customerId} at merchant \${merchantId} already has \${rewardsSnap.size} agent rewards → skipping\`);
+        continue;
+      }
+
+      const numToCreate = 4 - rewardsSnap.size;
+
+      const baseSpecs = [
+        { conditionsType: "none", offeringType: "Discount Voucher" },
+        { conditionsType: "none", offeringType: "Loyalty Bonus" },
+        { conditionsType: "optional", offeringType: "Exclusive Access Pass" },
+        { conditionsType: "optional", offeringType: "Free Gift" },
+      ];
+      const rewardSpecs = baseSpecs.slice(0, numToCreate);
+
+      for (const spec of rewardSpecs) {
+        const now = new Date();
+        const expiry = new Date(now.getTime() + 12 * 60 * 60 * 1000); // 12 hours later
+
+        const conditionInstruction =
+          spec.conditionsType === "none"
+            ? "This reward must have no conditions; return an empty conditions array."
+            : "This reward can include conditions if they make sense based on the data.";
+
+        const promptContent = \`Create a personalized reward for customer \${customerId} using these customer metrics: \${JSON.stringify(customerData)}.
+Also consider the merchant's business insights: \${JSON.stringify(businessInsights)}.
+\${conditionInstruction}
+This reward is a \${spec.offeringType} offering. Generate a completely unique, creative, and distinct reward that differs from any other offering.
+Limit to customerLimit = 1.
+Ensure the reward title (rewardName) is fantastic, customer-facing, max 20 characters.
+Ensure the reward description is enticing, customer-facing, max 50 characters.\`;
+
+        const aiResponse = await openai.chat.completions.create({
+          model: "gpt-4.1",
+          messages: [
+            {
+              role: "system",
+              content: "You are a conversational assistant helping users create reward programs for their customers.",
+            },
+            { role: "user", content: promptContent },
+          ],
+          tools: [
+            {
+              type: "function",
+              function: {
+                name: "create_reward",
+                description: "Create a personalized reward",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    rewardName: { type: "string" },
+                    description: { type: "string" },
+                    isActive: { type: "boolean" },
+                    pointsCost: { type: "number" },
+                    rewardVisibility: {
+                      type: "string",
+                      enum: ["global", "private"],
+                    },
+                    customers: {
+                      type: "array",
+                      items: { type: "string" },
+                    },
+                    voucherAmount: { type: "number" },
+                    delayedVisibility: {
+                      type: "object",
+                      properties: {
+                        type: { type: "string" },
+                        value: { type: "number" },
+                      },
+                    },
+                    conditions: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          type: {
+                            type: "string",
+                            enum: [
+                              "minimumLifetimeSpend",
+                              "minimumTransactions",
+                              "maximumTransactions",
+                              "minimumPointsBalance",
+                              "membershipLevel",
+                              "daysSinceJoined",
+                              "daysSinceLastVisit",
+                            ],
+                          },
+                          value: { type: "number" },
+                        },
+                      },
+                    },
+                    limitations: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          type: {
+                            type: "string",
+                            enum: ["customerLimit", "totalRedemptionLimit"],
+                          },
+                          value: { type: "number" },
+                        },
+                      },
+                    },
+                  },
+                  required: [
+                    "rewardName",
+                    "description",
+                    "isActive",
+                    "pointsCost",
+                    "rewardVisibility",
+                    "customers",
+                    "conditions",
+                    "limitations",
+                  ],
+                },
+              },
+            },
+          ],
+          tool_choice: {
+            type: "function",
+            function: { name: "create_reward" },
+          },
+        });
+
+        const toolCall = aiResponse.choices[0].message.tool_calls?.[0];
+        if (!toolCall) {
+          throw new Error(\`Invalid tool response for merchant \${merchantId}, customer \${customerId}\`);
+        }
+
+        const rewardJSON = JSON.parse(toolCall.function.arguments);
+
+        // Enforce business logic
+        rewardJSON.conditions = spec.conditionsType === "none" ? [] : rewardJSON.conditions;
+        rewardJSON.limitations = [{ type: "customerLimit", value: 1 }];
+        rewardJSON.programtype = "agent";
+        rewardJSON.rewardVisibility = "global";
+        rewardJSON.pin = "1111";
+        rewardJSON.createdAt = now;
+        rewardJSON.expiryDate = expiry;
+        rewardJSON.customers = [customerId];
+
+        // Write to Firestore
+        const rewardId = db.collection("rewards").doc().id;
+
+        batch.set(db.doc(\`merchants/\${merchantId}/rewards/\${rewardId}\`), rewardJSON);
+        writes++;
+
+        batch.set(db.doc(\`customers/\${customerId}/rewards/\${rewardId}\`), {
+          ...rewardJSON,
+          merchantId,
+          redeemable: true,
+          visible: true,
+        });
+        writes++;
+
+        batch.set(db.doc(\`rewards/\${rewardId}\`), {
+          ...rewardJSON,
+          merchantId,
+          redeemable: true,
+          visible: true,
+        });
+        writes++;
+
+        logger.info(\`Created reward \${rewardId} for merchant \${merchantId}, customer \${customerId}\`);
+
+        if (writes >= MAX_WRITES_PER_BATCH) {
+          logger.info(\`Committing batch of \${writes} writes.\`);
+          await batch.commit();
+          batch = db.batch();
+          writes = 0;
+        }
+      }
+    }
+  }
+
+  if (writes > 0) {
+    logger.info(\`Final commit of \${writes} writes.\`);
+    await batch.commit();
+  }
+
+  logger.info("✅ createRewards completed.");
+} catch (err) {
+  logger.error("❌ Error in createRewards:", err);
+}`
+  }]);
+  const [editingFunction, setEditingFunction] = useState<FunctionConfig | null>(null);
+  const [isEditFunctionDialogOpen, setIsEditFunctionDialogOpen] = useState(false);
+  const [isAddFunctionDialogOpen, setIsAddFunctionDialogOpen] = useState(false);
+  const [newFunction, setNewFunction] = useState<FunctionConfig>({
+    name: "",
+    schedule: "0 0 * * *", // Default to daily at midnight
+    timeZone: "Australia/Melbourne",
+    memory: "256MiB",
+    timeoutSeconds: 60,
+    secrets: [],
+    enabled: true,
+    description: "",
+    code: ""
   });
 
   useEffect(() => {
@@ -861,6 +1118,79 @@ export default function AdminMerchants() {
     );
   };
 
+  // Function management handlers
+  const handleEditFunction = (func: FunctionConfig) => {
+    setEditingFunction({...func});
+    setIsEditFunctionDialogOpen(true);
+  };
+
+  const handleUpdateFunction = () => {
+    if (!editingFunction) return;
+    
+    // In a real app, this would call a Firebase Function to update the function code
+    setFunctions(functions.map(f => 
+      f.name === editingFunction.name ? editingFunction : f
+    ));
+    
+    toast({
+      title: "Success",
+      description: "Function configuration updated successfully",
+    });
+    
+    setIsEditFunctionDialogOpen(false);
+  };
+
+  const handleAddFunction = () => {
+    // In a real app, this would call a Firebase Function to create a new function
+    setFunctions([...functions, newFunction]);
+    
+    toast({
+      title: "Success",
+      description: "Function created successfully",
+    });
+    
+    setIsAddFunctionDialogOpen(false);
+    setNewFunction({
+      name: "",
+      schedule: "0 0 * * *",
+      timeZone: "Australia/Melbourne",
+      memory: "256MiB",
+      timeoutSeconds: 60,
+      secrets: [],
+      enabled: true,
+      description: "",
+      code: ""
+    });
+  };
+
+  const handleToggleFunctionStatus = (functionName: string, enabled: boolean) => {
+    // In a real app, this would call a Firebase Function to enable/disable the function
+    setFunctions(functions.map(f => 
+      f.name === functionName ? {...f, enabled} : f
+    ));
+    
+    toast({
+      title: enabled ? "Function Enabled" : "Function Disabled",
+      description: `Function ${functionName} has been ${enabled ? "enabled" : "disabled"}`,
+    });
+  };
+
+  const handleDeleteFunction = (functionName: string) => {
+    // In a real app, this would call a Firebase Function to delete the function
+    setFunctions(functions.filter(f => f.name !== functionName));
+    
+    toast({
+      title: "Success",
+      description: `Function ${functionName} has been deleted`,
+    });
+  };
+
+  // Function to safely get regex match results
+  const safeRegexMatch = (regex: RegExp, text: string, defaultValue: string): string => {
+    const match = text.match(regex);
+    return match && match[1] ? match[1] : defaultValue;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
@@ -881,11 +1211,12 @@ export default function AdminMerchants() {
         <Tabs 
           defaultValue="merchants" 
           className="mb-8" 
-          onValueChange={(value) => setCurrentView(value as 'merchants' | 'customers')}
+          onValueChange={(value) => setCurrentView(value as 'merchants' | 'customers' | 'functions')}
         >
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full max-w-md grid-cols-3">
             <TabsTrigger value="merchants">Merchants</TabsTrigger>
             <TabsTrigger value="customers">Customers</TabsTrigger>
+            <TabsTrigger value="functions">Functions</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -1395,6 +1726,104 @@ export default function AdminMerchants() {
                     )}
                   </TableBody>
                 </Table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Functions Tab View */}
+        {currentView === 'functions' && (
+          <div className="bg-white p-6 rounded-lg shadow mb-8">
+            <div className="flex justify-between mb-6">
+              <h2 className="text-xl font-semibold">Cloud Functions</h2>
+              <Button onClick={() => setIsAddFunctionDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Function
+              </Button>
+            </div>
+
+            {functions.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                No functions configured. Click "Add Function" to create one.
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {functions.map((func) => (
+                  <div key={func.name} className="border rounded-lg overflow-hidden">
+                    <div className="p-4 flex items-center justify-between border-b bg-gray-50">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-3 h-3 rounded-full ${func.enabled ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                        <h3 className="font-medium">{func.name}</h3>
+                        <Badge variant="outline" className="ml-2">{func.schedule}</Badge>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className={func.enabled ? "text-red-600" : "text-green-600"}
+                          onClick={() => handleToggleFunctionStatus(func.name, !func.enabled)}
+                        >
+                          {func.enabled ? "Disable" : "Enable"}
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => handleEditFunction(func)}
+                        >
+                          <Edit className="h-4 w-4 mr-1" />
+                          Edit
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="text-red-600"
+                          onClick={() => handleDeleteFunction(func.name)}
+                        >
+                          <Trash className="h-4 w-4 mr-1" />
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="p-4">
+                      <div className="mb-4">{func.description}</div>
+                      
+                      <div className="grid grid-cols-3 gap-4 text-sm mb-4">
+                        <div>
+                          <span className="font-medium block">Schedule:</span>
+                          <span className="text-gray-600">{func.schedule}</span>
+                        </div>
+                        <div>
+                          <span className="font-medium block">Memory:</span>
+                          <span className="text-gray-600">{func.memory}</span>
+                        </div>
+                        <div>
+                          <span className="font-medium block">Timeout:</span>
+                          <span className="text-gray-600">{func.timeoutSeconds} seconds</span>
+                        </div>
+                        <div>
+                          <span className="font-medium block">Timezone:</span>
+                          <span className="text-gray-600">{func.timeZone}</span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="font-medium block">Secrets:</span>
+                          <span className="text-gray-600">
+                            {func.secrets.length > 0 
+                              ? func.secrets.map(s => <Badge key={s} variant="secondary" className="mr-1">{s}</Badge>) 
+                              : "None"}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-4">
+                        <h4 className="font-medium mb-2">Function Code:</h4>
+                        <div className="bg-gray-900 text-gray-50 p-4 rounded-md font-mono text-xs overflow-x-auto max-h-80 overflow-y-auto">
+                          <pre className="whitespace-pre-wrap break-words">{func.code}</pre>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -2196,6 +2625,674 @@ export default function AdminMerchants() {
             </Button>
             <Button onClick={handleCreateMerchant}>
               Create Merchant
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Function Dialog */}
+      <Dialog open={isEditFunctionDialogOpen} onOpenChange={setIsEditFunctionDialogOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Function Configuration</DialogTitle>
+            <DialogDescription>
+              Customize your cloud function configuration.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {editingFunction && (
+            <Tabs defaultValue="basic">
+              <TabsList className="grid w-full grid-cols-4 mb-4">
+                <TabsTrigger value="basic">Basic Settings</TabsTrigger>
+                <TabsTrigger value="config">Advanced Configuration</TabsTrigger>
+                {editingFunction.name === "createRewards" && (
+                  <TabsTrigger value="rewards">Reward Configuration</TabsTrigger>
+                )}
+                <TabsTrigger value="code">Function Code</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="basic" className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="functionName">Function Name</Label>
+                    <Input
+                      id="functionName"
+                      value={editingFunction.name}
+                      onChange={(e) => setEditingFunction({...editingFunction, name: e.target.value})}
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="enabled">Status</Label>
+                    <Select 
+                      value={editingFunction.enabled ? "enabled" : "disabled"} 
+                      onValueChange={(value) => setEditingFunction({...editingFunction, enabled: value === "enabled"})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="enabled">Enabled</SelectItem>
+                        <SelectItem value="disabled">Disabled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="col-span-2">
+                    <Label htmlFor="description">Description</Label>
+                    <Input
+                      id="description"
+                      value={editingFunction.description}
+                      onChange={(e) => setEditingFunction({...editingFunction, description: e.target.value})}
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="schedule">Schedule (cron format)</Label>
+                    <Input
+                      id="schedule"
+                      value={editingFunction.schedule}
+                      onChange={(e) => setEditingFunction({...editingFunction, schedule: e.target.value})}
+                      placeholder="0 */12 * * *"
+                    />
+                    <p className="text-sm text-gray-500 mt-1">
+                      Example: 0 */12 * * * runs every 12 hours
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="timeZone">Timezone</Label>
+                    <Select 
+                      value={editingFunction.timeZone} 
+                      onValueChange={(value) => setEditingFunction({...editingFunction, timeZone: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select timezone" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Australia/Melbourne">Australia/Melbourne</SelectItem>
+                        <SelectItem value="Australia/Sydney">Australia/Sydney</SelectItem>
+                        <SelectItem value="Australia/Perth">Australia/Perth</SelectItem>
+                        <SelectItem value="Australia/Brisbane">Australia/Brisbane</SelectItem>
+                        <SelectItem value="Pacific/Auckland">Pacific/Auckland</SelectItem>
+                        <SelectItem value="UTC">UTC</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="config" className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="memory">Memory Allocation</Label>
+                    <Select 
+                      value={editingFunction.memory} 
+                      onValueChange={(value) => setEditingFunction({...editingFunction, memory: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select memory" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="128MiB">128MiB</SelectItem>
+                        <SelectItem value="256MiB">256MiB</SelectItem>
+                        <SelectItem value="512MiB">512MiB</SelectItem>
+                        <SelectItem value="1GiB">1GiB</SelectItem>
+                        <SelectItem value="2GiB">2GiB</SelectItem>
+                        <SelectItem value="4GiB">4GiB</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="timeout">Timeout (seconds)</Label>
+                    <Input
+                      id="timeout"
+                      type="number"
+                      value={editingFunction.timeoutSeconds}
+                      onChange={(e) => setEditingFunction({...editingFunction, timeoutSeconds: parseInt(e.target.value) || 60})}
+                    />
+                    <p className="text-sm text-gray-500 mt-1">
+                      Maximum: 540 seconds (9 minutes)
+                    </p>
+                  </div>
+                  
+                  <div className="col-span-2">
+                    <Label htmlFor="secrets">Secrets</Label>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {editingFunction.secrets.map((secret, index) => (
+                        <div key={index} className="flex items-center bg-gray-100 px-2 py-1 rounded">
+                          <span>{secret}</span>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-5 w-5 p-0 ml-1"
+                            onClick={() => {
+                              const newSecrets = [...editingFunction.secrets];
+                              newSecrets.splice(index, 1);
+                              setEditingFunction({...editingFunction, secrets: newSecrets});
+                            }}
+                          >
+                            <XCircle className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                      <div className="flex">
+                        <Input
+                          id="newSecret"
+                          placeholder="Add new secret"
+                          className="h-8"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.currentTarget.value) {
+                              e.preventDefault();
+                              const newSecret = e.currentTarget.value;
+                              setEditingFunction({
+                                ...editingFunction, 
+                                secrets: [...editingFunction.secrets, newSecret]
+                              });
+                              e.currentTarget.value = "";
+                            }
+                          }}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="ml-2"
+                          onClick={() => {
+                            const input = document.getElementById('newSecret') as HTMLInputElement;
+                            if (input.value) {
+                              setEditingFunction({
+                                ...editingFunction, 
+                                secrets: [...editingFunction.secrets, input.value]
+                              });
+                              input.value = "";
+                            }
+                          }}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+              
+              {editingFunction.name === "createRewards" && (
+                <TabsContent value="rewards" className="space-y-6">
+                  <div className="bg-blue-50 p-4 rounded-md">
+                    <h3 className="font-medium text-blue-800 mb-2">Reward Generation Settings</h3>
+                    <p className="text-sm text-blue-700">
+                      Configure how rewards are generated for your customers.
+                    </p>
+                  </div>
+                  
+                  <div className="border rounded-md p-4">
+                    <h3 className="font-medium mb-3">AI Model Configuration</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="aiModel">AI Model</Label>
+                        <Select 
+                          value={editingFunction.code.includes("gpt-4.1") ? "gpt-4.1" : "gpt-3.5-turbo"}
+                          onValueChange={(value) => {
+                            const updatedCode = editingFunction.code.replace(
+                              /model: "([^"]+)"/,
+                              `model: "${value}"`
+                            );
+                            setEditingFunction({...editingFunction, code: updatedCode});
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select AI model" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="gpt-4.1">GPT-4 (Most capable)</SelectItem>
+                            <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo (Faster, cheaper)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="maxRewardsPerCustomer">Max Rewards Per Customer</Label>
+                        <Input
+                          id="maxRewardsPerCustomer"
+                          type="number"
+                          min="1"
+                          max="10"
+                          value={safeRegexMatch(/if \(rewardsSnap\.size >= (\d+)\)/, editingFunction.code, "4")}
+                          onChange={(e) => {
+                            const maxRewards = e.target.value;
+                            let updatedCode = editingFunction.code.replace(
+                              /if \(rewardsSnap\.size >= (\d+)\)/g,
+                              `if (rewardsSnap.size >= ${maxRewards})`
+                            );
+                            updatedCode = updatedCode.replace(
+                              /const numToCreate = (\d+) - rewardsSnap\.size/g,
+                              `const numToCreate = ${maxRewards} - rewardsSnap.size`
+                            );
+                            setEditingFunction({...editingFunction, code: updatedCode});
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="border rounded-md p-4">
+                    <h3 className="font-medium mb-3">Reward Types Configuration</h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Configure the types of rewards that will be generated.
+                    </p>
+                    
+                    <div className="space-y-4">
+                      {["Discount Voucher", "Loyalty Bonus", "Exclusive Access Pass", "Free Gift"].map((rewardType, index) => {
+                        // Extract current settings from code
+                        const rewardTypeRegex = new RegExp(`{ conditionsType: "([^"]+)", offeringType: "${rewardType}" }`);
+                        const match = editingFunction.code.match(rewardTypeRegex);
+                        const currentConditionType = match ? match[1] : "none";
+                        
+                        return (
+                          <div key={rewardType} className="grid grid-cols-3 gap-4 pb-4 border-b last:border-0 last:pb-0">
+                            <div>
+                              <Label>{rewardType}</Label>
+                              <div className="mt-1">
+                                <Select 
+                                  value={currentConditionType}
+                                  onValueChange={(value) => {
+                                    const updatedCode = editingFunction.code.replace(
+                                      rewardTypeRegex,
+                                      `{ conditionsType: "${value}", offeringType: "${rewardType}" }`
+                                    );
+                                    setEditingFunction({...editingFunction, code: updatedCode});
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Condition type" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">No Conditions</SelectItem>
+                                    <SelectItem value="optional">Optional Conditions</SelectItem>
+                                    <SelectItem value="required">Required Conditions</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                            
+                            <div className="col-span-2">
+                              <Label>Display Name</Label>
+                              <Input 
+                                value={rewardType}
+                                onChange={(e) => {
+                                  const newName = e.target.value;
+                                  const updatedCode = editingFunction.code.replace(
+                                    new RegExp(`offeringType: "${rewardType}"`, 'g'),
+                                    `offeringType: "${newName}"`
+                                  );
+                                  setEditingFunction({...editingFunction, code: updatedCode});
+                                }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                      
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          // Extract current reward types
+                          const baseSpecsMatch = editingFunction.code.match(/const baseSpecs = \[([\s\S]*?)\];/);
+                          if (baseSpecsMatch) {
+                            const currentBaseSpecs = baseSpecsMatch[1];
+                            const updatedBaseSpecs = currentBaseSpecs + ',\n        { conditionsType: "none", offeringType: "New Reward Type" }';
+                            const updatedCode = editingFunction.code.replace(
+                              /const baseSpecs = \[([\s\S]*?)\];/,
+                              `const baseSpecs = [${updatedBaseSpecs}];`
+                            );
+                            setEditingFunction({...editingFunction, code: updatedCode});
+                          }
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Reward Type
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="border rounded-md p-4">
+                    <h3 className="font-medium mb-3">Reward Expiration Settings</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="expiryHours">Expiry Time (hours)</Label>
+                        <Input
+                          id="expiryHours"
+                          type="number"
+                          min="1"
+                          value={safeRegexMatch(/const expiry = new Date\(now\.getTime\(\) \+ (\d+) \* 60 \* 60 \* 1000\)/, editingFunction.code, "12")}
+                          onChange={(e) => {
+                            const hours = e.target.value;
+                            const updatedCode = editingFunction.code.replace(
+                              /const expiry = new Date\(now\.getTime\(\) \+ (\d+) \* 60 \* 60 \* 1000\)/,
+                              `const expiry = new Date(now.getTime() + ${hours} * 60 * 60 * 1000)`
+                            );
+                            setEditingFunction({...editingFunction, code: updatedCode});
+                          }}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          How long rewards will be valid after creation
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="border rounded-md p-4">
+                    <h3 className="font-medium mb-3">AI Prompt Configuration</h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Customize the prompt sent to the AI for generating rewards.
+                    </p>
+                    
+                    <div>
+                      <Label htmlFor="systemPrompt">System Prompt</Label>
+                      <textarea
+                        id="systemPrompt"
+                        className="w-full h-20 p-2 mt-1 border rounded-md text-sm font-mono"
+                        value={safeRegexMatch(/role: "system",\s+content: "([^"]+)"/, editingFunction.code, 
+                          "You are a conversational assistant helping users create reward programs for their customers.")}
+                        onChange={(e) => {
+                          const systemPrompt = e.target.value;
+                          const updatedCode = editingFunction.code.replace(
+                            /role: "system",\s+content: "([^"]+)"/,
+                            `role: "system",\n                  content: "${systemPrompt}"`
+                          );
+                          setEditingFunction({...editingFunction, code: updatedCode});
+                        }}
+                      />
+                    </div>
+                    
+                    <div className="mt-4">
+                      <Label htmlFor="userPromptTemplate">User Prompt Template</Label>
+                      <textarea
+                        id="userPromptTemplate"
+                        className="w-full h-40 p-2 mt-1 border rounded-md text-sm font-mono"
+                        value={safeRegexMatch(/const promptContent = `([^`]+)`;/, editingFunction.code, "")}
+                        onChange={(e) => {
+                          const userPrompt = e.target.value;
+                          const updatedCode = editingFunction.code.replace(
+                            /const promptContent = `([^`]+)`;/,
+                            `const promptContent = \`${userPrompt}\`;`
+                          );
+                          setEditingFunction({...editingFunction, code: updatedCode});
+                        }}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        You can use template variables like ${`{conditionInstruction}`}, ${`{customerData}`}, etc.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="border rounded-md p-4">
+                    <h3 className="font-medium mb-3">Processing Limits</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="batchSize">Max Writes Per Batch</Label>
+                        <Input
+                          id="batchSize"
+                          type="number"
+                          min="100"
+                          max="1000"
+                          value={safeRegexMatch(/const MAX_WRITES_PER_BATCH = (\d+);/, editingFunction.code, "500")}
+                          onChange={(e) => {
+                            const batchSize = e.target.value;
+                            const updatedCode = editingFunction.code.replace(
+                              /const MAX_WRITES_PER_BATCH = \d+;/,
+                              `const MAX_WRITES_PER_BATCH = ${batchSize};`
+                            );
+                            setEditingFunction({...editingFunction, code: updatedCode});
+                          }}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Maximum number of Firestore writes before committing a batch
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
+              )}
+              
+              <TabsContent value="code" className="space-y-4">
+                <div>
+                  <Label htmlFor="functionCode">Function Code</Label>
+                  <div className="border rounded-md mt-1 bg-gray-50">
+                    <textarea
+                      id="functionCode"
+                      value={editingFunction.code}
+                      onChange={(e) => setEditingFunction({...editingFunction, code: e.target.value})}
+                      className="w-full h-96 p-4 font-mono text-sm bg-transparent focus:outline-none"
+                      spellCheck="false"
+                    />
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditFunctionDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateFunction}>
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Function Dialog */}
+      <Dialog open={isAddFunctionDialogOpen} onOpenChange={setIsAddFunctionDialogOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create New Function</DialogTitle>
+            <DialogDescription>
+              Configure a new cloud function.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <Tabs defaultValue="basic">
+            <TabsList className="grid w-full grid-cols-3 mb-4">
+              <TabsTrigger value="basic">Basic Settings</TabsTrigger>
+              <TabsTrigger value="config">Advanced Configuration</TabsTrigger>
+              <TabsTrigger value="code">Function Code</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="basic" className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="newFunctionName">Function Name</Label>
+                  <Input
+                    id="newFunctionName"
+                    value={newFunction.name}
+                    onChange={(e) => setNewFunction({...newFunction, name: e.target.value})}
+                    placeholder="myFunction"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="newEnabled">Status</Label>
+                  <Select 
+                    value={newFunction.enabled ? "enabled" : "disabled"} 
+                    onValueChange={(value) => setNewFunction({...newFunction, enabled: value === "enabled"})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="enabled">Enabled</SelectItem>
+                      <SelectItem value="disabled">Disabled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="col-span-2">
+                  <Label htmlFor="newDescription">Description</Label>
+                  <Input
+                    id="newDescription"
+                    value={newFunction.description}
+                    onChange={(e) => setNewFunction({...newFunction, description: e.target.value})}
+                    placeholder="Describe what this function does"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="newSchedule">Schedule (cron format)</Label>
+                  <Input
+                    id="newSchedule"
+                    value={newFunction.schedule}
+                    onChange={(e) => setNewFunction({...newFunction, schedule: e.target.value})}
+                    placeholder="0 0 * * *"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Example: 0 0 * * * runs daily at midnight
+                  </p>
+                </div>
+                
+                <div>
+                  <Label htmlFor="newTimeZone">Timezone</Label>
+                  <Select 
+                    value={newFunction.timeZone} 
+                    onValueChange={(value) => setNewFunction({...newFunction, timeZone: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select timezone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Australia/Melbourne">Australia/Melbourne</SelectItem>
+                      <SelectItem value="Australia/Sydney">Australia/Sydney</SelectItem>
+                      <SelectItem value="Australia/Perth">Australia/Perth</SelectItem>
+                      <SelectItem value="Australia/Brisbane">Australia/Brisbane</SelectItem>
+                      <SelectItem value="Pacific/Auckland">Pacific/Auckland</SelectItem>
+                      <SelectItem value="UTC">UTC</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="config" className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="newMemory">Memory Allocation</Label>
+                  <Select 
+                    value={newFunction.memory} 
+                    onValueChange={(value) => setNewFunction({...newFunction, memory: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select memory" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="128MiB">128MiB</SelectItem>
+                      <SelectItem value="256MiB">256MiB</SelectItem>
+                      <SelectItem value="512MiB">512MiB</SelectItem>
+                      <SelectItem value="1GiB">1GiB</SelectItem>
+                      <SelectItem value="2GiB">2GiB</SelectItem>
+                      <SelectItem value="4GiB">4GiB</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <Label htmlFor="newTimeout">Timeout (seconds)</Label>
+                  <Input
+                    id="newTimeout"
+                    type="number"
+                    value={newFunction.timeoutSeconds}
+                    onChange={(e) => setNewFunction({...newFunction, timeoutSeconds: parseInt(e.target.value) || 60})}
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Maximum: 540 seconds (9 minutes)
+                  </p>
+                </div>
+                
+                <div className="col-span-2">
+                  <Label htmlFor="newSecrets">Secrets</Label>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {newFunction.secrets.map((secret, index) => (
+                      <div key={index} className="flex items-center bg-gray-100 px-2 py-1 rounded">
+                        <span>{secret}</span>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-5 w-5 p-0 ml-1"
+                          onClick={() => {
+                            const newSecrets = [...newFunction.secrets];
+                            newSecrets.splice(index, 1);
+                            setNewFunction({...newFunction, secrets: newSecrets});
+                          }}
+                        >
+                          <XCircle className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                    <div className="flex">
+                      <Input
+                        id="addNewSecret"
+                        placeholder="Add new secret"
+                        className="h-8"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && e.currentTarget.value) {
+                            e.preventDefault();
+                            const newSecret = e.currentTarget.value;
+                            setNewFunction({
+                              ...newFunction, 
+                              secrets: [...newFunction.secrets, newSecret]
+                            });
+                            e.currentTarget.value = "";
+                          }
+                        }}
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="ml-2"
+                        onClick={() => {
+                          const input = document.getElementById('addNewSecret') as HTMLInputElement;
+                          if (input.value) {
+                            setNewFunction({
+                              ...newFunction, 
+                              secrets: [...newFunction.secrets, input.value]
+                            });
+                            input.value = "";
+                          }
+                        }}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="code" className="space-y-4">
+              <div>
+                <Label htmlFor="newFunctionCode">Function Code</Label>
+                <div className="border rounded-md mt-1 bg-gray-50">
+                  <textarea
+                    id="newFunctionCode"
+                    value={newFunction.code}
+                    onChange={(e) => setNewFunction({...newFunction, code: e.target.value})}
+                    className="w-full h-96 p-4 font-mono text-sm bg-transparent focus:outline-none"
+                    spellCheck="false"
+                    placeholder="// Write your function code here"
+                  />
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddFunctionDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddFunction} disabled={!newFunction.name || !newFunction.code}>
+              Create Function
             </Button>
           </DialogFooter>
         </DialogContent>

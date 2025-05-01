@@ -30,7 +30,8 @@ import {
   ShieldAlert,
   FileText,
   Image,
-  Download
+  Download,
+  Brain
 } from "lucide-react"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
@@ -231,6 +232,14 @@ const SettingsPage: React.FC = () => {
               ...notifications,
               ...data.notifications
             })
+          }
+          
+          // Set business insights for Tap Agent
+          if (data.businessInsights) {
+            setBusinessInsights({
+              ...businessInsights,
+              ...data.businessInsights
+            });
           }
         }
       } catch (error) {
@@ -448,6 +457,7 @@ const SettingsPage: React.FC = () => {
         paymentProvider,
         status: storeActive ? "active" : "inactive",
         notifications,
+        businessInsights,
         updatedAt: new Date(),
         documents: documents.map(doc => ({
           name: doc.name,
@@ -525,10 +535,46 @@ const SettingsPage: React.FC = () => {
   // Add this state variable
   const [mockLogoUrl, setMockLogoUrl] = useState<string | null>(null);
 
+  // Tap Agent related state variables
+  const [agentSection, setAgentSection] = useState('products')
+  const [businessInsights, setBusinessInsights] = useState({
+    // Products and Services
+    productTypes: "",
+    topProducts: "",
+    productPriceRange: "",
+    productSeasonality: "",
+    
+    // Customer Information
+    customerDemographics: "",
+    customerPreferences: "",
+    frequencyOfVisit: "",
+    averagePurchaseValue: "",
+    
+    // Competition & Market
+    mainCompetitors: "",
+    uniqueSellingPoints: "",
+    industryTrends: "",
+    businessChallenges: "",
+    
+    // Goals & Strategy
+    businessGoals: "",
+    targetedOutcomes: "",
+    preferredRewardTypes: "",
+    previousSuccessfulPromotions: ""
+  });
+
+  // Function to update business insights
+  const updateBusinessInsight = (key, value) => {
+    setBusinessInsights(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
   if (dataLoading) {
     return (
       <PageTransition>
-        <div className="p-4 md:p-6 max-w-7xl mx-auto">
+        <div className="p-6 max-w-7xl mx-auto">
           {/* Empty state instead of spinner */}
         </div>
       </PageTransition>
@@ -592,6 +638,10 @@ const SettingsPage: React.FC = () => {
             <TabsTrigger value="security" className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4" />
               <span>Security</span>
+            </TabsTrigger>
+            <TabsTrigger value="tapagent" className="flex items-center gap-2">
+              <Brain className="h-4 w-4" />
+              <span>Tap Agent</span>
             </TabsTrigger>
             <TabsTrigger value="files" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
@@ -1510,6 +1560,359 @@ const SettingsPage: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+          
+          <TabsContent value="tapagent" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              {/* Left Submenu */}
+              <div className="md:col-span-1">
+                <Card className="overflow-hidden">
+                  <div className="p-4 border-b">
+                    <h3 className="font-medium text-sm">Tap Agent</h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Help our AI understand your business to create better rewards
+                    </p>
+                  </div>
+                  
+                  <div className="p-2">
+                    {[
+                      { id: 'products', label: 'Products & Services', icon: <Store className="h-4 w-4" /> },
+                      { id: 'customers', label: 'Customer Information', icon: <User className="h-4 w-4" /> },
+                      { id: 'competition', label: 'Competition & Market', icon: <BarChart className="h-4 w-4" /> },
+                      { id: 'goals', label: 'Goals & Strategy', icon: <Gift className="h-4 w-4" /> }
+                    ].map(item => (
+                      <button
+                        key={item.id}
+                        onClick={() => setAgentSection(item.id)}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-md text-left transition-colors ${
+                          agentSection === item.id 
+                            ? 'bg-blue-50 text-blue-700' 
+                            : 'hover:bg-gray-100'
+                        }`}
+                      >
+                        <div className={`p-1.5 rounded-full ${
+                          agentSection === item.id 
+                            ? 'bg-blue-100 text-blue-700' 
+                            : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {item.icon}
+                        </div>
+                        <span className="font-medium text-sm">{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </Card>
+              </div>
+              
+              {/* Right Content Area */}
+              <div className="md:col-span-3">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>
+                      {agentSection === 'products' && "Products & Services"}
+                      {agentSection === 'customers' && "Customer Information"}
+                      {agentSection === 'competition' && "Competition & Market"}
+                      {agentSection === 'goals' && "Goals & Strategy"}
+                    </CardTitle>
+                    <CardDescription>
+                      {agentSection === 'products' && "Tell us about what you sell"}
+                      {agentSection === 'customers' && "Help us understand your customers"}
+                      {agentSection === 'competition' && "Share insights about your market"}
+                      {agentSection === 'goals' && "What do you want to achieve with rewards?"}
+                    </CardDescription>
+                  </CardHeader>
+                  
+                  <CardContent className="space-y-6">
+                    {/* Products & Services Section */}
+                    {agentSection === 'products' && (
+                      <div className="space-y-4">
+                        <div className="bg-amber-50 border border-amber-200 p-4 rounded-md mb-6">
+                          <div className="flex items-start gap-3">
+                            <Brain className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <h4 className="text-sm font-medium text-amber-800">Tap Agent Insights</h4>
+                              <p className="text-xs text-amber-700 mt-1">
+                                The more details you provide about your products and services, the better our AI can tailor rewards that align with your business offerings. This helps create more relevant and effective loyalty programs.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      
+                        <div className="space-y-2">
+                          <Label htmlFor="productTypes">Types of Products/Services Offered</Label>
+                          <Input
+                            id="productTypes"
+                            placeholder="What kinds of products or services do you sell?"
+                            value={businessInsights.productTypes}
+                            onChange={(e) => updateBusinessInsight('productTypes', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Example: "Coffee, pastries, sandwiches, salads, catering services"
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="topProducts">Best-Selling Products/Services</Label>
+                          <Input
+                            id="topProducts"
+                            placeholder="What are your most popular items?"
+                            value={businessInsights.topProducts}
+                            onChange={(e) => updateBusinessInsight('topProducts', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Example: "Flat white coffee, avocado toast, breakfast bagel"
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="productPriceRange">Price Range</Label>
+                          <Input
+                            id="productPriceRange"
+                            placeholder="What are your typical price points?"
+                            value={businessInsights.productPriceRange}
+                            onChange={(e) => updateBusinessInsight('productPriceRange', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Example: "Coffees $4-6, Light meals $12-18, Full meals $20-30"
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="productSeasonality">Seasonal Variations</Label>
+                          <Input
+                            id="productSeasonality"
+                            placeholder="Do you have seasonal products or busy periods?"
+                            value={businessInsights.productSeasonality}
+                            onChange={(e) => updateBusinessInsight('productSeasonality', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Example: "Iced drinks in summer, hot soups in winter, busier during weekday lunch hours"
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Customer Information Section */}
+                    {agentSection === 'customers' && (
+                      <div className="space-y-4">
+                        <div className="bg-amber-50 border border-amber-200 p-4 rounded-md mb-6">
+                          <div className="flex items-start gap-3">
+                            <Brain className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <h4 className="text-sm font-medium text-amber-800">Tap Agent Insights</h4>
+                              <p className="text-xs text-amber-700 mt-1">
+                                Understanding your customers helps our AI create personalized rewards that resonate with their preferences and behaviors. This information improves customer engagement and loyalty program effectiveness.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      
+                        <div className="space-y-2">
+                          <Label htmlFor="customerDemographics">Customer Demographics</Label>
+                          <Input
+                            id="customerDemographics"
+                            placeholder="Who are your typical customers?"
+                            value={businessInsights.customerDemographics}
+                            onChange={(e) => updateBusinessInsight('customerDemographics', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Example: "Young professionals 25-40, families on weekends, local office workers"
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="customerPreferences">Customer Preferences</Label>
+                          <Input
+                            id="customerPreferences"
+                            placeholder="What do your customers care about most?"
+                            value={businessInsights.customerPreferences}
+                            onChange={(e) => updateBusinessInsight('customerPreferences', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Example: "Quality coffee, quick service, healthy options, sustainable packaging"
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="frequencyOfVisit">Visit Frequency</Label>
+                          <Input
+                            id="frequencyOfVisit"
+                            placeholder="How often do customers typically visit?"
+                            value={businessInsights.frequencyOfVisit}
+                            onChange={(e) => updateBusinessInsight('frequencyOfVisit', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Example: "Regulars visit 3-4 times per week, casual customers 1-2 times per month"
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="averagePurchaseValue">Average Purchase Value</Label>
+                          <Input
+                            id="averagePurchaseValue"
+                            placeholder="What's the typical spend per customer visit?"
+                            value={businessInsights.averagePurchaseValue}
+                            onChange={(e) => updateBusinessInsight('averagePurchaseValue', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Example: "$15 for breakfast, $22 for lunch, $8 for coffee-only visits"
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Competition & Market Section */}
+                    {agentSection === 'competition' && (
+                      <div className="space-y-4">
+                        <div className="bg-amber-50 border border-amber-200 p-4 rounded-md mb-6">
+                          <div className="flex items-start gap-3">
+                            <Brain className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <h4 className="text-sm font-medium text-amber-800">Tap Agent Insights</h4>
+                              <p className="text-xs text-amber-700 mt-1">
+                                Market context helps our AI understand how to differentiate your loyalty program from competitors. These insights allow us to suggest rewards that highlight your unique strengths and address specific market challenges.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      
+                        <div className="space-y-2">
+                          <Label htmlFor="mainCompetitors">Main Competitors</Label>
+                          <Input
+                            id="mainCompetitors"
+                            placeholder="Who are your primary competitors?"
+                            value={businessInsights.mainCompetitors}
+                            onChange={(e) => updateBusinessInsight('mainCompetitors', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Example: "Local: Bean There Cafe, Chain: Starbucks and Gloria Jean's"
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="uniqueSellingPoints">Unique Selling Points</Label>
+                          <Input
+                            id="uniqueSellingPoints"
+                            placeholder="What makes your business special?"
+                            value={businessInsights.uniqueSellingPoints}
+                            onChange={(e) => updateBusinessInsight('uniqueSellingPoints', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Example: "House-roasted beans, all organic ingredients, family owned since 1998"
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="industryTrends">Industry Trends</Label>
+                          <Input
+                            id="industryTrends"
+                            placeholder="What trends are affecting your business?"
+                            value={businessInsights.industryTrends}
+                            onChange={(e) => updateBusinessInsight('industryTrends', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Example: "Plant-based options growing, increase in mobile ordering, specialty drinks"
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="businessChallenges">Business Challenges</Label>
+                          <Input
+                            id="businessChallenges"
+                            placeholder="What challenges is your business facing?"
+                            value={businessInsights.businessChallenges}
+                            onChange={(e) => updateBusinessInsight('businessChallenges', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Example: "Slower mid-afternoon periods, weekend customer retention, increasing costs"
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Goals & Strategy Section */}
+                    {agentSection === 'goals' && (
+                      <div className="space-y-4">
+                        <div className="bg-amber-50 border border-amber-200 p-4 rounded-md mb-6">
+                          <div className="flex items-start gap-3">
+                            <Brain className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <h4 className="text-sm font-medium text-amber-800">Tap Agent Insights</h4>
+                              <p className="text-xs text-amber-700 mt-1">
+                                Sharing your business goals helps our AI align reward strategies with your objectives. This ensures that every reward we suggest contributes to your broader business vision and targets your desired outcomes.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      
+                        <div className="space-y-2">
+                          <Label htmlFor="businessGoals">Business Goals</Label>
+                          <Input
+                            id="businessGoals"
+                            placeholder="What are your main business goals?"
+                            value={businessInsights.businessGoals}
+                            onChange={(e) => updateBusinessInsight('businessGoals', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Example: "Increase weekday foot traffic, grow average order value, retain first-time visitors"
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="targetedOutcomes">Desired Loyalty Outcomes</Label>
+                          <Input
+                            id="targetedOutcomes"
+                            placeholder="What do you want your loyalty program to achieve?"
+                            value={businessInsights.targetedOutcomes}
+                            onChange={(e) => updateBusinessInsight('targetedOutcomes', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Example: "Increase visit frequency, encourage customers to try new items, build community"
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="preferredRewardTypes">Preferred Reward Types</Label>
+                          <Input
+                            id="preferredRewardTypes"
+                            placeholder="What kinds of rewards would you like to offer?"
+                            value={businessInsights.preferredRewardTypes}
+                            onChange={(e) => updateBusinessInsight('preferredRewardTypes', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Example: "Free items, discounts, early access to new products, exclusive events"
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="previousSuccessfulPromotions">Past Successful Promotions</Label>
+                          <Input
+                            id="previousSuccessfulPromotions"
+                            placeholder="What promotions have worked well for you in the past?"
+                            value={businessInsights.previousSuccessfulPromotions}
+                            onChange={(e) => updateBusinessInsight('previousSuccessfulPromotions', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Example: "Happy hour discounts, buy-one-get-one weekends, seasonal menu specials"
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="flex justify-end">
+                      <Button 
+                        className="gap-2" 
+                        onClick={handleSave}
+                        disabled={loading}
+                      >
+                        <Save className="h-4 w-4" />
+                        {loading ? "Saving..." : "Save Changes"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </TabsContent>
           
           <TabsContent value="files">

@@ -103,7 +103,7 @@ export default function InviteCustomersPage() {
   }
   
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-6">
         <div className="flex items-center justify-between">
           <div>

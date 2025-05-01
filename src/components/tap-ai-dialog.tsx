@@ -2682,8 +2682,8 @@ export function TapAiDialog({
         <div className="flex h-full">
           {/* Conversations sidebar */}
           {sidebarVisible && (
-            <div className="w-64 border-r border-gray-200 h-full flex flex-col">
-              <div className="p-3 border-b border-gray-200">
+            <div className="w-64 h-full flex flex-col bg-gray-100">
+              <div className="p-3">
               <Button 
                   onClick={createNewConversation} 
                   className="w-full justify-start gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white"
@@ -2699,8 +2699,10 @@ export function TapAiDialog({
                   {conversations.map((conversation) => (
                     <div key={conversation.id} className="relative group">
                       <Button
-                        variant={currentConversation === conversation.id ? "secondary" : "ghost"}
-                        className="w-full justify-start text-left truncate h-auto py-2 pr-8"
+                        variant="ghost"
+                        className={`w-full justify-start text-left truncate h-auto py-2 pr-8 ${
+                          currentConversation === conversation.id ? "bg-white hover:bg-white text-gray-900 font-medium" : ""
+                        }`}
                         onClick={() => loadConversation(conversation.id)}
                       >
                         <MessageSquare className="h-4 w-4 mr-2 flex-shrink-0" />
@@ -2746,10 +2748,10 @@ export function TapAiDialog({
           )}
           
           {/* Main content area */}
-          <div className="flex-1 flex flex-col h-full relative">
+          <div className="flex-1 flex flex-col h-full relative rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             {/* Remove the absolute positioned button here */}
             
-            <DialogHeader className="p-3 border-b border-gray-100">
+            <DialogHeader className="p-3 bg-white">
               <div className="flex items-center justify-between">
                 <DialogTitle className="text-base flex items-center">
                   <Button
@@ -2823,8 +2825,8 @@ export function TapAiDialog({
             </DialogHeader>
 
             {/* Messages area */}
-            <div className="flex-1 overflow-y-auto flex flex-col items-center">
-              <div className="w-full max-w-4xl px-4 py-4 space-y-3">
+            <div className="flex-1 overflow-y-auto flex flex-col items-center p-4 pt-6">
+              <div className="w-full max-w-4xl px-6 py-6 space-y-3 bg-white">
                 {localMessages.map((message, index) => {
                   // Add this line for debugging
                   if (message.role === 'assistant') {
@@ -2999,10 +3001,10 @@ export function TapAiDialog({
                     </div>
                   </div>
                 )}
+                
+                {/* Add the missing messagesEndRef div */}
+                <div ref={messagesEndRef} />
               </div>
-              
-              {/* Add this div at the end of your messages */}
-              <div ref={messagesEndRef} />
             </div>
 
             <div className="px-4 py-2 border-gray-100 max-w-3xl mx-auto w-full">

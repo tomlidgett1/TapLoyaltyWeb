@@ -1,0 +1,76 @@
+"use client"
+
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardHeader, 
+  CardTitle
+} from "@/components/ui/card"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+
+interface AgentTasks {
+  rewardsGeneration: boolean
+  reEngagement: boolean
+  bannerCreation: boolean
+  emailMarketing: boolean
+  customerMessaging: boolean
+  performanceAnalysis: boolean
+}
+
+interface AgentTasksFormProps {
+  data: AgentTasks
+  onChange: (data: AgentTasks) => void
+}
+
+const taskDescriptions = {
+  rewardsGeneration: "Automatically generate targeted rewards for customers based on their behavior and preferences.",
+  reEngagement: "Create campaigns to re-engage dormant or churned customers.",
+  bannerCreation: "Design promotional banners for your store's app and website.",
+  emailMarketing: "Create and send email marketing campaigns to customers.",
+  customerMessaging: "Send personalized messages to customers based on their behavior.",
+  performanceAnalysis: "Analyze the performance of your loyalty program and provide insights."
+}
+
+export function AgentTasksForm({ data, onChange }: AgentTasksFormProps) {
+  
+  const handleSwitchChange = (task: keyof AgentTasks) => {
+    onChange({
+      ...data,
+      [task]: !data[task]
+    })
+  }
+  
+  return (
+    <Card className="border-none shadow-none">
+      <CardHeader className="px-0">
+        <CardTitle className="text-xl">Agent Tasks</CardTitle>
+        <CardDescription>
+          Enable or disable specific tasks for your Tap Agent.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6 px-0">
+        <div className="space-y-6">
+          {(Object.keys(data) as Array<keyof AgentTasks>).map((task) => (
+            <div key={task} className="flex flex-col space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor={task} className="font-medium capitalize">
+                  {task.replace(/([A-Z])/g, ' $1').trim()}
+                </Label>
+                <Switch
+                  id={task}
+                  checked={data[task]}
+                  onCheckedChange={() => handleSwitchChange(task)}
+                />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {taskDescriptions[task]}
+              </p>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
+} 

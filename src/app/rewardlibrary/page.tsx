@@ -527,7 +527,7 @@ export default function RewardLibraryPage() {
 
   return (
     <PageTransition>
-      <div className="p-4 md:p-6 max-w-7xl mx-auto">
+      <div className="p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>

@@ -1070,7 +1070,7 @@ export default function RewardsPage() {
             </Button>
           </div>
           
-          <div className="p-4">
+          <div className="p-6">
             <div className="flex justify-between items-start mb-3">
               <Badge variant="outline" className={cn(
                 "rounded-md",
@@ -1192,7 +1192,7 @@ export default function RewardsPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto">
+    <div className="p-6">
       <div>
         <div className="flex items-center justify-between mb-4">
           <div>

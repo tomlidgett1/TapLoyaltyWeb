@@ -1,0 +1,3314 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { PageTransition } from "@/components/page-transition"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { Separator } from "@/components/ui/separator"
+import { Progress } from "@/components/ui/progress"
+import { 
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { useToast } from "@/components/ui/use-toast"
+import {
+  LayoutDashboard,
+  FileQuestion,
+  Cloud,
+  Percent,
+  Target,
+  AlertTriangle,
+  ShieldCheck,
+  LineChart,
+  Lightbulb,
+  CalendarRange,
+  Brain,
+  BarChart3,
+  Building2,
+  Receipt,
+  BadgeDollarSign,
+  Users,
+  Gift, 
+  Settings, 
+  Info,
+  ArrowRight,
+  DollarSign,
+  Plus,
+  CheckCircle,
+  MessageSquareText,
+  Bell, 
+  Calendar,
+  FileText, 
+  BarChart,
+  Clock, 
+  Sparkles,
+  Zap,
+  Star,
+  MessageSquare as Message,
+  Star as StarIcon,
+  Clipboard,
+  ClipboardList,
+  UserCircle,
+  Cake,
+  Trophy,
+  Mail,
+  ShoppingBag
+} from "lucide-react"
+
+// Import necessary Firebase dependencies
+import { db } from "@/lib/firebase"
+import { doc, setDoc, getDoc, collection, getDocs, query, where } from "firebase/firestore" 
+import { useAuth } from "@/contexts/auth-context"
+
+// Add the gradient text CSS
+const gradientTextStyle = `
+.gradient-text {
+  background: linear-gradient(90deg, #3D8BFF 0%, #FF8A00 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-weight: 700;
+}
+
+.apple-switch {
+  background-color: #007AFF;
+}
+
+.apple-card {
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  border: none;
+}
+
+.apple-button {
+  background-color: #007AFF;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.apple-button:hover {
+  background-color: #0062CC;
+}
+`;
+
+export default function TapAgentPage() {
+  // Get the current user's auth state
+  const { user } = useAuth()
+  
+  // State for active tab
+  const [activeTab, setActiveTab] = useState<string>("business-brand")
+  const [completionStatus, setCompletionStatus] = useState<Record<string, number>>({
+    "business-brand": 0,
+    "product-pricing": 0,
+    "financial": 0,
+    "customer-segments": 0,
+    "reward-constraints": 0,
+    "messaging": 0
+  })
+  const [overallProgress, setOverallProgress] = useState<number>(0)
+  const { toast } = useToast()
+  
+  // Add state for merchant name
+  const [merchantName, setMerchantName] = useState<string>("")
+  
+  // Sample form state for business and brand section
+  const [businessBrand, setBusinessBrand] = useState({
+    merchantId: "", // Keep merchantId in state but hide the input field
+    brandPalette: "",
+    brandPrimaryColor: "#007AFF",
+    brandSecondaryColor: "#FFFFFF",
+    brandAccentColor: "#FF3B30",
+    logoUrl: "",
+    toneOfVoice: [] as string[],
+    agentTasks: {} as Record<string, boolean>,
+    openingHours: {} as {[day: string]: {isOpen: boolean, openTime: string, closeTime: string}},
+    businessContext: "" // Add this new field
+  })
+
+  // Add a useEffect to load settings from the settings page
+  useEffect(() => {
+    // This will be called when the component mounts
+    async function loadSettings() {
+      try {
+        // Call Firestore to get the merchant data
+        // For now, setting some default values to demonstrate
+        const defaultHours = {} as {[day: string]: {isOpen: boolean, openTime: string, closeTime: string}};
+        const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        
+        daysOfWeek.forEach(day => {
+          defaultHours[day.toLowerCase()] = {
+            isOpen: true,
+            openTime: "09:00",
+            closeTime: "17:00"
+          }
+        });
+        
+        // Default agent tasks
+        const defaultAgentTasks = {
+          rewards: false,
+          banners: false,
+          messages: false,
+          "re-engagement": false,
+          email: false,
+          analysis: false
+        };
+        
+        // Update the state with the imported values
+        setBusinessBrand(prev => ({
+          ...prev,
+          openingHours: defaultHours,
+          agentTasks: defaultAgentTasks,
+          // We would also set merchantId here from the fetched data
+          merchantId: "merchant_12345"
+        }));
+      } catch (error) {
+        console.error("Error loading settings:", error);
+      }
+    }
+    
+    loadSettings();
+  }, []);
+
+  // Initialize the productPricing state with an empty skus array
+  const [productPricing, setProductPricing] = useState({
+    skuList: [] as {name: string, category: string, price: string, cost: string}[],
+    heroItems: [] as string[],
+    lowVelocityItems: [] as string[],
+    averageBasketSize: "",
+    basketComposition: [] as {category: string, percentage: number}[],
+    newHeroItem: "",
+    newLowVelocityItem: "",
+    newBasketCategory: "",
+    newBasketPercentage: 0,
+    newSkuName: "",
+    newSkuCategory: "",
+    newSkuPrice: "",
+    newSkuCost: "",
+    productCategory: "",
+    skus: [] as { name: string, category: string, price: string, cost: string }[],
+    heroProducts: "",
+    lowVelocityProducts: "",
+    pricingStrategy: "",
+    competitivePressure: "",
+    seasonalPricing: "",
+    bundlingStrategy: ""
+  })
+
+  // Add a new state for the financial guard-rails section after the productPricing state
+  const [financialGuardrails, setFinancialGuardrails] = useState({
+    targetGrossMargin: "",
+    monthlyRewardBudget: "",
+    rewardBudgetType: "fixed", // 'fixed' or 'percentage'
+    maxCostPerAcquisition: "",
+    maxDiscountPercentage: "",
+    targetROAS: "",
+    minRewardValue: "",
+    maxRewardValue: "",
+    avgRewardValue: "",
+    minPurchaseRequirement: ""
+  })
+
+  // Add a new state for messaging and creative inputs
+  const [messagingInputs, setMessagingInputs] = useState({
+    bannerSlots: "1",
+    bannerDimensions: "1200x628",
+    copyLengthLimits: "",
+    quietHoursStart: "21:00",
+    quietHoursEnd: "07:00",
+    preferredEmojis: "",
+    ctaLandingRoute: "/rewards/{id}",
+    restrictedKeywords: ""
+  })
+
+  // Add state for customer segments
+  const [customerSegments, setCustomerSegments] = useState({
+    loyaltyTiers: [
+      { 
+        name: "Bronze", 
+        order: 1,
+        description: "Basic membership benefits",
+        conditions: {
+          lifetimeTransactions: { enabled: true, value: 0 },
+          lifetimeSpend: { enabled: true, value: 0 },
+          numberOfRedemptions: { enabled: false, value: 0 }
+        }
+      },
+      { 
+        name: "Silver", 
+        order: 2,
+        description: "Enhanced membership benefits",
+        conditions: {
+          lifetimeTransactions: { enabled: true, value: 10 },
+          lifetimeSpend: { enabled: true, value: 500 },
+          numberOfRedemptions: { enabled: false, value: 0 }
+        }
+      },
+      { 
+        name: "Gold", 
+        order: 3,
+        description: "Premium membership benefits",
+        conditions: {
+          lifetimeTransactions: { enabled: true, value: 25 },
+          lifetimeSpend: { enabled: true, value: 1500 },
+          numberOfRedemptions: { enabled: true, value: 5 }
+        }
+      }
+    ],
+    dormantThreshold: "30",
+    vipCriteria: "",
+    demographicTags: [] as string[],
+    // Additional cohort settings
+    newCustomerDuration: "30",
+    frequentVisitorThreshold: "4",
+    frequentVisitorPeriod: "30",
+    highSpenderThreshold: "100",
+    highSpenderPeriod: "30",
+    seasonalVisitors: [] as string[],
+    birthdayRewards: true,
+    anniversaryRewards: true,
+    // Add cohort thresholds
+    activeThreshold: "30",
+    newCustomerThreshold: "30",
+    churnedThreshold: "180",
+    resurrectedThreshold: "60",
+    dormantCohortThreshold: "90",
+    // Add escalation strategy
+    escalationStrategy: "value_increase",
+    // Initialize VIP thresholds with empty strings
+    vipSpendThreshold: "",
+    vipSpendPeriod: "",
+    vipVisitThreshold: "",
+    birthdayRewardDays: "7",
+    transactionMilestones: { enabled: false, interval: "10" },
+    redemptionMilestones: { enabled: false, interval: "5" },
+    spendingMilestones: { enabled: false, amount: "500" },
+    // Track threshold validation errors - initialize with empty strings
+    cohortThresholdErrors: {
+      activeThreshold: "",
+      dormantCohortThreshold: "",
+      churnedThreshold: "",
+      resurrectedThreshold: "",
+      newCustomerThreshold: ""
+    }
+  })
+
+  // Add state for reward constraints
+  const [rewardConstraints, setRewardConstraints] = useState({
+    allowedOfferTypes: {
+      freeItem: true,
+      percentageDiscount: true,
+      fixedAmount: true,
+      buyXGetY: true,
+      mysteryGift: false
+    },
+    dailyRedemptionLimit: "3",
+    redemptionWindow: "7",
+    minimumDaysBetweenRewards: "1",
+    rewardLifespanMin: "1",
+    rewardLifespanMax: "7",
+    concurrencyCeiling: "4",
+    displayFrequency: "daily",
+    displayLocation: ["home_screen", "checkout"] as string[],
+    minPurchaseRequirement: "10"
+  });
+
+  // Add remaining advanced section states
+  const [campaignSettings, setCampaignSettings] = useState({
+    frequencyMin: "1",
+    frequencyMax: "4",
+    aBTestDuration: "14",
+    testGroupSize: "10"
+  })
+
+  // Add a loading state for Firestore operations
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  
+  // Initialize the objectiveMatrix state with all required properties
+  const [objectiveMatrix, setObjectiveMatrix] = useState({
+    businessObjectives: [
+      {
+        name: "increase_revenue",
+        description: "Increase overall revenue",
+        priority: 10
+      },
+      {
+        name: "customer_retention",
+        description: "Keep existing customers coming back",
+        priority: 8
+      }
+    ],
+    customerObjectives: {
+      value_for_money: 8,
+      convenience: 7,
+      quality: 9,
+      exclusivity: 5,
+      personalization: 6,
+      novelty: 4
+    },
+    seasonalObjectives: [
+      {
+        season: "Summer",
+        objective: "Increase cold beverage sales",
+        startDate: "2023-06-01",
+        endDate: "2023-08-31"
+      }
+    ],
+    // Add this property to fix the type errors
+    objectives: [] as any[],
+    newObjective: {
+      userType: "",
+      objective: "",
+      importance: "",
+      rewardType: "",
+      example: ""
+    }
+  });
+  
+  // Update function for business and brand state
+  const updateBusinessBrand = (key: string, value: any) => {
+    setBusinessBrand(prev => ({
+      ...prev,
+      [key]: value
+    }))
+    
+    // Calculate section completion
+    const requiredFields = ["merchantId", "brandPrimaryColor", "toneOfVoice"]
+    const filledRequired = requiredFields.filter(field => {
+      if (field === "toneOfVoice") {
+        return businessBrand.toneOfVoice.length > 0;
+      }
+      return businessBrand[field as keyof typeof businessBrand]
+    }).length;
+    const completionPercentage = Math.round((filledRequired / requiredFields.length) * 100)
+    
+    setCompletionStatus(prev => ({
+      ...prev,
+      "business-brand": completionPercentage
+    }))
+  }
+  
+  // Add a new update function for product & pricing state below the updateBusinessBrand function
+  const updateProductPricing = (key: string, value: any) => {
+    setProductPricing(prev => ({
+      ...prev,
+      [key]: value
+    }))
+    
+    // Calculate section completion
+    const requiredFields = ["skuList", "heroItems", "averageBasketSize"]
+    const filledRequired = requiredFields.filter(field => productPricing[field as keyof typeof productPricing]).length
+    const completionPercentage = Math.round((filledRequired / requiredFields.length) * 100)
+    
+    setCompletionStatus(prev => ({
+      ...prev,
+      "product-pricing": completionPercentage
+    }))
+  }
+  
+  // Add a new update function for financial guard-rails state
+  const updateFinancialGuardrails = (key: string, value: any) => {
+    setFinancialGuardrails(prev => ({
+      ...prev,
+      [key]: value
+    }))
+    
+    // Calculate section completion
+    const requiredFields = ["targetGrossMargin", "monthlyRewardBudget", "maxCostPerAcquisition", "maxDiscountPercentage", "minRewardValue", "maxRewardValue", "avgRewardValue", "minPurchaseRequirement"]
+    const filledRequired = requiredFields.filter(field => financialGuardrails[field as keyof typeof financialGuardrails]).length
+    const completionPercentage = Math.round((filledRequired / requiredFields.length) * 100)
+    
+    setCompletionStatus(prev => ({
+      ...prev,
+      "financial": completionPercentage
+    }))
+  }
+  
+  // Add an update function for messaging inputs
+  const updateMessagingInputs = (key: string, value: any) => {
+    setMessagingInputs(prev => ({
+      ...prev,
+      [key]: value
+    }))
+    
+    // Calculate section completion for the messaging tab
+    const requiredFields = ["bannerSlots", "quietHoursStart", "quietHoursEnd"]
+    const filledRequired = requiredFields.filter(field => messagingInputs[field as keyof typeof messagingInputs]).length
+    const completionPercentage = Math.round((filledRequired / requiredFields.length) * 100)
+    
+    setCompletionStatus(prev => ({
+      ...prev,
+      "messaging": completionPercentage
+    }))
+  }
+  
+  // Add a new update function for customer segments
+  const updateCustomerSegments = (key: string, value: any) => {
+    // Create a new state object with the updated value
+    const updatedSegments = {
+      ...customerSegments,
+      [key]: value
+    };
+    
+    // Ensure cohortThresholdErrors exists
+    if (!updatedSegments.cohortThresholdErrors) {
+      updatedSegments.cohortThresholdErrors = {
+        activeThreshold: "",
+        dormantCohortThreshold: "",
+        churnedThreshold: "",
+        resurrectedThreshold: "",
+        newCustomerThreshold: ""
+      };
+    }
+    
+    // If this is a cohort threshold, validate the thresholds
+    if ([
+      'activeThreshold', 
+      'dormantCohortThreshold', 
+      'churnedThreshold', 
+      'resurrectedThreshold'
+    ].includes(key)) {
+      // Validate cohort thresholds
+      validateCohortThresholds(updatedSegments, key);
+    } else {
+      // Set state with the updated value
+      setCustomerSegments(updatedSegments);
+    }
+    
+    // Calculate section completion
+    const requiredFields = [
+      "loyaltyTiers", 
+      "dormantThreshold", 
+      "activeThreshold", 
+      "newCustomerThreshold", 
+      "churnedThreshold", 
+      "resurrectedThreshold", 
+      "dormantCohortThreshold",
+      "vipSpendThreshold",
+      "vipSpendPeriod",
+      "vipVisitThreshold",
+      "birthdayRewardDays",
+      "transactionMilestones",
+      "redemptionMilestones",
+      "spendingMilestones"
+    ]
+    const filledRequired = requiredFields.filter(field => updatedSegments[field as keyof typeof updatedSegments]).length
+    const completionPercentage = Math.round((filledRequired / requiredFields.length) * 100)
+    
+    setCompletionStatus(prev => ({
+      ...prev,
+      ["customer-segments"]: completionPercentage
+    }))
+  }
+  
+  // Validate cohort thresholds to ensure they are mutually exclusive and collectively exhaustive
+  const validateCohortThresholds = (updatedSegments: any, changedKey: string) => {
+    // Ensure cohortThresholdErrors exists with default values if not present
+    const errors = { 
+      ...(updatedSegments.cohortThresholdErrors || {
+        activeThreshold: "",
+        dormantCohortThreshold: "",
+        churnedThreshold: "",
+        resurrectedThreshold: "",
+        newCustomerThreshold: ""
+      }) 
+    };
+    let hasErrors = false;
+    
+    // Convert string values to numbers for comparison
+    const active = parseInt(updatedSegments.activeThreshold) || 0;
+    const dormant = parseInt(updatedSegments.dormantCohortThreshold) || 0;
+    const churned = parseInt(updatedSegments.churnedThreshold) || 0;
+    const resurrected = parseInt(updatedSegments.resurrectedThreshold) || 0;
+    
+    // Clear previous errors for the changed field
+    errors[changedKey] = "";
+    
+    // Validate that thresholds are in ascending order: active < dormant < churned
+    if (active >= dormant) {
+      errors.activeThreshold = "Active threshold must be less than Dormant threshold";
+      errors.dormantCohortThreshold = "Dormant threshold must be greater than Active threshold";
+      hasErrors = true;
+    }
+    
+    if (dormant >= churned) {
+      errors.dormantCohortThreshold = "Dormant threshold must be less than Churned threshold";
+      errors.churnedThreshold = "Churned threshold must be greater than Dormant threshold";
+      hasErrors = true;
+    }
+    
+    // Validate that resurrected threshold is a reasonable value (positive)
+    if (resurrected <= 0) {
+      errors.resurrectedThreshold = "Resurrected threshold must be greater than 0";
+      hasErrors = true;
+    }
+    
+    // Update the state with new values and any validation errors
+    setCustomerSegments({
+      ...updatedSegments,
+      cohortThresholdErrors: errors
+    });
+  }
+  
+  // Add update function for reward constraints
+  const updateRewardConstraints = (field: string, value: string | string[]) => {
+    setRewardConstraints(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    // Calculate section completion
+    const requiredFields = ["dailyRedemptionLimit", "redemptionWindow", "allowedOfferTypes"]
+    const allowedOfferTypesValid = Object.values(rewardConstraints.allowedOfferTypes).some(v => v === true);
+    const filledRequired = requiredFields.filter(field => {
+      if (field === "allowedOfferTypes") {
+        return allowedOfferTypesValid;
+      }
+      return rewardConstraints[field as keyof typeof rewardConstraints];
+    }).length;
+    const completionPercentage = Math.round((filledRequired / requiredFields.length) * 100)
+    
+    setCompletionStatus(prev => ({
+      ...prev,
+      ["reward-constraints"]: completionPercentage
+    }));
+  };
+  
+  // Calculate overall progress whenever section completion changes
+  useEffect(() => {
+    const sectionValues = Object.values(completionStatus)
+    const averageCompletion = sectionValues.reduce((sum, value) => sum + value, 0) / sectionValues.length
+    setOverallProgress(Math.round(averageCompletion))
+  }, [completionStatus])
+  
+  // Update saveProgress to save to Firestore but exclude specific settings
+  const saveProgress = async () => {
+    setIsSaving(true);
+    setSaveError(null);
+    
+    try {
+      if (!user?.uid) throw new Error("User not authenticated");
+      
+      // Create a reference to the agent document
+      const agentDocRef = doc(db, "agent", user.uid);
+      
+      // Gather all settings to save
+      const settings = {
+        businessBrand,
+        productPricing,
+        financialGuardrails,
+        messagingInputs,
+        rewardConstraints
+      };
+      
+      // Save to Firestore
+      await setDoc(agentDocRef, settings, { merge: true });
+      
+      // Show success message
+      toast({
+        title: "Progress Saved",
+        description: "Your Tap Agent configuration has been saved.",
+      });
+    } catch (error) {
+      console.error("Error saving agent settings:", error)
+      setSaveError("Failed to save settings. Please try again.")
+      
+      toast({
+        title: "Save Error",
+        description: "There was a problem saving your settings. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+  
+  // Add useEffect to load agent settings from Firestore
+  useEffect(() => {
+    // Skip if user is not authenticated
+    if (!user) return
+    
+    async function loadAgentSettings() {
+      try {
+        // Fix for 'user' is possibly 'null'
+        if (!user) return;
+        
+        const agentDocRef = doc(db, "agent", user.uid)
+        const agentDoc = await getDoc(agentDocRef)
+        
+        if (agentDoc.exists()) {
+          const data = agentDoc.data()
+          
+          // Update each state with the loaded data
+          if (data.businessBrand) {
+            // Convert agentTasks from array to object if it's in the old format
+            if (data.businessBrand.agentTasks && Array.isArray(data.businessBrand.agentTasks)) {
+              const tasksObject = {} as Record<string, boolean>;
+              data.businessBrand.agentTasks.forEach((taskId: string) => {
+                tasksObject[taskId] = true;
+              });
+              data.businessBrand.agentTasks = tasksObject;
+            }
+            
+            setBusinessBrand(data.businessBrand);
+          }
+          if (data.productPricing) {
+            // Ensure newHeroItem and newLowVelocityItem are initialized properly
+            setProductPricing({
+              ...data.productPricing,
+              newHeroItem: data.productPricing.newHeroItem || "",
+              newLowVelocityItem: data.productPricing.newLowVelocityItem || ""
+            });
+          }
+          if (data.financialGuardrails) setFinancialGuardrails(data.financialGuardrails)
+          if (data.messagingInputs) setMessagingInputs(data.messagingInputs)
+          if (data.customerSegments) {
+            // Ensure loyaltyTiers has the correct structure
+            if (data.customerSegments.loyaltyTiers) {
+              data.customerSegments.loyaltyTiers = ensureCorrectTierStructure(data.customerSegments.loyaltyTiers);
+            }
+            
+            // If we have dormancySettings but not the new cohort thresholds in customerSegments,
+            // migrate those values to the customerSegments
+            if (data.dormancySettings && !data.customerSegments.activeThreshold) {
+              data.customerSegments = {
+                ...data.customerSegments,
+                activeThreshold: data.dormancySettings.activeThreshold || "30",
+                newCustomerThreshold: data.dormancySettings.newCustomerThreshold || "30",
+                churnedThreshold: data.dormancySettings.churnedThreshold || "180",
+                resurrectedThreshold: data.dormancySettings.resurrectedThreshold || "60",
+                dormantCohortThreshold: data.dormancySettings.dormantThreshold || "90",
+                escalationStrategy: data.dormancySettings.escalationStrategy || "value_increase"
+              };
+            }
+            
+            setCustomerSegments(data.customerSegments);
+          }
+          if (data.rewardConstraints) setRewardConstraints(data.rewardConstraints)
+          
+          // Recalculate progress status after loading
+          calculateOverallProgress()
+        }
+      } catch (error) {
+        console.error("Error loading agent settings:", error)
+      }
+    }
+    
+    loadAgentSettings()
+  }, [user])
+  
+  // Function to calculate overall progress
+  const calculateOverallProgress = () => {
+    const sectionValues = Object.values(completionStatus)
+    const averageCompletion = sectionValues.reduce((sum, value) => sum + value, 0) / sectionValues.length
+    setOverallProgress(Math.round(averageCompletion))
+  }
+  
+  // Update the useEffect that watches completion status to use the new function
+  useEffect(() => {
+    calculateOverallProgress()
+  }, [completionStatus])
+
+  // Add these helper functions for managing loyalty tiers
+  const addLoyaltyTier = () => {
+    setCustomerSegments(prev => {
+      const newTier = { 
+        name: "", 
+        order: prev.loyaltyTiers.length + 1,
+        description: "",
+        conditions: {
+          lifetimeTransactions: { enabled: true, value: 0 },
+          lifetimeSpend: { enabled: true, value: 0 },
+          numberOfRedemptions: { enabled: false, value: 0 }
+        }
+      };
+      
+      return {
+      ...prev,
+        loyaltyTiers: [...prev.loyaltyTiers, newTier]
+      };
+    });
+  }
+
+  const removeLoyaltyTier = (index: number) => {
+    setCustomerSegments(prev => ({
+      ...prev,
+      loyaltyTiers: prev.loyaltyTiers.filter((_, i) => i !== index)
+    }));
+  }
+
+  const updateLoyaltyTier = (index: number, field: string, value: any) => {
+    setCustomerSegments(prev => {
+      const updatedTiers = [...prev.loyaltyTiers];
+      updatedTiers[index] = {
+        ...updatedTiers[index],
+        [field]: field === 'minVisits' || field === 'maxVisits' 
+          ? value === '' || value === 'null' || value === '∞' ? null : Number(value)
+          : value
+      };
+      return {
+        ...prev,
+        loyaltyTiers: updatedTiers
+      };
+    });
+  }
+
+  // Add this function to ensure each tier has the correct structure
+  const ensureCorrectTierStructure = (tiers: any[] | any) => {
+    if (!Array.isArray(tiers)) {
+      return [
+        { 
+          name: "Bronze", 
+          order: 1,
+          description: "Basic membership benefits",
+          conditions: {
+            lifetimeTransactions: { enabled: true, value: 0 },
+            lifetimeSpend: { enabled: true, value: 0 },
+            numberOfRedemptions: { enabled: false, value: 0 }
+          }
+        },
+        { 
+          name: "Silver", 
+          order: 2,
+          description: "Enhanced membership benefits",
+          conditions: {
+            lifetimeTransactions: { enabled: true, value: 10 },
+            lifetimeSpend: { enabled: true, value: 500 },
+            numberOfRedemptions: { enabled: false, value: 0 }
+          }
+        },
+        { 
+          name: "Gold", 
+          order: 3,
+          description: "Premium membership benefits",
+          conditions: {
+            lifetimeTransactions: { enabled: true, value: 25 },
+            lifetimeSpend: { enabled: true, value: 1500 },
+            numberOfRedemptions: { enabled: true, value: 5 }
+          }
+        }
+      ];
+    }
+    
+    return tiers.map(tier => {
+      // Ensure each tier has the correct structure
+      if (!tier.conditions || !tier.conditions.lifetimeTransactions) {
+        return {
+          name: tier.name || "",
+          order: tier.order || 1,
+          description: tier.description || "",
+          conditions: {
+            lifetimeTransactions: { enabled: true, value: 0 },
+            lifetimeSpend: { enabled: true, value: 0 },
+            numberOfRedemptions: { enabled: false, value: 0 }
+          }
+        };
+      }
+      return tier;
+    });
+  };
+
+  // In the component, add state for merchant ID
+  const [merchantId, setMerchantId] = useState("")
+
+  // Add a function to load membership tiers from Firestore
+  const loadMembershipTiers = async () => {
+    console.log("loadMembershipTiers called with merchantId:", merchantId);
+    if (!user || !merchantId) {
+      console.log("Missing user or merchantId, skipping load");
+      return;
+    }
+    
+    try {
+      // First check if the merchant exists
+      const merchantRef = doc(db, `merchants/${merchantId}`);
+      const merchantDoc = await getDoc(merchantRef);
+      
+      if (!merchantDoc.exists()) {
+        console.log("Merchant document doesn't exist, creating it");
+        // Create the merchant document if it doesn't exist
+        await setDoc(merchantRef, {
+          name: "Your Business",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          createdBy: user.uid
+        });
+      }
+      
+      // Get memberships collection for this merchant
+      const membershipsRef = collection(db, `merchants/${merchantId}/memberships`);
+      console.log("Fetching memberships from path:", `merchants/${merchantId}/memberships`);
+      
+      const membershipsSnapshot = await getDocs(membershipsRef);
+      console.log("Memberships snapshot:", membershipsSnapshot.size, "documents found");
+      
+      if (!membershipsSnapshot.empty) {
+        // Convert the memberships to the format we need
+        const tiers = membershipsSnapshot.docs.map(doc => {
+          const data = doc.data();
+          console.log("Membership document data:", doc.id, data);
+          
+          return {
+            id: doc.id, // Store the document ID for updates
+            name: data.name || "",
+            order: data.order || 0,
+            description: data.description || "",
+            conditions: {
+              lifetimeTransactions: data.conditions?.lifetimeTransactions || { enabled: false, value: 0 },
+              lifetimeSpend: data.conditions?.lifetimeSpend || { enabled: false, value: 0 },
+              numberOfRedemptions: data.conditions?.numberOfRedemptions || { enabled: false, value: 0 }
+            },
+            isActive: data.isActive !== undefined ? data.isActive : true
+          };
+        }).sort((a, b) => a.order - b.order); // Sort by order
+        
+        console.log("Processed membership tiers:", tiers);
+        
+        // Update the state with the loaded tiers
+        updateCustomerSegments('loyaltyTiers', tiers);
+        
+        toast({
+          title: "Membership Tiers Loaded",
+          description: `Loaded ${tiers.length} membership tiers from your account.`,
+        });
+      } else {
+        console.log("No membership documents found, creating default tiers");
+        
+        // Create default membership tiers
+        const defaultTiers = [
+          { 
+            name: "Bronze", 
+            order: 1,
+            description: "Basic membership benefits",
+            conditions: {
+              lifetimeTransactions: { enabled: true, value: 0 },
+              lifetimeSpend: { enabled: true, value: 0 },
+              numberOfRedemptions: { enabled: false, value: 0 }
+            },
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          },
+          { 
+            name: "Silver", 
+            order: 2,
+            description: "Enhanced membership benefits",
+            conditions: {
+              lifetimeTransactions: { enabled: true, value: 10 },
+              lifetimeSpend: { enabled: true, value: 500 },
+              numberOfRedemptions: { enabled: false, value: 0 }
+            },
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          },
+          { 
+            name: "Gold", 
+            order: 3,
+            description: "Premium membership benefits",
+            conditions: {
+              lifetimeTransactions: { enabled: true, value: 25 },
+              lifetimeSpend: { enabled: true, value: 1500 },
+              numberOfRedemptions: { enabled: true, value: 5 }
+            },
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        ];
+        
+        // Create the membership documents in Firestore
+        for (const tier of defaultTiers) {
+          const newDocRef = doc(collection(db, `merchants/${merchantId}/memberships`));
+          await setDoc(newDocRef, tier);
+          console.log("Created default tier:", tier.name, "with ID:", newDocRef.id);
+        }
+        
+        // Update the state with the default tiers
+        const tiersWithIds = await Promise.all(defaultTiers.map(async (tier) => {
+          const querySnapshot = await getDocs(
+            query(
+              collection(db, `merchants/${merchantId}/memberships`),
+              where("name", "==", tier.name),
+              where("order", "==", tier.order)
+            )
+          );
+          
+          if (!querySnapshot.empty) {
+            const doc = querySnapshot.docs[0];
+            return { ...tier, id: doc.id };
+          }
+          
+          return tier;
+        }));
+        
+        updateCustomerSegments('loyaltyTiers', tiersWithIds);
+        
+        toast({
+          title: "Default Membership Tiers Created",
+          description: "We've created default Bronze, Silver, and Gold tiers for you.",
+        });
+      }
+    } catch (error) {
+      console.error("Error loading/creating membership tiers:", error);
+      toast({
+        title: "Error with Membership Tiers",
+        description: "There was a problem with your membership tiers.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Update the saveMembershipTiers function
+  const saveMembershipTiers = async () => {
+    console.log("saveMembershipTiers called with merchantId:", merchantId);
+    if (!user || !merchantId) {
+      console.log("Missing user or merchantId, skipping save");
+      return;
+    }
+    
+    try {
+      setIsSaving(true);
+      console.log("Saving membership tiers:", customerSegments.loyaltyTiers);
+      
+      // Get existing membership IDs to track deletions
+      const membershipsRef = collection(db, `merchants/${merchantId}/memberships`);
+      const existingSnapshot = await getDocs(membershipsRef);
+      const existingIds = new Set(existingSnapshot.docs.map(doc => doc.id));
+      const updatedIds = new Set();
+      
+      // For each tier in the current state, create or update the membership document
+      for (const tier of customerSegments.loyaltyTiers) {
+        console.log("Processing tier for save:", tier);
+        
+        const membershipData = {
+          name: tier.name,
+          order: tier.order,
+          description: tier.description,
+          conditions: {
+            lifetimeTransactions: tier.conditions.lifetimeTransactions,
+            lifetimeSpend: tier.conditions.lifetimeSpend,
+            numberOfRedemptions: tier.conditions.numberOfRedemptions
+          },
+          isActive: (tier as any).isActive !== undefined ? (tier as any).isActive : true,
+          updatedAt: new Date()
+        };
+        
+        // If the tier has an ID, update the existing document
+        if ((tier as any).id) {
+          console.log("Updating existing tier with ID:", (tier as any).id);
+          await setDoc(doc(db, `merchants/${merchantId}/memberships/${(tier as any).id}`), membershipData, { merge: true });
+          updatedIds.add((tier as any).id);
+        } else {
+          // Otherwise create a new document
+          console.log("Creating new tier document");
+          const newDocRef = doc(collection(db, `merchants/${merchantId}/memberships`));
+          await setDoc(newDocRef, {
+            ...membershipData,
+            createdAt: new Date()
+          });
+          console.log("Created new tier with ID:", newDocRef.id);
+          updatedIds.add(newDocRef.id);
+        }
+      }
+      
+      // Check for tiers that were deleted in the UI and remove them from Firestore
+      const deletedIds = [...existingIds].filter(id => !updatedIds.has(id));
+      console.log("Deleted tier IDs:", deletedIds);
+      
+      for (const id of deletedIds) {
+        console.log("Deleting tier with ID:", id);
+        await setDoc(doc(db, `merchants/${merchantId}/memberships/${id}`), {
+          isActive: false,
+          deletedAt: new Date(),
+          updatedAt: new Date()
+        }, { merge: true });
+      }
+      
+      toast({
+        title: "Membership Tiers Saved",
+        description: "Your loyalty tier definitions have been saved.",
+      });
+      
+      // Reload the tiers to get any new IDs
+      loadMembershipTiers();
+    } catch (error) {
+      console.error("Error saving membership tiers:", error);
+      toast({
+        title: "Error Saving Tiers",
+        description: "There was a problem saving your membership tiers.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Update the useEffect to load merchant ID and membership tiers
+  useEffect(() => {
+    console.log("merchantId useEffect triggered with value:", merchantId);
+    if (!user) return;
+    
+    async function loadInitialData() {
+      try {
+        console.log("loadInitialData called");
+        // First load the agent settings to get the merchant ID
+        // Fix for user?.uid possibly being undefined
+        if (!user?.uid) return;
+        
+        const agentDocRef = doc(db, "agent", user.uid);
+        const agentDoc = await getDoc(agentDocRef);
+        
+        if (agentDoc.exists()) {
+          const data = agentDoc.data();
+          console.log("Agent document data:", data);
+          
+          // If we have a merchant ID, set it
+          if (data.businessBrand && data.businessBrand.merchantId) {
+            console.log("Setting merchantId to:", data.businessBrand.merchantId);
+            setMerchantId(data.businessBrand.merchantId);
+          } else {
+            console.log("No merchantId found in agent document");
+          }
+          
+          // Load the rest of the agent settings as before
+          if (data.businessBrand) setBusinessBrand(data.businessBrand);
+          if (data.productPricing) {
+            // Ensure newHeroItem and newLowVelocityItem are initialized properly
+            setProductPricing({
+              ...data.productPricing,
+              newHeroItem: data.productPricing.newHeroItem || "",
+              newLowVelocityItem: data.productPricing.newLowVelocityItem || ""
+            });
+          }
+          if (data.financialGuardrails) setFinancialGuardrails(data.financialGuardrails);
+          if (data.messagingInputs) setMessagingInputs(data.messagingInputs);
+          if (data.customerSegments) {
+            // We'll load membership tiers separately, but still load other customer segment settings
+            setCustomerSegments(data.customerSegments);
+          }
+          if (data.rewardConstraints) setRewardConstraints(data.rewardConstraints);
+          
+        } else {
+          console.log("Agent document does not exist");
+        }
+      } catch (error) {
+        console.error("Error loading initial data:", error);
+      }
+    }
+    
+    loadInitialData();
+  }, [user]);
+
+  // Add a separate useEffect to load membership tiers when merchantId changes
+  useEffect(() => {
+    console.log("merchantId useEffect triggered with value:", merchantId);
+    if (merchantId) {
+      loadMembershipTiers();
+      
+      // Fetch merchant name when merchantId is available
+      const fetchMerchantName = async () => {
+        try {
+          const merchantRef = doc(db, 'merchants', merchantId);
+          const merchantDoc = await getDoc(merchantRef);
+          
+          if (merchantDoc.exists()) {
+            const data = merchantDoc.data();
+            // Look for merchant name in different possible field names
+            const name = data.merchantName || data.name || data.tradingName || data.businessName || "";
+            setMerchantName(name);
+          }
+        } catch (error) {
+          console.error("Error fetching merchant name:", error);
+        }
+      };
+      
+      fetchMerchantName();
+    }
+  }, [merchantId]);
+
+  // Add these functions to handle the objective matrix updates
+  const updateObjectiveMatrix = (
+    section: 'businessObjectives' | 'seasonalObjectives',
+    index: number,
+    field: string,
+    value: any
+  ) => {
+    setObjectiveMatrix(prev => {
+      const updated = {...prev};
+      // Fix for element implicitly has 'any' type
+      const sectionItem = updated[section][index] as Record<string, any>;
+      sectionItem[field] = value;
+      return updated;
+    });
+  };
+
+  const updateCustomerObjective = (id: string, value: number) => {
+    setObjectiveMatrix(prev => ({
+      ...prev,
+      customerObjectives: {
+        ...prev.customerObjectives,
+        [id]: value
+      }
+    }));
+  };
+
+  const addBusinessObjective = () => {
+    setObjectiveMatrix(prev => ({
+      ...prev,
+      businessObjectives: [
+        ...prev.businessObjectives,
+        {
+          name: "",
+          description: "",
+          priority: 5
+        }
+      ]
+    }));
+  };
+
+  const moveObjective = (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index > 0) {
+      setObjectiveMatrix(prev => {
+        const updated = {...prev};
+        const temp = updated.businessObjectives[index];
+        updated.businessObjectives[index] = updated.businessObjectives[index - 1];
+        updated.businessObjectives[index - 1] = temp;
+        return updated;
+      });
+    } else if (direction === 'down' && index < objectiveMatrix.businessObjectives.length - 1) {
+      setObjectiveMatrix(prev => {
+        const updated = {...prev};
+        const temp = updated.businessObjectives[index];
+        updated.businessObjectives[index] = updated.businessObjectives[index + 1];
+        updated.businessObjectives[index + 1] = temp;
+        return updated;
+      });
+    }
+  };
+
+  const addSeasonalObjective = () => {
+    setObjectiveMatrix(prev => ({
+      ...prev,
+      seasonalObjectives: [
+        ...prev.seasonalObjectives,
+        {
+          season: "",
+          objective: "",
+          startDate: "",
+          endDate: ""
+        }
+      ]
+    }));
+  };
+
+  const removeSeasonalObjective = (index: number) => {
+    setObjectiveMatrix(prev => ({
+      ...prev,
+      seasonalObjectives: prev.seasonalObjectives.filter((_, i) => i !== index)
+    }));
+  };
+
+  // Function to add a new objective
+  const addObjective = () => {
+    const { userType, objective } = objectiveMatrix.newObjective;
+    
+    if (userType && objective) {
+      setObjectiveMatrix(prev => ({
+        ...prev,
+        objectives: [...prev.objectives, prev.newObjective],
+        newObjective: {
+        userType: "",
+        objective: "",
+        importance: "",
+        rewardType: "",
+        example: ""
+        }
+      }));
+    }
+  };
+
+  // Function to remove an objective
+  const removeObjective = (index: number) => {
+    setObjectiveMatrix(prev => ({
+      ...prev,
+      objectives: prev.objectives.filter((_, i: number) => i !== index)
+    }));
+  };
+
+  // Function to update a field in the new objective form
+  const updateNewObjectiveField = (field: string, value: string) => {
+    setObjectiveMatrix(prev => ({
+      ...prev,
+      newObjective: {
+        ...prev.newObjective,
+      [field]: value
+      }
+    }));
+  };
+
+  // Add useEffect to fetch merchant name when user ID is available
+  useEffect(() => {
+    // Exit early if user is not defined
+    if (!user) return;
+    
+    // User is now definitely defined
+    const uid = user.uid;
+    if (!uid) return;
+    
+    async function fetchMerchantName() {
+      try {
+        const merchantRef = doc(db, 'merchants', uid);
+        const merchantDoc = await getDoc(merchantRef);
+        
+        if (merchantDoc.exists()) {
+          const data = merchantDoc.data();
+          // Get the merchantName field specifically
+          if (data.merchantName) {
+            console.log("Found merchantName:", data.merchantName);
+            setMerchantName(data.merchantName);
+          } else {
+            // If merchantName doesn't exist, use user ID
+            console.log("No merchantName found, using uid:", uid);
+            setMerchantName(uid);
+          }
+        } else {
+          // If merchant document doesn't exist, use user ID
+          console.log("No merchant document found, using uid:", uid);
+          setMerchantName(uid);
+        }
+      } catch (error) {
+        console.error("Error fetching merchant name:", error);
+        // Fallback to user ID if there's an error
+        setMerchantName(uid);
+      }
+    }
+    
+    fetchMerchantName();
+  }, [user]);
+
+  // Add these functions to your component, before the return statement
+
+  // Function to add a new SKU
+  const addSku = () => {
+    setProductPricing(prev => ({
+      ...prev,
+      skus: [...(prev.skus || []), { name: "", category: "", price: "", cost: "" }]
+    }));
+  };
+
+  // Function to update a specific SKU field
+  const updateSku = (index: number, field: string, value: string) => {
+    setProductPricing(prev => {
+      const updatedSkus = [...(prev.skus || [])];
+      if (updatedSkus[index]) {
+        updatedSkus[index] = {
+          ...updatedSkus[index],
+          [field]: value
+        };
+      }
+      return {
+        ...prev,
+        skus: updatedSkus
+      };
+    });
+  };
+
+  // Function to remove a SKU
+  const removeSku = (index: number) => {
+    setProductPricing(prev => ({
+      ...prev,
+      skus: (prev.skus || []).filter((_, i) => i !== index)
+    }));
+  };
+
+  // Add this state variable for the new demographic tag input
+  const [newDemographicTag, setNewDemographicTag] = useState<string>("")
+
+  // Add these functions to handle demographic tags
+  const addDemographicTag = () => {
+    if (newDemographicTag.trim() !== "") {
+      setCustomerSegments(prev => ({
+        ...prev,
+        demographicTags: [...prev.demographicTags, newDemographicTag.trim()]
+      }))
+      setNewDemographicTag("")
+    }
+  }
+
+  const removeDemographicTag = (index: number) => {
+    setCustomerSegments(prev => ({
+      ...prev,
+      demographicTags: prev.demographicTags.filter((_, i) => i !== index)
+    }))
+  }
+
+  // Add these functions to handle loyalty tiers
+  const moveLoyaltyTier = (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index > 0) {
+      setCustomerSegments(prev => {
+        const updatedTiers = [...prev.loyaltyTiers]
+        const temp = updatedTiers[index]
+        updatedTiers[index] = updatedTiers[index - 1]
+        updatedTiers[index - 1] = temp
+        return { ...prev, loyaltyTiers: updatedTiers }
+      })
+    } else if (direction === 'down' && index < customerSegments.loyaltyTiers.length - 1) {
+      setCustomerSegments(prev => {
+        const updatedTiers = [...prev.loyaltyTiers]
+        const temp = updatedTiers[index]
+        updatedTiers[index] = updatedTiers[index + 1]
+        updatedTiers[index + 1] = temp
+        return { ...prev, loyaltyTiers: updatedTiers }
+      })
+    }
+  }
+
+  const updateLoyaltyTierCondition = (
+    tierIndex: number, 
+    conditionName: 'lifetimeTransactions' | 'lifetimeSpend' | 'numberOfRedemptions', 
+    field: 'enabled' | 'value', 
+    value: boolean | number
+  ) => {
+    setCustomerSegments(prev => {
+      const updatedTiers = [...prev.loyaltyTiers]
+      updatedTiers[tierIndex] = {
+        ...updatedTiers[tierIndex],
+        conditions: {
+          ...updatedTiers[tierIndex].conditions,
+          [conditionName]: {
+            ...updatedTiers[tierIndex].conditions[conditionName],
+            [field]: value
+          }
+        }
+      }
+      return { ...prev, loyaltyTiers: updatedTiers }
+    })
+  }
+
+  // Add this function to handle updating offer types in the reward constraints
+  const updateRewardConstraintOfferType = (offerType: string, value: boolean) => {
+    setRewardConstraints(prev => ({
+      ...prev,
+      allowedOfferTypes: {
+        ...prev.allowedOfferTypes,
+        [offerType]: value
+      }
+    }));
+  };
+
+  // Add a function to apply default cohort thresholds
+  const applyDefaultCohortThresholds = () => {
+    const defaultValues = {
+      ...customerSegments,
+      newCustomerThreshold: "20",
+      activeThreshold: "30",
+      dormantCohortThreshold: "60",
+      churnedThreshold: "60",
+      resurrectedThreshold: "20"
+    };
+    
+    // Ensure cohortThresholdErrors exists
+    if (!defaultValues.cohortThresholdErrors) {
+      defaultValues.cohortThresholdErrors = {
+        activeThreshold: "",
+        dormantCohortThreshold: "",
+        churnedThreshold: "",
+        resurrectedThreshold: "",
+        newCustomerThreshold: ""
+      };
+    }
+    
+    // Clear any existing errors when applying defaults
+    defaultValues.cohortThresholdErrors = {
+      activeThreshold: "",
+      dormantCohortThreshold: "",
+      churnedThreshold: "",
+      resurrectedThreshold: "",
+      newCustomerThreshold: ""
+    };
+    
+    // Update state with default values
+    setCustomerSegments(defaultValues);
+  };
+
+  return (
+    <PageTransition>
+      <style jsx global>{gradientTextStyle}</style>
+      <div className="min-h-[98vh] bg-gray-100">
+        <div className="w-[99.5%] mx-auto py-2 px-2 h-[98%]">
+          <div className="bg-white rounded-lg shadow-sm overflow-hidden h-full">
+            {/* Header with title and progress */}
+            <div className="px-4 pt-3 pb-5 border-b">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <h1 className="text-2xl font-bold">
+                    Tap <span className="gradient-text">Agent</span> 
+                  </h1>
+                  <p className="text-gray-500 mt-1">
+                    Configure your agent to create personalised customer rewards
+                  </p>
+                </div>
+                
+                <div className="flex flex-col items-end w-full md:w-auto">
+                  <div className="flex items-center gap-3 mb-2">
+                    {merchantName && (
+                      <span className="text-sm font-medium text-gray-700">{merchantName}</span>
+                    )}
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="text-xs h-7 px-3"
+                      onClick={() => window.location.href = '/dashboard'}
+                    >
+                      Exit Setup
+                    </Button>
+                  </div>
+                  
+                  <div className="w-full md:w-64">
+                  <div className="flex items-center justify-between mb-1">
+                     
+                  </div>
+                    <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                      <div 
+                    
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+                  
+            {/* Navigation with more visual emphasis */}
+            <div className="px-4 py-4 border-b">
+              <div className="mb-2">
+                <h3 className="text-sm font-medium text-gray-700">Configuration Steps</h3>
+              </div>
+              
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: "business-brand", label: "Business & Brand", icon: <Building2 className="h-4 w-4" /> },
+                  { id: "product-pricing", label: "Product & Pricing", icon: <Receipt className="h-4 w-4" /> },
+                  { id: "financial", label: "Financial", icon: <BadgeDollarSign className="h-4 w-4" /> },
+                  { id: "customer-segments", label: "Customer Segments", icon: <Users className="h-4 w-4" /> },
+                  { id: "reward-constraints", label: "Reward Constraints", icon: <Gift className="h-4 w-4" /> },
+                  { id: "messaging", label: "Messaging", icon: <MessageSquareText className="h-4 w-4" /> }
+                ].map(tab => (
+                <button 
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm ${
+                      activeTab === tab.id 
+                        ? "bg-gradient-to-r from-blue-50 to-orange-50 text-blue-700 font-medium shadow-sm" 
+                        : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    <div className={activeTab === tab.id ? "text-blue-600" : "text-gray-500"}>
+                      {tab.icon}
+                    </div>
+                    <span>{tab.label}</span>
+                    <div className={`ml-1 h-2 w-2 rounded-full ${
+                      completionStatus[tab.id] === 100 
+                        ? "bg-green-500" 
+                        : completionStatus[tab.id] > 0 
+                          ? "bg-amber-500" 
+                          : "bg-gray-200"
+                    }`}></div>
+                </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Content area */}
+            <div>
+            {/* Dynamic content based on active tab */}
+            {activeTab === "business-brand" && (
+              <Card className="border-0 shadow-md apple-card">
+                <CardHeader className="pb-2">
+                    <div>
+                    <CardTitle className="text-2xl">
+                      <span className="gradient-text">Business & Brand DNA</span>
+                    </CardTitle>
+                    <CardDescription className="text-gray-500 mt-1">
+                      Define your brand identity and business details
+                      </CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-8 pt-4">
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium gradient-text">Brand Identity</h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                        <Label htmlFor="merchantName" className="text-sm font-medium text-gray-700">Business Name</Label>
+                        <Input
+                          id="merchantName"
+                          placeholder="Your Business Name"
+                          value={merchantName}
+                          onChange={(e) => setMerchantName(e.target.value)}
+                          className="rounded-lg border-gray-200"
+                        />
+                              </div>
+                      
+                      {/* Add new Business Context section here */}
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="businessContext" className="text-sm font-medium text-gray-700">Business Context</Label>
+                        <textarea
+                          id="businessContext"
+                          placeholder="Describe your business in detail: what you offer, your unique value proposition, target audience, business goals, and any other context that would help the agent create better rewards."
+                          value={businessBrand.businessContext || ""}
+                          onChange={(e) => updateBusinessBrand('businessContext', e.target.value)}
+                          className="w-full min-h-[120px] p-3 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <p className="text-xs text-gray-500">This information helps the agent understand your business better and create more relevant rewards.</p>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="brandPrimaryColor" className="text-sm font-medium text-gray-700">Primary Color</Label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="color"
+                            id="brandPrimaryColor"
+                            value={businessBrand.brandPrimaryColor}
+                            onChange={(e) => updateBusinessBrand('brandPrimaryColor', e.target.value)}
+                            className="w-10 h-10 rounded-full overflow-hidden border-0"
+                            style={{ appearance: 'none' }}
+                          />
+                          <Input
+                            value={businessBrand.brandPrimaryColor}
+                            onChange={(e) => updateBusinessBrand('brandPrimaryColor', e.target.value)}
+                            className="rounded-lg border-gray-200 font-mono"
+                          />
+                    </div>
+                  </div>
+                  
+                      <div className="space-y-2">
+                        <Label htmlFor="brandSecondaryColor" className="text-sm font-medium text-gray-700">Secondary Color</Label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="color"
+                            id="brandSecondaryColor"
+                            value={businessBrand.brandSecondaryColor}
+                            onChange={(e) => updateBusinessBrand('brandSecondaryColor', e.target.value)}
+                            className="w-10 h-10 rounded-full overflow-hidden border-0"
+                            style={{ appearance: 'none' }}
+                          />
+                          <Input
+                            value={businessBrand.brandSecondaryColor}
+                            onChange={(e) => updateBusinessBrand('brandSecondaryColor', e.target.value)}
+                            className="rounded-lg border-gray-200 font-mono"
+                          />
+                        </div>
+                    </div>
+                    
+                    {/* Removed Accent Color input */}
+                    </div>
+                                </div>
+                        
+                  <Separator className="my-6" />
+                  
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium gradient-text">Brand Voice & Tone</h3>
+                    
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-gray-700">Tone of Voice</Label>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {["friendly", "professional", "casual", "formal", "playful", "serious", "inspirational", "direct", "quirky", "luxurious"].map(tone => (
+                          <Badge 
+                            key={tone}
+                            variant={(businessBrand.toneOfVoice && businessBrand.toneOfVoice.includes(tone)) ? "default" : "outline"}
+                            className={`cursor-pointer px-3 py-1.5 rounded-full transition-all ${
+                              (businessBrand.toneOfVoice && businessBrand.toneOfVoice.includes(tone))
+                                ? "bg-blue-100 hover:bg-blue-200 text-blue-800 border-blue-200"
+                                : "bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200"
+                            }`}
+                            onClick={() => {
+                              if (businessBrand.toneOfVoice && businessBrand.toneOfVoice.includes(tone)) {
+                                updateBusinessBrand('toneOfVoice', businessBrand.toneOfVoice.filter(t => t !== tone))
+                              } else {
+                                updateBusinessBrand('toneOfVoice', [...(businessBrand.toneOfVoice || []), tone])
+                              }
+                            }}
+                          >
+                            {(businessBrand.toneOfVoice && businessBrand.toneOfVoice.includes(tone)) && (
+                              <CheckCircle className="h-3 w-3 mr-1 inline-block text-blue-600" />
+                            )}
+                            {tone}
+                          </Badge>
+                        ))}
+                              </div>
+                      <p className="text-xs text-gray-500 mt-2">Select the tones that best represent your brand's voice</p>
+                    </div>
+                  </div>
+                  
+                  <Separator className="my-6" />
+                  
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium gradient-text">Agent Capabilities</h3>
+                    
+                      <div className="space-y-2">
+                      <Label className="text-sm font-medium text-gray-700">Enable Agent Tasks</Label>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                        {[
+                          { id: "rewards", label: "Rewards Generation", icon: <Gift className="h-4 w-4 text-blue-600" /> },
+                          { id: "banners", label: "Banner Creation", icon: <LayoutDashboard className="h-4 w-4 text-blue-600" /> },
+                          { id: "messages", label: "Customer Messaging", icon: <MessageSquareText className="h-4 w-4 text-blue-600" /> },
+                          { id: "re-engagement", label: "Re-engagement", icon: <Bell className="h-4 w-4 text-blue-600" /> },
+                          { id: "email", label: "Email Marketing", icon: <Mail className="h-4 w-4 text-blue-600" /> },
+                          { id: "analysis", label: "Performance Analysis", icon: <BarChart className="h-4 w-4 text-blue-600" /> }
+                        ].map(task => (
+                          <div key={task.id} className="flex items-center space-x-2 p-3 border border-gray-100 rounded-xl bg-gray-50">
+                            <div className="flex items-center gap-2 flex-1">
+                              {task.icon}
+                              <span className="text-sm text-gray-700">{task.label}</span>
+                            </div>
+                            <Switch 
+                              checked={businessBrand.agentTasks && businessBrand.agentTasks[task.id]} 
+                              onCheckedChange={(checked) => {
+                                updateBusinessBrand('agentTasks', {
+                                  ...(businessBrand.agentTasks || {}),
+                                  [task.id]: checked
+                                })
+                              }}
+                              className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                                />
+                              </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">Select which tasks the agent should perform for your business</p>
+                            </div>
+                          </div>
+                          
+                  <Separator className="my-6" />
+                  
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium gradient-text">Business Hours</h3>
+                    
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 gap-4">
+                        {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
+                          <div key={day} className="flex items-center space-x-4 p-3 border border-gray-100 rounded-xl bg-gray-50">
+                            <div className="w-24">
+                              <span className="text-sm font-medium text-gray-700 capitalize">{day}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Switch 
+                                checked={businessBrand.openingHours && businessBrand.openingHours[day] ? businessBrand.openingHours[day].isOpen : true} 
+                                onCheckedChange={(checked) => {
+                                  updateBusinessBrand('openingHours', {
+                                    ...(businessBrand.openingHours || {}),
+                                    [day]: {
+                                      isOpen: checked,
+                                      openTime: businessBrand.openingHours && businessBrand.openingHours[day] ? businessBrand.openingHours[day].openTime : "09:00",
+                                      closeTime: businessBrand.openingHours && businessBrand.openingHours[day] ? businessBrand.openingHours[day].closeTime : "17:00"
+                                    }
+                                  })
+                                }}
+                                className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                              />
+                              <span className="text-sm text-gray-600 w-16">
+                                {businessBrand.openingHours && businessBrand.openingHours[day] && businessBrand.openingHours[day].isOpen ? "Open" : "Closed"}
+                              </span>
+                              </div>
+                            
+                            {businessBrand.openingHours && businessBrand.openingHours[day] && businessBrand.openingHours[day].isOpen && (
+                              <div className="flex items-center gap-2 ml-4">
+                              <Input
+                                  type="time"
+                                  value={businessBrand.openingHours[day].openTime}
+                                  onChange={(e) => {
+                                    updateBusinessBrand('openingHours', {
+                                      ...businessBrand.openingHours,
+                                      [day]: {
+                                        ...businessBrand.openingHours[day],
+                                        openTime: e.target.value
+                                      }
+                                    })
+                                  }}
+                                  className="w-32 rounded-lg border-gray-200"
+                                />
+                                <span className="text-gray-500">to</span>
+                              <Input
+                                  type="time"
+                                  value={businessBrand.openingHours[day].closeTime}
+                                  onChange={(e) => {
+                                    updateBusinessBrand('openingHours', {
+                                      ...businessBrand.openingHours,
+                                      [day]: {
+                                        ...businessBrand.openingHours[day],
+                                        closeTime: e.target.value
+                                      }
+                                    })
+                                  }}
+                                  className="w-32 rounded-lg border-gray-200"
+                              />
+                            </div>
+                            )}
+                          </div>
+                          ))}
+                        </div>
+                      <p className="text-xs text-gray-500 mt-2">Set your business hours to help the agent schedule appropriate campaigns</p>
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter className="flex justify-between border-t p-6">
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      className="flex items-center gap-1 rounded-lg"
+                      onClick={() => window.location.href = '/dashboard'}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
+                        <path d="M19 12H5M12 19l-7-7 7-7"/>
+                      </svg>
+                      Back to Dashboard
+                    </Button>
+                    <Button variant="outline" className="rounded-lg">Reset</Button>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      className="border-blue-200 text-blue-700 hover:bg-blue-50 rounded-lg" 
+                      onClick={saveProgress}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? (
+                        <>
+                          <span className="animate-pulse mr-2">●</span>
+                          Saving...
+                        </>
+                      ) : (
+                        "Save Progress"
+                      )}
+                    </Button>
+                    <Button className="gap-2 bg-blue-600 hover:bg-blue-700 rounded-lg" onClick={() => setActiveTab("product-pricing")}>
+                      Next: Product & Pricing
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardFooter>
+              </Card>
+            )}
+            
+              {activeTab === "product-pricing" && (
+                <Card className="border-0 shadow-md apple-card">
+                  <CardHeader className="pb-2">
+                      <div>
+                      <CardTitle className="text-2xl">
+                        <span className="gradient-text">Product & Pricing</span>
+                      </CardTitle>
+                      <CardDescription className="text-gray-500 mt-1">
+                        Define your product catalog and pricing strategy
+                        </CardDescription>
+      </div>
+                  </CardHeader>
+                  <CardContent className="space-y-8 pt-4">
+                    {/* Product Catalog Section */}
+                      <div className="space-y-4">
+                      <h3 className="text-lg font-medium gradient-text">Product Catalog</h3>
+                      
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <Label htmlFor="productCategory" className="text-sm font-medium text-gray-700">Product Category</Label>
+                            <Select
+                              value={productPricing.productCategory}
+                              onValueChange={(value) => updateProductPricing('productCategory', value)}
+                            >
+                              <SelectTrigger id="productCategory" className="w-full rounded-lg border-gray-200">
+                                <SelectValue placeholder="Select a category" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="food">Food</SelectItem>
+                                <SelectItem value="beverage">Beverage</SelectItem>
+                                <SelectItem value="retail">Retail</SelectItem>
+                                <SelectItem value="service">Service</SelectItem>
+                                <SelectItem value="experience">Experience</SelectItem>
+                                <SelectItem value="other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Label htmlFor="averageBasketSize" className="text-sm font-medium text-gray-700">Average Basket Size</Label>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500">$</span>
+                              <Input
+                                id="averageBasketSize"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="25.00"
+                                value={productPricing.averageBasketSize}
+                                onChange={(e) => updateProductPricing('averageBasketSize', e.target.value)}
+                                className="rounded-lg border-gray-200"
+                              />
+                            </div>
+                            <p className="text-xs text-gray-500">Average amount spent per transaction</p>
+                          </div>
+    </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm font-medium text-gray-700">Product SKUs</Label>
+                            <Button 
+                              type="button" 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={addSku}
+                              className="rounded-lg border-blue-200 text-blue-700 hover:bg-blue-50"
+                            >
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add SKU
+                            </Button>
+                          </div>
+                          
+                          <div className="border border-gray-100 rounded-xl overflow-hidden">
+                            <div className="grid grid-cols-12 gap-2 bg-gray-50 p-3 border-b border-gray-100">
+                              <div className="col-span-4 text-sm font-medium text-gray-700">Product Name</div>
+                              <div className="col-span-2 text-sm font-medium text-gray-700">Price ($)</div>
+                              <div className="col-span-2 text-sm font-medium text-gray-700">Cost ($)</div>
+                              <div className="col-span-3 text-sm font-medium text-gray-700">Category</div>
+                              <div className="col-span-1 text-sm font-medium text-gray-700"></div>
+                            </div>
+                            
+                            <div className="max-h-64 overflow-y-auto">
+                              {(productPricing.skus || []).map((sku, index) => (
+                                <div key={index} className="grid grid-cols-12 gap-2 p-3 border-b border-gray-100 items-center">
+                                  <div className="col-span-4">
+                              <Input
+                                      value={sku.name}
+                                      onChange={(e) => updateSku(index, 'name', e.target.value)}
+                                placeholder="Product name"
+                                      className="rounded-lg border-gray-200"
+                              />
+                                  </div>
+                                  <div className="col-span-2">
+                              <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={sku.price}
+                                      onChange={(e) => updateSku(index, 'price', e.target.value)}
+                                      placeholder="0.00"
+                                      className="rounded-lg border-gray-200"
+                                    />
+                                  </div>
+                                  <div className="col-span-2">
+                              <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={sku.cost}
+                                      onChange={(e) => updateSku(index, 'cost', e.target.value)}
+                                      placeholder="0.00"
+                                      className="rounded-lg border-gray-200"
+                                    />
+                                  </div>
+                                  <div className="col-span-3">
+                                    <Select
+                                      value={sku.category}
+                                      onValueChange={(value) => updateSku(index, 'category', value)}
+                                    >
+                                      <SelectTrigger className="rounded-lg border-gray-200">
+                                        <SelectValue placeholder="Category" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="main">Main</SelectItem>
+                                        <SelectItem value="side">Side</SelectItem>
+                                        <SelectItem value="dessert">Dessert</SelectItem>
+                                        <SelectItem value="drink">Drink</SelectItem>
+                                        <SelectItem value="combo">Combo</SelectItem>
+                                        <SelectItem value="other">Other</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="col-span-1 text-right">
+                                <Button 
+                                  type="button" 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      onClick={() => removeSku(index)}
+                                      className="text-gray-500 hover:text-red-500 p-1 h-auto"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/>
+                                      </svg>
+                                </Button>
+                          </div>
+                              </div>
+                              ))}
+                              
+                              {(!productPricing.skus || productPricing.skus.length === 0) && (
+                                <div className="p-4 text-center text-gray-500">
+                                  No products added yet. Click "Add SKU" to get started.
+                              </div>
+                            )}
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-2">Add your key products to help the agent create relevant offers</p>
+                            </div>
+                          </div>
+                        </div>
+                      
+                    <Separator className="my-6" />
+                    
+                    {/* Special Product Categories */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-medium gradient-text">Special Product Categories</h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="heroItems" className="text-sm font-medium text-gray-700">Hero Products</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="newHeroItem"
+                              placeholder="Add a hero product"
+                              value={productPricing.newHeroItem}
+                              onChange={(e) => updateProductPricing('newHeroItem', e.target.value)}
+                              className="rounded-lg border-gray-200"
+                            />
+                            <Button 
+                              type="button" 
+                              onClick={() => {
+                                if (productPricing.newHeroItem && productPricing.newHeroItem.trim()) {
+                                  updateProductPricing('heroItems', [...productPricing.heroItems, productPricing.newHeroItem.trim()]);
+                                  updateProductPricing('newHeroItem', '');
+                                }
+                              }}
+                              disabled={!productPricing.newHeroItem || !productPricing.newHeroItem.trim()}
+                              className="bg-blue-600 hover:bg-blue-700 rounded-lg"
+                            >
+                              Add
+                            </Button>
+                          </div>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {productPricing.heroItems.map((item, index) => (
+                              <Badge 
+                                key={index}
+                                variant="outline"
+                                className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 border-blue-100 flex items-center gap-1"
+                              >
+                                {item}
+                                <button
+                                  type="button"
+                                  onClick={() => updateProductPricing('heroItems', productPricing.heroItems.filter((_, i) => i !== index))}
+                                  className="ml-1 h-4 w-4 rounded-full hover:bg-blue-200 inline-flex items-center justify-center"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M18 6 6 18"/>
+                                    <path d="m6 6 12 12"/>
+                                  </svg>
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                          <p className="text-xs text-gray-500">Your best-selling or signature products</p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="lowVelocityItems" className="text-sm font-medium text-gray-700">Low Velocity Products</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="newLowVelocityItem"
+                              placeholder="Add a low velocity product"
+                              value={productPricing.newLowVelocityItem}
+                              onChange={(e) => updateProductPricing('newLowVelocityItem', e.target.value)}
+                              className="rounded-lg border-gray-200"
+                            />
+                            <Button 
+                              type="button" 
+                              onClick={() => {
+                                if (productPricing.newLowVelocityItem && productPricing.newLowVelocityItem.trim()) {
+                                  updateProductPricing('lowVelocityItems', [...productPricing.lowVelocityItems, productPricing.newLowVelocityItem.trim()]);
+                                  updateProductPricing('newLowVelocityItem', '');
+                                }
+                              }}
+                              disabled={!productPricing.newLowVelocityItem || !productPricing.newLowVelocityItem.trim()}
+                              className="bg-blue-600 hover:bg-blue-700 rounded-lg"
+                            >
+                              Add
+                            </Button>
+                          </div>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {productPricing.lowVelocityItems.map((item, index) => (
+                              <Badge 
+                                key={index}
+                                variant="outline"
+                                className="px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border-amber-100 flex items-center gap-1"
+                              >
+                                {item}
+                                <button
+                                  type="button"
+                                  onClick={() => updateProductPricing('lowVelocityItems', productPricing.lowVelocityItems.filter((_, i) => i !== index))}
+                                  className="ml-1 h-4 w-4 rounded-full hover:bg-amber-200 inline-flex items-center justify-center"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M18 6 6 18"/>
+                                    <path d="m6 6 12 12"/>
+                                  </svg>
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                          <p className="text-xs text-gray-500">Products that need a sales boost</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                      
+                    
+                              
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mt-4">
+                      <div className="flex items-start gap-3">
+                        <BadgeDollarSign className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <h4 className="text-sm font-medium text-blue-800">Why this matters</h4>
+                          <p className="text-xs text-blue-700 mt-1">
+                            Your product and pricing information helps the AI agent create offers that align with your business strategy, 
+                            promote high-margin items, and move slow inventory while maintaining your desired price positioning.
+                          </p>
+                              </div>
+                    </div>
+                      </div>
+                    </CardContent>
+                    <CardFooter className="flex justify-between border-t p-6">
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                        className="flex items-center gap-1 rounded-lg"
+                        onClick={() => setActiveTab("business-brand")}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
+                            <path d="M19 12H5M12 19l-7-7 7-7"/>
+                          </svg>
+                        Previous: Business & Brand
+                        </Button>
+                      <Button variant="outline" className="rounded-lg">Reset</Button>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                        className="border-blue-200 text-blue-700 hover:bg-blue-50 rounded-lg" 
+                          onClick={saveProgress}
+                          disabled={isSaving}
+                        >
+                          {isSaving ? (
+                            <>
+                              <span className="animate-pulse mr-2">●</span>
+                              Saving...
+                            </>
+                          ) : (
+                            "Save Progress"
+                          )}
+                        </Button>
+                      <Button className="gap-2 bg-blue-600 hover:bg-blue-700 rounded-lg" onClick={() => setActiveTab("financial")}>
+                        Next: Financial Guardrails
+                            <ArrowRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </CardFooter>
+                </Card>
+              )}
+              
+              {activeTab === "financial" && (
+                <Card className="border-0 shadow-md apple-card">
+                  <CardHeader className="pb-2">
+                        <div>
+                      <CardTitle className="text-2xl">
+                        <span className="gradient-text">Financial Guardrails</span>
+                      </CardTitle>
+                      <CardDescription className="text-gray-500 mt-1">
+                        Set budget constraints and financial parameters for your rewards
+                  </CardDescription>
+                      </div>
+                    </CardHeader>
+                  <CardContent className="space-y-8 pt-4">
+                    {/* Budget Constraints Section */}
+                      <div className="space-y-4">
+                      <h3 className="text-lg font-medium gradient-text">Budget Constraints</h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                          <Label htmlFor="rewardBudgetType" className="text-sm font-medium text-gray-700">Reward Budget Type</Label>
+                          <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                              <input 
+                                type="radio" 
+                                id="fixed" 
+                                name="budgetType" 
+                                value="fixed" 
+                                checked={financialGuardrails.rewardBudgetType === "fixed"}
+                                onChange={() => updateFinancialGuardrails('rewardBudgetType', 'fixed')}
+                                className="text-blue-600 focus:ring-blue-500"
+                              />
+                              <Label htmlFor="fixed" className="text-sm text-gray-700 cursor-pointer">Fixed Amount</Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <input 
+                                type="radio" 
+                                id="percentage" 
+                                name="budgetType" 
+                                value="percentage" 
+                                checked={financialGuardrails.rewardBudgetType === "percentage"}
+                                onChange={() => updateFinancialGuardrails('rewardBudgetType', 'percentage')}
+                                className="text-blue-600 focus:ring-blue-500"
+                              />
+                              <Label htmlFor="percentage" className="text-sm text-gray-700 cursor-pointer">Percentage of Revenue</Label>
+                            </div>
+                      </div>
+                        </div>
+                          
+                            <div className="space-y-2">
+                          <Label htmlFor="monthlyRewardBudget" className="text-sm font-medium text-gray-700">
+                            {financialGuardrails.rewardBudgetType === "fixed" ? "Monthly Reward Budget" : "Budget as % of Revenue"}
+                          </Label>
+                          <div className="flex items-center gap-2">
+                            {financialGuardrails.rewardBudgetType === "fixed" && <span className="text-gray-500">$</span>}
+                              <Input
+                                id="monthlyRewardBudget"
+                              type="number"
+                              min="0"
+                              step={financialGuardrails.rewardBudgetType === "fixed" ? "100" : "0.1"}
+                              placeholder={financialGuardrails.rewardBudgetType === "fixed" ? "1000" : "2.5"}
+                                value={financialGuardrails.monthlyRewardBudget}
+                                onChange={(e) => updateFinancialGuardrails('monthlyRewardBudget', e.target.value)}
+                              className="rounded-lg border-gray-200"
+                              />
+                            {financialGuardrails.rewardBudgetType === "percentage" && <span className="text-gray-500">%</span>}
+                          </div>
+                              <p className="text-xs text-gray-500">
+                            {financialGuardrails.rewardBudgetType === "fixed" 
+                              ? "Maximum amount to spend on rewards each month" 
+                              : "Percentage of monthly revenue allocated to rewards"}
+                          </p>
+                          </div>
+                        </div>
+                      </div>
+                        
+                    <Separator className="my-6" />
+                      
+                    {/* Profitability Parameters Section */}
+                      <div className="space-y-4">
+                      <h3 className="text-lg font-medium gradient-text">Profitability Parameters</h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="targetGrossMargin" className="text-sm font-medium text-gray-700">Target Gross Margin</Label>
+                        <div className="flex items-center gap-2">
+                            <Input
+                              id="targetGrossMargin"
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              placeholder="30"
+                              value={financialGuardrails.targetGrossMargin}
+                              onChange={(e) => updateFinancialGuardrails('targetGrossMargin', e.target.value)}
+                              className="rounded-lg border-gray-200"
+                            />
+                            <span className="text-gray-500">%</span>
+                          </div>
+                          <p className="text-xs text-gray-500">Minimum gross margin to maintain for reward-driven sales</p>
+                      </div>
+                      
+                          <div className="space-y-2">
+                          <Label htmlFor="maxCostPerAcquisition" className="text-sm font-medium text-gray-700">Max Cost Per Acquisition</Label>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-500">$</span>
+                            <Input
+                              id="maxCostPerAcquisition"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="25.00"
+                              value={financialGuardrails.maxCostPerAcquisition}
+                              onChange={(e) => updateFinancialGuardrails('maxCostPerAcquisition', e.target.value)}
+                              className="rounded-lg border-gray-200"
+                            />
+                      </div>
+                          <p className="text-xs text-gray-500">Maximum cost to acquire a new customer through rewards</p>
+                    </div>
+                        
+                        
+                      </div>
+                    </div>
+                    
+                    <Separator className="my-6" />
+                    
+                    {/* Reward Value Limits Section */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-medium gradient-text">Reward Value Limits</h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="minRewardValue" className="text-sm font-medium text-gray-700">Minimum Reward Value</Label>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-500">$</span>
+                            <Input
+                              id="minRewardValue"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="5.00"
+                              value={financialGuardrails.minRewardValue}
+                              onChange={(e) => updateFinancialGuardrails('minRewardValue', e.target.value)}
+                              className="rounded-lg border-gray-200"
+                            />
+                          </div>
+                          <p className="text-xs text-gray-500">Smallest reward value that can be offered</p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="maxRewardValue" className="text-sm font-medium text-gray-700">Maximum Reward Value</Label>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-500">$</span>
+                            <Input
+                              id="maxRewardValue"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="50.00"
+                              value={financialGuardrails.maxRewardValue}
+                              onChange={(e) => updateFinancialGuardrails('maxRewardValue', e.target.value)}
+                              className="rounded-lg border-gray-200"
+                            />
+                          </div>
+                          <p className="text-xs text-gray-500">Largest reward value that can be offered</p>
+                        </div>
+                        
+                        
+                        
+                       
+                      </div>
+                    </div>
+                    
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mt-4">
+                          <div className="flex items-start gap-3">
+                        <BadgeDollarSign className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                            <div>
+                          <h4 className="text-sm font-medium text-blue-800">Financial Impact</h4>
+                          <p className="text-xs text-blue-700 mt-1">
+                            Setting clear financial guardrails ensures your reward program remains profitable while still providing 
+                            compelling offers to customers. These parameters help the AI agent balance customer engagement with 
+                            business sustainability.
+                          </p>
+                          </div>
+                    </div>
+                      </div>
+                    </CardContent>
+                    <CardFooter className="flex justify-between border-t p-6">
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                        className="flex items-center gap-1 rounded-lg"
+                        onClick={() => setActiveTab("product-pricing")}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
+                            <path d="M19 12H5M12 19l-7-7 7-7"/>
+                          </svg>
+                        Previous: Product & Pricing
+                        </Button>
+                      <Button variant="outline" className="rounded-lg">Reset</Button>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                        className="border-blue-200 text-blue-700 hover:bg-blue-50 rounded-lg" 
+                          onClick={saveProgress}
+                          disabled={isSaving}
+                        >
+                          {isSaving ? (
+                            <>
+                              <span className="animate-pulse mr-2">●</span>
+                              Saving...
+                            </>
+                          ) : (
+                            "Save Progress"
+                          )}
+                        </Button>
+                      <Button className="gap-2 bg-blue-600 hover:bg-blue-700 rounded-lg" onClick={() => setActiveTab("customer-segments")}>
+                        Next: Customer Segments
+                            <ArrowRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </CardFooter>
+                </Card>
+              )}
+              
+              {activeTab === "customer-segments" && (
+                <Card className="border-0 shadow-md apple-card">
+                  <CardHeader className="pb-2">
+                        <div>
+                      <CardTitle className="text-2xl">
+                        <span className="gradient-text">Customer Segments</span>
+                      </CardTitle>
+                      <CardDescription className="text-gray-500 mt-1">
+                        Define your customer segments and loyalty tiers
+                          </CardDescription>
+                      </div>
+                    </CardHeader>
+                  <CardContent className="space-y-8 pt-4">
+                    {/* Loyalty Tiers Section */}
+                      <div className="space-y-4">
+                      <h3 className="text-lg font-medium gradient-text">Loyalty Tiers</h3>
+                        
+                        <div className="space-y-4">
+                        {customerSegments.loyaltyTiers.map((tier, index) => (
+                          <div key={index} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-3">
+                              <div className="flex items-center gap-3">
+                                <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
+                                  index === 0 ? "bg-amber-100 text-amber-700" :
+                                  index === 1 ? "bg-gray-200 text-gray-700" :
+                                  "bg-yellow-100 text-yellow-700"
+                                }`}>
+                                  <Trophy className="h-4 w-4" />
+                                </div>
+                                <div>
+                                      <Input 
+                                        value={tier.name}
+                                    onChange={(e) => updateLoyaltyTier(index, 'name', e.target.value)}
+                                    className="font-medium border-0 bg-transparent p-0 h-auto text-base focus-visible:ring-0"
+                                    placeholder="Tier Name"
+                                  />
+                                      <Input 
+                                        value={tier.description}
+                                    onChange={(e) => updateLoyaltyTier(index, 'description', e.target.value)}
+                                    className="text-sm text-gray-500 border-0 bg-transparent p-0 h-auto focus-visible:ring-0"
+                                    placeholder="Tier Description"
+                                  />
+                                </div>
+                              </div>
+                                      <div className="flex items-center gap-2">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => moveLoyaltyTier(index, 'up')}
+                                  disabled={index === 0}
+                                  className="h-8 w-8 p-0 rounded-lg"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="m18 15-6-6-6 6"/>
+                                  </svg>
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => moveLoyaltyTier(index, 'down')}
+                                  disabled={index === customerSegments.loyaltyTiers.length - 1}
+                                  className="h-8 w-8 p-0 rounded-lg"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="m6 9 6 6 6-6"/>
+                                  </svg>
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => removeLoyaltyTier(index)}
+                                  disabled={customerSegments.loyaltyTiers.length <= 1}
+                                  className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M3 6h18"/>
+                                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/>
+                                  </svg>
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label htmlFor={`lifetimeTransactions-${index}`} className="text-sm font-medium text-gray-700">
+                                    Lifetime Transactions
+                                  </Label>
+                                        <Switch 
+                                    id={`lifetimeTransactions-enabled-${index}`}
+                                          checked={tier.conditions.lifetimeTransactions.enabled}
+                                    onCheckedChange={(checked) => updateLoyaltyTierCondition(index, 'lifetimeTransactions', 'enabled', checked)}
+                                    className="apple-switch"
+                                  />
+                                </div>
+                                        <Input 
+                                  id={`lifetimeTransactions-${index}`}
+                                          type="number"
+                                          min="0"
+                                  value={tier.conditions.lifetimeTransactions.value}
+                                  onChange={(e) => updateLoyaltyTierCondition(index, 'lifetimeTransactions', 'value', parseInt(e.target.value))}
+                                          disabled={!tier.conditions.lifetimeTransactions.enabled}
+                                  className="rounded-lg border-gray-200"
+                                        />
+                                      </div>
+                              
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label htmlFor={`lifetimeSpend-${index}`} className="text-sm font-medium text-gray-700">
+                                    Lifetime Spend ($)
+                                  </Label>
+                                        <Switch 
+                                    id={`lifetimeSpend-enabled-${index}`}
+                                          checked={tier.conditions.lifetimeSpend.enabled}
+                                    onCheckedChange={(checked) => updateLoyaltyTierCondition(index, 'lifetimeSpend', 'enabled', checked)}
+                                    className="apple-switch"
+                                  />
+                                </div>
+                                        <Input 
+                                  id={`lifetimeSpend-${index}`}
+                                          type="number"
+                                          min="0"
+                                  value={tier.conditions.lifetimeSpend.value}
+                                  onChange={(e) => updateLoyaltyTierCondition(index, 'lifetimeSpend', 'value', parseInt(e.target.value))}
+                                          disabled={!tier.conditions.lifetimeSpend.enabled}
+                                  className="rounded-lg border-gray-200"
+                                        />
+                                      </div>
+                              
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label htmlFor={`numberOfRedemptions-${index}`} className="text-sm font-medium text-gray-700">
+                                    Number of Redemptions
+                                  </Label>
+                                        <Switch 
+                                    id={`numberOfRedemptions-enabled-${index}`}
+                                          checked={tier.conditions.numberOfRedemptions.enabled}
+                                    onCheckedChange={(checked) => updateLoyaltyTierCondition(index, 'numberOfRedemptions', 'enabled', checked)}
+                                    className="apple-switch"
+                                  />
+                                </div>
+                                        <Input 
+                                  id={`numberOfRedemptions-${index}`}
+                                          type="number"
+                                          min="0"
+                                  value={tier.conditions.numberOfRedemptions.value}
+                                  onChange={(e) => updateLoyaltyTierCondition(index, 'numberOfRedemptions', 'value', parseInt(e.target.value))}
+                                          disabled={!tier.conditions.numberOfRedemptions.enabled}
+                                  className="rounded-lg border-gray-200"
+                                        />
+                                      </div>
+                            </div>
+                          </div>
+                        ))}
+                        
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          onClick={addLoyaltyTier}
+                          className="w-full py-2 border-dashed border-blue-200 text-blue-700 hover:bg-blue-50 rounded-lg"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Loyalty Tier
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <Separator className="my-6" />
+                    
+                    {/* Demographic Tags Section */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-medium gradient-text">Demographic Tags</h3>
+                      
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap gap-2">
+                          {customerSegments.demographicTags.map((tag, index) => (
+                            <Badge 
+                              key={index}
+                              variant="outline"
+                              className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 border-blue-100 flex items-center gap-1"
+                            >
+                              {tag}
+                                      <button
+                                        type="button"
+                                onClick={() => removeDemographicTag(index)}
+                                className="ml-1 h-4 w-4 rounded-full hover:bg-blue-200 inline-flex items-center justify-center"
+                                      >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M18 6 6 18"/>
+                                  <path d="m6 6 12 12"/>
+                                </svg>
+                                      </button>
+                            </Badge>
+                          ))}
+                          
+                          {customerSegments.demographicTags.length === 0 && (
+                            <div className="text-sm text-gray-500 italic">No demographic tags added yet</div>
+                          )}
+                          </div>
+                          
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="Add demographic tag (e.g., parents, students)"
+                            value={newDemographicTag}
+                            onChange={(e) => setNewDemographicTag(e.target.value)}
+                            className="rounded-lg border-gray-200"
+                          />
+                          <Button 
+                            type="button" 
+                            onClick={addDemographicTag}
+                            disabled={!newDemographicTag}
+                            className="bg-blue-600 hover:bg-blue-700 rounded-lg"
+                          >
+                            Add
+                          </Button>
+                        </div>
+                        <p className="text-xs text-gray-500">Add demographic groups that are relevant to your business</p>
+                              </div>
+                    </div>
+                    
+                    <Separator className="my-6" />
+                      
+                    {/* Visit & Spending Thresholds Section */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-medium gradient-text">Visit & Spending Thresholds</h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Frequent Visitor Threshold */}
+                        <div className="space-y-2">
+                          <Label htmlFor="frequentVisitorThreshold" className="text-sm font-medium text-gray-700">
+                            Frequent Visitor Threshold
+                          </Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="frequentVisitorThreshold"
+                              type="number"
+                              min="1"
+                              placeholder="4"
+                              value={customerSegments.frequentVisitorThreshold}
+                              onChange={(e) => updateCustomerSegments('frequentVisitorThreshold', e.target.value)}
+                              className="rounded-lg border-gray-200"
+                            />
+                            <span className="text-sm text-gray-600">visits per</span>
+                            <Input
+                              id="frequentVisitorPeriod"
+                              type="number"
+                              min="1"
+                              placeholder="30"
+                              value={customerSegments.frequentVisitorPeriod}
+                              onChange={(e) => updateCustomerSegments('frequentVisitorPeriod', e.target.value)}
+                              className="w-20 rounded-lg border-gray-200"
+                            />
+                            <span className="text-sm text-gray-600">days</span>
+                          </div>
+                          <p className="text-xs text-gray-500">Number of visits in a period to be considered frequent</p>
+                        </div>
+                        
+                        {/* High Spender Threshold */}
+                        <div className="space-y-2">
+                          <Label htmlFor="highSpenderThreshold" className="text-sm font-medium text-gray-700">
+                            High Spender Threshold
+                          </Label>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-500">$</span>
+                            <Input
+                              id="highSpenderThreshold"
+                              type="number"
+                              min="1"
+                              placeholder="100"
+                              value={customerSegments.highSpenderThreshold}
+                              onChange={(e) => updateCustomerSegments('highSpenderThreshold', e.target.value)}
+                              className="rounded-lg border-gray-200"
+                            />
+                            <span className="text-sm text-gray-600">per</span>
+                            <Input
+                              id="highSpenderPeriod"
+                              type="number"
+                              min="1"
+                              placeholder="30"
+                              value={customerSegments.highSpenderPeriod}
+                              onChange={(e) => updateCustomerSegments('highSpenderPeriod', e.target.value)}
+                              className="w-20 rounded-lg border-gray-200"
+                            />
+                            <span className="text-sm text-gray-600">days</span>
+                          </div>
+                          <p className="text-xs text-gray-500">Spending amount in a period to be considered a high spender</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Separator className="my-6" />
+                    
+                    {/* Cohort-Specific Thresholds Section */}
+                        <div className="space-y-4">
+                      <h3 className="text-lg font-medium gradient-text">Cohort-Specific Thresholds</h3>
+                      
+                      <div className="bg-blue-50 p-4 rounded-lg mb-4">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm text-blue-800">
+                            <strong>Note:</strong> These thresholds define mutually exclusive customer segments. 
+                            Values must follow the pattern: Active &lt; Dormant &lt; Churned.
+                          </p>
+                          <Button 
+                            onClick={applyDefaultCohortThresholds}
+                            className="bg-blue-500 hover:bg-blue-600 text-white text-xs py-1 h-8 rounded-lg"
+                          >
+                            Use Default Values
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="newCustomerThreshold" className="text-sm font-medium text-gray-700">New Customer Duration</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="newCustomerThreshold"
+                              type="number"
+                              min="1"
+                              placeholder="30"
+                              value={customerSegments.newCustomerThreshold}
+                              onChange={(e) => updateCustomerSegments('newCustomerThreshold', e.target.value)}
+                              className={`rounded-lg border-gray-200 ${customerSegments.cohortThresholdErrors?.newCustomerThreshold ? 'border-red-500' : ''}`}
+                            />
+                            <span className="text-sm text-gray-600">days</span>
+                          </div>
+                          {customerSegments.cohortThresholdErrors?.newCustomerThreshold && (
+                            <p className="text-xs text-red-500">{customerSegments.cohortThresholdErrors.newCustomerThreshold}</p>
+                          )}
+                          <p className="text-xs text-gray-500">Days since first visit to be considered a new customer</p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="activeThreshold" className="text-sm font-medium text-gray-700">Active Customer Threshold</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="activeThreshold"
+                              type="number"
+                              min="1"
+                              placeholder="30"
+                              value={customerSegments.activeThreshold}
+                              onChange={(e) => updateCustomerSegments('activeThreshold', e.target.value)}
+                              className={`rounded-lg border-gray-200 ${customerSegments.cohortThresholdErrors?.activeThreshold ? 'border-red-500' : ''}`}
+                            />
+                            <span className="text-sm text-gray-600">days</span>
+                          </div>
+                          {customerSegments.cohortThresholdErrors?.activeThreshold && (
+                            <p className="text-xs text-red-500">{customerSegments.cohortThresholdErrors.activeThreshold}</p>
+                          )}
+                          <p className="text-xs text-gray-500">Maximum days since last visit to be considered active</p>
+                        </div>
+                            
+                        <div className="space-y-2">
+                          <Label htmlFor="dormantCohortThreshold" className="text-sm font-medium text-gray-700">Dormant Cohort Threshold</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="dormantCohortThreshold"
+                              type="number"
+                              min="1"
+                              placeholder="90"
+                              value={customerSegments.dormantCohortThreshold}
+                              onChange={(e) => updateCustomerSegments('dormantCohortThreshold', e.target.value)}
+                              className={`rounded-lg border-gray-200 ${customerSegments.cohortThresholdErrors?.dormantCohortThreshold ? 'border-red-500' : ''}`}
+                            />
+                            <span className="text-sm text-gray-600">days</span>
+                          </div>
+                          {customerSegments.cohortThresholdErrors?.dormantCohortThreshold && (
+                            <p className="text-xs text-red-500">{customerSegments.cohortThresholdErrors.dormantCohortThreshold}</p>
+                          )}
+                          <p className="text-xs text-gray-500">Days since last visit to be in the dormant cohort</p>
+                        </div>
+                            
+                        <div className="space-y-2">
+                          <Label htmlFor="churnedThreshold" className="text-sm font-medium text-gray-700">Churned Customer Threshold</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="churnedThreshold"
+                              type="number"
+                              min="1"
+                              placeholder="180"
+                              value={customerSegments.churnedThreshold}
+                              onChange={(e) => updateCustomerSegments('churnedThreshold', e.target.value)}
+                              className={`rounded-lg border-gray-200 ${customerSegments.cohortThresholdErrors?.churnedThreshold ? 'border-red-500' : ''}`}
+                            />
+                            <span className="text-sm text-gray-600">days</span>
+                          </div>
+                          {customerSegments.cohortThresholdErrors?.churnedThreshold && (
+                            <p className="text-xs text-red-500">{customerSegments.cohortThresholdErrors.churnedThreshold}</p>
+                          )}
+                          <p className="text-xs text-gray-500">Days since last visit to be considered churned</p>
+                        </div>
+                            
+                        <div className="space-y-2">
+                          <Label htmlFor="resurrectedThreshold" className="text-sm font-medium text-gray-700">Resurrected Customer Status Duration</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="resurrectedThreshold"
+                              type="number"
+                              min="1"
+                              placeholder="60"
+                              value={customerSegments.resurrectedThreshold}
+                              onChange={(e) => updateCustomerSegments('resurrectedThreshold', e.target.value)}
+                              className={`rounded-lg border-gray-200 ${customerSegments.cohortThresholdErrors?.resurrectedThreshold ? 'border-red-500' : ''}`}
+                            />
+                            <span className="text-sm text-gray-600">days</span>
+                          </div>
+                          {customerSegments.cohortThresholdErrors?.resurrectedThreshold && (
+                            <p className="text-xs text-red-500">{customerSegments.cohortThresholdErrors.resurrectedThreshold}</p>
+                          )}
+                          <p className="text-xs text-gray-500">Days a previously dormant or churned customer remains in the "resurrected" state after making an order</p>
+                        </div>
+                        
+                        <div className="col-span-1 md:col-span-2 mt-4">
+                          <div className="bg-gray-50 p-4 rounded-lg">
+                            <h4 className="text-sm font-medium text-gray-800 mb-2">Cohort Definitions:</h4>
+                            <ul className="text-xs text-gray-600 space-y-2">
+                              <li><strong>New:</strong> Customers within {customerSegments?.newCustomerThreshold || "30"} days of their first visit.</li>
+                              <li><strong>Active:</strong> Customers who have visited within the last {customerSegments?.activeThreshold || "30"} days.</li>
+                              <li><strong>Dormant:</strong> Customers who haven't visited between {customerSegments?.activeThreshold || "30"} and {customerSegments?.dormantCohortThreshold || "90"} days.</li>
+                              <li><strong>Churned:</strong> Customers who haven't visited for more than {customerSegments?.churnedThreshold || "180"} days.</li>
+                              <li><strong>Resurrected:</strong> Previously dormant or churned customers who have made a new order. They remain in this state for {customerSegments?.resurrectedThreshold || "60"} days after their return visit.</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                            
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mt-4">
+                            <div className="flex items-start gap-3">
+                        <Users className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                              <div>
+                          <h4 className="text-sm font-medium text-blue-800">Why Customer Segmentation Matters</h4>
+                          <p className="text-xs text-blue-700 mt-1">
+                            Detailed customer segmentation allows your AI agent to create highly targeted rewards that resonate with specific customer groups. 
+                            This increases engagement and conversion rates while building stronger customer relationships.
+                          </p>
+                        </div>
+                          </div>
+                        </div>
+                        
+                    <Separator className="my-6" />
+                    
+                    {/* Customer Milestones Section */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-medium gradient-text">Customer Milestones</h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="birthdayRewards" className="text-sm font-medium text-gray-700">Birthday Rewards</Label>
+                            <Switch 
+                              id="birthdayRewards"
+                              checked={customerSegments.birthdayRewards}
+                              onCheckedChange={(checked) => updateCustomerSegments('birthdayRewards', checked)}
+                              className="apple-switch"
+                            />
+                          </div>
+                          <p className="text-xs text-gray-500">Send special offers on customer birthdays</p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="anniversaryRewards" className="text-sm font-medium text-gray-700">Anniversary Rewards</Label>
+                            <Switch 
+                              id="anniversaryRewards"
+                              checked={customerSegments.anniversaryRewards}
+                              onCheckedChange={(checked) => updateCustomerSegments('anniversaryRewards', checked)}
+                              className="apple-switch"
+                            />
+                          </div>
+                          <p className="text-xs text-gray-500">Send special offers on customer's first purchase anniversary</p>
+                        </div>
+                        
+                        {/* Transaction Milestones */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="transactionMilestones" className="text-sm font-medium text-gray-700">Transaction Milestones</Label>
+                            <Switch 
+                              id="transactionMilestones"
+                              checked={customerSegments.transactionMilestones.enabled}
+                              onCheckedChange={(checked) => updateCustomerSegments('transactionMilestones', {
+                                ...customerSegments.transactionMilestones,
+                                enabled: checked
+                              })}
+                              className="apple-switch"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-600">Every</span>
+                            <Input
+                              id="transactionMilestonesInterval"
+                              type="number"
+                              min="1"
+                              placeholder="10"
+                              value={customerSegments.transactionMilestones.interval}
+                              onChange={(e) => updateCustomerSegments('transactionMilestones', {
+                                ...customerSegments.transactionMilestones,
+                                interval: e.target.value
+                              })}
+                              disabled={!customerSegments.transactionMilestones.enabled}
+                              className="w-20 rounded-lg border-gray-200"
+                            />
+                            <span className="text-sm text-gray-600">transactions</span>
+                          </div>
+                          <p className="text-xs text-gray-500">Reward customers on transaction milestones (e.g., every 10th purchase)</p>
+                        </div>
+                        
+                        {/* Spending Milestones */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="spendingMilestones" className="text-sm font-medium text-gray-700">Spending Milestones</Label>
+                            <Switch 
+                              id="spendingMilestones"
+                              checked={customerSegments.spendingMilestones.enabled}
+                              onCheckedChange={(checked) => updateCustomerSegments('spendingMilestones', {
+                                ...customerSegments.spendingMilestones,
+                                enabled: checked
+                              })}
+                              className="apple-switch"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-600">Every</span>
+                            <span className="text-gray-500">$</span>
+                            <Input
+                              id="spendingMilestonesAmount"
+                              type="number"
+                              min="1"
+                              placeholder="500"
+                              value={customerSegments.spendingMilestones.amount}
+                              onChange={(e) => updateCustomerSegments('spendingMilestones', {
+                                ...customerSegments.spendingMilestones,
+                                amount: e.target.value
+                              })}
+                              disabled={!customerSegments.spendingMilestones.enabled}
+                              className="w-24 rounded-lg border-gray-200"
+                            />
+                            <span className="text-sm text-gray-600">spent</span>
+                          </div>
+                          <p className="text-xs text-gray-500">Reward customers when they reach spending thresholds (e.g., every $500 spent)</p>
+                        </div>
+                        
+                        {/* Redemption Milestones */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="redemptionMilestones" className="text-sm font-medium text-gray-700">Redemption Milestones</Label>
+                            <Switch 
+                              id="redemptionMilestones"
+                              checked={customerSegments.redemptionMilestones.enabled}
+                              onCheckedChange={(checked) => updateCustomerSegments('redemptionMilestones', {
+                                ...customerSegments.redemptionMilestones,
+                                enabled: checked
+                              })}
+                              className="apple-switch"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-600">Every</span>
+                            <Input
+                              id="redemptionMilestonesInterval"
+                              type="number"
+                              min="1"
+                              placeholder="5"
+                              value={customerSegments.redemptionMilestones.interval}
+                              onChange={(e) => updateCustomerSegments('redemptionMilestones', {
+                                ...customerSegments.redemptionMilestones,
+                                interval: e.target.value
+                              })}
+                              disabled={!customerSegments.redemptionMilestones.enabled}
+                              className="w-20 rounded-lg border-gray-200"
+                            />
+                            <span className="text-sm text-gray-600">redemptions</span>
+                          </div>
+                          <p className="text-xs text-gray-500">Reward customers after they redeem a certain number of offers (e.g., every 5th redemption)</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <CardFooter className="flex justify-between border-t p-6">
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                        className="flex items-center gap-1 rounded-lg"
+                        onClick={() => setActiveTab("financial")}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
+                            <path d="M19 12H5M12 19l-7-7 7-7"/>
+                          </svg>
+                        Previous: Financial
+                        </Button>
+                      <Button variant="outline" className="rounded-lg">Reset</Button>
+                      </div>
+                      <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                        className="border-blue-200 text-blue-700 hover:bg-blue-50 rounded-lg" 
+                          onClick={saveProgress}
+                          disabled={isSaving}
+                        >
+                          {isSaving ? (
+                            <>
+                              <span className="animate-pulse mr-2">●</span>
+                              Saving...
+                            </>
+                          ) : (
+                            "Save Progress"
+                          )}
+                        </Button>
+                      <Button className="gap-2 bg-blue-600 hover:bg-blue-700 rounded-lg" onClick={() => setActiveTab("reward-constraints")}>
+                            Next: Reward Constraints
+                            <ArrowRight className="h-4 w-4" />
+                        </Button>
+                          </div>
+                    </CardFooter>
+                  </Card>
+                )}
+              
+              {activeTab === "reward-constraints" && (
+                <Card className="border-0 shadow-md apple-card">
+                  <CardHeader className="pb-2">
+                    <div>
+                      <CardTitle className="text-2xl">
+                        <span className="gradient-text">Reward Constraints</span>
+                      </CardTitle>
+                      <CardDescription className="text-gray-500 mt-1">
+                        Configure the rules and limitations for your rewards program
+                      </CardDescription>
+                          </div>
+                  </CardHeader>
+                  <CardContent className="space-y-8 pt-4">
+                    {/* Allowed Offer Types Section */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-medium gradient-text">Allowed Offer Types</h3>
+                      <p className="text-sm text-gray-600">Select which reward types the agent is allowed to create</p>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
+                        <div className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-sm transition-shadow">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
+                                <Gift className="h-5 w-5 text-blue-600" />
+                              </div>
+                              <div>
+                                <h4 className="font-medium">Free Item</h4>
+                                <p className="text-xs text-gray-500 mt-1">E.g., Free coffee, dessert, or side item with purchase</p>
+                            </div>
+                        </div>
+                            <Switch 
+                              checked={rewardConstraints.allowedOfferTypes.freeItem}
+                              onCheckedChange={(checked) => updateRewardConstraintOfferType('freeItem', checked)}
+                              className="data-[state=checked]:bg-blue-600"
+                            />
+                          </div>
+                          </div>
+                          
+                        <div className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-sm transition-shadow">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-full bg-green-50 flex items-center justify-center">
+                                <Percent className="h-5 w-5 text-green-600" />
+                              </div>
+                              <div>
+                                <h4 className="font-medium">Percentage Discount (%)</h4>
+                                <p className="text-xs text-gray-500 mt-1">E.g., 15% off your next purchase, 20% off specific items</p>
+                            </div>
+                        </div>
+                            <Switch 
+                              checked={rewardConstraints.allowedOfferTypes.percentageDiscount}
+                              onCheckedChange={(checked) => updateRewardConstraintOfferType('percentageDiscount', checked)}
+                              className="data-[state=checked]:bg-blue-600"
+                            />
+                              </div>
+                          </div>
+                          
+                        <div className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-sm transition-shadow">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-full bg-amber-50 flex items-center justify-center">
+                                <BadgeDollarSign className="h-5 w-5 text-amber-600" />
+                              </div>
+                              <div>
+                                <h4 className="font-medium">Fixed Amount ($)</h4>
+                                <p className="text-xs text-gray-500 mt-1">E.g., $5 off your order, $10 off when you spend $50+</p>
+                            </div>
+                        </div>
+                            <Switch 
+                              checked={rewardConstraints.allowedOfferTypes.fixedAmount}
+                              onCheckedChange={(checked) => updateRewardConstraintOfferType('fixedAmount', checked)}
+                              className="data-[state=checked]:bg-blue-600"
+                            />
+                          </div>
+                          </div>
+                          
+                        <div className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-sm transition-shadow">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-full bg-purple-50 flex items-center justify-center">
+                                <ShoppingBag className="h-5 w-5 text-purple-600" />
+                              </div>
+                              <div>
+                                <h4 className="font-medium">Buy X Get Y</h4>
+                                <p className="text-xs text-gray-500 mt-1">E.g., Buy one get one free, Buy 3 get 1 free</p>
+                            </div>
+                        </div>
+                            <Switch
+                              checked={rewardConstraints.allowedOfferTypes.buyXGetY}
+                              onCheckedChange={(checked) => updateRewardConstraintOfferType('buyXGetY', checked)}
+                              className="data-[state=checked]:bg-blue-600"
+                            />
+                        </div>
+                          </div>
+                          
+                        <div className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-sm transition-shadow">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-full bg-pink-50 flex items-center justify-center">
+                                <Sparkles className="h-5 w-5 text-pink-600" />
+                              </div>
+                          <div>
+                                <h4 className="font-medium">Mystery Gift</h4>
+                                <p className="text-xs text-gray-500 mt-1">E.g., Surprise reward revealed at checkout, random prize</p>
+                              </div>
+                            </div>
+                            <Switch 
+                              checked={rewardConstraints.allowedOfferTypes.mysteryGift}
+                              onCheckedChange={(checked) => updateRewardConstraintOfferType('mysteryGift', checked)}
+                              className="data-[state=checked]:bg-blue-600"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                          </div>
+                          
+                    <Separator className="my-6" />
+                    
+                    
+                    
+                    
+                    {/* Reward Duration & Display Section */}
+                      <div className="space-y-4">
+                      <h3 className="text-lg font-medium gradient-text">Reward Duration & Display</h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        
+                        
+                            <div className="space-y-2">
+                          <Label htmlFor="concurrencyCeiling" className="text-sm font-medium text-gray-700">
+                            Concurrency Ceiling
+                          </Label>
+                              <div className="flex items-center gap-2">
+                                <Input
+                              id="concurrencyCeiling"
+                                  type="number"
+                                  min="1"
+                              max="10"
+                              placeholder="4"
+                              value={rewardConstraints.concurrencyCeiling}
+                              onChange={(e) => updateRewardConstraints('concurrencyCeiling', e.target.value)}
+                              className="max-w-[100px] rounded-lg border-gray-200"
+                            />
+                            <span className="text-sm text-gray-600">active rewards</span>
+                              </div>
+                          <p className="text-xs text-gray-500">Maximum number of rewards displayed to a customer at once</p>
+                            </div>
+                          
+                        <div className="space-y-2">
+                          
+                            </div>
+                            
+                        <div className="space-y-2 md:col-span-2">
+                          
+                            </div>
+                        </div>
+                      </div>
+                      
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mt-4">
+                        <div className="flex items-start gap-3">
+                        <Gift className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                          <div>
+                          <h4 className="text-sm font-medium text-blue-800">Reward Constraints Impact</h4>
+                          <p className="text-xs text-blue-700 mt-1">
+                            Setting clear constraints helps your AI agent create rewards that align with your business goals and customer expectations.
+                            These parameters ensure rewards are valuable but sustainable, and presented at the right time and place.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                    <CardFooter className="flex justify-between border-t p-6">
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                        className="flex items-center gap-1 rounded-lg"
+                        onClick={() => setActiveTab("customer-segments")}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
+                            <path d="M19 12H5M12 19l-7-7 7-7"/>
+                          </svg>
+                        Previous: Customer Segments
+                        </Button>
+                      <Button variant="outline" className="rounded-lg">Reset</Button>
+                    </div>
+                      <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                        className="border-blue-200 text-blue-700 hover:bg-blue-50 rounded-lg" 
+                          onClick={saveProgress}
+                            disabled={isSaving}
+                          >
+                            {isSaving ? (
+                              <>
+                                <span className="animate-pulse mr-2">●</span>
+                            Saving...
+                              </>
+                            ) : (
+                          "Save Progress"
+                            )}
+                          </Button>
+                      <Button className="gap-2 bg-blue-600 hover:bg-blue-700 rounded-lg" onClick={() => setActiveTab("messaging")}>
+                        Next: Messaging
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardFooter>
+                </Card>
+              )}
+
+              {activeTab === "messaging" && (
+                <Card className="border-0 shadow-md apple-card">
+                  <CardHeader className="pb-2">
+                    <div>
+                      <CardTitle className="text-2xl">
+                        <span className="gradient-text">Messaging</span>
+                      </CardTitle>
+                      <CardDescription className="text-gray-500 mt-1">
+                        Configure messaging constraints for your rewards
+                      </CardDescription>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-8 pt-4">
+                    {/* Restricted Keywords Section */}
+                      <div className="space-y-4">
+                      <h3 className="text-lg font-medium gradient-text">Restricted Keywords</h3>
+                      <p className="text-sm text-gray-600">Specify words that should not be used in reward messaging</p>
+                      
+                      <div className="space-y-4">
+                        <div className="space-y-4">
+                          <Label htmlFor="restrictedKeywords" className="text-sm font-medium text-gray-700">
+                            Keywords to Avoid
+                          </Label>
+                          <Input
+                            id="restrictedKeywords"
+                            placeholder="e.g., free, guaranteed, unlimited, best, cheapest"
+                            value={messagingInputs.restrictedKeywords || ""}
+                            onChange={(e) => updateMessagingInputs('restrictedKeywords', e.target.value)}
+                            className="rounded-lg border-gray-200"
+                          />
+                          <p className="text-xs text-gray-500">
+                            Enter comma-separated words that should be avoided in reward messaging. 
+                            These might include legally sensitive terms or words that don't align with your brand voice.
+                          </p>
+                            </div>
+                            
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-medium text-gray-700">Common Restricted Terms</h4>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {["free", "guaranteed", "unlimited", "best", "cheapest", "discount", "sale", "limited time", "exclusive", "secret"].map(keyword => (
+                              <Badge 
+                                key={keyword}
+                            variant="outline" 
+                                className="cursor-pointer px-3 py-1.5 rounded-full transition-all bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200"
+                            onClick={() => {
+                                  const currentKeywords = messagingInputs.restrictedKeywords || "";
+                                  const keywordArray = currentKeywords.split(',').map(k => k.trim()).filter(k => k !== "");
+                                  
+                                  if (!keywordArray.includes(keyword)) {
+                                    const newKeywords = [...keywordArray, keyword].join(', ');
+                                    updateMessagingInputs('restrictedKeywords', newKeywords);
+                                  }
+                                }}
+                              >
+                                + {keyword}
+                              </Badge>
+                            ))}
+                            </div>
+                          <p className="text-xs text-gray-500 mt-2">Click to add these common restricted terms to your list</p>
+                          </div>
+                            </div>
+                            
+                      <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mt-6">
+                        <div className="flex items-start gap-3">
+                          <MessageSquareText className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <h4 className="text-sm font-medium text-blue-800">Why Restricted Keywords Matter</h4>
+                            <p className="text-xs text-blue-700 mt-1">
+                              Restricting certain keywords helps ensure your rewards messaging complies with regulations and 
+                              maintains your brand standards. This prevents potential legal issues and keeps your messaging 
+                              consistent with your brand voice.
+                            </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                    <CardFooter className="flex justify-between border-t p-6">
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                        className="flex items-center gap-1 rounded-lg"
+                        onClick={() => setActiveTab("reward-constraints")}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
+                            <path d="M19 12H5M12 19l-7-7 7-7"/>
+                          </svg>
+                        Previous: Reward Constraints
+                        </Button>
+                      <Button variant="outline" className="rounded-lg">Reset</Button>
+                      </div>
+                      <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                        className="border-blue-200 text-blue-700 hover:bg-blue-50 rounded-lg" 
+                          onClick={saveProgress}
+                            disabled={isSaving}
+                          >
+                            {isSaving ? (
+                              <>
+                                <span className="animate-pulse mr-2">●</span>
+                              Saving...
+                              </>
+                            ) : (
+                            "Save Progress"
+                            )}
+                          </Button>
+                      <Button className="gap-2 bg-green-600 hover:bg-green-700 rounded-lg" onClick={() => window.location.href = '/dashboard'}>
+                        Done
+                        <CheckCircle className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardFooter>
+                </Card>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </PageTransition>
+  )
+} 

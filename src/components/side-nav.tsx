@@ -29,7 +29,8 @@ import {
   ChevronRight,
   ShieldCheck,
   Search,
-  Command
+  Command,
+  DollarSign
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -43,7 +44,7 @@ import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, DocumentData } from "firebase/firestore"
-import { signOut, Auth } from "firebase/auth"
+import { signOut, Auth, getAuth } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { TapAiButton } from "@/components/tap-ai-button"
@@ -51,6 +52,26 @@ import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/use-toast"
 import { collection, getDocs, query, where, limit } from "firebase/firestore"
 import { Input } from "@/components/ui/input"
+
+// Type assertion for auth
+const typedAuth: Auth = auth as Auth;
+
+// Custom scrollbar styles
+const scrollbarStyles = `
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(0, 0, 0, 0.2);
+  }
+`;
 
 const navItems = [
   {
@@ -102,13 +123,30 @@ const navItems = [
   },
   {
     title: "Tap Agent",
-    href: "/tap-agent",
-    icon: Sparkles
+    href: "/tap-agent/intro",
+    icon: Sparkles,
+    subItems: [
+      {
+        title: "Introduction",
+        href: "/tap-agent/intro",
+        icon: Home
+      },
+      {
+        title: "Agent Setup",
+        href: "/tap-agent/setup",
+        icon: Settings
+      }
+    ]
   },
   {
     title: "Customers",
     href: "/customers",
     icon: Users
+  },
+  {
+    title: "Financials",
+    href: "/merchant/financials",
+    icon: DollarSign
   },
   {
     title: "TapAI",
@@ -184,6 +222,7 @@ export function SideNav() {
   const [showChecklist, setShowChecklist] = useState(true)
   const [openSections, setOpenSections] = useState<SectionState>({
     "My Store": true,
+    "Tap Agent": true,
     "Settings": true
   })
   const [searchQuery, setSearchQuery] = useState("")
@@ -307,7 +346,7 @@ export function SideNav() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth)
+      await signOut(typedAuth)
       router.push('/login')
     } catch (error) {
       console.error("Error signing out:", error)
@@ -327,8 +366,11 @@ export function SideNav() {
   }
 
   return (
-    <div className="w-64 border-r h-screen flex-shrink-0 bg-[#FAFCFF] flex flex-col">
-      <div className="h-16 border-b flex items-center px-4">
+    <div className="w-56 h-screen flex-shrink-0 bg-[#F5F5F5] flex flex-col">
+      {/* Apply custom scrollbar styles */}
+      <style jsx global>{scrollbarStyles}</style>
+      
+      <div className="h-16 flex items-center px-4">
         <img
           src="/hand1.png"
           alt="Tap Loyalty Logo"
@@ -374,7 +416,7 @@ export function SideNav() {
         </div>
       </div>
       
-      <nav className="px-2 py-1.5 flex-1 overflow-y-auto">
+      <nav className="px-2 py-1.5 flex-1 overflow-y-auto custom-scrollbar">
         <ul className="space-y-1">
           {/* Main pages without sub-items */}
           {navItems
@@ -425,10 +467,9 @@ export function SideNav() {
                     <ul className="space-y-1">
                       {item.subItems?.map((subItem) => {
                         const isSubActive = pathname === subItem.href || 
-                          pathname.startsWith(`${subItem.href}/`);
-                        
+                          pathname.startsWith(`${item.href}/`)
                         return (
-                          <li key={subItem.href}>
+                          <li key={subItem.title}>
                             <Link
                               href={subItem.href}
                               className={cn(
@@ -439,7 +480,9 @@ export function SideNav() {
                               )}
                             >
                               <subItem.icon className={cn("h-4 w-4", 
-                                isSubActive ? "text-[#007AFF]" : "text-gray-500 group-hover:text-[#007AFF]"
+                                isSubActive 
+                                  ? "text-[#007AFF]" 
+                                  : "text-gray-500 group-hover:text-[#007AFF]"
                               )} />
                               <span className={isSubActive ? "text-[#007AFF]" : "group-hover:text-[#007AFF]"}>
                                 {subItem.title}
@@ -452,112 +495,105 @@ export function SideNav() {
                   </CollapsibleContent>
                 </Collapsible>
               </li>
-            ))
-          }
+            ))}
+          
+          {/* Tap Agent section */}
+          {navItems
+            .filter(item => item.title === "Tap Agent")
+            .map((item) => (
+              <li key={item.title} className="mt-2">
+                <div className="px-3 mb-0.5">
+                  <button 
+                    onClick={() => toggleSection("Tap Agent")}
+                    className="text-[10px] font-medium text-gray-500 hover:text-[#007AFF] uppercase tracking-wider"
+                  >
+                    {item.title}
+                  </button>
+                </div>
+                <Collapsible open={openSections["Tap Agent"]}>
+                  <CollapsibleContent>
+                    <ul className="space-y-1">
+                      {item.subItems?.map((subItem) => {
+                        const isSubActive = pathname === subItem.href || 
+                          pathname.startsWith(`${item.href}/`)
+                        return (
+                          <li key={subItem.title}>
+                            <Link
+                              href={subItem.href}
+                              className={cn(
+                                "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-normal transition-colors",
+                                isSubActive 
+                                  ? "bg-[#007AFF]/10 text-[#007AFF]" 
+                                  : "text-gray-800 hover:bg-[#007AFF]/5"
+                              )}
+                            >
+                              <subItem.icon className={cn("h-4 w-4", 
+                                isSubActive 
+                                  ? "text-[#007AFF]" 
+                                  : "text-gray-500 group-hover:text-[#007AFF]"
+                              )} />
+                              <span className={isSubActive ? "text-[#007AFF]" : "group-hover:text-[#007AFF]"}>
+                                {subItem.title}
+                              </span>
+                            </Link>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </CollapsibleContent>
+                </Collapsible>
+              </li>
+            ))}
           
           {/* Settings section */}
-          <li className="mt-2">
-            <div className="px-3 mb-0.5">
-              <button 
-                onClick={() => toggleSection("Settings")}
-                className="text-[10px] font-medium text-gray-500 hover:text-[#007AFF] uppercase tracking-wider"
-              >
-                Settings
-              </button>
-            </div>
-            <Collapsible open={openSections["Settings"]}>
-              <CollapsibleContent>
-                <ul className="space-y-1">
-                  {navItems
-                    .filter(item => item.title === "Settings" || item.title === "Onboarding Wizard" || item.title === "Integrations" || item.title === "Admin")
-                    .map((item) => {
-                      const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
-                      
-                      return (
-                        <li key={item.title}>
-                          <Link
-                            href={item.href}
-                            className={cn(
-                              "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-normal transition-colors",
-                              isActive 
-                                ? "bg-[#007AFF]/10 text-[#007AFF]" 
-                                : "text-gray-800 hover:bg-[#007AFF]/5"
-                            )}
-                          >
-                            <item.icon className={cn("h-4 w-4", 
-                              isActive ? "text-[#007AFF]" : "text-gray-500 group-hover:text-[#007AFF]"
-                            )} />
-                            <span className={isActive ? "text-[#007AFF]" : "group-hover:text-[#007AFF]"}>
-                              {item.title}
-                            </span>
-                          </Link>
-                        </li>
-                      )
-                    })
-                  }
-                </ul>
-              </CollapsibleContent>
-            </Collapsible>
-          </li>
+          {navItems
+            .filter(item => item.title === "Settings")
+            .map((item) => (
+              <li key={item.title} className="mt-2">
+                <div className="px-3 mb-0.5">
+                  <button 
+                    onClick={() => toggleSection("Settings")}
+                    className="text-[10px] font-medium text-gray-500 hover:text-[#007AFF] uppercase tracking-wider"
+                  >
+                    {item.title}
+                  </button>
+                </div>
+                <Collapsible open={openSections["Settings"]}>
+                  <CollapsibleContent>
+                    <ul className="space-y-1">
+                      {item.subItems?.map((subItem) => {
+                        const isSubActive = pathname === subItem.href || 
+                          pathname.startsWith(`${item.href}/`)
+                        return (
+                          <li key={subItem.title}>
+                            <Link
+                              href={subItem.href}
+                              className={cn(
+                                "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-normal transition-colors",
+                                isSubActive 
+                                  ? "bg-[#007AFF]/10 text-[#007AFF]" 
+                                  : "text-gray-800 hover:bg-[#007AFF]/5"
+                              )}
+                            >
+                              <subItem.icon className={cn("h-4 w-4", 
+                                isSubActive 
+                                  ? "text-[#007AFF]" 
+                                  : "text-gray-500 group-hover:text-[#007AFF]"
+                              )} />
+                              <span className={isSubActive ? "text-[#007AFF]" : "group-hover:text-[#007AFF]"}>
+                                {subItem.title}
+                              </span>
+                            </Link>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </CollapsibleContent>
+                </Collapsible>
+              </li>
+            ))}
         </ul>
       </nav>
-      
-      {/* Profile section at bottom */}
-      <div className="mt-auto border-t pt-4 pb-4">
-        <div className="flex items-center p-2">
-          <div className="w-10 h-10 rounded-full overflow-hidden border mr-3">
-            {merchantData?.logoUrl ? (
-              <img 
-                src={merchantData.logoUrl} 
-                alt={merchantData.tradingName || "Business Logo"} 
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                <User className="h-4 w-4 text-gray-400" />
-              </div>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">
-              {merchantData?.tradingName || user?.displayName || "Your Business"}
-            </p>
-            <p className="text-xs text-muted-foreground truncate">
-              {merchantData?.businessEmail || user?.email || ""}
-            </p>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <div className="px-2 py-1.5">
-                <p className="text-sm font-medium">
-                  {merchantData?.tradingName || user?.displayName || "Your Business"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {merchantData?.businessEmail || user?.email || ""}
-                </p>
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Settings</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                onClick={handleLogout}
-                className="text-red-600 focus:bg-red-50 focus:text-red-600"
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Log out</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
     </div>
   )
-} 
+}

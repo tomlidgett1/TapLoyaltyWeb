@@ -82,13 +82,13 @@ export function BusinessBrandForm({ data, onChange }: BusinessBrandFormProps) {
 
   return (
     <Card className="border-none shadow-none">
-      <CardHeader className="px-0">
-        <CardTitle className="text-xl">Business Brand</CardTitle>
+      <CardHeader className="p-0">
+        <CardTitle className="text-xl bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Business Brand</CardTitle>
         <CardDescription>
           Define your business identity and brand voice.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6 px-0">
+      <CardContent className="space-y-6 p-0 mt-6">
         <div className="space-y-4">
           <div className="grid gap-2">
             <Label htmlFor="businessName">Business Name</Label>

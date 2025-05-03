@@ -44,13 +44,13 @@ export function AgentTasksForm({ data, onChange }: AgentTasksFormProps) {
   
   return (
     <Card className="border-none shadow-none">
-      <CardHeader className="px-0">
-        <CardTitle className="text-xl">Agent Tasks</CardTitle>
+      <CardHeader className="p-0">
+        <CardTitle className="text-xl bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Agent Tasks</CardTitle>
         <CardDescription>
           Enable or disable specific tasks for your Tap Agent.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6 px-0">
+      <CardContent className="space-y-6 p-0 mt-6">
         <div className="space-y-6">
           {(Object.keys(data) as Array<keyof AgentTasks>).map((task) => (
             <div key={task} className="flex flex-col space-y-2">

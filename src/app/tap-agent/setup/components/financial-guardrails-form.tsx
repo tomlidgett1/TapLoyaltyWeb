@@ -84,9 +84,9 @@ export function FinancialGuardrailsForm({ data, onChange }: FinancialGuardrailsF
   return (
     <Card className="border-none shadow-none">
       <CardHeader className="p-0">
-        <CardTitle className="text-xl">Financial Guardrails</CardTitle>
+        <CardTitle className="text-xl bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Financial Guardrails</CardTitle>
         <CardDescription>
-          Set financial constraints and limits for your rewards program.
+          Set financial constraints for your rewards program.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-8 p-0 mt-6">

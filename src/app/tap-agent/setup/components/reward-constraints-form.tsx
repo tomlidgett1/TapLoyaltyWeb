@@ -58,12 +58,12 @@ export function RewardConstraintsForm({ data, onChange }: RewardConstraintsFormP
   return (
     <Card className="border-none shadow-none">
       <CardHeader className="p-0">
-        <CardTitle className="text-xl">Reward Constraints</CardTitle>
+        <CardTitle className="text-xl bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Reward Constraints</CardTitle>
         <CardDescription>
-          Set limits and constraints on the types of rewards your agent can create.
+          Define allowed reward types and limitations.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6 p-0 mt-6">
+      <CardContent className="space-y-8 p-0 mt-6">
         {/* Allowed Reward Types */}
         <div className="space-y-4">
           <div>

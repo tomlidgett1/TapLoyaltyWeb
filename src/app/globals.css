@@ -138,6 +138,30 @@ body {
   }
 }
 
+/* Custom scrollbar styling */
+.scrollable {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+.scrollable::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.scrollable::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollable::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+}
+
+.scrollable::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 122, 255, 0.4);
+}
+
 .tap-agent-gradient {
   @apply bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent;
 }

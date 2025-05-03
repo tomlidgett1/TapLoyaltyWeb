@@ -115,12 +115,12 @@ export function CustomerCohortsForm({ data, onChange }: CustomerCohortsFormProps
   return (
     <Card className="border-none shadow-none">
       <CardHeader className="p-0">
-        <CardTitle className="text-xl">Customer Cohorts</CardTitle>
+        <CardTitle className="text-xl bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Customer Cohorts</CardTitle>
         <CardDescription>
-          Define how customers are segmented into cohorts based on their behavior.
+          Define customer lifecycle stages and behaviors.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6 p-0 mt-6">
+      <CardContent className="space-y-8 p-0 mt-6">
         {/* New Customers */}
         <div className="space-y-4 border-b pb-4">
           <div>

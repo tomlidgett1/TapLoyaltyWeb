@@ -57,10 +57,22 @@ interface FormData {
   delayedVisibilityType: string
   delayedVisibilityTransactions: string
   delayedVisibilitySpend: string
-  itemName: string
-  voucherAmount: string
-  spendThreshold: string
-
+  
+  // Reward type specific fields
+  discountValue: string          // For percentage and fixed discounts
+  discountAppliesTo: string      // For percentage discount
+  minimumPurchase: string        // For fixed discount
+  itemName: string               // For free item
+  itemDescription: string        // For free item details
+  requiredPurchase: string       // For bundle offer (X)
+  bonusItem: string              // For bundle offer (Y)
+  bundleDiscountType: string     // For bundle offer (free, percentage, fixed)
+  bundleDiscountValue: string    // For bundle offer (percentage or fixed amount)
+  mysteryOptions: string         // For mystery surprise options
+  revealAtCheckout: boolean      // For mystery surprise reveal timing
+  customRewardDetails: string    // For other/custom rewards
+  voucherAmount: string          // Legacy field
+  
   // Conditions
   conditions: {
     useTransactionRequirements: boolean
@@ -93,6 +105,9 @@ interface FormData {
     startDate: string
     endDate: string
   }
+  
+  // Summary text for the reward
+  rewardSummary: string
 }
 
 export function CreateRewardDialog({ 
@@ -123,10 +138,23 @@ export function CreateRewardDialog({
     delayedVisibilityType: "transactions",
     delayedVisibilityTransactions: "",
     delayedVisibilitySpend: "",
+    
+    // Reward type specific fields
+    discountValue: "",
+    discountAppliesTo: "",
+    minimumPurchase: "",
     itemName: "",
+    itemDescription: "",
+    requiredPurchase: "",
+    bonusItem: "",
+    bundleDiscountType: "free",    // Default to free
+    bundleDiscountValue: "",
+    mysteryOptions: "",
+    revealAtCheckout: false,
+    customRewardDetails: "",
     voucherAmount: "",
     spendThreshold: "",
-
+    
     // Conditions
     conditions: {
       useTransactionRequirements: true,
@@ -158,7 +186,10 @@ export function CreateRewardDialog({
     activePeriod: {
       startDate: "",
       endDate: ""
-    }
+    },
+    
+    // Summary text for the reward
+    rewardSummary: "",
   })
 
   // Add new state for AI creator
@@ -699,7 +730,13 @@ export function CreateRewardDialog({
                           formData.rewardVisibility === 'new' ? 'new' : 'conditional',
         // Add newcx flag for New Customers Only visibility
         newcx: formData.rewardVisibility === 'new',
-        voucherAmount: Number(formData.voucherAmount) || 0,
+        
+        // Add reward type specific data
+        rewardTypeDetails: {
+          type: formData.type,
+        },
+        
+        // Add back the missing fields
         delayedVisibility: finalDelayedVisibility,
         conditions: filteredConditions,
         limitations,
@@ -714,10 +751,75 @@ export function CreateRewardDialog({
         redemptionCount: 0,
         uniqueCustomersCount: 0,
         lastRedeemedAt: null,
-        uniqueCustomerIds
-        // customerVisibility field removed as it's redundant
+        uniqueCustomerIds,
+        
+        // Add the reward summary
+        rewardSummary: formData.rewardSummary,
       }
-
+      
+      // Add type-specific details to the rewardTypeDetails object
+      switch(formData.type) {
+        case 'percentageDiscount':
+          rewardData.rewardTypeDetails = {
+            ...rewardData.rewardTypeDetails,
+            discountValue: Number(formData.discountValue) || 0,
+            discountType: 'percentage',
+            appliesTo: formData.discountAppliesTo || 'Any purchase'
+          };
+          break;
+          
+        case 'fixedDiscount':
+          rewardData.rewardTypeDetails = {
+            ...rewardData.rewardTypeDetails,
+            discountValue: Number(formData.discountValue) || 0,
+            discountType: 'fixed',
+            minimumPurchase: Number(formData.minimumPurchase) || 0
+          };
+          break;
+          
+        case 'freeItem':
+          rewardData.rewardTypeDetails = {
+            ...rewardData.rewardTypeDetails,
+            itemName: formData.itemName,
+            itemDescription: formData.itemDescription || ''
+          };
+          break;
+          
+        case 'bundleOffer':
+          rewardData.rewardTypeDetails = {
+            ...rewardData.rewardTypeDetails,
+            requiredPurchase: formData.requiredPurchase,
+            bonusItem: formData.bonusItem,
+            discountType: formData.bundleDiscountType,
+            discountValue: formData.bundleDiscountType !== 'free' 
+              ? Number(formData.bundleDiscountValue) || 0 
+              : 0
+          };
+          break;
+          
+        case 'mysterySurprise':
+          rewardData.rewardTypeDetails = {
+            ...rewardData.rewardTypeDetails,
+            options: formData.mysteryOptions.split('\n').filter(option => option.trim() !== ''),
+            revealAtCheckout: formData.revealAtCheckout
+          };
+          break;
+          
+        case 'other':
+          rewardData.rewardTypeDetails = {
+            ...rewardData.rewardTypeDetails,
+            details: formData.customRewardDetails
+          };
+          break;
+          
+        // For backward compatibility
+        default:
+          if (formData.voucherAmount) {
+            rewardData.voucherAmount = Number(formData.voucherAmount) || 0;
+          }
+          break;
+      }
+      
       // Handle specific customer visibility case
       if (formData.rewardVisibility === 'specific' && formData.specificCustomerIds && formData.specificCustomerIds.length > 0) {
         // Only store the customer names for display purposes
@@ -1469,6 +1571,86 @@ export function CreateRewardDialog({
     }
   }, [customers, formData.specificCustomerIds]);
 
+  // Add a function to generate the reward summary based on the reward type and details
+  const generateRewardSummary = () => {
+    let summary = "";
+    
+    switch(formData.type) {
+      case 'percentageDiscount':
+        summary = `Get ${formData.discountValue}% off`;
+        if (formData.discountAppliesTo) {
+          summary += ` ${formData.discountAppliesTo}`;
+        } else {
+          summary += " your purchase";
+        }
+        break;
+        
+      case 'fixedDiscount':
+        summary = `$${formData.discountValue} off`;
+        if (formData.minimumPurchase && Number(formData.minimumPurchase) > 0) {
+          summary += ` when you spend $${formData.minimumPurchase} or more`;
+        } else {
+          summary += " your purchase";
+        }
+        break;
+        
+      case 'freeItem':
+        summary = `Get a free ${formData.itemName}`;
+        if (formData.itemDescription) {
+          summary += ` (${formData.itemDescription})`;
+        }
+        break;
+        
+      case 'bundleOffer':
+        summary = `Buy ${formData.requiredPurchase}, get ${formData.bonusItem}`;
+        if (formData.bundleDiscountType === 'free') {
+          summary += " free";
+        } else if (formData.bundleDiscountType === 'percentage') {
+          summary += ` ${formData.bundleDiscountValue}% off`;
+        } else if (formData.bundleDiscountType === 'fixed') {
+          summary += ` $${formData.bundleDiscountValue} off`;
+        }
+        break;
+        
+      case 'mysterySurprise':
+        summary = "Surprise reward - redeem to reveal your prize!";
+        break;
+        
+      case 'other':
+        // For custom rewards, use the first line of the details as a summary
+        const firstLine = formData.customRewardDetails.split('\n')[0];
+        summary = firstLine || "Custom reward";
+        break;
+        
+      default:
+        summary = "Reward";
+        break;
+    }
+    
+    return summary;
+  }
+
+  // Add an effect to update the summary when relevant fields change
+  useEffect(() => {
+    const summary = generateRewardSummary();
+    setFormData(prev => ({
+      ...prev,
+      rewardSummary: summary
+    }));
+  }, [
+    formData.type, 
+    formData.discountValue, 
+    formData.discountAppliesTo,
+    formData.minimumPurchase,
+    formData.itemName,
+    formData.itemDescription,
+    formData.requiredPurchase,
+    formData.bonusItem,
+    formData.bundleDiscountType,
+    formData.bundleDiscountValue,
+    formData.customRewardDetails
+  ]);
+
   return (
     <Dialog 
       open={open} 
@@ -1731,51 +1913,90 @@ export function CreateRewardDialog({
                     <div className="p-4">
                       <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-6">
-                  <div className="grid gap-2">
-                    <Label>Reward Type</Label>
-                    <Select
-                      value={formData.type}
-                      onValueChange={(value) => setFormData({ ...formData, type: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select reward type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="discount">Discount</SelectItem>
-                        <SelectItem value="freeItem">Free Item</SelectItem>
-                        <SelectItem value="voucher">Gift Voucher</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
+                          <div className="grid gap-2">
+                            <Label>Reward Type</Label>
+                            <Select
+                              value={formData.type}
+                              onValueChange={(value) => setFormData({ ...formData, type: value })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select reward type" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="percentageDiscount">Percentage Discount</SelectItem>
+                                <SelectItem value="fixedDiscount">Fixed-Amount Discount</SelectItem>
+                                <SelectItem value="freeItem">Free Item</SelectItem>
+                                <SelectItem value="bundleOffer">Buy X Get Y (Bundle)</SelectItem>
+                                <SelectItem value="mysterySurprise">Mystery Surprise</SelectItem>
+                                <SelectItem value="other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
                             <p className="text-xs text-gray-500">Choose the type of reward to offer</p>
-                  </div>
+                          </div>
                           
-                  <div className="grid gap-2">
+                          <div className="grid gap-2">
                             <Label>Points Cost <span className="text-red-500">*</span></Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={formData.pointsCost}
-                      onChange={(e) => setFormData({ ...formData, pointsCost: e.target.value })}
+                            <Input
+                              type="number"
+                              min="0"
+                              value={formData.pointsCost}
+                              onChange={(e) => setFormData({ ...formData, pointsCost: e.target.value })}
                               placeholder="e.g., 100"
-                    />
+                            />
                             <p className="text-xs text-gray-500">Points customers will spend to redeem</p>
-                  </div>
+                          </div>
                         </div>
                         
                         {/* Add reward type specific input fields */}
-                        {formData.type === 'discount' && (
+                        {formData.type === 'percentageDiscount' && (
                           <div className="grid gap-2 border-l-2 border-blue-100 pl-4 py-2">
                             <Label>Discount Percentage <span className="text-red-500">*</span></Label>
                             <Input
                               type="number"
                               min="1"
                               max="100"
-                              value={formData.voucherAmount}
-                              onChange={(e) => setFormData({ ...formData, voucherAmount: e.target.value })}
+                              value={formData.discountValue}
+                              onChange={(e) => setFormData({ ...formData, discountValue: e.target.value })}
                               placeholder="e.g., 15 for 15% off"
                             />
                             <p className="text-xs text-gray-500">Percentage discount the customer will receive</p>
+                            
+                            <div className="mt-2">
+                              <Label>Applies To (Optional)</Label>
+                              <Input
+                                type="text"
+                                value={formData.discountAppliesTo}
+                                onChange={(e) => setFormData({ ...formData, discountAppliesTo: e.target.value })}
+                                placeholder="e.g., Any purchase, Coffee only, etc."
+                              />
+                              <p className="text-xs text-gray-500">Specify what products this discount applies to</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {formData.type === 'fixedDiscount' && (
+                          <div className="grid gap-2 border-l-2 border-blue-100 pl-4 py-2">
+                            <Label>Discount Amount ($) <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={formData.discountValue}
+                              onChange={(e) => setFormData({ ...formData, discountValue: e.target.value })}
+                              placeholder="e.g., 5 for $5 off"
+                            />
+                            <p className="text-xs text-gray-500">Fixed amount discount the customer will receive</p>
+                            
+                            <div className="mt-2">
+                              <Label>Minimum Purchase Amount ($)</Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                value={formData.minimumPurchase}
+                                onChange={(e) => setFormData({ ...formData, minimumPurchase: e.target.value })}
+                                placeholder="e.g., 20"
+                              />
+                              <p className="text-xs text-gray-500">Minimum purchase required to use this discount (0 for no minimum)</p>
+                            </div>
                           </div>
                         )}
 
@@ -1786,23 +2007,130 @@ export function CreateRewardDialog({
                               type="text"
                               value={formData.itemName}
                               onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
-                              placeholder="e.g., Coffee, Dessert, Product"
+                              placeholder="e.g., Coffee, Muffin, etc."
                             />
                             <p className="text-xs text-gray-500">Specify what item the customer will receive for free</p>
+                            
+                            <div className="mt-2">
+                              <Label>Item Description (Optional)</Label>
+                              <Input
+                                type="text"
+                                value={formData.itemDescription}
+                                onChange={(e) => setFormData({ ...formData, itemDescription: e.target.value })}
+                                placeholder="e.g., Any size, Specific flavor, etc."
+                              />
+                              <p className="text-xs text-gray-500">Additional details about the free item</p>
+                            </div>
                           </div>
                         )}
 
-                        {formData.type === 'voucher' && (
+                        {formData.type === 'bundleOffer' && (
                           <div className="grid gap-2 border-l-2 border-blue-100 pl-4 py-2">
-                            <Label>Gift Voucher Amount ($) <span className="text-red-500">*</span></Label>
+                            <Label>Required Purchase (X) <span className="text-red-500">*</span></Label>
                             <Input
-                              type="number"
-                              min="1"
-                              value={formData.voucherAmount}
-                              onChange={(e) => setFormData({ ...formData, voucherAmount: e.target.value })}
-                              placeholder="e.g., 10"
+                              type="text"
+                              value={formData.requiredPurchase}
+                              onChange={(e) => setFormData({ ...formData, requiredPurchase: e.target.value })}
+                              placeholder="e.g., Any sandwich, Coffee, etc."
                             />
-                            <p className="text-xs text-gray-500">Dollar value of the gift voucher</p>
+                            <p className="text-xs text-gray-500">What the customer needs to purchase</p>
+                            
+                            <div className="mt-4">
+                              <Label>Bonus Item (Y) <span className="text-red-500">*</span></Label>
+                              <Input
+                                type="text"
+                                value={formData.bonusItem}
+                                onChange={(e) => setFormData({ ...formData, bonusItem: e.target.value })}
+                                placeholder="e.g., Second sandwich, Drink, etc."
+                              />
+                              <p className="text-xs text-gray-500">What item the customer receives as a bonus</p>
+                            </div>
+                            
+                            <div className="mt-4">
+                              <Label>Discount Type <span className="text-red-500">*</span></Label>
+                              <RadioGroup 
+                                value={formData.bundleDiscountType} 
+                                onValueChange={(value) => setFormData({
+                                  ...formData,
+                                  bundleDiscountType: value
+                                })}
+                                className="grid grid-cols-3 gap-2 mt-2"
+                              >
+                                <div className="flex items-center space-x-2 border rounded p-2 hover:bg-gray-50">
+                                  <RadioGroupItem value="free" id="bundle-free" />
+                                  <Label htmlFor="bundle-free" className="cursor-pointer">Free</Label>
+                                </div>
+                                <div className="flex items-center space-x-2 border rounded p-2 hover:bg-gray-50">
+                                  <RadioGroupItem value="percentage" id="bundle-percentage" />
+                                  <Label htmlFor="bundle-percentage" className="cursor-pointer">% Off</Label>
+                                </div>
+                                <div className="flex items-center space-x-2 border rounded p-2 hover:bg-gray-50">
+                                  <RadioGroupItem value="fixed" id="bundle-fixed" />
+                                  <Label htmlFor="bundle-fixed" className="cursor-pointer">$ Off</Label>
+                                </div>
+                              </RadioGroup>
+                            </div>
+                            
+                            {formData.bundleDiscountType !== 'free' && (
+                              <div className="mt-2">
+                                <Label>
+                                  {formData.bundleDiscountType === 'percentage' ? 'Discount Percentage (%)' : 'Discount Amount ($)'}
+                                  <span className="text-red-500">*</span>
+                                </Label>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  max={formData.bundleDiscountType === 'percentage' ? "100" : undefined}
+                                  value={formData.bundleDiscountValue}
+                                  onChange={(e) => setFormData({ ...formData, bundleDiscountValue: e.target.value })}
+                                  placeholder={formData.bundleDiscountType === 'percentage' ? "e.g., 50 for 50% off" : "e.g., 5 for $5 off"}
+                                />
+                                <p className="text-xs text-gray-500">
+                                  {formData.bundleDiscountType === 'percentage' 
+                                    ? 'Percentage discount applied to the bonus item' 
+                                    : 'Fixed amount discount applied to the bonus item'}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {formData.type === 'mysterySurprise' && (
+                          <div className="grid gap-2 border-l-2 border-blue-100 pl-4 py-2">
+                            <Label>Possible Rewards <span className="text-red-500">*</span></Label>
+                            <Textarea
+                              value={formData.mysteryOptions}
+                              onChange={(e) => setFormData({ ...formData, mysteryOptions: e.target.value })}
+                              placeholder="List possible rewards, one per line (e.g., Free coffee, 10% off, etc.)"
+                              className="min-h-[80px]"
+                            />
+                            <p className="text-xs text-gray-500">List the possible rewards that could be randomly selected</p>
+                            
+                            <div className="mt-2 flex items-center space-x-2">
+                              <Checkbox 
+                                id="revealAtCheckout"
+                                checked={formData.revealAtCheckout}
+                                onCheckedChange={(checked) => 
+                                  setFormData({ ...formData, revealAtCheckout: checked === true })
+                                }
+                              />
+                              <Label htmlFor="revealAtCheckout" className="text-sm font-normal">
+                                Reveal reward only at checkout
+                              </Label>
+                            </div>
+                          </div>
+                        )}
+
+                        {formData.type === 'other' && (
+                          <div className="grid gap-2 border-l-2 border-blue-100 pl-4 py-2">
+                            <Label>Custom Reward Details <span className="text-red-500">*</span></Label>
+                            <Textarea
+                              value={formData.customRewardDetails}
+                              onChange={(e) => setFormData({ ...formData, customRewardDetails: e.target.value })}
+                              placeholder="Describe the custom reward in detail"
+                              className="min-h-[80px]"
+                            />
+                            <p className="text-xs text-gray-500">Provide a detailed description of this custom reward</p>
                           </div>
                         )}
                       </div>
@@ -2927,9 +3255,11 @@ export function CreateRewardDialog({
                       <div className="space-y-1">
                           <p className="text-sm text-gray-500">Reward Type</p>
                           <p className="font-medium">
-                            {formData.type === 'discount' ? 'Discount' : 
+                            {formData.type === 'percentageDiscount' ? 'Percentage Discount' : 
+                             formData.type === 'fixedDiscount' ? 'Fixed-Amount Discount' : 
                              formData.type === 'freeItem' ? 'Free Item' : 
-                             formData.type === 'voucher' ? 'Gift Voucher' : 
+                             formData.type === 'bundleOffer' ? 'Buy X Get Y (Bundle)' : 
+                             formData.type === 'mysterySurprise' ? 'Mystery Surprise' : 
                              formData.type === 'other' ? 'Other' : 'Not set'}
                           </p>
                         </div>
@@ -2941,22 +3271,52 @@ export function CreateRewardDialog({
                           <p className="text-sm text-gray-500">PIN Code</p>
                           <p className="font-medium">{formData.pin || "Not set"}</p>
                     </div>
-                        {formData.type === 'discount' && (
+                        {formData.type === 'percentageDiscount' && (
                           <div className="space-y-1">
                             <p className="text-sm text-gray-500">Discount</p>
-                            <p className="font-medium">{formData.voucherAmount}%</p>
+                            <p className="font-medium">{formData.discountValue}%</p>
+                            <p className="text-xs text-gray-500">{formData.discountAppliesTo ? `Applies to: ${formData.discountAppliesTo}` : "No specific conditions"}</p>
                     </div>
+                        )}
+                        {formData.type === 'fixedDiscount' && (
+                          <div className="space-y-1">
+                            <p className="text-sm text-gray-500">Discount</p>
+                            <p className="font-medium">${formData.discountValue}</p>
+                            <p className="text-xs text-gray-500">{formData.minimumPurchase ? `Minimum purchase: $${formData.minimumPurchase}` : "No minimum purchase required"}</p>
+                          </div>
                         )}
                         {formData.type === 'freeItem' && (
                           <div className="space-y-1">
                             <p className="text-sm text-gray-500">Free Item</p>
                             <p className="font-medium">{formData.itemName}</p>
+                            <p className="text-xs text-gray-500">{formData.itemDescription ? `Description: ${formData.itemDescription}` : "No additional details"}</p>
                           </div>
                         )}
-                        {formData.type === 'voucher' && (
+                        {formData.type === 'bundleOffer' && (
                           <div className="space-y-1">
-                            <p className="text-sm text-gray-500">Gift Voucher Amount</p>
-                            <p className="font-medium">${formData.voucherAmount}</p>
+                            <p className="text-sm text-gray-500">Bundle Offer</p>
+                            <p className="font-medium">Buy: {formData.requiredPurchase}</p>
+                            <p className="text-sm">
+                              Get: {formData.bonusItem} 
+                              {formData.bundleDiscountType === 'free' 
+                                ? ' (Free)' 
+                                : formData.bundleDiscountType === 'percentage' 
+                                  ? ` (${formData.bundleDiscountValue}% off)` 
+                                  : ` ($${formData.bundleDiscountValue} off)`}
+                            </p>
+                          </div>
+                        )}
+                        {formData.type === 'mysterySurprise' && (
+                          <div className="space-y-1">
+                            <p className="text-sm text-gray-500">Possible Rewards</p>
+                            <p className="font-medium">{formData.mysteryOptions}</p>
+                            <p className="text-xs text-gray-500">{formData.revealAtCheckout ? "Reward revealed at checkout" : "Reward revealed after purchase"}</p>
+                          </div>
+                        )}
+                        {formData.type === 'other' && (
+                          <div className="space-y-1">
+                            <p className="text-sm text-gray-500">Custom Reward Details</p>
+                            <p className="font-medium">{formData.customRewardDetails}</p>
                           </div>
                         )}
                       </div>

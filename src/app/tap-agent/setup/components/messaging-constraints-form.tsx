@@ -79,12 +79,12 @@ export function MessagingConstraintsForm({ data, onChange }: MessagingConstraint
   return (
     <Card className="border-none shadow-none">
       <CardHeader className="p-0">
-        <CardTitle className="text-xl">Messaging Constraints</CardTitle>
+        <CardTitle className="text-xl bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Messaging Constraints</CardTitle>
         <CardDescription>
-          Set constraints on what language can be used in marketing messages.
+          Define keywords and terms to avoid in customer communications.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6 p-0 mt-6">
+      <CardContent className="space-y-8 p-0 mt-6">
         <div className="space-y-4">
           <div>
             <h3 className="text-lg font-medium">Restricted Keywords</h3>

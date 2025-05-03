@@ -594,6 +594,50 @@ export function SideNav() {
             ))}
         </ul>
       </nav>
+      
+      {/* Account section at the bottom */}
+      <div className="mt-auto border-t border-gray-200 py-3 px-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <Avatar className="h-8 w-8">
+              <AvatarFallback className="bg-primary text-white text-xs">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="overflow-hidden">
+              <p className="text-sm font-medium truncate">{merchantName}</p>
+              <p className="text-xs text-muted-foreground truncate">{merchantEmail}</p>
+            </div>
+          </div>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/settings" className="cursor-pointer flex items-center">
+                  <Settings className="h-4 w-4 mr-2" />
+                  <span>Settings</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/merchant/profile" className="cursor-pointer flex items-center">
+                  <User className="h-4 w-4 mr-2" />
+                  <span>Profile</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
+                <LogOut className="h-4 w-4 mr-2" />
+                <span>Log out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
     </div>
   )
 }

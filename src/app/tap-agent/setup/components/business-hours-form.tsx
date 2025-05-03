@@ -56,13 +56,13 @@ export function BusinessHoursForm({ data, onChange }: BusinessHoursFormProps) {
   
   return (
     <Card className="border-none shadow-none">
-      <CardHeader className="px-0">
-        <CardTitle className="text-xl">Business Hours</CardTitle>
+      <CardHeader className="p-0">
+        <CardTitle className="text-xl bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Business Hours</CardTitle>
         <CardDescription>
-          Set your business operating hours.
+          Configure your operating hours for each day of the week.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6 px-0">
+      <CardContent className="space-y-6 p-0 mt-6">
         <div className="space-y-4">
           {daysOfWeek.map((day) => (
             <div key={day} className="flex flex-col space-y-2">

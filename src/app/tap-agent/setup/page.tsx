@@ -6,14 +6,6 @@ import { db } from "@/lib/firebase"
 import { doc, getDoc, setDoc } from "firebase/firestore"
 import { AgentConfig } from "@/types/agent-config"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
-} from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/use-toast"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -27,6 +19,7 @@ import { CustomerSegmentsForm } from "./components/customer-segments-form"
 import { CustomerCohortsForm } from "./components/customer-cohorts-form"
 import { RewardConstraintsForm } from "./components/reward-constraints-form"
 import { MessagingConstraintsForm } from "./components/messaging-constraints-form"
+import { CustomersList } from "./components/customers-view"
 import { 
   Building2, 
   CheckCircle, 
@@ -39,6 +32,7 @@ import {
   Gift, 
   MessageSquare 
 } from "lucide-react"
+import Link from "next/link"
 
 // Default agent configuration
 const defaultAgentConfig: AgentConfig = {
@@ -148,6 +142,7 @@ export default function AgentSetup() {
   const [activeTab, setActiveTab] = useState("brand")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [mainTab, setMainTab] = useState("setup")
 
   useEffect(() => {
     async function fetchAgentConfig() {
@@ -217,6 +212,10 @@ export default function AgentSetup() {
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
   }
+  
+  const handleMainTabChange = (tab: string) => {
+    setMainTab(tab)
+  }
 
   const updateSection = <K extends keyof AgentConfig>(
     section: K, 
@@ -237,197 +236,220 @@ export default function AgentSetup() {
   }
 
   return (
-    <div className="container mx-auto py-6 max-w-6xl">
+    <div className="mx-auto py-4 max-w-full bg-white">
       <div className="flex flex-col space-y-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Tap Agent</span> Setup
-          </h1>
-          <p className="text-muted-foreground">
-            Configure your Tap Agent to automate marketing, rewards, and customer engagement.
-          </p>
+        <div className="border-b border-gray-200 w-full bg-white shadow-sm">
+          <div className="container mx-auto px-6 max-w-7xl pb-4">
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <h1 className="text-2xl font-bold tracking-tight">
+                  <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Tap Agent</span> Setup
+                </h1>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/tap-agent/intro">Learn More</Link>
+                </Button>
+              </div>
+              <p className="text-muted-foreground">
+                Configure your Tap Agent to automate marketing, rewards, and customer engagement.
+              </p>
+            </div>
+          </div>
         </div>
         
-        <Card>
-          <CardHeader className="pb-0">
-            <CardTitle>Agent Configuration</CardTitle>
-            <CardDescription>
-              Complete each section to customize how your Tap Agent works for your business.
-            </CardDescription>
-          </CardHeader>
-          
-          <CardContent className="pt-6">
-            <Tabs 
-              defaultValue="brand" 
-              value={activeTab} 
-              onValueChange={handleTabChange}
-              className="w-full"
-            >
-              <div className="flex flex-col md:flex-row gap-6">
-                <div className="w-full md:w-64 flex-shrink-0">
-                  <ScrollArea className="h-[600px] md:h-auto">
-                    <TabsList className="flex flex-col w-full h-auto space-y-1">
-                      <TabsTrigger value="brand" className="justify-start w-full">
-                        <Building2 className="mr-2 h-4 w-4" />
-                        Business Brand
-                      </TabsTrigger>
-                      <TabsTrigger value="tasks" className="justify-start w-full">
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        Agent Tasks
-                      </TabsTrigger>
-                      <TabsTrigger value="hours" className="justify-start w-full">
-                        <Clock className="mr-2 h-4 w-4" />
-                        Business Hours
-                      </TabsTrigger>
-                      <TabsTrigger value="objectives" className="justify-start w-full">
-                        <Target className="mr-2 h-4 w-4" />
-                        Objectives
-                      </TabsTrigger>
-                      <TabsTrigger value="pricing" className="justify-start w-full">
-                        <TagsIcon className="mr-2 h-4 w-4" />
-                        Product Pricing
-                      </TabsTrigger>
-                      <TabsTrigger value="financials" className="justify-start w-full">
-                        <LineChart className="mr-2 h-4 w-4" />
-                        Financial Guardrails
-                      </TabsTrigger>
-                      <TabsTrigger value="segments" className="justify-start w-full">
-                        <Users className="mr-2 h-4 w-4" />
-                        Customer Segments
-                      </TabsTrigger>
-                      <TabsTrigger value="cohorts" className="justify-start w-full">
-                        <UsersRound className="mr-2 h-4 w-4" />
-                        Customer Cohorts
-                      </TabsTrigger>
-                      <TabsTrigger value="rewards" className="justify-start w-full">
-                        <Gift className="mr-2 h-4 w-4" />
-                        Reward Constraints
-                      </TabsTrigger>
-                      <TabsTrigger value="messaging" className="justify-start w-full">
-                        <MessageSquare className="mr-2 h-4 w-4" />
-                        Messaging Constraints
-                      </TabsTrigger>
-                    </TabsList>
-                  </ScrollArea>
-                </div>
+        <div className="container mx-auto px-6 max-w-7xl">
+          <Tabs defaultValue="setup" value={mainTab} onValueChange={handleMainTabChange} className="w-full">
+            <TabsList className="w-fit grid grid-cols-2 mb-6 shadow-md border border-gray-200 rounded-lg overflow-hidden">
+              <TabsTrigger value="setup" className="px-6">Setup</TabsTrigger>
+              <TabsTrigger value="customers" className="px-6">Customers</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="setup">
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-md">
+                <p className="text-sm text-muted-foreground mb-4">
+                  Complete each section to customize how your Tap Agent works for your business.
+                </p>
                 
-                <div className="flex-1">
-                  <ScrollArea className="h-[600px] px-0">
-                    <div className="px-0">
-                      <TabsContent value="brand">
-                        <BusinessBrandForm 
-                          data={agentConfig.businessBrand} 
-                          onChange={(data) => updateSection("businessBrand", data)} 
-                        />
-                      </TabsContent>
-                      
-                      <TabsContent value="tasks">
-                        <AgentTasksForm 
-                          data={agentConfig.agentTasks} 
-                          onChange={(data) => updateSection("agentTasks", data)} 
-                        />
-                      </TabsContent>
-                      
-                      <TabsContent value="hours">
-                        <BusinessHoursForm 
-                          data={agentConfig.businessHours} 
-                          onChange={(data) => updateSection("businessHours", data)} 
-                        />
-                      </TabsContent>
-                      
-                      <TabsContent value="objectives">
-                        <ObjectivesForm 
-                          data={agentConfig.objectives} 
-                          onChange={(data) => updateSection("objectives", data)} 
-                        />
-                      </TabsContent>
-                      
-                      <TabsContent value="pricing">
-                        <ProductPricingForm 
-                          data={agentConfig.productPricing} 
-                          onChange={(data) => updateSection("productPricing", data)} 
-                        />
-                      </TabsContent>
-                      
-                      <TabsContent value="financials">
-                        <FinancialGuardrailsForm 
-                          data={agentConfig.financialGuardrails} 
-                          onChange={(data) => updateSection("financialGuardrails", data)} 
-                        />
-                      </TabsContent>
-                      
-                      <TabsContent value="segments">
-                        <CustomerSegmentsForm 
-                          data={agentConfig.customerSegments} 
-                          onChange={(data) => updateSection("customerSegments", data)} 
-                        />
-                      </TabsContent>
-                      
-                      <TabsContent value="cohorts">
-                        <CustomerCohortsForm 
-                          data={agentConfig.customerCohorts} 
-                          onChange={(data) => updateSection("customerCohorts", data)} 
-                        />
-                      </TabsContent>
-                      
-                      <TabsContent value="rewards">
-                        <RewardConstraintsForm 
-                          data={agentConfig.rewardConstraints} 
-                          onChange={(data) => updateSection("rewardConstraints", data)} 
-                        />
-                      </TabsContent>
-                      
-                      <TabsContent value="messaging">
-                        <MessagingConstraintsForm 
-                          data={agentConfig.messagingConstraints} 
-                          onChange={(data) => updateSection("messagingConstraints", data)} 
-                        />
-                      </TabsContent>
+                <Tabs 
+                  defaultValue="brand" 
+                  value={activeTab} 
+                  onValueChange={handleTabChange}
+                  className="w-full"
+                >
+                  <div className="flex flex-col md:flex-row gap-6">
+                    <div className="w-full md:w-60 flex-shrink-0 bg-slate-100 rounded-lg p-4 border border-slate-200 shadow-sm">
+                      <ScrollArea className="md:h-auto max-h-[500px] scrollable pr-2">
+                        <TabsList className="flex flex-col w-full h-auto space-y-1 bg-transparent">
+                          <TabsTrigger value="brand" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
+                            <Building2 className="mr-2 h-4 w-4" />
+                            Business Brand
+                          </TabsTrigger>
+                          <TabsTrigger value="tasks" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
+                            <CheckCircle className="mr-2 h-4 w-4" />
+                            Agent Tasks
+                          </TabsTrigger>
+                          <TabsTrigger value="hours" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
+                            <Clock className="mr-2 h-4 w-4" />
+                            Business Hours
+                          </TabsTrigger>
+                          <TabsTrigger value="objectives" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
+                            <Target className="mr-2 h-4 w-4" />
+                            Objectives
+                          </TabsTrigger>
+                          <TabsTrigger value="pricing" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
+                            <TagsIcon className="mr-2 h-4 w-4" />
+                            Product Pricing
+                          </TabsTrigger>
+                          <TabsTrigger value="financials" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
+                            <LineChart className="mr-2 h-4 w-4" />
+                            Financial Guardrails
+                          </TabsTrigger>
+                          <TabsTrigger value="segments" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
+                            <Users className="mr-2 h-4 w-4" />
+                            Customer Segments
+                          </TabsTrigger>
+                          <TabsTrigger value="cohorts" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
+                            <UsersRound className="mr-2 h-4 w-4" />
+                            Customer Cohorts
+                          </TabsTrigger>
+                          <TabsTrigger value="rewards" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
+                            <Gift className="mr-2 h-4 w-4" />
+                            Reward Constraints
+                          </TabsTrigger>
+                          <TabsTrigger value="messaging" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
+                            <MessageSquare className="mr-2 h-4 w-4" />
+                            Messaging Constraints
+                          </TabsTrigger>
+                        </TabsList>
+                      </ScrollArea>
                     </div>
-                  </ScrollArea>
+                    
+                    <div className="flex-1 bg-white rounded-lg p-6 shadow-md border border-slate-200">
+                      <ScrollArea className="max-h-[650px] scrollable">
+                        <div className="pr-4 pl-1">
+                          <TabsContent value="brand">
+                            <BusinessBrandForm 
+                              data={agentConfig.businessBrand} 
+                              onChange={(data) => updateSection("businessBrand", data)} 
+                            />
+                          </TabsContent>
+                          
+                          <TabsContent value="tasks">
+                            <AgentTasksForm 
+                              data={agentConfig.agentTasks} 
+                              onChange={(data) => updateSection("agentTasks", data)} 
+                            />
+                          </TabsContent>
+                          
+                          <TabsContent value="hours">
+                            <BusinessHoursForm 
+                              data={agentConfig.businessHours} 
+                              onChange={(data) => updateSection("businessHours", data)} 
+                            />
+                          </TabsContent>
+                          
+                          <TabsContent value="objectives">
+                            <ObjectivesForm 
+                              data={agentConfig.objectives} 
+                              onChange={(data) => updateSection("objectives", data)} 
+                            />
+                          </TabsContent>
+                          
+                          <TabsContent value="pricing">
+                            <ProductPricingForm 
+                              data={agentConfig.productPricing} 
+                              onChange={(data) => updateSection("productPricing", data)} 
+                            />
+                          </TabsContent>
+                          
+                          <TabsContent value="financials">
+                            <FinancialGuardrailsForm 
+                              data={agentConfig.financialGuardrails} 
+                              onChange={(data) => updateSection("financialGuardrails", data)} 
+                            />
+                          </TabsContent>
+                          
+                          <TabsContent value="segments">
+                            <CustomerSegmentsForm 
+                              data={agentConfig.customerSegments} 
+                              onChange={(data) => updateSection("customerSegments", data)} 
+                            />
+                          </TabsContent>
+                          
+                          <TabsContent value="cohorts">
+                            <CustomerCohortsForm 
+                              data={agentConfig.customerCohorts} 
+                              onChange={(data) => updateSection("customerCohorts", data)} 
+                            />
+                          </TabsContent>
+                          
+                          <TabsContent value="rewards">
+                            <RewardConstraintsForm 
+                              data={agentConfig.rewardConstraints} 
+                              onChange={(data) => updateSection("rewardConstraints", data)} 
+                            />
+                          </TabsContent>
+                          
+                          <TabsContent value="messaging">
+                            <MessagingConstraintsForm 
+                              data={agentConfig.messagingConstraints} 
+                              onChange={(data) => updateSection("messagingConstraints", data)} 
+                            />
+                          </TabsContent>
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  </div>
+                </Tabs>
+                
+                <div className="flex justify-between mt-6 pt-4 border-t border-slate-200">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      // Reset section to default
+                      const sectionKey = activeTab === "brand" ? "businessBrand" :
+                                      activeTab === "tasks" ? "agentTasks" :
+                                      activeTab === "hours" ? "businessHours" :
+                                      activeTab === "objectives" ? "objectives" :
+                                      activeTab === "pricing" ? "productPricing" :
+                                      activeTab === "financials" ? "financialGuardrails" :
+                                      activeTab === "segments" ? "customerSegments" :
+                                      activeTab === "cohorts" ? "customerCohorts" :
+                                      activeTab === "rewards" ? "rewardConstraints" :
+                                      "messagingConstraints";
+                    
+                      setAgentConfig(prev => ({
+                        ...prev,
+                        [sectionKey]: defaultAgentConfig[sectionKey as keyof AgentConfig]
+                      }));
+                    
+                      toast({
+                        title: "Reset",
+                        description: "This section has been reset to default values.",
+                      })
+                    }}
+                    className="border-slate-300 hover:bg-slate-100"
+                  >
+                    Reset Section
+                  </Button>
+                  
+                  <Button 
+                    onClick={saveAgentConfig}
+                    disabled={saving}
+                    className="shadow-sm"
+                  >
+                    {saving ? "Saving..." : "Save Configuration"}
+                  </Button>
                 </div>
               </div>
-            </Tabs>
-          </CardContent>
-          
-          <CardFooter className="flex justify-between">
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                // Reset section to default
-                const sectionKey = activeTab === "brand" ? "businessBrand" :
-                                  activeTab === "tasks" ? "agentTasks" :
-                                  activeTab === "hours" ? "businessHours" :
-                                  activeTab === "objectives" ? "objectives" :
-                                  activeTab === "pricing" ? "productPricing" :
-                                  activeTab === "financials" ? "financialGuardrails" :
-                                  activeTab === "segments" ? "customerSegments" :
-                                  activeTab === "cohorts" ? "customerCohorts" :
-                                  activeTab === "rewards" ? "rewardConstraints" :
-                                  "messagingConstraints";
-                
-                setAgentConfig(prev => ({
-                  ...prev,
-                  [sectionKey]: defaultAgentConfig[sectionKey as keyof AgentConfig]
-                }));
-                
-                toast({
-                  title: "Reset",
-                  description: "This section has been reset to default values.",
-                })
-              }}
-            >
-              Reset Section
-            </Button>
+            </TabsContent>
             
-            <Button 
-              onClick={saveAgentConfig}
-              disabled={saving}
-            >
-              {saving ? "Saving..." : "Save Configuration"}
-            </Button>
-          </CardFooter>
-        </Card>
+            <TabsContent value="customers">
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-md">
+                <CustomersList />
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
     </div>
   )

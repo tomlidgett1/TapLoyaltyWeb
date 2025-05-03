@@ -233,13 +233,13 @@ export function ObjectivesForm({ data, onChange }: ObjectivesFormProps) {
   
   return (
     <Card className="border-none shadow-none">
-      <CardHeader className="px-0">
-        <CardTitle className="text-xl">Business Objectives</CardTitle>
+      <CardHeader className="p-0">
+        <CardTitle className="text-xl bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Objectives</CardTitle>
         <CardDescription>
-          Define your business goals and priorities.
+          Define your business objectives and customer value priorities.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-8 px-0">
+      <CardContent className="space-y-8 p-0 mt-6">
         {/* Business Objectives */}
         <div className="space-y-4">
           <div>

@@ -138,7 +138,7 @@ export function ProductPricingForm({ data, onChange }: ProductPricingFormProps) 
   return (
     <Card className="border-none shadow-none">
       <CardHeader className="p-0">
-        <CardTitle className="text-xl">Product Pricing</CardTitle>
+        <CardTitle className="text-xl bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Product Pricing</CardTitle>
         <CardDescription>
           Configure your product catalog and pricing information.
         </CardDescription>

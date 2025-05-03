@@ -109,9 +109,9 @@ export function CustomerSegmentsForm({ data, onChange }: CustomerSegmentsFormPro
   return (
     <Card className="border-none shadow-none">
       <CardHeader className="p-0">
-        <CardTitle className="text-xl">Customer Segments</CardTitle>
+        <CardTitle className="text-xl bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Customer Segments</CardTitle>
         <CardDescription>
-          Define customer segmentation and loyalty tiers.
+          Configure customer segments and loyalty tiers.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-8 p-0 mt-6">

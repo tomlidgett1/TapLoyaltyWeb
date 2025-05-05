@@ -30,7 +30,9 @@ import {
   Users, 
   UsersRound, 
   Gift, 
-  MessageSquare 
+  MessageSquare,
+  Maximize2,
+  Minimize2
 } from "lucide-react"
 import Link from "next/link"
 
@@ -143,6 +145,7 @@ export default function AgentSetup() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [mainTab, setMainTab] = useState("setup")
+  const [isExpanded, setIsExpanded] = useState(false)
 
   useEffect(() => {
     async function fetchAgentConfig() {
@@ -227,47 +230,96 @@ export default function AgentSetup() {
     }))
   }
 
+  const toggleExpand = () => {
+    setIsExpanded(!isExpanded)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0D6EFD]"></div>
       </div>
     )
   }
 
   return (
-    <div className="mx-auto py-4 max-w-full bg-white">
+    <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'fixed inset-0 z-50 bg-white overflow-auto' : 'mx-auto py-4 max-w-full bg-white'}`}>
       <div className="flex flex-col space-y-4">
-        <div className="border-b border-gray-200 w-full bg-white shadow-sm">
-          <div className="container mx-auto px-6 max-w-7xl pb-4">
+        <div className={`border-b border-[#E2E4E8] w-full bg-white ${isExpanded ? 'sticky top-0 z-20 shadow-sm' : ''}`}>
+          <div className={`${isExpanded ? 'px-4 py-2' : 'container mx-auto px-6 max-w-7xl pb-4'}`}>
             <div>
               <div className="flex justify-between items-center mb-1">
-                <h1 className="text-2xl font-bold tracking-tight">
-                  <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Tap Agent</span> Setup
+                <h1 className={`${isExpanded ? 'text-xl' : 'text-2xl'} font-semibold tracking-tight text-[#111827]`}>
+                  <span className="bg-gradient-to-r from-[#0D6EFD] to-[#FF8C00] bg-clip-text text-transparent">Tap Agent</span> Setup
                 </h1>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/tap-agent/intro">Learn More</Link>
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Tabs 
+                    defaultValue="setup" 
+                    value={mainTab} 
+                    onValueChange={handleMainTabChange} 
+                    className="mr-2"
+                  >
+                    <TabsList className="h-8 grid grid-cols-2 bg-[#F6F6F7] border border-[#E2E4E8] rounded-md overflow-hidden p-0.5">
+                      <TabsTrigger 
+                        value="setup" 
+                        className="px-3 text-xs data-[state=active]:bg-white data-[state=active]:text-[#111827] data-[state=active]:shadow-sm text-[#6B7280] transition-all duration-150 ease-in-out"
+                      >
+                        Setup
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="customers" 
+                        className="px-3 text-xs data-[state=active]:bg-white data-[state=active]:text-[#111827] data-[state=active]:shadow-sm text-[#6B7280] transition-all duration-150 ease-in-out"
+                      >
+                        Customers
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    asChild 
+                    className="h-8 border-[#D1D5DB] text-[#111827] hover:bg-[#F0F2F4] transition-all duration-150 ease-in-out active:scale-[0.98]"
+                  >
+                    <Link href="/tap-agent/intro">Learn More</Link>
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={toggleExpand}
+                    className="h-8 border-[#D1D5DB] text-[#111827] hover:bg-[#F0F2F4] transition-all duration-150 ease-in-out active:scale-[0.98] flex items-center gap-1"
+                  >
+                    {isExpanded ? (
+                      <>
+                        <Minimize2 className="h-3.5 w-3.5" />
+                        <span>Minimize</span>
+                      </>
+                    ) : (
+                      <>
+                        <Maximize2 className="h-4 w-4" />
+                        <span>Expand</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
-              <p className="text-muted-foreground">
-                Configure your Tap Agent to automate marketing, rewards, and customer engagement.
-              </p>
+              {!isExpanded && (
+                <p className="text-sm text-[#6B7280]">
+                  Configure your Tap Agent to automate marketing, rewards, and customer engagement.
+                </p>
+              )}
             </div>
           </div>
         </div>
         
-        <div className="container mx-auto px-6 max-w-7xl">
+        <div className={`${isExpanded ? 'px-4 pt-0' : 'container mx-auto px-6 max-w-7xl'}`}>
           <Tabs defaultValue="setup" value={mainTab} onValueChange={handleMainTabChange} className="w-full">
-            <TabsList className="w-fit grid grid-cols-2 mb-6 shadow-md border border-gray-200 rounded-lg overflow-hidden">
-              <TabsTrigger value="setup" className="px-6">Setup</TabsTrigger>
-              <TabsTrigger value="customers" className="px-6">Customers</TabsTrigger>
-            </TabsList>
-            
             <TabsContent value="setup">
-              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-md">
-                <p className="text-sm text-muted-foreground mb-4">
-                  Complete each section to customize how your Tap Agent works for your business.
-                </p>
+              <div className={`bg-white ${isExpanded ? 'p-3' : 'p-6'} rounded-lg border border-[#E2E4E8]`}>
+                {!isExpanded && (
+                  <p className="text-sm text-[#6B7280] mb-4">
+                    Complete each section to customize how your Tap Agent works for your business.
+                  </p>
+                )}
                 
                 <Tabs 
                   defaultValue="brand" 
@@ -275,57 +327,80 @@ export default function AgentSetup() {
                   onValueChange={handleTabChange}
                   className="w-full"
                 >
-                  <div className="flex flex-col md:flex-row gap-6">
-                    <div className="w-full md:w-60 flex-shrink-0 bg-slate-100 rounded-lg p-4 border border-slate-200 shadow-sm">
-                      <ScrollArea className="md:h-auto max-h-[500px] scrollable pr-2">
-                        <TabsList className="flex flex-col w-full h-auto space-y-1 bg-transparent">
-                          <TabsTrigger value="brand" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
-                            <Building2 className="mr-2 h-4 w-4" />
+                  <div className={`flex flex-col gap-6`}>
+                    <div className={`w-full bg-white py-2 mb-2 ${isExpanded ? 'sticky top-16 z-10 shadow-sm border-b border-[#E2E4E8]' : 'border-b border-[#E2E4E8]'}`}>
+                      <div className="flex flex-wrap gap-1.5 justify-start items-center px-1">
+                        <TabsList className="flex flex-wrap h-auto gap-1.5 bg-transparent p-0">
+                          <TabsTrigger 
+                            value="brand" 
+                            className="justify-start h-8 px-3 rounded-md text-xs transition-all border border-[#E2E4E8] hover:border-[#0D6EFD] hover:bg-[#EBF5FF] data-[state=active]:border-[#0D6EFD] data-[state=active]:bg-[#EBF5FF] data-[state=active]:text-[#0D6EFD] data-[state=active]:shadow-sm"
+                          >
+                            <Building2 className="mr-1.5 h-3.5 w-3.5" />
                             Business Brand
                           </TabsTrigger>
-                          <TabsTrigger value="tasks" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
-                            <CheckCircle className="mr-2 h-4 w-4" />
+                          <TabsTrigger 
+                            value="tasks" 
+                            className="justify-start h-8 px-3 rounded-md text-xs transition-all border border-[#E2E4E8] hover:border-[#0D6EFD] hover:bg-[#EBF5FF] data-[state=active]:border-[#0D6EFD] data-[state=active]:bg-[#EBF5FF] data-[state=active]:text-[#0D6EFD] data-[state=active]:shadow-sm"
+                          >
+                            <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
                             Agent Tasks
                           </TabsTrigger>
-                          <TabsTrigger value="hours" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
-                            <Clock className="mr-2 h-4 w-4" />
-                            Business Hours
+                          <TabsTrigger 
+                            value="hours" 
+                            className="justify-start h-8 px-3 rounded-md text-xs transition-all border border-[#E2E4E8] hover:border-[#0D6EFD] hover:bg-[#EBF5FF] data-[state=active]:border-[#0D6EFD] data-[state=active]:bg-[#EBF5FF] data-[state=active]:text-[#0D6EFD] data-[state=active]:shadow-sm"
+                          >
+                            <Clock className="mr-1.5 h-3.5 w-3.5" />
+                            Hours
                           </TabsTrigger>
-                          <TabsTrigger value="objectives" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
-                            <Target className="mr-2 h-4 w-4" />
+                          <TabsTrigger 
+                            value="objectives" 
+                            className="justify-start h-8 px-3 rounded-md text-xs transition-all border border-[#E2E4E8] hover:border-[#0D6EFD] hover:bg-[#EBF5FF] data-[state=active]:border-[#0D6EFD] data-[state=active]:bg-[#EBF5FF] data-[state=active]:text-[#0D6EFD] data-[state=active]:shadow-sm"
+                          >
+                            <Target className="mr-1.5 h-3.5 w-3.5" />
                             Objectives
                           </TabsTrigger>
-                          <TabsTrigger value="pricing" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
-                            <TagsIcon className="mr-2 h-4 w-4" />
-                            Product Pricing
+                          <TabsTrigger 
+                            value="pricing" 
+                            className="justify-start h-8 px-3 rounded-md text-xs transition-all border border-[#E2E4E8] hover:border-[#0D6EFD] hover:bg-[#EBF5FF] data-[state=active]:border-[#0D6EFD] data-[state=active]:bg-[#EBF5FF] data-[state=active]:text-[#0D6EFD] data-[state=active]:shadow-sm"
+                          >
+                            <TagsIcon className="mr-1.5 h-3.5 w-3.5" />
+                            Pricing
                           </TabsTrigger>
-                          <TabsTrigger value="financials" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
-                            <LineChart className="mr-2 h-4 w-4" />
-                            Financial Guardrails
+                          <TabsTrigger 
+                            value="financials" 
+                            className="justify-start h-8 px-3 rounded-md text-xs transition-all border border-[#E2E4E8] hover:border-[#0D6EFD] hover:bg-[#EBF5FF] data-[state=active]:border-[#0D6EFD] data-[state=active]:bg-[#EBF5FF] data-[state=active]:text-[#0D6EFD] data-[state=active]:shadow-sm"
+                          >
+                            <LineChart className="mr-1.5 h-3.5 w-3.5" />
+                            Financials
                           </TabsTrigger>
-                          <TabsTrigger value="segments" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
-                            <Users className="mr-2 h-4 w-4" />
-                            Customer Segments
+                          <TabsTrigger 
+                            value="cohorts" 
+                            className="justify-start h-8 px-3 rounded-md text-xs transition-all border border-[#E2E4E8] hover:border-[#0D6EFD] hover:bg-[#EBF5FF] data-[state=active]:border-[#0D6EFD] data-[state=active]:bg-[#EBF5FF] data-[state=active]:text-[#0D6EFD] data-[state=active]:shadow-sm"
+                          >
+                            <UsersRound className="mr-1.5 h-3.5 w-3.5" />
+                            Cohorts
                           </TabsTrigger>
-                          <TabsTrigger value="cohorts" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
-                            <UsersRound className="mr-2 h-4 w-4" />
-                            Customer Cohorts
+                          <TabsTrigger 
+                            value="rewards" 
+                            className="justify-start h-8 px-3 rounded-md text-xs transition-all border border-[#E2E4E8] hover:border-[#0D6EFD] hover:bg-[#EBF5FF] data-[state=active]:border-[#0D6EFD] data-[state=active]:bg-[#EBF5FF] data-[state=active]:text-[#0D6EFD] data-[state=active]:shadow-sm"
+                          >
+                            <Gift className="mr-1.5 h-3.5 w-3.5" />
+                            Rewards
                           </TabsTrigger>
-                          <TabsTrigger value="rewards" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
-                            <Gift className="mr-2 h-4 w-4" />
-                            Reward Constraints
-                          </TabsTrigger>
-                          <TabsTrigger value="messaging" className="justify-start w-full border border-transparent hover:border-blue-100 hover:bg-blue-50">
-                            <MessageSquare className="mr-2 h-4 w-4" />
-                            Messaging Constraints
+                          <TabsTrigger 
+                            value="messaging" 
+                            className="justify-start h-8 px-3 rounded-md text-xs transition-all border border-[#E2E4E8] hover:border-[#0D6EFD] hover:bg-[#EBF5FF] data-[state=active]:border-[#0D6EFD] data-[state=active]:bg-[#EBF5FF] data-[state=active]:text-[#0D6EFD] data-[state=active]:shadow-sm"
+                          >
+                            <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
+                            Messages
                           </TabsTrigger>
                         </TabsList>
-                      </ScrollArea>
+                      </div>
                     </div>
                     
-                    <div className="flex-1 bg-white rounded-lg p-6 shadow-md border border-slate-200">
-                      <ScrollArea className="max-h-[650px] scrollable">
-                        <div className="pr-4 pl-1">
+                    <div className={`w-full bg-white ${isExpanded ? 'px-2' : 'px-1'}`}>
+                      <ScrollArea className={`${isExpanded ? 'max-h-[calc(100vh-180px)]' : 'max-h-[650px]'} scrollable`}>
+                        <div className={`${isExpanded ? 'px-0' : 'pr-2'}`}>
                           <TabsContent value="brand">
                             <BusinessBrandForm 
                               data={agentConfig.businessBrand} 
@@ -368,13 +443,6 @@ export default function AgentSetup() {
                             />
                           </TabsContent>
                           
-                          <TabsContent value="segments">
-                            <CustomerSegmentsForm 
-                              data={agentConfig.customerSegments} 
-                              onChange={(data) => updateSection("customerSegments", data)} 
-                            />
-                          </TabsContent>
-                          
                           <TabsContent value="cohorts">
                             <CustomerCohortsForm 
                               data={agentConfig.customerCohorts} 
@@ -401,9 +469,10 @@ export default function AgentSetup() {
                   </div>
                 </Tabs>
                 
-                <div className="flex justify-between mt-6 pt-4 border-t border-slate-200">
+                <div className="flex justify-between mt-6 pt-4 border-t border-[#E2E4E8] sticky bottom-0 bg-white">
                   <Button 
                     variant="outline" 
+                    size="sm"
                     onClick={() => {
                       // Reset section to default
                       const sectionKey = activeTab === "brand" ? "businessBrand" :
@@ -412,7 +481,6 @@ export default function AgentSetup() {
                                       activeTab === "objectives" ? "objectives" :
                                       activeTab === "pricing" ? "productPricing" :
                                       activeTab === "financials" ? "financialGuardrails" :
-                                      activeTab === "segments" ? "customerSegments" :
                                       activeTab === "cohorts" ? "customerCohorts" :
                                       activeTab === "rewards" ? "rewardConstraints" :
                                       "messagingConstraints";
@@ -427,7 +495,7 @@ export default function AgentSetup() {
                         description: "This section has been reset to default values.",
                       })
                     }}
-                    className="border-slate-300 hover:bg-slate-100"
+                    className="h-8 border-[#D1D5DB] text-[#111827] hover:bg-[#F0F2F4] transition-all duration-150 ease-in-out active:scale-[0.98]"
                   >
                     Reset Section
                   </Button>
@@ -435,7 +503,8 @@ export default function AgentSetup() {
                   <Button 
                     onClick={saveAgentConfig}
                     disabled={saving}
-                    className="shadow-sm"
+                    size="sm"
+                    className="h-8 bg-[#0D6EFD] hover:bg-[#0B5ED7] text-white transition-all duration-150 ease-in-out active:scale-[0.98]"
                   >
                     {saving ? "Saving..." : "Save Configuration"}
                   </Button>
@@ -444,7 +513,7 @@ export default function AgentSetup() {
             </TabsContent>
             
             <TabsContent value="customers">
-              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-md">
+              <div className="bg-white rounded-lg">
                 <CustomersList />
               </div>
             </TabsContent>

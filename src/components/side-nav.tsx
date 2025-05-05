@@ -110,7 +110,7 @@ const navItems = [
         icon: Image
       },
       {
-        title: "Broadcast Messages",
+        title: "Messages",
         href: "/store/messages",
         icon: MessageSquare
       }
@@ -222,8 +222,7 @@ export function SideNav() {
   const [showChecklist, setShowChecklist] = useState(true)
   const [openSections, setOpenSections] = useState<SectionState>({
     "My Store": true,
-    "Tap Agent": true,
-    "Settings": true
+    "Tap Agent": true
   })
   const [searchQuery, setSearchQuery] = useState("")
 
@@ -366,35 +365,32 @@ export function SideNav() {
   }
 
   return (
-    <div className="w-56 h-screen flex-shrink-0 bg-[#F5F5F5] flex flex-col">
+    <div className="w-48 h-screen flex-shrink-0 bg-[#F5F5F5] flex flex-col">
       {/* Apply custom scrollbar styles */}
       <style jsx global>{scrollbarStyles}</style>
       
-      <div className="h-16 flex items-center px-4">
-        <img
-          src="/hand1.png"
-          alt="Tap Loyalty Logo"
-          className="w-6.2 h-7 mr-2 object-cover rounded"
-        />
-        <div className="flex flex-col">
-          <span className="text-xl font-semibold leading-none">
-            <span className="text-[#007AFF] font-extrabold">Tap</span>
-            {' '}
-            <span>Loyalty</span>
-          </span>
-          <span className="text-xs text-gray-500 mt-0.5">
-            Merchant Portal
-          </span>
+      <div className="h-16 flex items-center px-3 mb-2">
+        <div className="flex items-center pl-3">
+          <div className="flex flex-col">
+            <span className="text-xl font-semibold leading-none">
+              <span className="text-[#007AFF] font-extrabold">Tap</span>
+              {' '}
+              <span>Loyalty</span>
+            </span>
+            <span className="text-xs text-gray-500 mt-1">
+              Merchant Portal
+            </span>
+          </div>
         </div>
       </div>
       
       {/* Search bar with Command+K shortcut */}
-      <div className="px-3 py-3">
+      <div className="px-3 pb-2">
         <div className="relative w-full">
-          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input 
             placeholder="Search..." 
-            className="pl-8 pr-10 h-9 w-full cursor-pointer"
+            className="pl-10 pr-10 h-9 w-full cursor-pointer"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onClick={(e) => {
@@ -421,7 +417,7 @@ export function SideNav() {
           {/* Main pages without sub-items */}
           {navItems
             .filter(item => !item.isAI && !item.subItems)
-            .filter(item => item.title !== "Settings" && item.title !== "Onboarding Wizard" && item.title !== "Integrations" && item.title !== "Admin")
+            .filter(item => item.title !== "Onboarding Wizard")
             .map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
               
@@ -436,7 +432,7 @@ export function SideNav() {
                         : "text-gray-800 hover:bg-[#007AFF]/5"
                     )}
                   >
-                    <item.icon className={cn("h-4 w-4", 
+                    <item.icon className={cn("h-4 w-4 flex-shrink-0", 
                       isActive 
                         ? "text-[#007AFF]" 
                         : "text-gray-500 group-hover:text-[#007AFF]"
@@ -453,8 +449,8 @@ export function SideNav() {
           {navItems
             .filter(item => item.title === "My Store")
             .map((item) => (
-              <li key={item.title} className="mt-2">
-                <div className="px-3 mb-0.5">
+              <li key={item.title} className="mt-3">
+                <div className="px-3 mb-1">
                   <button 
                     onClick={() => toggleSection("My Store")}
                     className="text-[10px] font-medium text-gray-500 hover:text-[#007AFF] uppercase tracking-wider"
@@ -479,7 +475,7 @@ export function SideNav() {
                                   : "text-gray-800 hover:bg-[#007AFF]/5"
                               )}
                             >
-                              <subItem.icon className={cn("h-4 w-4", 
+                              <subItem.icon className={cn("h-4 w-4 flex-shrink-0", 
                                 isSubActive 
                                   ? "text-[#007AFF]" 
                                   : "text-gray-500 group-hover:text-[#007AFF]"
@@ -501,8 +497,8 @@ export function SideNav() {
           {navItems
             .filter(item => item.title === "Tap Agent")
             .map((item) => (
-              <li key={item.title} className="mt-2">
-                <div className="px-3 mb-0.5">
+              <li key={item.title} className="mt-3">
+                <div className="px-3 mb-1">
                   <button 
                     onClick={() => toggleSection("Tap Agent")}
                     className="text-[10px] font-medium text-gray-500 hover:text-[#007AFF] uppercase tracking-wider"
@@ -527,7 +523,7 @@ export function SideNav() {
                                   : "text-gray-800 hover:bg-[#007AFF]/5"
                               )}
                             >
-                              <subItem.icon className={cn("h-4 w-4", 
+                              <subItem.icon className={cn("h-4 w-4 flex-shrink-0", 
                                 isSubActive 
                                   ? "text-[#007AFF]" 
                                   : "text-gray-500 group-hover:text-[#007AFF]"
@@ -546,60 +542,15 @@ export function SideNav() {
             ))}
           
           {/* Settings section */}
-          {navItems
-            .filter(item => item.title === "Settings")
-            .map((item) => (
-              <li key={item.title} className="mt-2">
-                <div className="px-3 mb-0.5">
-                  <button 
-                    onClick={() => toggleSection("Settings")}
-                    className="text-[10px] font-medium text-gray-500 hover:text-[#007AFF] uppercase tracking-wider"
-                  >
-                    {item.title}
-                  </button>
-                </div>
-                <Collapsible open={openSections["Settings"]}>
-                  <CollapsibleContent>
-                    <ul className="space-y-1">
-                      {item.subItems?.map((subItem) => {
-                        const isSubActive = pathname === subItem.href || 
-                          pathname.startsWith(`${item.href}/`)
-                        return (
-                          <li key={subItem.title}>
-                            <Link
-                              href={subItem.href}
-                              className={cn(
-                                "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-normal transition-colors",
-                                isSubActive 
-                                  ? "bg-[#007AFF]/10 text-[#007AFF]" 
-                                  : "text-gray-800 hover:bg-[#007AFF]/5"
-                              )}
-                            >
-                              <subItem.icon className={cn("h-4 w-4", 
-                                isSubActive 
-                                  ? "text-[#007AFF]" 
-                                  : "text-gray-500 group-hover:text-[#007AFF]"
-                              )} />
-                              <span className={isSubActive ? "text-[#007AFF]" : "group-hover:text-[#007AFF]"}>
-                                {subItem.title}
-                              </span>
-                            </Link>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  </CollapsibleContent>
-                </Collapsible>
-              </li>
-            ))}
+          {/* Removing this section as Settings doesn't have subItems */}
         </ul>
       </nav>
       
       {/* Account section at the bottom */}
-      <div className="mt-auto border-t border-gray-200 py-3 px-4">
+      <div className="mt-auto border-t border-gray-200 py-2 px-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <Avatar className="h-8 w-8">
+          <div className="flex items-center space-x-3 overflow-hidden min-w-0 max-w-[80%]">
+            <Avatar className="h-8 w-8 flex-shrink-0">
               <AvatarFallback className="bg-primary text-white text-xs">
                 {initials}
               </AvatarFallback>
@@ -611,7 +562,7 @@ export function SideNav() {
           </div>
           
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+            <DropdownMenuTrigger asChild className="flex-shrink-0 ml-1">
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
                 <MoreVertical className="h-4 w-4" />
               </Button>

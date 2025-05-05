@@ -52,8 +52,16 @@ export interface AgentConfig {
       cost: number;
       category: string;
     }>;
-    heroProducts: Array<string>;
-    lowVelocityProducts: Array<string>;
+    heroProducts: Array<{
+      name: string;
+      rrp: number;
+      cost: number;
+    }>;
+    lowVelocityProducts: Array<{
+      name: string;
+      rrp: number;
+      cost: number;
+    }>;
   };
   financialGuardrails: {
     rewardBudgetType: 'fixed' | 'percentage';

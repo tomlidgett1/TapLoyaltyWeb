@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { collection, getDocs, query, getDoc, doc as firestoreDoc } from "firebase/firestore"
@@ -9,10 +9,25 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Gift, Search, User, Clock, ChevronRight, CheckCircle, Users, Zap, DollarSign } from "lucide-react"
+import { 
+  Gift, 
+  Search, 
+  User, 
+  Clock, 
+  ChevronRight, 
+  ChevronLeft,
+  CheckCircle, 
+  Users, 
+  Zap, 
+  DollarSign,
+  BarChart3,
+  Calendar
+} from "lucide-react"
 import { format, formatDistanceToNow } from "date-fns"
 import { Skeleton } from "@/components/ui/skeleton"
 import Link from "next/link"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
 
 interface Customer {
   customerId: string
@@ -47,6 +62,13 @@ interface Customer {
     name: string
     since: any
   }
+  // Add profiles data
+  customerProfiles?: Array<{
+    profileId: string
+    merchantId: string
+    createdAt: any
+    profileDescription: string
+  }>
 }
 
 interface AgentReward {
@@ -68,76 +90,109 @@ interface AgentReward {
 
 export function CustomersList() {
   const { user } = useAuth()
+  const [loading, setLoading] = useState(true)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [hoveredCustomerId, setHoveredCustomerId] = useState<string | null>(null)
 
+  // Update search handler
+  const handleSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value.toLowerCase()
+    setSearchQuery(query)
+    
+    if (query.trim() === "") {
+      setFilteredCustomers(customers)
+    } else {
+      const filtered = customers.filter(customer => 
+        customer.fullName.toLowerCase().includes(query) ||
+        customer.cohort?.toLowerCase().includes(query) ||
+        customer.currentCohort?.name?.toLowerCase().includes(query) ||
+        customer.membershipTier?.toLowerCase().includes(query)
+      )
+      setFilteredCustomers(filtered)
+    }
+  }, [customers])
+
+  // Reset search when customers data changes
+  useEffect(() => {
+    setFilteredCustomers(customers)
+  }, [customers])
+
+  // Fetch customers data
   useEffect(() => {
     async function fetchCustomers() {
       if (!user?.uid) {
         setLoading(false)
         return
       }
-
+      
       try {
-        const customersRef = collection(db, 'merchants', user.uid, 'customers')
-        const customersSnap = await getDocs(query(customersRef))
+        const customersRef = collection(db, 'customers')
+        const customersSnap = await getDocs(customersRef)
         
-        const customersPromises = customersSnap.docs.map(async (doc) => {
+        if (customersSnap.empty) {
+          setLoading(false)
+          return
+        }
+        
+        // Create an array of promises for fetching both customer data and profiles
+        const customerPromises = customersSnap.docs.map(async (doc) => {
           const data = doc.data()
+          const customerId = doc.id
           
-          // Fetch customer profile data
-          const profileRef = firestoreDoc(db, 'customers', doc.id)
-          const profileSnap = await getDoc(profileRef)
-          const profileData = profileSnap.exists() ? profileSnap.data() : undefined
-
-          // Mock agent-generated rewards for each customer
-          // In a real implementation, these would come from the Firestore database
-          const agentRewards = mockAgentRewards(data.daysSinceLastVisit, data.lifetimeTransactionCount)
+          // Fetch customer profiles
+          const profilesRef = collection(db, 'customers', customerId, 'profiles')
+          const profilesSnap = await getDocs(profilesRef)
           
-          // Determine customer cohort based on visit behavior
-          const cohort = determineCustomerCohort(data.daysSinceLastVisit, data.lifetimeTransactionCount, data.daysSinceFirstPurchase)
+          // Filter profiles for this merchant and sort by creation date
+          const profilesData = profilesSnap.docs
+            .map(profileDoc => {
+              const profileData = profileDoc.data()
+              return {
+                profileId: profileDoc.id,
+                merchantId: profileData.merchantId || '',
+                createdAt: profileData.createdAt || null,
+                profileDescription: profileData.profileDescription || ''
+              }
+            })
+            .filter(profile => profile.merchantId === user.uid)
+            .sort((a, b) => {
+              const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+              const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+              return dateB - dateA
+            })
           
-          // Generate a behavior summary
-          const recentBehavior = generateBehaviorSummary(data)
-
-          return {
-            customerId: doc.id,
-            fullName: data.fullName || 'Unknown Customer',
+          // Build the customer object with all required fields
+          const customer: Customer = {
+            customerId,
+            fullName: data.fullName || 'Unknown',
             pointsBalance: data.pointsBalance || 0,
+            membershipTier: data.membershipTier || '',
             lifetimeTransactionCount: data.lifetimeTransactionCount || 0,
             totalLifetimeSpend: data.totalLifetimeSpend || 0,
-            lastTransactionDate: data.lastTransactionDate || null,
-            firstTransactionDate: data.firstTransactionDate || null,
-            daysSinceFirstPurchase: data.daysSinceFirstPurchase || 0,
             daysSinceLastVisit: data.daysSinceLastVisit || 0,
-            highestTransactionAmount: data.highestTransactionAmount || 0,
-            membershipTier: data.membershipTier || null,
+            daysSinceFirstPurchase: data.daysSinceFirstPurchase || 0,
             redemptionCount: data.redemptionCount || 0,
-            profileData: profileData ? {
-              profilePictureUrl: profileData.profilePictureUrl,
-              shareProfileWithMerchants: profileData.shareProfileWithMerchants
-            } : undefined,
-            // Add agent-specific fields
-            cohort,
-            agentRewards,
-            recentBehavior,
-            // Add cohort tracking information
-            cohortHistory: data.cohortHistory || [
-              { days: 0, name: cohort, since: new Date() }
-            ],
-            cohortViewCount: data.cohortViewCount || 1,
-            currentCohort: data.currentCohort || {
-              daysInCohort: 0,
-              name: cohort,
-              since: new Date()
-            }
+            firstTransactionDate: data.firstTransactionDate || null,
+            lastTransactionDate: data.lastTransactionDate || null,
+            highestTransactionAmount: data.highestTransactionAmount || 0,
+            currentCohort: data.currentCohort || null,
+            cohort: data.cohort || 'New Customer',
+            customerProfiles: profilesData,
+            // Calculate agent rewards and behaviors from data
+            agentRewards: data.agentRewards || [],
+            recentBehavior: data.recentBehavior || 'No recent behavior data available.'
           }
+          
+          return customer
         })
-
-        const customersData = await Promise.all(customersPromises)
+        
+        // Wait for all customer data to be fetched
+        const customersData = await Promise.all(customerPromises)
+        
+        // Set customers data state
         setCustomers(customersData)
         setFilteredCustomers(customersData)
       } catch (error) {
@@ -148,22 +203,9 @@ export function CustomersList() {
         setLoading(false)
       }
     }
-
+    
     fetchCustomers()
   }, [user?.uid])
-
-  useEffect(() => {
-    if (searchTerm.trim() === "") {
-      setFilteredCustomers(customers)
-    } else {
-      const filtered = customers.filter(customer => 
-        customer.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        customer.customerId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (customer.cohort && customer.cohort.toLowerCase().includes(searchTerm.toLowerCase()))
-      )
-      setFilteredCustomers(filtered)
-    }
-  }, [searchTerm, customers])
 
   // Helper function to determine customer cohort
   function determineCustomerCohort(daysSinceLastVisit: number, transactionCount: number, daysSinceFirstPurchase: number): string {
@@ -313,188 +355,160 @@ export function CustomersList() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center space-x-4 mb-4">
-          <Skeleton className="h-9 w-[250px]" />
+      <div className="py-6 space-y-6">
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-8 w-[180px]" />
+          <Skeleton className="h-10 w-[250px]" />
         </div>
-        {[1, 2, 3, 4, 5].map((i) => (
-          <Skeleton key={i} className="h-24 w-full" />
-        ))}
+        <div className="grid grid-cols-4 gap-6">
+          {Array(4).fill(0).map((_, i) => (
+            <Skeleton key={i} className="h-[72px] w-full" />
+          ))}
+        </div>
+        <Skeleton className="h-[400px] w-full rounded-md" />
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
-        <div>
-          <h2 className="text-xl font-semibold mb-1">Customer Insights</h2>
-          <p className="text-sm text-muted-foreground">
-            View detailed customer information and agent-generated rewards.
-          </p>
-        </div>
-        <div className="relative w-full md:w-64">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search customers..."
-            className="pl-8 w-full border-slate-200"
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-          />
-        </div>
-      </div>
-
-      {/* Add metrics section */}
-      {!selectedCustomer && (
-        <div className="grid grid-cols-4 gap-3 mb-6">
-          <div className="bg-white border border-slate-200 rounded-md py-2 px-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Total Rewards</span>
-              <Gift className="h-3.5 w-3.5 text-muted-foreground" />
+    <div className="py-6 space-y-6">
+      {!selectedCustomer ? (
+        <>
+          {/* Header with search */}
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold text-[#111827]">Customers</h2>
+            <div className="relative w-[280px]">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#6B7280]" />
+              <Input
+                placeholder="Search customers..."
+                className="pl-9 h-10 border-[#D1D5DB] rounded-md focus:border-[#0D6EFD] focus:ring-2 focus:ring-[#0D6EFD] focus:ring-opacity-20 transition-all duration-150 ease-in-out"
+                value={searchQuery}
+                onChange={handleSearch}
+              />
             </div>
-            <p className="text-lg font-medium mt-1">
-              {customers.reduce((total, customer) => total + (customer.agentRewards?.length || 0), 0)}
-            </p>
           </div>
-          
-          <div className="bg-white border border-slate-200 rounded-md py-2 px-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Redemption Rate</span>
-              <CheckCircle className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-            <p className="text-lg font-medium mt-1">
-              {(() => {
+
+          {/* Metrics row */}
+          <div className="grid grid-cols-4 gap-6">
+            <MetricCard 
+              icon={<Users className="h-5 w-5 text-[#0D6EFD]" />}
+              value={customers.length.toString()}
+              label="Total Customers"
+            />
+            
+            <MetricCard 
+              icon={<Gift className="h-5 w-5 text-[#0D6EFD]" />}
+              value={customers.reduce((total, customer) => total + (customer.agentRewards?.length || 0), 0).toString()}
+              label="Total Rewards"
+            />
+            
+            <MetricCard 
+              icon={<CheckCircle className="h-5 w-5 text-[#0D6EFD]" />}
+              value={(() => {
                 const allRewards = customers.flatMap(c => c.agentRewards || [])
                 const redeemedRewards = allRewards.filter(r => r.isRedeemed)
-                return allRewards.length ? Math.round((redeemedRewards.length / allRewards.length) * 100) : 0
-              })()}%
-            </p>
-          </div>
-          
-          <div className="bg-white border border-slate-200 rounded-md py-2 px-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Active Customers</span>
-              <Users className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-            <p className="text-lg font-medium mt-1">
-              {customers.filter(c => c.cohort === "Active").length}
-            </p>
-          </div>
-          
-          <div className="bg-white border border-slate-200 rounded-md py-2 px-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Re-engagement</span>
-              <Zap className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-            <p className="text-lg font-medium mt-1">
-              {(() => {
-                const dormantCustomers = customers.filter(c => c.cohort === "Dormant" || c.cohort === "Churned")
-                if (!dormantCustomers.length) return "0%"
-                
-                const reengagedCount = dormantCustomers.filter(c => {
-                  const rewards = c.agentRewards || []
-                  return rewards.some(r => r.isRedeemed)
-                }).length
-                
-                return Math.round((reengagedCount / dormantCustomers.length) * 100) + "%"
+                return allRewards.length ? Math.round((redeemedRewards.length / allRewards.length) * 100) + "%" : "0%"
               })()}
-            </p>
+              label="Redemption Rate"
+            />
+            
+            <MetricCard 
+              icon={<Zap className="h-5 w-5 text-[#0D6EFD]" />}
+              value={customers.filter(c => c.cohort === "Active").length.toString()}
+              label="Active Customers"
+            />
           </div>
-        </div>
-      )}
 
-      <div className="grid grid-cols-1 gap-6">
-        {selectedCustomer ? (
-          <CustomerDetail 
-            customer={selectedCustomer} 
-            onBack={() => setSelectedCustomer(null)}
-          />
-        ) : (
-          <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
-            <h3 className="text-base font-medium mb-3">Your Customers</h3>
-            <div className="rounded-md border border-slate-200 overflow-hidden">
-              <Table>
-                <TableHeader className="bg-slate-50">
-                  <TableRow>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Cohort</TableHead>
-                    <TableHead>Last Visit</TableHead>
-                    <TableHead>Total Visits</TableHead>
-                    <TableHead>Agent Rewards</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredCustomers.length > 0 ? (
-                    filteredCustomers.map((customer) => (
-                      <TableRow key={customer.customerId} onClick={() => setSelectedCustomer(customer)} className="cursor-pointer hover:bg-slate-50">
-                        <TableCell>
-                          <div className="flex items-center space-x-3">
-                            <Avatar className="h-8 w-8 border border-slate-100">
-                              {customer.profileData?.shareProfileWithMerchants && customer.profileData?.profilePictureUrl ? (
-                                <AvatarImage src={customer.profileData.profilePictureUrl} alt={customer.fullName} />
-                              ) : (
-                                <AvatarFallback className="bg-primary/10 text-primary">
-                                  {customer.fullName.substring(0, 2).toUpperCase()}
-                                </AvatarFallback>
-                              )}
-                            </Avatar>
-                            <div>
-                              <div className="font-medium">{customer.fullName}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {formatTimeAgo(customer.firstTransactionDate)} first visit
-                              </div>
+          {/* Customer table */}
+          <div className="border border-[#E2E4E8] rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader className="bg-[#F6F6F7]">
+                <TableRow className="border-b border-[#E2E4E8]">
+                  <TableHead className="py-3 font-semibold text-[#111827]">Customer</TableHead>
+                  <TableHead className="py-3 font-semibold text-[#111827]">Cohort</TableHead>
+                  <TableHead className="py-3 font-semibold text-[#111827]">Last Visit</TableHead>
+                  <TableHead className="py-3 font-semibold text-[#111827]">Total Visits</TableHead>
+                  <TableHead className="py-3 font-semibold text-[#111827]">Rewards</TableHead>
+                  <TableHead className="w-[40px]"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredCustomers.length > 0 ? (
+                  filteredCustomers.map((customer) => (
+                    <TableRow 
+                      key={customer.customerId} 
+                      onClick={() => setSelectedCustomer(customer)} 
+                      className="cursor-pointer hover:bg-[#F9FAFB] transition-colors duration-150 ease-in-out border-b border-[#E2E4E8]"
+                    >
+                      <TableCell className="py-4">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-9 w-9 border border-[#E2E4E8]">
+                            {customer.profileData?.shareProfileWithMerchants && customer.profileData?.profilePictureUrl ? (
+                              <AvatarImage src={customer.profileData.profilePictureUrl} alt={customer.fullName} />
+                            ) : (
+                              <AvatarFallback className="bg-[#F0F2F4] text-[#6B7280]">
+                                {customer.fullName.substring(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            )}
+                          </Avatar>
+                          <div>
+                            <div className="font-medium text-[#111827]">{customer.fullName}</div>
+                            <div className="text-xs text-[#6B7280]">
+                              Since {formatDate(customer.firstTransactionDate)}
                             </div>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          {customer.currentCohort?.name ? (
-                            <Badge className={`${getCohortBadgeStyle(customer.currentCohort.name)} font-normal rounded-md`}>
-                              {customer.currentCohort.name}
-                            </Badge>
-                          ) : customer.cohort ? (
-                            <Badge className={`${getCohortBadgeStyle(customer.cohort)} font-normal rounded-md`}>
-                              {customer.cohort}
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-gray-100 text-gray-800 font-normal rounded-md">
-                              Unknown
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-1">
-                            <Clock className="h-3 w-3 text-muted-foreground" />
-                            <span>{customer.daysSinceLastVisit} days ago</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>{customer.lifetimeTransactionCount}</TableCell>
-                        <TableCell>{customer.agentRewards?.length || 0}</TableCell>
-                        <TableCell>
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8">
-                        <div className="flex flex-col items-center justify-center text-muted-foreground">
-                          <User className="h-10 w-10 mb-2 text-slate-300" />
-                          {searchTerm ? (
-                            <p>No customers match your search.</p>
-                          ) : (
-                            <p>No customers found.</p>
-                          )}
                         </div>
                       </TableCell>
+                      <TableCell>
+                        <CohortBadge cohort={customer.currentCohort?.name || customer.cohort} />
+                      </TableCell>
+                      <TableCell className="text-[#111827]">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5 text-[#6B7280]" />
+                          <span>{customer.daysSinceLastVisit} days ago</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-[#111827]">{customer.lifetimeTransactionCount}</TableCell>
+                      <TableCell className="text-[#111827]">{customer.agentRewards?.length || 0}</TableCell>
+                      <TableCell>
+                        <ChevronRight className="h-4 w-4 text-[#6B7280]" />
+                      </TableCell>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-[300px]">
+                      <div className="flex flex-col items-center justify-center text-[#6B7280]">
+                        <User className="h-12 w-12 mb-3 text-[#E2E4E8]" />
+                        {searchQuery ? (
+                          <p className="text-sm">No customers match your search</p>
+                        ) : (
+                          <p className="text-sm">No customers found</p>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           </div>
-        )}
-      </div>
+
+          {/* Sticky action row */}
+          <div className="sticky bottom-0 bg-white py-4 border-t border-[#E2E4E8] flex justify-end">
+            <Button 
+              variant="outline" 
+              className="h-10 px-4 border-[#D1D5DB] text-[#111827] hover:bg-[#F0F2F4] transition-all duration-150 ease-in-out active:scale-[0.98]"
+            >
+              Export Customer Data
+            </Button>
+          </div>
+        </>
+      ) : (
+        <CustomerDetail 
+          customer={selectedCustomer} 
+          onBack={() => setSelectedCustomer(null)}
+        />
+      )}
     </div>
   )
 }
@@ -503,6 +517,14 @@ function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () =
   const { user } = useAuth()
   const [rewards, setRewards] = useState<AgentReward[]>([])
   const [loadingRewards, setLoadingRewards] = useState(true)
+  const [activeTab, setActiveTab] = useState("overview")
+  const [customerProfiles, setCustomerProfiles] = useState<Array<{
+    profileId: string
+    merchantId: string
+    createdAt: any
+    profileDescription: string
+  }>>([])
+  const [loadingProfiles, setLoadingProfiles] = useState(true)
 
   // Add useEffect to fetch customer rewards when component mounts
   useEffect(() => {
@@ -562,6 +584,54 @@ function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () =
     fetchCustomerRewards()
   }, [user?.uid, customer.customerId])
 
+  // Add useEffect to fetch customer profiles
+  useEffect(() => {
+    async function fetchCustomerProfiles() {
+      if (!user?.uid || !customer.customerId) {
+        setLoadingProfiles(false)
+        return
+      }
+
+      try {
+        // Get profiles from the customer's profiles collection
+        const profilesRef = collection(db, 'customers', customer.customerId, 'profiles')
+        const profilesSnap = await getDocs(profilesRef)
+        
+        if (profilesSnap.empty) {
+          setLoadingProfiles(false)
+          return
+        }
+
+        const profilesData = profilesSnap.docs
+          .map(doc => {
+            const data = doc.data()
+            return {
+              profileId: doc.id,
+              merchantId: data.merchantId || '',
+              createdAt: data.createdAt || null,
+              profileDescription: data.profileDescription || ''
+            }
+          })
+          // Filter for profiles that match this merchant
+          .filter(profile => profile.merchantId === user.uid)
+          // Sort by createdAt (newest first)
+          .sort((a, b) => {
+            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+            return dateB - dateA
+          })
+        
+        setCustomerProfiles(profilesData)
+      } catch (error) {
+        console.error('Error fetching customer profiles:', error)
+      } finally {
+        setLoadingProfiles(false)
+      }
+    }
+    
+    fetchCustomerProfiles()
+  }, [user?.uid, customer.customerId])
+
   const formatDate = (timestamp: any) => {
     if (!timestamp) return 'N/A'
     
@@ -613,317 +683,280 @@ function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () =
     ? Math.round((customer.totalLifetimeSpend || 0) / customer.lifetimeTransactionCount)
     : 0
 
+  // Get the most recent profile that matches this merchant
+  const latestProfile = customerProfiles.length > 0 ? customerProfiles[0] : null
+
   return (
-    <div className="space-y-6 bg-white p-6 rounded-lg border border-slate-200 shadow-md">
-      {/* Header with back button and profile summary */}
-      <div className="flex items-center justify-between bg-white rounded-lg p-4 shadow-sm border border-slate-200">
-        <div className="flex items-center space-x-4">
-          <button 
-            onClick={onBack}
-            className="rounded-full p-2 hover:bg-blue-50 text-blue-600 transition-colors border border-transparent hover:border-blue-100"
+    <div className="space-y-6">
+      {/* Header with back button */}
+      <div className="flex items-center gap-3">
+        <Button 
+          onClick={onBack}
+          variant="outline"
+          size="icon"
+          className="h-8 w-8 rounded-md border-[#E2E4E8] hover:bg-[#F0F2F4] text-[#6B7280] transition-all duration-150 ease-in-out active:scale-[0.98]"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <h2 className="text-xl font-semibold text-[#111827]">{customer.fullName}</h2>
+        <CohortBadge cohort={customer.currentCohort?.name || customer.cohort} />
+        {customer.membershipTier && (
+          <Badge variant="outline" className="rounded-md border-[#E2E4E8] text-[#6B7280] font-normal">
+            {customer.membershipTier}
+          </Badge>
+        )}
+        <span className="text-sm text-[#6B7280] ml-auto">
+          Customer since {formatDate(customer.firstTransactionDate)}
+        </span>
+      </div>
+
+      {/* OpenAI-style tabs */}
+      <Tabs 
+        defaultValue="overview" 
+        value={activeTab} 
+        onValueChange={setActiveTab}
+        className="mt-4"
+      >
+        <TabsList className="border border-[#E2E4E8] p-0.5 bg-[#F6F6F7] rounded-md mb-6">
+          <TabsTrigger 
+            value="overview"
+            className="rounded-sm px-4 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:text-[#111827] data-[state=active]:shadow-sm text-[#6B7280] transition-all duration-150 ease-in-out"
           >
-            <ChevronRight className="h-5 w-5 transform rotate-180" />
-          </button>
-          <Avatar className="h-12 w-12 border-2 border-blue-100">
-            {customer.profileData?.shareProfileWithMerchants && customer.profileData?.profilePictureUrl ? (
-              <AvatarImage src={customer.profileData.profilePictureUrl} alt={customer.fullName} />
-            ) : (
-              <AvatarFallback className="bg-blue-50 text-blue-600 text-lg">
-                {customer.fullName.substring(0, 2).toUpperCase()}
-              </AvatarFallback>
-            )}
-          </Avatar>
-          <div>
-            <h2 className="text-xl font-semibold">{customer.fullName}</h2>
-            <div className="flex items-center space-x-2">
-              <Badge className={`${getCohortBadgeStyle(customer.currentCohort?.name)} font-medium rounded-md`}>
-                {customer.currentCohort?.name || customer.cohort || 'Unknown'}
-              </Badge>
-              {customer.membershipTier && (
-                <Badge variant="outline" className="font-normal rounded-md border-slate-200">
-                  {customer.membershipTier}
-                </Badge>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="text-sm text-muted-foreground">Customer since</div>
-          <div className="font-medium">{formatDate(customer.firstTransactionDate)}</div>
-        </div>
-      </div>
+            Overview
+          </TabsTrigger>
+          <TabsTrigger 
+            value="rewards"
+            className="rounded-sm px-4 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:text-[#111827] data-[state=active]:shadow-sm text-[#6B7280] transition-all duration-150 ease-in-out"
+          >
+            Rewards
+          </TabsTrigger>
+          <TabsTrigger 
+            value="transactions"
+            className="rounded-sm px-4 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:text-[#111827] data-[state=active]:shadow-sm text-[#6B7280] transition-all duration-150 ease-in-out"
+          >
+            Transactions
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Customer Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between">
-            <div className="bg-blue-50 p-2 rounded-full text-blue-600 border border-blue-100">
-              <Clock className="h-5 w-5" />
-            </div>
-            <span className="text-xs uppercase text-slate-500 font-medium">Last Visit</span>
-          </div>
-          <div className="mt-3">
-            <p className="text-2xl font-bold">{customer.daysSinceLastVisit}</p>
-            <p className="text-sm text-slate-500">days ago</p>
-          </div>
-        </div>
+        <TabsContent value="overview" className="space-y-6">
+          {/* Key metrics row */}
+          <div className="grid grid-cols-4 gap-6">
+            <MetricCard 
+              icon={<Clock className="h-5 w-5 text-[#0D6EFD]" />}
+              value={`${customer.daysSinceLastVisit} days ago`}
+              label="Last Visit"
+            />
 
-        <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between">
-            <div className="bg-indigo-50 p-2 rounded-full text-indigo-600 border border-indigo-100">
-              <Users className="h-5 w-5" />
-            </div>
-            <span className="text-xs uppercase text-slate-500 font-medium">Total Visits</span>
-          </div>
-          <div className="mt-3">
-            <p className="text-2xl font-bold">{customer.lifetimeTransactionCount}</p>
-            <p className="text-sm text-slate-500">transactions</p>
-          </div>
-        </div>
+            <MetricCard 
+              icon={<BarChart3 className="h-5 w-5 text-[#0D6EFD]" />}
+              value={customer.lifetimeTransactionCount.toString()}
+              label="Total Visits"
+            />
 
-        <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between">
-            <div className="bg-green-50 p-2 rounded-full text-green-600 border border-green-100">
-              <DollarSign className="h-5 w-5" />
-            </div>
-            <span className="text-xs uppercase text-slate-500 font-medium">Total Spend</span>
-          </div>
-          <div className="mt-3">
-            <p className="text-2xl font-bold">${customer.totalLifetimeSpend || 0}</p>
-            <p className="text-sm text-slate-500">lifetime value</p>
-          </div>
-        </div>
+            <MetricCard 
+              icon={<DollarSign className="h-5 w-5 text-[#0D6EFD]" />}
+              value={`$${customer.totalLifetimeSpend || 0}`}
+              label="Total Spend"
+            />
 
-        <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between">
-            <div className="bg-amber-50 p-2 rounded-full text-amber-600 border border-amber-100">
-              <Gift className="h-5 w-5" />
-            </div>
-            <span className="text-xs uppercase text-slate-500 font-medium">Rewards Used</span>
+            <MetricCard 
+              icon={<Gift className="h-5 w-5 text-[#0D6EFD]" />}
+              value={(customer.redemptionCount || 0).toString()}
+              label="Rewards Used"
+            />
           </div>
-          <div className="mt-3">
-            <p className="text-2xl font-bold">{customer.redemptionCount || 0}</p>
-            <p className="text-sm text-slate-500">redemptions</p>
-          </div>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Customer Profile & Behavior */}
-        <div className="space-y-6">
-          {/* Profile Card */}
-          <div className="bg-white rounded-lg shadow-sm p-5 border border-slate-200">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-medium text-slate-800">Customer Profile</h3>
-              <div className="bg-blue-50 h-7 w-7 rounded-full flex items-center justify-center text-blue-600 border border-blue-100">
-                <User className="h-4 w-4" />
+          {/* Profile summary */}
+          {loadingProfiles ? (
+            <div className="border border-[#E2E4E8] rounded-lg p-5">
+              <h3 className="text-base font-semibold text-[#111827] mb-4">Customer Profile</h3>
+              <div className="flex justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-2 border-[#0D6EFD] border-opacity-30 border-t-[#0D6EFD]"></div>
               </div>
             </div>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+          ) : latestProfile ? (
+            <div className="border border-[#E2E4E8] rounded-lg p-5">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-base font-semibold text-[#111827]">Customer Profile</h3>
+                <span className="text-xs text-[#6B7280]">
+                  Updated {formatTimeAgo(latestProfile.createdAt)}
+                </span>
+              </div>
+              <p className="text-[#6B7280] text-sm leading-relaxed">{latestProfile.profileDescription}</p>
+            </div>
+          ) : (
+            <div className="border border-[#E2E4E8] rounded-lg p-5">
+              <h3 className="text-base font-semibold text-[#111827] mb-4">Customer Profile</h3>
+              <p className="text-[#6B7280] text-sm">No profile information available for this customer.</p>
+            </div>
+          )}
+
+          {/* Analytics section */}
+          <div className="grid grid-cols-2 gap-6">
+            {/* Spending patterns */}
+            <div className="border border-[#E2E4E8] rounded-lg p-5">
+              <h3 className="text-base font-semibold text-[#111827] mb-4">Spending Patterns</h3>
+              <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <div className="text-xs text-slate-500 font-medium uppercase">Avg. Spend</div>
-                  <div className="text-base font-semibold">${avgSpend}</div>
-                  <div className="text-xs text-slate-500">per transaction</div>
+                  <div className="text-xs uppercase font-medium text-[#6B7280] mb-1">Avg. Transaction</div>
+                  <div className="text-xl font-semibold text-[#111827]">${avgSpend}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-slate-500 font-medium uppercase">Visit Frequency</div>
-                  <div className="text-base font-semibold">{visitFrequency > 0 ? `Every ${visitFrequency} days` : 'N/A'}</div>
-                  <div className="text-xs text-slate-500">average</div>
+                  <div className="text-xs uppercase font-medium text-[#6B7280] mb-1">Visit Frequency</div>
+                  <div className="text-xl font-semibold text-[#111827]">
+                    {visitFrequency > 0 ? `${visitFrequency} days` : 'N/A'}
+                  </div>
                 </div>
               </div>
+            </div>
 
-              <div className="border-t border-slate-100 pt-4">
-                <div className="text-sm font-medium mb-1 text-slate-800">Recent Behavior Pattern</div>
-                <div className="text-sm text-slate-600">{customer.recentBehavior}</div>
-              </div>
-
-              <div className="bg-gray-100 rounded-md p-3 border border-slate-200">
-                <div className="flex justify-between items-center mb-2">
-                  <div className="text-sm font-medium text-slate-800">Points Balance</div>
-                  <div className="text-xs text-slate-500">Current</div>
+            {/* Points & rewards */}
+            <div className="border border-[#E2E4E8] rounded-lg p-5">
+              <h3 className="text-base font-semibold text-[#111827] mb-4">Loyalty Points</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs uppercase font-medium text-[#6B7280]">Current Balance</span>
+                  <span className="text-xl font-semibold text-[#111827]">{customer.pointsBalance || 0}</span>
                 </div>
-                <div className="text-2xl font-bold text-blue-600">{customer.pointsBalance || 0}</div>
-                <div className="h-2 w-full bg-slate-200 rounded-full mt-2">
-                  <div className="h-2 bg-blue-500 rounded-full" style={{ width: `${Math.min(100, Math.max(5, (customer.pointsBalance || 0) / 10))}%` }}></div>
+                <div className="mt-2">
+                  <div className="h-2 w-full bg-[#F3F4F6] rounded-full">
+                    <div 
+                      className="h-2 bg-[#0D6EFD] rounded-full" 
+                      style={{ width: `${Math.min(100, Math.max(5, (customer.pointsBalance || 0) / 10))}%` }}
+                    ></div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Cohort Information */}
-          <div className="bg-white rounded-lg shadow-sm p-5 border border-slate-200">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-medium text-slate-800">Cohort Tracking</h3>
-              <div className="bg-indigo-50 h-7 w-7 rounded-full flex items-center justify-center text-indigo-600 border border-indigo-100">
-                <Users className="h-4 w-4" />
-              </div>
-            </div>
-            <div className="space-y-4">
-              {/* Current Cohort */}
-              <div className="bg-gray-100 rounded-md p-3 border border-slate-200">
-                <div className="flex justify-between items-center mb-2">
-                  <div className="text-sm font-medium text-slate-800">Current Cohort</div>
-                  <Badge className={`${getCohortBadgeStyle(customer.currentCohort?.name)} font-medium`}>
-                    {customer.currentCohort?.name || customer.cohort}
-                  </Badge>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-500">Since</span>
-                  <span className="text-slate-800">{formatDate(customer.currentCohort?.since || new Date())}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm mt-1">
-                  <span className="text-slate-500">Duration</span>
-                  <span className="text-slate-800">{customer.currentCohort?.daysInCohort || 0} days</span>
-                </div>
-              </div>
-
-              {/* Cohort History */}
-              <div>
-                <div className="flex justify-between items-center mb-3">
-                  <div className="text-sm font-medium text-slate-800">Cohort History</div>
-                  <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full border border-indigo-100">
-                    {customer.cohortViewCount || 1} views
-                  </span>
-                </div>
-                
-                <div className="space-y-2">
-                  {customer.cohortHistory && customer.cohortHistory.length > 0 ? (
-                    customer.cohortHistory.map((entry, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <div className="flex-shrink-0 h-6 w-6 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-xs text-slate-500">
-                          {index}
-                        </div>
-                        <div className="flex-1 bg-gray-100 rounded-md p-2 border border-slate-200">
-                          <div className="flex justify-between items-center">
-                            <Badge variant="outline" className={`${getCohortBadgeStyle(entry.name)} font-normal border-slate-200`}>
-                              {entry.name}
-                            </Badge>
-                            <span className="text-xs text-slate-500">
-                              {entry.days} days
-                            </span>
-                          </div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            {formatDate(entry.since)}
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center text-sm text-slate-500 py-2 bg-gray-100 border border-slate-200 rounded-md">
-                      No cohort history available
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
+          {/* Customer behavior insights */}
+          <div className="border border-[#E2E4E8] rounded-lg p-5">
+            <h3 className="text-base font-semibold text-[#111827] mb-4">Behavior Insights</h3>
+            <p className="text-[#6B7280] text-sm leading-relaxed">{customer.recentBehavior}</p>
           </div>
-        </div>
+        </TabsContent>
 
-        {/* Agent-Generated Rewards Card - Spans 2 columns for better visibility */}
-        <div className="bg-white rounded-lg shadow-sm p-5 md:col-span-2 border border-slate-200">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-base font-medium text-slate-800">Agent-Generated Rewards</h3>
-            <div className="bg-amber-50 h-7 w-7 rounded-full flex items-center justify-center text-amber-600 border border-amber-100">
-              <Gift className="h-4 w-4" />
-            </div>
-          </div>
-          
+        <TabsContent value="rewards" className="space-y-6">
           {loadingRewards ? (
-            <div className="flex justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="flex justify-center items-center py-16">
+              <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#0D6EFD] border-opacity-30 border-t-[#0D6EFD]"></div>
             </div>
           ) : rewards.length > 0 ? (
-            <div className="space-y-4">
-              {rewards.map((reward) => (
-                <div key={reward.id} className="border border-slate-200 rounded-md p-4 transition-shadow hover:shadow-md bg-white hover:border-blue-200">
+            <div className="border border-[#E2E4E8] rounded-lg divide-y divide-[#E2E4E8]">
+              {rewards.map(reward => (
+                <div key={reward.id} className="p-4 hover:bg-[#F9FAFB] transition-colors duration-150 ease-in-out">
                   <div className="flex items-start gap-4">
-                    {/* Left: Reward icon */}
-                    {getRewardTypeIcon(reward.type)}
-                    
-                    {/* Middle: Reward details */}
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h4 className="font-semibold text-base text-slate-800">{reward.rewardName}</h4>
-                          <p className="text-sm text-slate-600">{reward.description}</p>
-                        </div>
-                        <Badge 
-                          variant={reward.isRedeemed ? "default" : "outline"} 
-                          className={`rounded-full px-3 ${reward.isRedeemed ? 'bg-green-100 text-green-800 hover:bg-green-200 border-green-200' : 'border-slate-200'}`}
-                        >
-                          {reward.isRedeemed ? 'Redeemed' : 'Active'}
-                        </Badge>
+                    <div className="mt-1 flex-shrink-0">
+                      {getRewardTypeIcon(reward.type)}
+                    </div>
+                    <div className="flex-grow min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <h4 className="font-medium text-[#111827] truncate">{reward.rewardName}</h4>
+                        {reward.isRedeemed ? (
+                          <Badge className="rounded-full px-2.5 py-0.5 bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0] font-medium text-xs">
+                            Redeemed
+                          </Badge>
+                        ) : (
+                          <Badge className="rounded-full px-2.5 py-0.5 bg-[#EBF5FF] text-[#1E40AF] border border-[#BFDBFE] font-medium text-xs">
+                            Active
+                          </Badge>
+                        )}
                       </div>
-                      
-                      <div className="bg-gray-100 rounded-md p-3 mb-2 border border-slate-200">
-                        <div className="text-xs font-medium text-slate-500 uppercase mb-1">Agent Reasoning</div>
-                        <p className="text-sm text-slate-700">{reward.reasoning || reward.reason || reward.generationReason}</p>
-                      </div>
-                      
-                      <div className="flex justify-between items-center text-xs text-slate-500 mt-3">
-                        <div className="flex items-center">
-                          <Clock className="h-3.5 w-3.5 mr-1" />
+                      <p className="text-sm text-[#6B7280] mb-2">{reward.description}</p>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[#6B7280]">
                           Created {formatTimeAgo(reward.createdAt)}
-                        </div>
+                        </span>
                         {reward.pointsCost > 0 && (
-                          <div className="font-medium text-blue-600">{reward.pointsCost} points required</div>
+                          <span className="font-medium text-[#111827]">{reward.pointsCost} pts</span>
                         )}
                       </div>
                     </div>
                   </div>
-                  
-                  {/* Factors that influenced this reward */}
-                  {reward.basedOn && reward.basedOn.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-slate-200">
-                      <div className="text-xs text-slate-500 mb-2">Based on:</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {reward.basedOn.map((reason, index) => (
-                          <Badge key={index} variant="secondary" className="font-normal text-xs rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100">
-                            {reason}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Redemption info if applicable */}
-                  {reward.isRedeemed && reward.redeemedDate && (
-                    <div className="mt-3 pt-3 border-t border-slate-200 flex items-center gap-1.5 text-xs text-green-600">
-                      <CheckCircle className="h-3.5 w-3.5" />
-                      Redeemed {formatTimeAgo(reward.redeemedDate)}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 border border-dashed rounded-md bg-gray-100 border-slate-200">
-              <Gift className="h-12 w-12 mx-auto text-slate-300 mb-3" />
-              <h3 className="text-lg font-medium mb-1 text-slate-700">No rewards found</h3>
-              <p className="text-sm text-slate-500">
-                Tap Agent hasn't created any rewards for this customer yet.
-              </p>
+            <div className="border border-[#E2E4E8] rounded-lg p-16 flex flex-col items-center justify-center">
+              <Gift className="h-12 w-12 text-[#E2E4E8] mb-4" />
+              <p className="text-[#6B7280] mb-1">No rewards available for this customer</p>
+              <p className="text-xs text-[#6B7280]">Rewards will appear here once created</p>
             </div>
           )}
-        </div>
+        </TabsContent>
+
+        <TabsContent value="transactions" className="space-y-6">
+          <div className="border border-[#E2E4E8] rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader className="bg-[#F6F6F7]">
+                <TableRow className="border-b border-[#E2E4E8]">
+                  <TableHead className="py-3 font-semibold text-[#111827]">Date</TableHead>
+                  <TableHead className="py-3 font-semibold text-[#111827]">Amount</TableHead>
+                  <TableHead className="py-3 font-semibold text-[#111827]">Items</TableHead>
+                  <TableHead className="py-3 font-semibold text-[#111827]">Points</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow>
+                  <TableCell colSpan={4} className="h-[300px]">
+                    <div className="flex flex-col items-center justify-center text-[#6B7280]">
+                      <Calendar className="h-12 w-12 text-[#E2E4E8] mb-4" />
+                      <p className="text-[#6B7280] mb-1">Transaction history not available</p>
+                      <p className="text-xs text-[#6B7280]">This is a demo view</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Sticky action row */}
+      <div className="sticky bottom-0 bg-white py-4 border-t border-[#E2E4E8] flex justify-end gap-3">
+        <Button 
+          variant="outline" 
+          className="h-10 px-4 border-[#D1D5DB] text-[#111827] hover:bg-[#F0F2F4] transition-all duration-150 ease-in-out active:scale-[0.98]"
+        >
+          Edit Customer
+        </Button>
+        <Button 
+          className="h-10 px-4 bg-[#0D6EFD] hover:bg-[#0B5ED7] text-white transition-all duration-150 ease-in-out active:scale-[0.98]"
+        >
+          Create Reward
+        </Button>
       </div>
     </div>
   )
 }
 
-// Helper function to get cohort badge style
-function getCohortBadgeStyle(cohort: string | undefined) {
+// Reusable components to follow the design system
+function MetricCard({ icon, value, label }: { icon: React.ReactNode, value: string, label: string }) {
+  return (
+    <div className="border border-[#E2E4E8] rounded-lg p-4 bg-white">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs uppercase font-medium text-[#6B7280]">{label}</span>
+        <div className="h-8 w-8 rounded-md bg-[#F0F2F4] flex items-center justify-center">
+          {icon}
+        </div>
+      </div>
+      <div className="text-xl font-semibold text-[#111827]">{value}</div>
+    </div>
+  )
+}
+
+function CohortBadge({ cohort }: { cohort?: string }) {
   switch (cohort?.toLowerCase()) {
     case 'new':
-      return "bg-blue-100 text-blue-800 hover:bg-blue-200"
+      return <Badge className="rounded-md bg-[#EBF5FF] text-[#1E40AF] border border-[#BFDBFE] font-medium">{cohort}</Badge>
     case 'active':
-      return "bg-green-100 text-green-800 hover:bg-green-200"
+      return <Badge className="rounded-md bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0] font-medium">{cohort}</Badge>
     case 'dormant':
-      return "bg-amber-100 text-amber-800 hover:bg-amber-200"
+      return <Badge className="rounded-md bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] font-medium">{cohort}</Badge>
     case 'churned':
-      return "bg-red-100 text-red-800 hover:bg-red-200"
+      return <Badge className="rounded-md bg-[#FEE2E2] text-[#991B1B] border border-[#FECACA] font-medium">{cohort}</Badge>
     default:
-      return "bg-gray-100 text-gray-800 hover:bg-gray-200"
+      return <Badge className="rounded-md bg-[#F3F4F6] text-[#4B5563] border border-[#E5E7EB] font-medium">{cohort || 'Unknown'}</Badge>
   }
 } 

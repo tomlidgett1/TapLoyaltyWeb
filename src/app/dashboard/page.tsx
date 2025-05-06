@@ -978,6 +978,20 @@ export default function DashboardPage() {
           
           if (data.success) {
             console.log('Lightspeed New connection successful')
+            
+            // Verify the integration was stored correctly
+            try {
+              const integrationCheck = await fetch(`/api/integrations/check?merchantId=${merchantId}&integration=lightspeed_new`)
+              const checkResult = await integrationCheck.json()
+              console.log('Integration check result:', checkResult)
+              
+              if (!checkResult.connected) {
+                console.warn('Integration check shows not connected despite successful token exchange')
+              }
+            } catch (checkError) {
+              console.error('Error checking integration status:', checkError)
+            }
+            
             toast({
               title: "Success!",
               description: "Your Lightspeed account has been connected.",

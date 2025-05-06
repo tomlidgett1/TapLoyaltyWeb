@@ -33,7 +33,10 @@ export async function POST(request: NextRequest) {
     
     console.log('Exchanging code for access token...')
     
-    // Exchange code for access token using the client_secret and code_verifier
+    // Get the redirect URI - this must match what was used in the authorization request
+    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/dashboard`
+    
+    // Exchange code for access token using the client_secret, code_verifier, and redirect_uri
     const tokenResponse = await fetch('https://cloud.lightspeedapp.com/auth/oauth/token', {
       method: 'POST',
       headers: {
@@ -44,12 +47,20 @@ export async function POST(request: NextRequest) {
         client_secret: LIGHTSPEED_CLIENT_SECRET,
         code,
         grant_type: 'authorization_code',
-        code_verifier: codeVerifier
+        code_verifier: codeVerifier,
+        redirect_uri: redirectUri
       })
     })
     
     const tokenData = await tokenResponse.json()
     console.log('Token response status:', tokenResponse.status)
+    console.log('Token response data:', {
+      hasAccessToken: !!tokenData.access_token,
+      hasRefreshToken: !!tokenData.refresh_token,
+      hasExpiresIn: !!tokenData.expires_in,
+      error: tokenData.error,
+      errorDescription: tokenData.error_description
+    })
     
     if (!tokenResponse.ok) {
       console.error('Lightspeed OAuth token error:', tokenData)
@@ -61,11 +72,6 @@ export async function POST(request: NextRequest) {
     }
     
     console.log('Successfully obtained access token, storing in Firestore...')
-    console.log('Token data received:', {
-      hasAccessToken: !!tokenData.access_token,
-      hasRefreshToken: !!tokenData.refresh_token,
-      hasExpiresIn: !!tokenData.expires_in
-    })
     
     try {
       // Calculate expiration timestamp safely

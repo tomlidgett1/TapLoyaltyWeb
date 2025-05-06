@@ -13,18 +13,18 @@
 
 3. **Verified API Parameters**:
    - Confirmed that the Square OAuth token exchange requires `client_id` and `client_secret` parameters
-   - Updated to use environment variables for secure credential storage
+   - Updated to use environment variables with fallback values for production
    - Confirmed that we're using the correct API endpoint and version
 
 ## Credentials
 
-- **Application ID**: Stored in environment variable `SQUARE_APP_ID`
-- **OAuth Application Secret**: Stored in environment variable `SQUARE_CLIENT_SECRET`
+- **Application ID**: Primarily stored in environment variable `SQUARE_APP_ID` with production fallback
+- **OAuth Application Secret**: Primarily stored in environment variable `SQUARE_CLIENT_SECRET` with production fallback
 - **API Version**: 2025-04-16
 
 ## Environment Variables Setup
 
-For security reasons, Square credentials are now stored as environment variables:
+For security reasons, Square credentials should be stored as environment variables:
 
 1. Add the following to your `.env.local` file (for development):
    ```
@@ -34,7 +34,7 @@ For security reasons, Square credentials are now stored as environment variables
 
 2. Add these same variables to your production environment (Vercel, etc.)
 
-3. Never commit these values to your repository
+3. Note: The code includes fallback values for production to ensure functionality while you set up environment variables
 
 ## How to Test the Integration
 

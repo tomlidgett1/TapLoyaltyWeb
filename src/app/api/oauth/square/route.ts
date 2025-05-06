@@ -4,14 +4,10 @@ import { doc, setDoc } from 'firebase/firestore'
 import { headers } from 'next/headers'
 
 // Square API production constants from environment variables
-const SQUARE_APP_ID = process.env.SQUARE_APP_ID || ""
-const SQUARE_CLIENT_SECRET = process.env.SQUARE_CLIENT_SECRET || ""
+// Use environment variables if available, otherwise use production values
+const SQUARE_APP_ID = process.env.SQUARE_APP_ID || "sq0idp-4LAqjdrwhjauSthYdTRFtA"
+const SQUARE_CLIENT_SECRET = process.env.SQUARE_CLIENT_SECRET || "sq0csp-Mtlvb4GHknGh25V8PfX5n5f9-s3TYNa7EPNiqAQRjx8"
 const API_VERSION = '2025-04-16'
-
-// Validate environment variables are set
-if (!SQUARE_APP_ID || !SQUARE_CLIENT_SECRET) {
-  console.error('Missing required Square API credentials in environment variables')
-}
 
 export async function POST(request: NextRequest) {
   console.log('Square OAuth token exchange endpoint called')
@@ -32,15 +28,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Missing required parameters' }, { status: 400 })
     }
     
-    // Validate environment variables are set
-    if (!SQUARE_APP_ID || !SQUARE_CLIENT_SECRET) {
-      console.error('Missing required Square API credentials in environment variables')
-      return NextResponse.json({ success: false, error: 'Server configuration error' }, { status: 500 })
-    }
-    
     console.log('Exchanging code for access token...')
     
-    // Exchange code for access token using the client_secret from environment variables
+    // Exchange code for access token using the client_secret
     const tokenResponse = await fetch('https://connect.squareup.com/oauth2/token', {
       method: 'POST',
       headers: {

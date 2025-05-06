@@ -935,12 +935,81 @@ export default function DashboardPage() {
             variant: "destructive"
           })
         }
+      } 
+      // Check if it's a Lightspeed New callback
+      else if (state === localStorage.getItem('lightspeed_new_state')) {
+        console.log('Lightspeed New OAuth callback confirmed')
+        try {
+          // Get merchant ID and code verifier from localStorage
+          const merchantId = localStorage.getItem('lightspeed_new_merchant_id')
+          const codeVerifier = localStorage.getItem('lightspeed_new_code_verifier')
+          
+          console.log('Merchant ID from localStorage:', merchantId)
+          console.log('Code verifier exists:', !!codeVerifier)
+          
+          if (!merchantId) {
+            console.error('Missing merchant ID in localStorage')
+            throw new Error('Missing merchant ID')
+          }
+          
+          if (!codeVerifier) {
+            console.error('Missing code verifier in localStorage')
+            throw new Error('Missing code verifier')
+          }
+          
+          console.log('Exchanging code for token...')
+          // Exchange code for token
+          const response = await fetch('/api/lightspeed/new', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              code,
+              state,
+              merchantId,
+              codeVerifier
+            })
+          })
+          
+          console.log('Token exchange response status:', response.status)
+          const data = await response.json()
+          console.log('Token exchange response data:', data)
+          
+          if (data.success) {
+            console.log('Lightspeed New connection successful')
+            toast({
+              title: "Success!",
+              description: "Your Lightspeed account has been connected.",
+            })
+          } else {
+            console.error('Lightspeed New connection failed:', data.error, data.details)
+            throw new Error(data.error || 'Failed to connect Lightspeed account')
+          }
+          
+          // Clear state from localStorage
+          localStorage.removeItem('lightspeed_new_state')
+          localStorage.removeItem('lightspeed_new_merchant_id')
+          localStorage.removeItem('lightspeed_new_code_verifier')
+          
+          // Redirect to integrations page
+          console.log('Redirecting to integrations page')
+          router.push('/integrations')
+        } catch (error) {
+          console.error('Error handling Lightspeed New callback:', error)
+          toast({
+            title: "Connection Failed",
+            description: "We couldn't connect your Lightspeed account. Please try again.",
+            variant: "destructive"
+          })
+        }
       } else if (code && state) {
         // If we have code and state but no matching stored state, log this information
         console.log('OAuth callback received but no matching state found in localStorage', {
           availableLocalStorageKeys: Object.keys(localStorage),
           squareStateExists: !!localStorage.getItem('square_state'),
-          lightspeedStateExists: !!localStorage.getItem('lightspeed_state')
+          lightspeedStateExists: !!localStorage.getItem('lightspeed_state'),
+          lightspeedNewStateExists: !!localStorage.getItem('lightspeed_new_state')
         })
       }
       

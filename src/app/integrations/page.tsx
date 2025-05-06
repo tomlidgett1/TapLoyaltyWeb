@@ -11,6 +11,7 @@ import { toast } from "@/components/ui/use-toast"
 import Link from "next/link"
 import { PageTransition } from "@/components/page-transition"
 import { PageHeader } from "@/components/page-header"
+import { generateCodeVerifier, generateCodeChallenge } from "@/lib/pkce"
 
 // Import icons for different POS systems
 import { LightspeedIcon } from "@/components/icons/lightspeed-icon"
@@ -29,6 +30,7 @@ interface IntegrationsState {
   square: IntegrationState;
   clover: IntegrationState;
   shopify: IntegrationState;
+  lightspeed_new: IntegrationState;
 }
 
 export default function IntegrationsPage() {
@@ -38,7 +40,8 @@ export default function IntegrationsPage() {
     lightspeed: { connected: false, data: null },
     square: { connected: false, data: null },
     clover: { connected: false, data: null },
-    shopify: { connected: false, data: null }
+    shopify: { connected: false, data: null },
+    lightspeed_new: { connected: false, data: null }
   })
   
   // Add a new state for the API connection
@@ -69,6 +72,18 @@ export default function IntegrationsPage() {
             square: { 
               connected: true, 
               data: squareDoc.data() 
+            }
+          }))
+        }
+        
+        // Check Lightspeed New integration status
+        const lightspeedNewDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'lightspeed_new'))
+        if (lightspeedNewDoc.exists() && lightspeedNewDoc.data().connected) {
+          setIntegrations(prev => ({
+            ...prev,
+            lightspeed_new: { 
+              connected: true, 
+              data: lightspeedNewDoc.data() 
             }
           }))
         }
@@ -266,6 +281,87 @@ export default function IntegrationsPage() {
     }
   }
 
+  // Lightspeed New integration
+  const connectLightspeedNew = async () => {
+    if (!user) return
+    
+    setConnecting("lightspeed_new")
+    
+    try {
+      // Lightspeed New OAuth parameters
+      const clientId = "0be25ce25b4988b26b5759aecca02248cfe561d7594edd46e7d6807c141ee72e"
+      
+      // Store the state in localStorage to verify when the user returns
+      const state = Math.random().toString(36).substring(2, 15)
+      localStorage.setItem('lightspeed_new_state', state)
+      
+      // Store the merchant ID in localStorage to associate with the integration
+      localStorage.setItem('lightspeed_new_merchant_id', user.uid)
+      
+      // Generate code verifier and challenge for PKCE
+      const codeVerifier = generateCodeVerifier()
+      localStorage.setItem('lightspeed_new_code_verifier', codeVerifier)
+      
+      // Generate code challenge using SHA-256
+      const codeChallenge = await generateCodeChallenge(codeVerifier)
+      
+      // Add redirect_uri to the authorization URL
+      const redirectUri = `${window.location.origin}/dashboard`
+      
+      // Define the scopes we need
+      const scopes = [
+        'employee:register',
+        'employee:inventory',
+        'employee:customers'
+      ].join(' ')
+      
+      // Build the authorization URL
+      const authUrl = `https://cloud.lightspeedapp.com/auth/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientId)}&scope=${encodeURIComponent(scopes)}&state=${encodeURIComponent(state)}&code_challenge=${encodeURIComponent(codeChallenge)}&code_challenge_method=S256`
+      
+      console.log("Redirecting to Lightspeed New authorization URL:", authUrl)
+      
+      // Redirect to Lightspeed authorization page
+      window.location.href = authUrl
+    } catch (error) {
+      console.error("Error connecting to Lightspeed New:", error)
+      toast({
+        title: "Connection Failed",
+        description: "Failed to connect to Lightspeed. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setConnecting(null)
+    }
+  }
+
+  // Disconnect Lightspeed New
+  const disconnectLightspeedNew = async () => {
+    if (!user) return
+    
+    try {
+      await updateDoc(doc(db, 'merchants', user.uid, 'integrations', 'lightspeed_new'), {
+        connected: false
+      })
+      
+      setIntegrations(prev => ({
+        ...prev,
+        lightspeed_new: { connected: false, data: null }
+      }))
+      
+      toast({
+        title: "Disconnected",
+        description: "Your Lightspeed New account has been disconnected."
+      })
+    } catch (error) {
+      console.error("Error disconnecting Lightspeed New:", error)
+      toast({
+        title: "Error",
+        description: "Failed to disconnect Lightspeed New. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
+
   return (
     <PageTransition>
       <div className="p-6">
@@ -342,6 +438,42 @@ export default function IntegrationsPage() {
                 disabled={connectingApi === "lightspeed"}
               >
                 {connectingApi === "lightspeed" ? "Connecting..." : "Connect to API"}
+              </Button>
+            </CardFooter>
+          </Card>
+          
+          {/* Lightspeed New Integration Card */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="w-10 h-10 bg-gray-100 rounded-md flex items-center justify-center">
+                    <LightspeedIcon className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-medium">Lightspeed New</CardTitle>
+                    <CardDescription>R-Series API Integration</CardDescription>
+                  </div>
+                </div>
+                {integrations.lightspeed_new.connected ? (
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Connected</Badge>
+                ) : null}
+              </div>
+            </CardHeader>
+            <CardContent className="pb-2">
+              <p className="text-sm text-muted-foreground">
+                Connect to Lightspeed Retail POS (R-Series) for advanced inventory and customer management.
+              </p>
+            </CardContent>
+            <CardFooter>
+              <Button 
+                variant={integrations.lightspeed_new.connected ? "outline" : "default"}
+                className="w-full rounded-md"
+                onClick={integrations.lightspeed_new.connected ? disconnectLightspeedNew : connectLightspeedNew}
+                disabled={connecting === "lightspeed_new"}
+              >
+                {connecting === "lightspeed_new" ? "Connecting..." : 
+                 integrations.lightspeed_new.connected ? "Disconnect" : "Connect"}
               </Button>
             </CardFooter>
           </Card>

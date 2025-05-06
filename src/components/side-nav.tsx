@@ -30,7 +30,8 @@ import {
   ShieldCheck,
   Search,
   Command,
-  DollarSign
+  DollarSign,
+  Package
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -93,6 +94,11 @@ const navItems = [
         title: "Rewards",
         href: "/store/rewards",
         icon: Gift
+      },
+      {
+        title: "Inventory",
+        href: "/store/inventory",
+        icon: Package
       },
       {
         title: "Memberships",

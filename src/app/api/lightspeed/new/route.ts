@@ -5,6 +5,7 @@ import { doc, setDoc, serverTimestamp, collection, addDoc } from 'firebase/fires
 // Lightspeed API credentials
 const LIGHTSPEED_CLIENT_ID = process.env.NEXT_PUBLIC_LIGHTSPEED_NEW_CLIENT_ID || process.env.LIGHTSPEED_NEW_CLIENT_ID || "0be25ce25b4988b26b5759aecca02248cfe561d7594edd46e7d6807c141ee72e"
 const LIGHTSPEED_CLIENT_SECRET = process.env.LIGHTSPEED_NEW_CLIENT_SECRET || "0b9c2fb76f1504ce387939066958a68cc28ec9212f571108fcbdba7b3c378f3e"
+const REDIRECT_URI = process.env.NEXT_PUBLIC_APP_URL || 'https://app.taployalty.com.au'
 
 // GET handler for the OAuth callback
 export async function GET(request: NextRequest) {
@@ -68,14 +69,23 @@ export async function GET(request: NextRequest) {
         client_secret: LIGHTSPEED_CLIENT_SECRET,
         code,
         grant_type: 'authorization_code',
-        code_verifier: codeVerifier
+        code_verifier: codeVerifier,
+        redirect_uri: REDIRECT_URI
       })
     })
     
     console.log('Token response status:', tokenResponse.status)
     console.log('Token response headers:', Object.fromEntries([...tokenResponse.headers.entries()]))
     
-    const tokenData = await tokenResponse.json()
+    let tokenData: any
+    try {
+      tokenData = await tokenResponse.json()
+    } catch (parseErr) {
+      const raw = await tokenResponse.text()
+      console.error('Token JSON parse failed, raw response:', raw.slice(0,200))
+      throw new Error('Invalid JSON from Lightspeed token endpoint')
+    }
+    
     console.log('Token data received (keys only):', Object.keys(tokenData))
     
     // Log token data with sensitive information redacted
@@ -289,14 +299,23 @@ export async function POST(request: NextRequest) {
         client_secret: LIGHTSPEED_CLIENT_SECRET,
         code,
         grant_type: 'authorization_code',
-        code_verifier: codeVerifier
+        code_verifier: codeVerifier,
+        redirect_uri: REDIRECT_URI
       })
     })
     
     console.log('Token response status:', tokenResponse.status)
     console.log('Token response headers:', Object.fromEntries([...tokenResponse.headers.entries()]))
     
-    const tokenData = await tokenResponse.json()
+    let tokenData: any
+    try {
+      tokenData = await tokenResponse.json()
+    } catch (parseErr) {
+      const raw = await tokenResponse.text()
+      console.error('Token JSON parse failed, raw response:', raw.slice(0,200))
+      throw new Error('Invalid JSON from Lightspeed token endpoint')
+    }
+    
     console.log('Token data received (keys only):', Object.keys(tokenData))
     
     // Log token data with sensitive information redacted

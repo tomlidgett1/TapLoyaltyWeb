@@ -66,14 +66,19 @@ export async function POST(request: NextRequest) {
     })
     
     try {
-      // Store the integration data in Firestore
+      // Calculate expiration timestamp safely
+      const now = new Date();
+      const expiresInSeconds = tokenData.expires_in || 0;
+      const expiresAt = new Date(now.getTime() + (expiresInSeconds * 1000));
+      
+      // Store the integration data in Firestore with proper date handling
       await setDoc(doc(db, 'merchants', merchantId, 'integrations', 'square'), {
         connected: true,
-        accessToken: tokenData.access_token,
-        refreshToken: tokenData.refresh_token,
-        expiresAt: new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString(),
-        merchantId: tokenData.merchant_id,
-        connectedAt: new Date().toISOString(),
+        accessToken: tokenData.access_token || '',
+        refreshToken: tokenData.refresh_token || '',
+        expiresAt: expiresAt,  // Store as Date object which Firestore can handle
+        merchantId: tokenData.merchant_id || merchantId,
+        connectedAt: new Date(),  // Store as Date object
         connectionState: state
       })
       

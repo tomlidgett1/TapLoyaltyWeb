@@ -31,12 +31,14 @@ import {
   Plus,
   Loader2,
   AlertCircle,
-  ChevronRight
+  ChevronRight,
+  Zap,
+  Trash2
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, getDoc } from "firebase/firestore"
+import { doc, getDoc, collection, updateDoc, arrayUnion, setDoc } from "firebase/firestore"
 import { PageTransition } from "@/components/page-transition"
 import { PageHeader } from "@/components/page-header"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -50,6 +52,8 @@ import {
 } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 
 // Define types for Square Catalog objects
 interface SquareCatalogObject {
@@ -109,6 +113,30 @@ interface InventoryCount {
   updatedAt: string;
 }
 
+// Add interface for tap agent item
+interface TapAgentItem extends SquareCatalogObject {
+  costOfGoods?: number;
+  selected?: boolean;
+}
+
+// Add interface for POS inventory item to be saved to Firestore
+interface POSInventoryItem {
+  id: string;
+  name: string;
+  retailPrice?: number;
+  costOfGoods: number;
+  type: string;
+}
+
+// Add a gradient text component for Tap Agent branding
+const GradientText = ({ children }: { children: React.ReactNode }) => {
+  return (
+    <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-semibold">
+      {children}
+    </span>
+  );
+};
+
 export default function InventoryPage() {
   const router = useRouter()
   const { user } = useAuth()
@@ -126,6 +154,16 @@ export default function InventoryPage() {
   // Add state for inventory counts
   const [inventoryCounts, setInventoryCounts] = useState<Record<string, InventoryCount>>({})
   const [loadingInventory, setLoadingInventory] = useState(false)
+  
+  // Add state for tap agent items
+  const [tapAgentItems, setTapAgentItems] = useState<TapAgentItem[]>([])
+  const [isTapAgentSheetOpen, setIsTapAgentSheetOpen] = useState(false)
+  // Add state for tap agent activation
+  const [isTapAgentActivated, setIsTapAgentActivated] = useState(false)
+  const [checkingTapAgent, setCheckingTapAgent] = useState(false)
+  // Add state for existing tap agent inventory
+  const [existingTapAgentItems, setExistingTapAgentItems] = useState<POSInventoryItem[]>([])
+  const [loadingExistingItems, setLoadingExistingItems] = useState(false)
 
   // Fetch inventory data from Square
   useEffect(() => {
@@ -577,6 +615,269 @@ export default function InventoryPage() {
     return null;
   };
 
+  // Add function to check if Tap Agent is activated
+  const checkTapAgentActivation = async () => {
+    if (!user?.uid) return false;
+    
+    try {
+      setCheckingTapAgent(true);
+      
+      // Check if the merchant has a document in the agents collection
+      const agentDocRef = doc(db, 'agents', user.uid);
+      const agentDoc = await getDoc(agentDocRef);
+      
+      // If the agent document exists, also fetch the existing inventory items
+      if (agentDoc.exists()) {
+        const data = agentDoc.data();
+        if (data.posInventory && Array.isArray(data.posInventory)) {
+          setExistingTapAgentItems(data.posInventory);
+        } else {
+          setExistingTapAgentItems([]);
+        }
+      } else {
+        setExistingTapAgentItems([]);
+      }
+      
+      setIsTapAgentActivated(agentDoc.exists());
+      return agentDoc.exists();
+    } catch (error) {
+      console.error("Error checking Tap Agent activation:", error);
+      return false;
+    } finally {
+      setCheckingTapAgent(false);
+    }
+  };
+
+  // Add function to handle opening tap agent sheet
+  const handleOpenTapAgentSheet = async () => {
+    // First check if Tap Agent is activated
+    setLoadingExistingItems(true);
+    const isActivated = await checkTapAgentActivation();
+    
+    if (!isActivated) {
+      setIsTapAgentSheetOpen(true);
+      setLoadingExistingItems(false);
+      return;
+    }
+    
+    // Convert inventory items to tap agent items
+    const items = inventoryItems
+      .filter(item => item.type === 'ITEM' || item.type === 'ITEM_VARIATION')
+      .map(item => {
+        // Check if this item already exists in the Tap Agent inventory
+        const existingItem = existingTapAgentItems.find(existing => existing.id === item.id);
+        
+        return {
+          ...item,
+          costOfGoods: existingItem?.costOfGoods || 0,
+          selected: false
+        };
+      });
+    
+    setTapAgentItems(items);
+    setIsTapAgentSheetOpen(true);
+    setLoadingExistingItems(false);
+  };
+
+  // Add function to navigate to Tap Agent activation
+  const handleGoToTapAgent = () => {
+    router.push('/tap-agent');
+    setIsTapAgentSheetOpen(false);
+  };
+
+  // Add function to handle selecting all items
+  const handleSelectAll = () => {
+    setTapAgentItems(prevItems => 
+      prevItems.map(item => ({
+        ...item,
+        selected: true
+      }))
+    );
+  };
+
+  // Add function to handle unselecting all items
+  const handleUnselectAll = () => {
+    setTapAgentItems(prevItems => 
+      prevItems.map(item => ({
+        ...item,
+        selected: false
+      }))
+    );
+  };
+
+  // Add function to handle selecting a single item
+  const handleSelectItem = (id: string) => {
+    setTapAgentItems(prevItems => 
+      prevItems.map(item => 
+        item.id === id ? { ...item, selected: !item.selected } : item
+      )
+    );
+  };
+
+  // Add function to handle cost of goods change
+  const handleCostOfGoodsChange = (id: string, value: string) => {
+    const numValue = parseFloat(value) || 0;
+    
+    setTapAgentItems(prevItems => 
+      prevItems.map(item => 
+        item.id === id ? { ...item, costOfGoods: numValue } : item
+      )
+    );
+  };
+
+  // Add function to handle submit
+  const handleSubmitToTapAgent = async () => {
+    if (!user?.uid) return;
+    
+    const selectedItems = tapAgentItems.filter(item => item.selected);
+    
+    // Check if all selected items have a cost of goods
+    const missingCosts = selectedItems.filter(item => !item.costOfGoods || item.costOfGoods <= 0);
+    
+    if (missingCosts.length > 0) {
+      toast({
+        title: "Missing Cost Information",
+        description: "Please enter cost of goods for all selected items.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    try {
+      setIsTapAgentSheetOpen(false);
+      
+      // Show loading toast
+      toast({
+        title: "Saving Items",
+        description: "Adding inventory items to Tap Agent...",
+      });
+      
+      // Format items for Firestore
+      const posInventoryItems: POSInventoryItem[] = selectedItems.map(item => {
+        let name = '';
+        let retailPrice: number | null = null;
+        let type = item.type;
+        
+        if (item.type === 'ITEM' && item.item_data) {
+          name = item.item_data.name;
+        } else if (item.type === 'ITEM_VARIATION' && item.item_variation_data) {
+          name = item.item_variation_data.name;
+          
+          if (item.item_variation_data.price_money) {
+            retailPrice = item.item_variation_data.price_money.amount / 100; // Convert cents to dollars
+          }
+        }
+        
+        // Create the item object, ensuring no undefined values
+        return {
+          id: item.id,
+          name,
+          // Only include retailPrice if it's not null
+          ...(retailPrice !== null && { retailPrice }),
+          costOfGoods: item.costOfGoods || 0,
+          type
+        };
+      });
+      
+      // Reference to the agent document
+      const agentDocRef = doc(db, 'agents', user.uid);
+      
+      // Get the current document to check if it exists
+      const agentDoc = await getDoc(agentDocRef);
+      
+      if (agentDoc.exists()) {
+        // Document exists, but we need to handle the posInventory array differently
+        // to avoid the arrayUnion with undefined values error
+        
+        // Get current posInventory or initialize as empty array
+        const currentData = agentDoc.data();
+        const currentInventory = currentData.posInventory || [];
+        
+        // Merge the arrays without using arrayUnion
+        const updatedInventory = [...currentInventory, ...posInventoryItems];
+        
+        // Update with the combined array
+        await updateDoc(agentDocRef, {
+          posInventory: updatedInventory
+        });
+      } else {
+        // Document doesn't exist, create it with the posInventory array
+        await setDoc(agentDocRef, {
+          posInventory: posInventoryItems
+        });
+      }
+      
+      // Success toast
+      toast({
+        title: "Items Added Successfully",
+        description: `${selectedItems.length} items have been added to Tap Agent.`,
+        variant: "default"
+      });
+      
+    } catch (error) {
+      console.error("Error saving items to Tap Agent:", error);
+      
+      // Error toast
+      toast({
+        title: "Error",
+        description: "Failed to add items to Tap Agent. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Add function to remove an item from Tap Agent inventory
+  const handleRemoveFromTapAgent = async (itemId: string) => {
+    if (!user?.uid) return;
+    
+    try {
+      // Show loading toast
+      toast({
+        title: "Removing Item",
+        description: "Removing item from Tap Agent...",
+      });
+      
+      // Reference to the agent document
+      const agentDocRef = doc(db, 'agents', user.uid);
+      
+      // Get the current document
+      const agentDoc = await getDoc(agentDocRef);
+      
+      if (agentDoc.exists()) {
+        const data = agentDoc.data();
+        
+        if (data.posInventory && Array.isArray(data.posInventory)) {
+          // Filter out the item to be removed
+          const updatedInventory = data.posInventory.filter((item: POSInventoryItem) => item.id !== itemId);
+          
+          // Update the document with the filtered array
+          await updateDoc(agentDocRef, {
+            posInventory: updatedInventory
+          });
+          
+          // Update local state
+          setExistingTapAgentItems(updatedInventory);
+          
+          // Success toast
+          toast({
+            title: "Item Removed",
+            description: "Item has been removed from Tap Agent.",
+            variant: "default"
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error removing item from Tap Agent:", error);
+      
+      // Error toast
+      toast({
+        title: "Error",
+        description: "Failed to remove item from Tap Agent. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <PageTransition>
       <div className="p-6">
@@ -588,6 +889,7 @@ export default function InventoryPage() {
             <Button 
               variant="outline" 
               size="sm" 
+              className="h-9"
               onClick={handleRefresh}
               disabled={refreshing || loading}
             >
@@ -611,6 +913,16 @@ export default function InventoryPage() {
             >
               <Download className="h-4 w-4 mr-2" />
               Export
+            </Button>
+            <Button 
+              variant="default" 
+              size="sm" 
+              className="h-9"
+              disabled={!isSquareConnected || loading}
+              onClick={handleOpenTapAgentSheet}
+            >
+              <Zap className="h-4 w-4 mr-2" />
+              Add to Tap Agent
             </Button>
           </div>
         </PageHeader>
@@ -642,7 +954,7 @@ export default function InventoryPage() {
           </div>
         ) : isSquareConnected && (
           <>
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center mb-6">
               <div className="relative w-full max-w-sm">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -822,6 +1134,173 @@ export default function InventoryPage() {
             <ScrollArea className="h-[calc(100vh-8rem)] py-4">
               {renderItemDetails()}
             </ScrollArea>
+          </SheetContent>
+        </Sheet>
+        
+        {/* Side panel for adding items to Tap Agent */}
+        <Sheet open={isTapAgentSheetOpen} onOpenChange={setIsTapAgentSheetOpen}>
+          <SheetContent className="w-full sm:max-w-md overflow-y-auto flex flex-col">
+            {!isTapAgentActivated ? (
+              <div className="flex flex-col items-center justify-center h-full">
+                <div className="text-center space-y-4 p-6">
+                  <Zap className="h-12 w-12 mx-auto text-orange-500" />
+                  <h3 className="text-xl font-semibold">
+                    Activate <GradientText>Tap Agent</GradientText> First
+                  </h3>
+                  <p className="text-muted-foreground">
+                    You need to activate Tap Agent before adding inventory items.
+                  </p>
+                  <Button onClick={handleGoToTapAgent} className="mt-4">
+                    Go to Tap Agent Setup
+                  </Button>
+                </div>
+              </div>
+            ) : loadingExistingItems ? (
+              <div className="flex flex-col items-center justify-center h-full">
+                <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                <p>Loading inventory items...</p>
+              </div>
+            ) : (
+              <>
+                {/* Header section */}
+                <div className="flex-none">
+                  <SheetHeader className="pb-4">
+                    <SheetTitle>
+                      Add Items to <GradientText>Tap Agent</GradientText>
+                    </SheetTitle>
+                    <SheetDescription>
+                      Select items to create a catalog for automatic customer rewards
+                    </SheetDescription>
+                  </SheetHeader>
+                  
+                  {/* Existing Tap Agent Items Section */}
+                  {existingTapAgentItems.length > 0 && (
+                    <div className="mb-6">
+                      <h3 className="text-sm font-semibold mb-2">Already Added Items</h3>
+                      <div className="bg-muted rounded-md p-2">
+                        <div className="space-y-1">
+                          {existingTapAgentItems.map(item => (
+                            <div key={`existing-${item.id}`} className="flex items-center justify-between border-b border-gray-200 py-2 last:border-0">
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{item.name}</p>
+                                <div className="flex items-center text-xs text-muted-foreground">
+                                  <span className="mr-2">Cost: ${item.costOfGoods.toFixed(2)}</span>
+                                  {item.retailPrice && (
+                                    <span>Price: ${item.retailPrice.toFixed(2)}</span>
+                                  )}
+                                </div>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleRemoveFromTapAgent(item.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center justify-between py-2">
+                    <div className="space-x-2">
+                      <Button variant="outline" size="sm" onClick={handleSelectAll}>
+                        Select All
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={handleUnselectAll}>
+                        Unselect All
+                      </Button>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {tapAgentItems.filter(item => item.selected).length} items selected
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1 mb-2">
+                    * Cost of goods is required for all selected items
+                  </div>
+                  <Separator className="my-2" />
+                </div>
+                
+                {/* Scrollable content */}
+                <div className="flex-grow overflow-hidden">
+                  <ScrollArea className="h-[calc(100vh-15rem)] pr-2 scrollbar-thin">
+                    <div className="space-y-1">
+                      {tapAgentItems
+                        // Filter out items that already exist in Tap Agent
+                        .filter(item => !existingTapAgentItems.some(existing => existing.id === item.id))
+                        .map(item => {
+                          const itemName = 
+                            item.type === 'ITEM' && item.item_data
+                              ? item.item_data.name
+                              : item.type === 'ITEM_VARIATION' && item.item_variation_data
+                                ? item.item_variation_data.name
+                                : 'Unknown Item';
+                          
+                          const itemPrice = 
+                            item.type === 'ITEM_VARIATION' && item.item_variation_data?.price_money
+                              ? formatPrice(item.item_variation_data.price_money.amount, item.item_variation_data.price_money.currency)
+                              : 'N/A';
+                          
+                          // Check if this item is selected and missing cost
+                          const isMissingCost = item.selected && (!item.costOfGoods || item.costOfGoods <= 0);
+                          
+                          return (
+                            <div key={item.id} className="flex items-center border-b border-gray-100 py-2">
+                              <Checkbox 
+                                id={`item-${item.id}`} 
+                                checked={item.selected} 
+                                onCheckedChange={() => handleSelectItem(item.id)}
+                                className="mr-2"
+                              />
+                              <div className="flex-1 min-w-0 mr-3">
+                                <div className="flex items-center justify-between">
+                                  <Label 
+                                    htmlFor={`item-${item.id}`}
+                                    className="font-medium cursor-pointer truncate text-sm"
+                                  >
+                                    {itemName}
+                                  </Label>
+                                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                    {itemPrice}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="w-24 flex-shrink-0">
+                                <Input
+                                  id={`cog-${item.id}`}
+                                  type="number"
+                                  min="0.01"
+                                  step="0.01"
+                                  placeholder="Cost ($)"
+                                  value={item.costOfGoods || ''}
+                                  onChange={(e) => handleCostOfGoodsChange(item.id, e.target.value)}
+                                  className={`h-7 text-xs w-full ${isMissingCost ? 'border-red-500' : ''}`}
+                                  aria-label="Cost of Goods"
+                                  required={item.selected}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </ScrollArea>
+                </div>
+                
+                {/* Sticky footer with submit button */}
+                <div className="flex-none pt-4 mt-2 border-t bg-background sticky bottom-0">
+                  <Button 
+                    className="w-full" 
+                    onClick={handleSubmitToTapAgent}
+                    disabled={tapAgentItems.filter(item => item.selected).length === 0}
+                  >
+                    Submit to Tap Agent
+                  </Button>
+                </div>
+              </>
+            )}
           </SheetContent>
         </Sheet>
       </div>

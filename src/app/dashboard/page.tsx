@@ -48,8 +48,28 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
+import { 
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetClose
+} from "@/components/ui/sheet"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
+import { Checkbox } from "@/components/ui/checkbox"
 
 type TimeframeType = "today" | "yesterday" | "7days" | "30days"
+
+// Add a gradient text component for Tap Agent branding
+const GradientText = ({ children }: { children: React.ReactNode }) => {
+  return (
+    <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-semibold">
+      {children}
+    </span>
+  );
+};
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -89,6 +109,16 @@ export default function DashboardPage() {
   const [topViewingCustomers, setTopViewingCustomers] = useState<any[]>([])
   const [isRewardDialogOpen, setIsRewardDialogOpen] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<{id: string, name: string} | null>(null)
+  const [isSetupWizardOpen, setIsSetupWizardOpen] = useState(false)
+  const [setupChecklist, setSetupChecklist] = useState({
+    tapAgent: false,
+    banner: false,
+    membershipLevels: false,
+    pointsRule: false,
+    posIntegration: false,
+    openBanking: false,
+    customReward: false
+  })
 
   const getDateRange = (tf: TimeframeType): { start: Date; end: Date } => {
     const now = new Date()
@@ -1036,6 +1066,68 @@ export default function DashboardPage() {
     }
   }, [searchParams, user, router])
 
+  // Add function to fetch setup status
+  useEffect(() => {
+    const fetchSetupStatus = async () => {
+      if (!user?.uid) return
+      
+      try {
+        // Check Tap Agent setup
+        const tapAgentRef = doc(db, 'agents', user.uid)
+        const tapAgentDoc = await getDoc(tapAgentRef)
+        
+        // Check banner creation
+        const bannersRef = collection(db, 'merchants', user.uid, 'banners')
+        const bannersSnapshot = await getDocs(bannersRef)
+        
+        // Check membership levels
+        const membershipLevelsRef = collection(db, 'merchants', user.uid, 'membershipLevels')
+        const membershipLevelsSnapshot = await getDocs(membershipLevelsRef)
+        
+        // Check points rules
+        const pointsRulesRef = collection(db, 'merchants', user.uid, 'pointsRules')
+        const pointsRulesSnapshot = await getDocs(pointsRulesRef)
+        
+        // Check POS integration
+        const integrationsRef = doc(db, 'merchants', user.uid, 'integrations', 'square')
+        const integrationsDoc = await getDoc(integrationsRef)
+        
+        // Check open banking
+        const openBankingRef = doc(db, 'merchants', user.uid, 'integrations', 'openBanking')
+        const openBankingDoc = await getDoc(openBankingRef)
+        
+        // Check custom rewards
+        const rewardsRef = collection(db, 'merchants', user.uid, 'rewards')
+        const rewardsSnapshot = await getDocs(rewardsRef)
+        
+        setSetupChecklist({
+          tapAgent: tapAgentDoc.exists(),
+          banner: bannersSnapshot.docs.length > 0,
+          membershipLevels: membershipLevelsSnapshot.docs.length > 0,
+          pointsRule: pointsRulesSnapshot.docs.length > 0,
+          posIntegration: integrationsDoc.exists() && integrationsDoc.data()?.connected === true,
+          openBanking: openBankingDoc.exists() && openBankingDoc.data()?.connected === true,
+          customReward: rewardsSnapshot.docs.length > 0
+        })
+        
+      } catch (error) {
+        console.error('Error fetching setup status:', error)
+      }
+    }
+    
+    if (user?.uid && isSetupWizardOpen) {
+      fetchSetupStatus()
+    }
+  }, [user?.uid, isSetupWizardOpen])
+
+  // Add function to handle checkbox changes
+  const handleChecklistChange = (key: keyof typeof setupChecklist) => {
+    setSetupChecklist(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }))
+  }
+
   if (loading) {
     return (
       <PageTransition>
@@ -1057,7 +1149,17 @@ export default function DashboardPage() {
             <PageHeader
               title="Welcome back"
               subtitle="Here's an overview of your business"
-            />
+            >
+              <Button 
+                variant="outline" 
+                size="sm"
+                className="h-9 gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                onClick={() => setIsSetupWizardOpen(true)}
+              >
+                <PlusCircle className="h-4 w-4" />
+                Setup Wizard
+              </Button>
+            </PageHeader>
 
             {/* Update the tabs layout to be side-by-side with a separator */}
             <div className="flex items-center gap-4">
@@ -1699,6 +1801,218 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Setup Wizard Sheet */}
+      <Sheet open={isSetupWizardOpen} onOpenChange={setIsSetupWizardOpen}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto flex flex-col">
+          <div className="flex-none">
+            <SheetHeader className="pb-4">
+              <SheetTitle className="text-xl">
+                Setup Wizard
+              </SheetTitle>
+              <SheetDescription>
+                Complete these steps to get the most out of your loyalty platform
+              </SheetDescription>
+            </SheetHeader>
+            <Separator className="my-4" />
+          </div>
+          
+          <ScrollArea className="flex-grow pr-4">
+            <div className="space-y-6">
+              {/* Tap Agent Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="tap-agent-checkbox" 
+                      checked={setupChecklist.tapAgent} 
+                      onCheckedChange={() => handleChecklistChange('tapAgent')}
+                    />
+                    <label htmlFor="tap-agent-checkbox" className="text-base font-medium cursor-pointer">
+                      Set up <GradientText>Tap Agent</GradientText>
+                    </label>
+                  </div>
+                  <Button variant="link" size="sm" asChild>
+                    <Link href="/tap-agent">Set up</Link>
+                  </Button>
+                </div>
+                <div className="pl-6">
+                  <p className="text-sm text-muted-foreground">
+                    Tap Agent uses AI to create personalized rewards for your customers based on their preferences and purchase history. 
+                    It automatically manages your loyalty program, increasing customer engagement and retention.
+                  </p>
+                </div>
+              </div>
+
+              {/* Banner Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="banner-checkbox" 
+                      checked={setupChecklist.banner} 
+                      onCheckedChange={() => handleChecklistChange('banner')}
+                    />
+                    <label htmlFor="banner-checkbox" className="text-base font-medium cursor-pointer">
+                      Create a Banner
+                    </label>
+                  </div>
+                  <Button variant="link" size="sm" asChild>
+                    <Link href="/store/banner">Create</Link>
+                  </Button>
+                </div>
+                <div className="pl-6">
+                  <p className="text-sm text-muted-foreground">
+                    Banners allow you to promote special offers, events, or announcements to your customers 
+                    when they visit your digital storefront.
+                  </p>
+                </div>
+              </div>
+
+              {/* Membership Levels Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="membership-levels-checkbox" 
+                      checked={setupChecklist.membershipLevels} 
+                      onCheckedChange={() => handleChecklistChange('membershipLevels')}
+                    />
+                    <label htmlFor="membership-levels-checkbox" className="text-base font-medium cursor-pointer">
+                      Set Membership Levels
+                    </label>
+                  </div>
+                  <Button variant="link" size="sm" asChild>
+                    <Link href="/store/membership">Set up</Link>
+                  </Button>
+                </div>
+                <div className="pl-6">
+                  <p className="text-sm text-muted-foreground">
+                    Create tiered membership levels to reward your most loyal customers with exclusive benefits 
+                    and encourage customers to increase their engagement with your business.
+                  </p>
+                </div>
+              </div>
+
+              {/* Points Rule Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="points-rule-checkbox" 
+                      checked={setupChecklist.pointsRule} 
+                      onCheckedChange={() => handleChecklistChange('pointsRule')}
+                    />
+                    <label htmlFor="points-rule-checkbox" className="text-base font-medium cursor-pointer">
+                      Create Points Rule
+                    </label>
+                  </div>
+                  <Button variant="link" size="sm" asChild>
+                    <Link href="/store/points">Create</Link>
+                  </Button>
+                </div>
+                <div className="pl-6">
+                  <p className="text-sm text-muted-foreground">
+                    Define how customers earn points with your business. Set point values for purchases, 
+                    referrals, social media engagement, and more.
+                  </p>
+                </div>
+              </div>
+
+              {/* POS Integration Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="pos-integration-checkbox" 
+                      checked={setupChecklist.posIntegration} 
+                      onCheckedChange={() => handleChecklistChange('posIntegration')}
+                    />
+                    <label htmlFor="pos-integration-checkbox" className="text-base font-medium cursor-pointer">
+                      Integrate POS System
+                    </label>
+                  </div>
+                  <Button variant="link" size="sm" asChild>
+                    <Link href="/integrations">Connect</Link>
+                  </Button>
+                </div>
+                <div className="pl-6">
+                  <p className="text-sm text-muted-foreground">
+                    Connect your Square or Lightspeed point-of-sale system to automatically track customer 
+                    purchases and award points for transactions.
+                  </p>
+                </div>
+              </div>
+
+              {/* Open Banking Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="open-banking-checkbox" 
+                      checked={setupChecklist.openBanking} 
+                      onCheckedChange={() => handleChecklistChange('openBanking')}
+                    />
+                    <label htmlFor="open-banking-checkbox" className="text-base font-medium cursor-pointer">
+                      Set up Open Banking
+                    </label>
+                  </div>
+                  <Button variant="link" size="sm" asChild>
+                    <Link href="/integrations/banking">Connect</Link>
+                  </Button>
+                </div>
+                <div className="pl-6">
+                  <p className="text-sm text-muted-foreground">
+                    Connect your financial accounts to get deep financial analytics and insights about your 
+                    business performance and customer behavior.
+                  </p>
+                </div>
+              </div>
+
+              {/* Custom Reward Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="custom-reward-checkbox" 
+                      checked={setupChecklist.customReward} 
+                      onCheckedChange={() => handleChecklistChange('customReward')}
+                    />
+                    <label htmlFor="custom-reward-checkbox" className="text-base font-medium cursor-pointer">
+                      Create Custom Reward
+                    </label>
+                  </div>
+                  <Button variant="link" size="sm" asChild>
+                    <Link href="/store/rewards/new">Create</Link>
+                  </Button>
+                </div>
+                <div className="pl-6">
+                  <p className="text-sm text-muted-foreground">
+                    Design personalized rewards that resonate with your customers and align with your brand. 
+                    Custom rewards can increase redemption rates and customer satisfaction.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </ScrollArea>
+          
+          <div className="flex-none pt-4 mt-4 border-t">
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setIsSetupWizardOpen(false)}>
+                Close
+              </Button>
+              <Button 
+                variant="default"
+                disabled={!Object.values(setupChecklist).every(Boolean)}
+              >
+                {Object.values(setupChecklist).every(Boolean) ? 
+                  "All steps completed!" : 
+                  `${Object.values(setupChecklist).filter(Boolean).length}/${Object.values(setupChecklist).length} completed`}
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Alternative to Dialog - Simple conditional rendering */}
       {insightDialogOpen && (

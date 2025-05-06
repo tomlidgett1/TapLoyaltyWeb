@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, setDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore'
 
 // Lightspeed API credentials
 const LIGHTSPEED_CLIENT_ID = process.env.NEXT_PUBLIC_LIGHTSPEED_NEW_CLIENT_ID || process.env.LIGHTSPEED_NEW_CLIENT_ID || "0be25ce25b4988b26b5759aecca02248cfe561d7594edd46e7d6807c141ee72e"
@@ -33,6 +33,19 @@ export async function GET(request: NextRequest) {
         codeVerifier: !!codeVerifier 
       })
       return NextResponse.json({ success: false, error: 'Missing required parameters' }, { status: 400 })
+    }
+    
+    // Test Firestore permissions before proceeding
+    const hasFirestorePermissions = await testFirestorePermissions(merchantId);
+    console.log('Firestore permission test result:', hasFirestorePermissions ? 'SUCCESS' : 'FAILED');
+    
+    if (!hasFirestorePermissions) {
+      console.error('Insufficient Firestore permissions for merchant ID:', merchantId);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Insufficient permissions to write to Firestore',
+        details: { merchantId }
+      }, { status: 500 });
     }
     
     console.log('Exchanging code for access token...')
@@ -116,6 +129,7 @@ export async function GET(request: NextRequest) {
     try {
       // Store the token data in Firestore
       const integrationDocRef = doc(db, `merchants/${merchantId}/integrations/lightspeed_new`);
+      console.log('Firestore document reference created for path:', `merchants/${merchantId}/integrations/lightspeed_new`);
       
       const dataToStore = {
         connected: true,
@@ -131,17 +145,21 @@ export async function GET(request: NextRequest) {
         region: 'aus',
       };
       
-      console.log('Data to store in Firestore:', {
+      console.log('Data structure to store in Firestore:', {
         ...dataToStore,
         access_token: dataToStore.access_token ? '***[REDACTED]***' : null,
         refresh_token: dataToStore.refresh_token ? '***[REDACTED]***' : null,
       });
       
       try {
+        console.log('Attempting to write to Firestore...');
         await setDoc(integrationDocRef, dataToStore);
+        console.log('Firestore setDoc operation completed successfully');
         console.log('Lightspeed New integration connected successfully and data stored in Firestore');
       } catch (firestoreWriteError) {
         console.error('Error writing to Firestore:', firestoreWriteError);
+        console.error('Error details:', typeof firestoreWriteError, JSON.stringify(firestoreWriteError, Object.getOwnPropertyNames(firestoreWriteError)));
+        
         // Attempt to write again with fewer fields in case there's an issue with one of the fields
         try {
           const essentialData = {
@@ -157,6 +175,7 @@ export async function GET(request: NextRequest) {
           console.log('Essential Lightspeed integration data stored successfully');
         } catch (retryError) {
           console.error('Second attempt to write to Firestore failed:', retryError);
+          console.error('Retry error details:', typeof retryError, JSON.stringify(retryError, Object.getOwnPropertyNames(retryError)));
           throw retryError; // Re-throw to be caught by outer catch
         }
       }
@@ -193,6 +212,23 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Function to test Firestore write permissions
+async function testFirestorePermissions(merchantId: string) {
+  console.log('Testing Firestore write permissions...');
+  try {
+    // Test with a simple document in a test collection
+    const testDoc = await addDoc(collection(db, 'merchants', merchantId, 'test_permissions'), {
+      test: true,
+      timestamp: serverTimestamp()
+    });
+    console.log('Test document written successfully with ID:', testDoc.id);
+    return true;
+  } catch (error) {
+    console.error('Firestore permission test failed:', error);
+    return false;
+  }
+}
+
 export async function POST(request: NextRequest) {
   console.log('Lightspeed New OAuth token exchange POST endpoint called')
   
@@ -218,6 +254,19 @@ export async function POST(request: NextRequest) {
         codeVerifier: !!codeVerifier 
       })
       return NextResponse.json({ success: false, error: 'Missing required parameters' }, { status: 400 })
+    }
+    
+    // Test Firestore permissions before proceeding
+    const hasFirestorePermissions = await testFirestorePermissions(merchantId);
+    console.log('Firestore permission test result:', hasFirestorePermissions ? 'SUCCESS' : 'FAILED');
+    
+    if (!hasFirestorePermissions) {
+      console.error('Insufficient Firestore permissions for merchant ID:', merchantId);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Insufficient permissions to write to Firestore',
+        details: { merchantId }
+      }, { status: 500 });
     }
     
     console.log('Exchanging code for access token...')
@@ -301,6 +350,7 @@ export async function POST(request: NextRequest) {
     try {
       // Store the token data in Firestore
       const integrationDocRef = doc(db, `merchants/${merchantId}/integrations/lightspeed_new`);
+      console.log('Firestore document reference created for path:', `merchants/${merchantId}/integrations/lightspeed_new`);
       
       const dataToStore = {
         connected: true,
@@ -316,17 +366,21 @@ export async function POST(request: NextRequest) {
         region: 'aus',
       };
       
-      console.log('Data to store in Firestore:', {
+      console.log('Data structure to store in Firestore:', {
         ...dataToStore,
         access_token: dataToStore.access_token ? '***[REDACTED]***' : null,
         refresh_token: dataToStore.refresh_token ? '***[REDACTED]***' : null,
       });
       
       try {
+        console.log('Attempting to write to Firestore...');
         await setDoc(integrationDocRef, dataToStore);
+        console.log('Firestore setDoc operation completed successfully');
         console.log('Lightspeed New integration connected successfully and data stored in Firestore');
       } catch (firestoreWriteError) {
         console.error('Error writing to Firestore:', firestoreWriteError);
+        console.error('Error details:', typeof firestoreWriteError, JSON.stringify(firestoreWriteError, Object.getOwnPropertyNames(firestoreWriteError)));
+        
         // Attempt to write again with fewer fields in case there's an issue with one of the fields
         try {
           const essentialData = {
@@ -342,6 +396,7 @@ export async function POST(request: NextRequest) {
           console.log('Essential Lightspeed integration data stored successfully');
         } catch (retryError) {
           console.error('Second attempt to write to Firestore failed:', retryError);
+          console.error('Retry error details:', typeof retryError, JSON.stringify(retryError, Object.getOwnPropertyNames(retryError)));
           throw retryError; // Re-throw to be caught by outer catch
         }
       }

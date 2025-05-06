@@ -77,44 +77,68 @@ export default function Home() {
           })
           
           console.log('Sending token exchange request...')
-          // Process the Lightspeed callback with await to ensure it completes
-          const response = await fetch('/api/lightspeed/new', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              code,
-              merchantId,
-              state,
-              codeVerifier
-            })
+          console.log('Request payload:', {
+            code: code?.substring(0, 20) + '...',
+            merchantId,
+            state,
+            codeVerifierLength: codeVerifier.length
           })
           
-          console.log('Token exchange response status:', response.status)
-          const data = await response.json()
-          console.log('Token exchange response data:', data)
-          
-          if (data.success) {
-            console.log('Lightspeed connection successful!')
-            toast({
-              title: "Success!",
-              description: "Your Lightspeed account has been connected."
+          // Process the Lightspeed callback with await to ensure it completes
+          try {
+            const response = await fetch('/api/lightspeed/new', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                code,
+                merchantId,
+                state,
+                codeVerifier
+              })
             })
             
-            // Clear localStorage items
-            localStorage.removeItem('lightspeed_new_state')
-            localStorage.removeItem('lightspeed_new_merchant_id')
-            localStorage.removeItem('lightspeed_new_code_verifier')
+            console.log('Token exchange response status:', response.status)
+            console.log('Token exchange response headers:', Object.fromEntries([...response.headers.entries()]))
             
-            // Redirect to integrations page after a longer delay to ensure data is saved
-            console.log('Redirecting to integrations page...')
-            setTimeout(() => {
-              router.push('/integrations')
-            }, 3000)
-          } else {
-            console.error('Lightspeed connection failed:', data.error, data.details)
-            throw new Error(data.error || 'Failed to connect Lightspeed account')
+            const text = await response.text()
+            console.log('Raw response text:', text)
+            
+            let data
+            try {
+              data = JSON.parse(text)
+              console.log('Token exchange response data:', data)
+            } catch (parseError) {
+              console.error('Error parsing JSON response:', parseError)
+              console.log('Response was not JSON, using text response instead')
+              data = { success: false, error: 'Invalid JSON response', rawText: text }
+            }
+            
+            if (data.success) {
+              console.log('Lightspeed connection successful!')
+              toast({
+                title: "Success!",
+                description: "Your Lightspeed account has been connected."
+              })
+              
+              // Clear localStorage items
+              localStorage.removeItem('lightspeed_new_state')
+              localStorage.removeItem('lightspeed_new_merchant_id')
+              localStorage.removeItem('lightspeed_new_code_verifier')
+              
+              // Redirect to integrations page after a longer delay to ensure data is saved
+              console.log('Redirecting to integrations page...')
+              setTimeout(() => {
+                router.push('/integrations')
+              }, 3000)
+            } else {
+              console.error('Lightspeed connection failed:', data.error, data.details)
+              throw new Error(data.error || 'Failed to connect Lightspeed account')
+            }
+          } catch (fetchError) {
+            console.error('Fetch operation failed:', fetchError)
+            throw fetchError
           }
         } catch (error) {
           console.error('Error processing Lightspeed callback:', error)
@@ -137,8 +161,22 @@ export default function Home() {
       
       // Check if it's a Lightspeed callback by looking at the stored state
       if (state === localStorage.getItem('lightspeed_new_state')) {
-        handleLightspeedCallback()
-        return // Prevent immediate redirect
+        console.log('===== LIGHTSPEED CALLBACK STATE MATCH =====');
+        console.log('URL state:', state);
+        console.log('localStorage state:', localStorage.getItem('lightspeed_new_state'));
+        
+        // Checking everything in localStorage
+        console.log('All localStorage items:', Object.keys(localStorage).reduce<Record<string, string | null>>((obj, key) => {
+          obj[key] = localStorage.getItem(key);
+          return obj;
+        }, {}));
+        
+        handleLightspeedCallback();
+        return; // Prevent immediate redirect
+      } else if (state && localStorage.getItem('lightspeed_new_state')) {
+        console.log('===== LIGHTSPEED CALLBACK STATE MISMATCH =====');
+        console.log('URL state:', state);
+        console.log('localStorage state:', localStorage.getItem('lightspeed_new_state'));
       }
       
       // Function to handle Square OAuth callback

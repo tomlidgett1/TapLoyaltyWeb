@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, setDoc, updateDoc, DocumentData } from "firebase/firestore"
 import { toast } from "@/components/ui/use-toast"
+import Link from "next/link"
 
 // Import icons for different POS systems
 import { LightspeedIcon } from "@/components/icons/lightspeed-icon"
@@ -269,6 +270,11 @@ export default function IntegrationsPage() {
         <p className="text-sm text-muted-foreground mt-1">
           Connect your point of sale system to automatically sync customer data and transactions
         </p>
+        <div className="mt-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/test-square">Square Integration Test Page</Link>
+          </Button>
+        </div>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

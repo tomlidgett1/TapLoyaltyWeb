@@ -870,18 +870,27 @@ export default function DashboardPage() {
       const code = searchParams.get('code')
       const state = searchParams.get('state')
       
+      console.log('OAuth callback detected:', { hasCode: !!code, hasState: !!state, hasUser: !!user })
+      
       if (!code || !state || !user) return
       
       // Check if it's a Square callback
       const storedSquareState = localStorage.getItem('square_state')
+      console.log('Checking Square state:', { storedState: storedSquareState, urlState: state, match: state === storedSquareState })
+      
       if (state === storedSquareState) {
+        console.log('Square OAuth callback confirmed')
         try {
           // Get merchant ID from localStorage
           const merchantId = localStorage.getItem('merchant_id')
+          console.log('Merchant ID from localStorage:', merchantId)
+          
           if (!merchantId) {
+            console.error('Missing merchant ID in localStorage')
             throw new Error('Missing merchant ID')
           }
           
+          console.log('Exchanging code for token...')
           // Exchange code for token
           const response = await fetch('/api/oauth/square', {
             method: 'POST',
@@ -895,14 +904,18 @@ export default function DashboardPage() {
             })
           })
           
+          console.log('Token exchange response status:', response.status)
           const data = await response.json()
+          console.log('Token exchange response data:', data)
           
           if (data.success) {
+            console.log('Square connection successful')
             toast({
               title: "Success!",
               description: "Your Square account has been connected.",
             })
           } else {
+            console.error('Square connection failed:', data.error, data.details)
             throw new Error(data.error || 'Failed to connect Square account')
           }
           
@@ -911,6 +924,7 @@ export default function DashboardPage() {
           localStorage.removeItem('merchant_id')
           
           // Redirect to integrations page
+          console.log('Redirecting to integrations page')
           router.push('/integrations')
         } catch (error) {
           console.error('Error handling Square callback:', error)
@@ -920,12 +934,23 @@ export default function DashboardPage() {
             variant: "destructive"
           })
         }
+      } else if (code && state) {
+        // If we have code and state but no matching stored state, log this information
+        console.log('OAuth callback received but no matching state found in localStorage', {
+          availableLocalStorageKeys: Object.keys(localStorage),
+          squareStateExists: !!localStorage.getItem('square_state'),
+          lightspeedStateExists: !!localStorage.getItem('lightspeed_state')
+        })
       }
       
       // Handle other OAuth providers like Lightspeed as needed...
     }
     
-    handleOAuthCallback()
+    // Only run the callback handler if we have query parameters that look like an OAuth callback
+    if (searchParams && (searchParams.get('code') || searchParams.get('state'))) {
+      console.log('OAuth callback parameters detected in URL')
+      handleOAuthCallback()
+    }
   }, [searchParams, user, router])
 
   if (loading) {

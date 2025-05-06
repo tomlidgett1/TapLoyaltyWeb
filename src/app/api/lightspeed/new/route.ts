@@ -59,19 +59,23 @@ export async function GET(request: NextRequest) {
     })
     
     // Exchange code for access token using the client_secret and code_verifier
+    const tokenParams = new URLSearchParams({
+      client_id: LIGHTSPEED_CLIENT_ID,
+      // If using PKCE you can omit client_secret, but including it is allowed as long as it matches your app.
+      client_secret: LIGHTSPEED_CLIENT_SECRET,
+      code,
+      grant_type: 'authorization_code',
+      code_verifier: codeVerifier,
+      // DO NOT send redirect_uri because it must match exactly the one used during authorisation –
+      // omitting avoids accidental mismatch (Lightspeed will use the registered URI).
+    })
+
     const tokenResponse = await fetch('https://aus.merchantos.com/oauth/access_token.php', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: JSON.stringify({
-        client_id: LIGHTSPEED_CLIENT_ID,
-        client_secret: LIGHTSPEED_CLIENT_SECRET,
-        code,
-        grant_type: 'authorization_code',
-        code_verifier: codeVerifier,
-        redirect_uri: REDIRECT_URI
-      })
+      body: tokenParams.toString()
     })
     
     console.log('Token response status:', tokenResponse.status)
@@ -298,19 +302,20 @@ export async function POST(request: NextRequest) {
     })
     
     // Exchange code for access token using the client_secret and code_verifier
+    const tokenParams2 = new URLSearchParams({
+      client_id: LIGHTSPEED_CLIENT_ID,
+      client_secret: LIGHTSPEED_CLIENT_SECRET,
+      code,
+      grant_type: 'authorization_code',
+      code_verifier: codeVerifier,
+    })
+
     const tokenResponse = await fetch('https://aus.merchantos.com/oauth/access_token.php', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: JSON.stringify({
-        client_id: LIGHTSPEED_CLIENT_ID,
-        client_secret: LIGHTSPEED_CLIENT_SECRET,
-        code,
-        grant_type: 'authorization_code',
-        code_verifier: codeVerifier,
-        redirect_uri: REDIRECT_URI
-      })
+      body: tokenParams2.toString()
     })
     
     console.log('Token response status:', tokenResponse.status)

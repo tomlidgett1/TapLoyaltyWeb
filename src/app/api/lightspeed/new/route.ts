@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, setDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore'
+import { FieldValue } from 'firebase-admin/firestore'
+import { getFirebaseAdminApp } from '@/lib/firebase-admin'
 
 // Lightspeed API credentials
 const LIGHTSPEED_CLIENT_ID = process.env.NEXT_PUBLIC_LIGHTSPEED_NEW_CLIENT_ID || process.env.LIGHTSPEED_NEW_CLIENT_ID || "0be25ce25b4988b26b5759aecca02248cfe561d7594edd46e7d6807c141ee72e"
 const LIGHTSPEED_CLIENT_SECRET = process.env.LIGHTSPEED_NEW_CLIENT_SECRET || "0b9c2fb76f1504ce387939066958a68cc28ec9212f571108fcbdba7b3c378f3e"
+
+// Initialize admin app once and get Firestore reference
+const { db: adminDb } = getFirebaseAdminApp();
 
 // GET handler for the OAuth callback
 export async function GET(request: NextRequest) {
@@ -127,8 +132,8 @@ export async function GET(request: NextRequest) {
     console.log('Firestore document path:', `merchants/${merchantId}/integrations/lightspeed_new`)
     
     try {
-      // Store the token data in Firestore
-      const integrationDocRef = doc(db, `merchants/${merchantId}/integrations/lightspeed_new`);
+      // Store the token data in Firestore (admin SDK bypasses rules)
+      const integrationDocRef = adminDb.doc(`merchants/${merchantId}/integrations/lightspeed_new`);
       console.log('Firestore document reference created for path:', `merchants/${merchantId}/integrations/lightspeed_new`);
       
       const dataToStore = {
@@ -139,7 +144,7 @@ export async function GET(request: NextRequest) {
         token_type: tokenData.token_type,
         scope: tokenData.scope,
         instance_url: tokenData.instance_url,
-        connectedAt: serverTimestamp(),
+        connectedAt: FieldValue.serverTimestamp(),
         // Store information about which API endpoint was used (Australian regional endpoint)
         apiEndpoint: 'https://aus.merchantos.com',
         region: 'aus',
@@ -152,8 +157,8 @@ export async function GET(request: NextRequest) {
       });
       
       try {
-        console.log('Attempting to write to Firestore...');
-        await setDoc(integrationDocRef, dataToStore);
+        console.log('Attempting to write to Firestore (admin)...');
+        await integrationDocRef.set(dataToStore);
         console.log('Firestore setDoc operation completed successfully');
         console.log('Lightspeed New integration connected successfully and data stored in Firestore');
       } catch (firestoreWriteError) {
@@ -166,12 +171,12 @@ export async function GET(request: NextRequest) {
             connected: true,
             access_token: tokenData.access_token,
             refresh_token: tokenData.refresh_token,
-            connectedAt: serverTimestamp(),
+            connectedAt: FieldValue.serverTimestamp(),
             apiEndpoint: 'https://aus.merchantos.com',
           };
           
           console.log('Attempting to write essential data only...');
-          await setDoc(integrationDocRef, essentialData);
+          await integrationDocRef.set(essentialData);
           console.log('Essential Lightspeed integration data stored successfully');
         } catch (retryError) {
           console.error('Second attempt to write to Firestore failed:', retryError);
@@ -348,8 +353,8 @@ export async function POST(request: NextRequest) {
     console.log('Firestore document path:', `merchants/${merchantId}/integrations/lightspeed_new`)
     
     try {
-      // Store the token data in Firestore
-      const integrationDocRef = doc(db, `merchants/${merchantId}/integrations/lightspeed_new`);
+      // Store the token data in Firestore (admin SDK bypasses rules)
+      const integrationDocRef = adminDb.doc(`merchants/${merchantId}/integrations/lightspeed_new`);
       console.log('Firestore document reference created for path:', `merchants/${merchantId}/integrations/lightspeed_new`);
       
       const dataToStore = {
@@ -360,7 +365,7 @@ export async function POST(request: NextRequest) {
         token_type: tokenData.token_type,
         scope: tokenData.scope,
         instance_url: tokenData.instance_url,
-        connectedAt: serverTimestamp(),
+        connectedAt: FieldValue.serverTimestamp(),
         // Store information about which API endpoint was used (Australian regional endpoint)
         apiEndpoint: 'https://aus.merchantos.com',
         region: 'aus',
@@ -373,8 +378,8 @@ export async function POST(request: NextRequest) {
       });
       
       try {
-        console.log('Attempting to write to Firestore...');
-        await setDoc(integrationDocRef, dataToStore);
+        console.log('Attempting to write to Firestore (admin)...');
+        await integrationDocRef.set(dataToStore);
         console.log('Firestore setDoc operation completed successfully');
         console.log('Lightspeed New integration connected successfully and data stored in Firestore');
       } catch (firestoreWriteError) {
@@ -387,12 +392,12 @@ export async function POST(request: NextRequest) {
             connected: true,
             access_token: tokenData.access_token,
             refresh_token: tokenData.refresh_token,
-            connectedAt: serverTimestamp(),
+            connectedAt: FieldValue.serverTimestamp(),
             apiEndpoint: 'https://aus.merchantos.com',
           };
           
           console.log('Attempting to write essential data only...');
-          await setDoc(integrationDocRef, essentialData);
+          await integrationDocRef.set(essentialData);
           console.log('Essential Lightspeed integration data stored successfully');
         } catch (retryError) {
           console.error('Second attempt to write to Firestore failed:', retryError);

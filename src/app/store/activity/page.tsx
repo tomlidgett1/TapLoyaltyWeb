@@ -252,12 +252,12 @@ export default function ActivityPage() {
     return data.filter(item => {
       // Apply status filter
       const status = item.status.toLowerCase()
-      if (!statusFilters[status]) return false
+      if (status in statusFilters && !statusFilters[status as keyof typeof statusFilters]) return false
 
       // Apply type filter for transactions
       if ('type' in item) {
         const type = item.type.toLowerCase()
-        if (!typeFilters[type]) return false
+        if (type in typeFilters && !typeFilters[type as keyof typeof typeFilters]) return false
       }
 
       // Apply date filter
@@ -656,20 +656,20 @@ export default function ActivityPage() {
       setLoadingSales(true)
       setSalesError(null)
       
-      const response = await fetch(`/api/square/sales?merchantId=${user.uid}`)
+      const response = await fetch(`/api/square/orders?merchantId=${user.uid}`)
       const data = await response.json()
       
       if (!response.ok) {
         throw new Error(data.error || 'Failed to fetch sales data')
       }
       
-      if (data.success && Array.isArray(data.sales)) {
-        setSquareSales(data.sales)
+      if (data.success && Array.isArray(data.orders)) {
+        setSquareSales(data.orders)
       } else {
         setSquareSales([])
       }
     } catch (error) {
-      console.error('Error fetching Square sales:', error)
+      console.error('Error fetching Square orders:', error)
       setSalesError(error instanceof Error ? error.message : 'An unknown error occurred')
     } finally {
       setLoadingSales(false)

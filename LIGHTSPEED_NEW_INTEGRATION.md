@@ -1,77 +1,109 @@
-# Lightspeed Retail POS (R-Series) Integration
+# Lightspeed New Integration (R-Series API)
 
-This document outlines the integration between Tap Loyalty and Lightspeed's Retail POS (R-Series) system.
+This document provides information about the Lightspeed New integration, which uses the R-Series API to connect to Lightspeed Retail POS.
 
-## Integration Overview
+## Overview
 
-The Lightspeed New integration allows merchants to:
+The Lightspeed New integration allows merchants to connect their Lightspeed Retail POS (R-Series) to our platform. This integration enables:
 
-1. Connect their Lightspeed Retail POS account to Tap Loyalty
-2. Sync customer data between Lightspeed and Tap Loyalty
-3. Track transactions for loyalty points
-4. Manage inventory and product information
+- Inventory synchronization
+- Customer data management
+- Transaction tracking
+- Advanced reporting
 
 ## Technical Implementation
 
-The integration uses Lightspeed's OAuth 2.0 flow with PKCE to securely connect merchant accounts:
+### OAuth 2.0 with PKCE
 
-1. When a merchant clicks "Connect" in the Integrations page, they are redirected to Lightspeed's authorization page
-2. After authorizing, Lightspeed redirects back to our application with an authorization code
-3. Our server exchanges this code for an access token using Lightspeed's OAuth API
-4. The access token is stored securely in the merchant's account in Firestore
-5. We use this token to make authorized API calls to Lightspeed on behalf of the merchant
+The integration uses OAuth 2.0 with PKCE (Proof Key for Code Exchange) for secure authorization:
 
-## Configuration Details
+1. **Code Verifier Generation**: A random string is generated as the code verifier
+2. **Code Challenge Creation**: The code verifier is hashed using SHA-256 and then base64url-encoded
+3. **Authorization Request**: The user is redirected to Lightspeed's authorization page with the code challenge
+4. **Authorization Code Grant**: After user consent, Lightspeed redirects back with an authorization code
+5. **Token Exchange**: The authorization code and code verifier are exchanged for access and refresh tokens
+6. **Token Storage**: Tokens are securely stored in Firestore under the merchant's document
 
-- **Client ID**: 0be25ce25b4988b26b5759aecca02248cfe561d7594edd46e7d6807c141ee72e
-- **Environment**: Production
-- **Redirect URL**: Must match the URL configured in your Lightspeed Developer account
-  - The redirect URL should be your application's dashboard page (e.g., https://app.taployalty.com.au/dashboard)
+### API Endpoints
 
-## OAuth Scopes
+#### Authorization Endpoint
 
-The integration requests the following permissions:
+- **URL**: `https://cloud.lightspeedapp.com/oauth/authorize`
+- **Parameters**:
+  - `response_type`: Always "code"
+  - `client_id`: Your Lightspeed application client ID
+  - `scope`: Space-separated list of required permissions
+  - `state`: Random string to prevent CSRF attacks
+  - `code_challenge`: Base64url-encoded SHA-256 hash of the code verifier
+  - `code_challenge_method`: Always "S256"
 
-- `employee:register`: Access to register operations
-- `employee:inventory`: Access to inventory management
-- `employee:customers`: Access to customer data
+#### Token Exchange Endpoint
 
-## Token Management
+- **URL**: `/api/lightspeed/new`
+- **Method**: GET
+- **Parameters**:
+  - `code`: Authorization code from Lightspeed
+  - `merchantId`: The ID of the merchant connecting their account
+  - `codeVerifier`: The original code verifier for PKCE verification
 
-- Access tokens are stored in Firestore under `merchants/{merchantId}/integrations/lightspeed_new`
-- Tokens expire after a set period (typically 1 hour)
-- Refresh tokens are used to obtain new access tokens without requiring reauthorization
-- All tokens are encrypted at rest
+### Required Scopes
 
-## OAuth Flow with PKCE
+The integration requires the following scopes:
 
-The integration uses OAuth 2.0 with PKCE (Proof Key for Code Exchange) for enhanced security:
+- `employee:inventory_read`: Read inventory data
+- `employee:inventory_write`: Write inventory data
 
-1. Generate a code verifier (a random string)
-2. Derive a code challenge from the verifier using SHA-256 hashing
-3. Include the code challenge in the authorization request
-4. Store the code verifier to be used during the token exchange
+## Setup Instructions
 
-## Security Considerations
+### Prerequisites
 
-1. API credentials are not exposed to the client side
-2. OAuth state parameter is used to prevent CSRF attacks
-3. PKCE is used to prevent authorization code interception attacks
-4. All API requests are made server-side
-5. HTTPS is enforced for all communication
+1. A Lightspeed Retail account (R-Series)
+2. A Lightspeed Developer account with an application created
+3. The application must have the correct redirect URI configured in the Lightspeed Developer Portal
+
+### Environment Variables
+
+Add the following environment variables to your `.env.local` file:
+
+```
+NEXT_PUBLIC_LIGHTSPEED_NEW_CLIENT_ID=your_client_id
+LIGHTSPEED_NEW_CLIENT_SECRET=your_client_secret
+```
+
+### Integration Flow
+
+1. User clicks "Connect" on the Lightspeed New integration card
+2. The application generates a code verifier and challenge
+3. User is redirected to Lightspeed's authorization page
+4. User logs in and grants permissions
+5. Lightspeed redirects back to the application with an authorization code
+6. The application exchanges the code for access and refresh tokens
+7. The tokens are stored in Firestore
+8. The UI updates to show the connected status
 
 ## Troubleshooting
 
-Common issues and their solutions:
+### Common Issues
 
-1. **Connection Failed - Invalid redirect_uri**: Ensure that the redirect URL is properly configured in your Lightspeed Developer account. The URL in your developer account must exactly match the URL where Lightspeed will redirect after authorization.
-2. **API Permission Errors**: Ensure that all required OAuth scopes are requested during authorization.
-3. **Token Expiration**: Implement a token refresh mechanism to handle expired access tokens.
-4. **PKCE Errors**: Ensure that the code verifier and code challenge are properly generated and used.
+1. **Invalid code verifier**: Ensure the code verifier is properly generated and stored
+2. **Missing scopes**: Verify that all required scopes are included in the authorization request
+3. **Redirect URI mismatch**: Check that the redirect URI in your application matches the one configured in the Lightspeed Developer Portal
 
-## Useful Links
+### Debugging
 
-- [Lightspeed Developer Portal](https://developers.lightspeedhq.com/)
-- [Lightspeed OAuth Documentation](https://developers.lightspeedhq.com/retail/authentication/oauth-flow/)
-- [Lightspeed API Reference](https://developers.lightspeedhq.com/retail/endpoints/introduction/)
-- [PKCE RFC](https://tools.ietf.org/html/rfc7636) 
+- Check the browser console for detailed logs during the connection process
+- Verify that localStorage items are properly set and retrieved
+- Examine network requests to identify any issues with the token exchange
+
+## Security Considerations
+
+- The code verifier should be a cryptographically random string
+- Tokens are stored securely in Firestore, not in localStorage
+- The state parameter prevents CSRF attacks
+- PKCE prevents authorization code interception attacks
+
+## References
+
+- [Lightspeed API Documentation](https://developers.lightspeedhq.com/retail/introduction/introduction/)
+- [OAuth 2.0 with PKCE](https://oauth.net/2/pkce/)
+- [RFC 7636: PKCE](https://tools.ietf.org/html/rfc7636) 

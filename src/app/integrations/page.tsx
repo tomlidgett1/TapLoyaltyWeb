@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, getDoc, setDoc, updateDoc, DocumentData } from "firebase/firestore"
+import { doc, getDoc, setDoc, updateDoc, DocumentData, deleteDoc } from "firebase/firestore"
 import { toast } from "@/components/ui/use-toast"
 import Link from "next/link"
 import { PageTransition } from "@/components/page-transition"
@@ -46,6 +46,88 @@ export default function IntegrationsPage() {
   
   // Add a new state for the API connection
   const [connectingApi, setConnectingApi] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  
+  // Function to manually refresh integration status
+  const refreshIntegrationStatus = async () => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to check integration status",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setRefreshing(true);
+    try {
+      // Check Lightspeed integration status
+      const lightspeedDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/lightspeed`));
+      const lightspeedConnected = lightspeedDoc.exists() && lightspeedDoc.data()?.connected === true;
+      console.log('Lightspeed integration status:', lightspeedConnected ? 'Connected' : 'Not connected');
+
+      // Check Square integration status
+      const squareDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/square`));
+      const squareConnected = squareDoc.exists() && squareDoc.data()?.connected === true;
+      console.log('Square integration status:', squareConnected ? 'Connected' : 'Not connected');
+
+      // Check Lightspeed New integration status
+      const lightspeedNewDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/lightspeed_new`));
+      if (lightspeedNewDoc.exists()) {
+        const lightspeedNewData = lightspeedNewDoc.data();
+        console.log('Lightspeed New integration found:', lightspeedNewData);
+        const lightspeedNewConnected = lightspeedNewData?.connected === true;
+        console.log('Lightspeed New integration status:', lightspeedNewConnected ? 'Connected' : 'Not connected');
+        
+        setIntegrations(prev => ({
+          ...prev,
+          lightspeed: {
+            connected: lightspeedConnected,
+            data: lightspeedDoc.exists() ? lightspeedDoc.data() : null
+          },
+          square: {
+            connected: squareConnected,
+            data: squareDoc.exists() ? squareDoc.data() : null
+          },
+          lightspeed_new: {
+            connected: lightspeedNewConnected,
+            data: lightspeedNewConnected ? lightspeedNewData : null
+          }
+        }));
+      } else {
+        console.log('Lightspeed New integration not found');
+        setIntegrations(prev => ({
+          ...prev,
+          lightspeed: {
+            connected: lightspeedConnected,
+            data: lightspeedDoc.exists() ? lightspeedDoc.data() : null
+          },
+          square: {
+            connected: squareConnected,
+            data: squareDoc.exists() ? squareDoc.data() : null
+          },
+          lightspeed_new: {
+            connected: false,
+            data: null
+          }
+        }));
+      }
+
+      toast({
+        title: "Success",
+        description: "Integration status refreshed successfully"
+      });
+    } catch (error) {
+      console.error('Error refreshing integration status:', error);
+      toast({
+        title: "Error",
+        description: "Failed to refresh integration status",
+        variant: "destructive"
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
   
   useEffect(() => {
     // Check if we have existing integrations
@@ -53,6 +135,7 @@ export default function IntegrationsPage() {
       if (!user?.uid) return
       
       try {
+        // Check Lightspeed integration status
         const lightspeedDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'lightspeed'))
         if (lightspeedDoc.exists() && lightspeedDoc.data().connected) {
           setIntegrations(prev => ({
@@ -79,6 +162,7 @@ export default function IntegrationsPage() {
         // Check Lightspeed New integration status
         const lightspeedNewDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'lightspeed_new'))
         if (lightspeedNewDoc.exists() && lightspeedNewDoc.data().connected) {
+          console.log('Lightspeed New integration found:', lightspeedNewDoc.data())
           setIntegrations(prev => ({
             ...prev,
             lightspeed_new: { 
@@ -86,6 +170,8 @@ export default function IntegrationsPage() {
               data: lightspeedNewDoc.data() 
             }
           }))
+        } else {
+          console.log('Lightspeed New integration not connected or not found')
         }
       } catch (error) {
         console.error("Error checking integrations:", error)
@@ -283,84 +369,97 @@ export default function IntegrationsPage() {
 
   // Lightspeed New integration
   const connectLightspeedNew = async () => {
-    if (!user) return
-    
-    setConnecting("lightspeed_new")
-    
     try {
-      // Lightspeed New OAuth parameters
-      const clientId = "0be25ce25b4988b26b5759aecca02248cfe561d7594edd46e7d6807c141ee72e"
+      setConnecting("lightspeed_new");
       
-      // Store the state in localStorage to verify when the user returns
-      const state = Math.random().toString(36).substring(2, 15)
-      localStorage.setItem('lightspeed_new_state', state)
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "You must be logged in to connect integrations",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Store the merchant ID in localStorage
+      localStorage.setItem("lightspeed_new_merchant_id", user.uid);
       
-      // Store the merchant ID in localStorage to associate with the integration
-      localStorage.setItem('lightspeed_new_merchant_id', user.uid)
+      // Generate a random state parameter for security
+      const state = Math.random().toString(36).substring(2, 15);
+      localStorage.setItem("lightspeed_new_state", state);
       
       // Generate code verifier and challenge for PKCE
-      const codeVerifier = generateCodeVerifier()
-      localStorage.setItem('lightspeed_new_code_verifier', codeVerifier)
+      const codeVerifier = generateCodeVerifier();
+      localStorage.setItem("lightspeed_new_code_verifier", codeVerifier);
       
-      // Generate code challenge using SHA-256
-      const codeChallenge = await generateCodeChallenge(codeVerifier)
+      const codeChallenge = await generateCodeChallenge(codeVerifier);
       
-      // Add redirect_uri to the authorization URL
-      const redirectUri = `${window.location.origin}/dashboard`
+      // Define the scopes needed for the integration
+      const scope = "employee:inventory_read employee:inventory_write";
       
-      // Define the scopes we need
-      const scopes = [
-        'employee:register',
-        'employee:inventory',
-        'employee:customers'
-      ].join(' ')
+      // Lightspeed New API credentials
+      const clientId = process.env.NEXT_PUBLIC_LIGHTSPEED_NEW_CLIENT_ID;
       
-      // Build the authorization URL
-      const authUrl = `https://cloud.lightspeedapp.com/auth/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientId)}&scope=${encodeURIComponent(scopes)}&state=${encodeURIComponent(state)}&code_challenge=${encodeURIComponent(codeChallenge)}&code_challenge_method=S256&redirect_uri=${encodeURIComponent(redirectUri)}`
+      // Construct the authorization URL
+      // Note: redirect_uri is not included as it's configured in the Lightspeed portal
+      const authUrl = `https://cloud.lightspeedapp.com/oauth/authorize?response_type=code&client_id=${clientId}&scope=${encodeURIComponent(scope)}&state=${state}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
       
-      console.log("Redirecting to Lightspeed New authorization URL:", authUrl)
+      console.log("Redirecting to Lightspeed New authorization URL:", authUrl);
       
-      // Redirect to Lightspeed authorization page
-      window.location.href = authUrl
+      // Redirect to the authorization URL
+      window.location.href = authUrl;
     } catch (error) {
-      console.error("Error connecting to Lightspeed New:", error)
-      toast({
-        title: "Connection Failed",
-        description: "Failed to connect to Lightspeed. Please try again.",
-        variant: "destructive"
-      })
-    } finally {
-      setConnecting(null)
-    }
-  }
-
-  // Disconnect Lightspeed New
-  const disconnectLightspeedNew = async () => {
-    if (!user) return
-    
-    try {
-      await updateDoc(doc(db, 'merchants', user.uid, 'integrations', 'lightspeed_new'), {
-        connected: false
-      })
-      
-      setIntegrations(prev => ({
-        ...prev,
-        lightspeed_new: { connected: false, data: null }
-      }))
-      
-      toast({
-        title: "Disconnected",
-        description: "Your Lightspeed New account has been disconnected."
-      })
-    } catch (error) {
-      console.error("Error disconnecting Lightspeed New:", error)
+      console.error("Error connecting to Lightspeed New:", error);
       toast({
         title: "Error",
-        description: "Failed to disconnect Lightspeed New. Please try again.",
+        description: "Failed to connect to Lightspeed New",
         variant: "destructive"
-      })
+      });
+      setConnecting("");
     }
-  }
+  };
+
+  const disconnectLightspeedNew = async () => {
+    try {
+      setConnecting("lightspeed_new");
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "You must be logged in to disconnect integrations",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Delete the integration from Firestore
+      const integrationRef = doc(db, `merchants/${user.uid}/integrations/lightspeed_new`);
+      await deleteDoc(integrationRef);
+      
+      // Update local state
+      setIntegrations(prev => ({
+        ...prev,
+        lightspeed_new: {
+          connected: false,
+          data: null
+        }
+      }));
+      
+      toast({
+        title: "Success",
+        description: "Lightspeed New disconnected successfully"
+      });
+    } catch (error) {
+      console.error("Error disconnecting Lightspeed New:", error);
+      toast({
+        title: "Error",
+        description: "Failed to disconnect Lightspeed New",
+        variant: "destructive"
+      });
+    } finally {
+      setConnecting("");
+    }
+  };
 
   return (
     <PageTransition>
@@ -368,7 +467,31 @@ export default function IntegrationsPage() {
         <PageHeader
           title="Integrations"
           subtitle="Connect your POS system and other services"
-        />
+        >
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={refreshIntegrationStatus}
+            disabled={refreshing}
+          >
+            {refreshing ? (
+              <>
+                <svg className="mr-2 h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh Status
+              </>
+            )}
+          </Button>
+        </PageHeader>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Lightspeed Integration Card */}
@@ -464,6 +587,11 @@ export default function IntegrationsPage() {
               <p className="text-sm text-muted-foreground">
                 Connect to Lightspeed Retail POS (R-Series) for advanced inventory and customer management.
               </p>
+              {integrations.lightspeed_new.connected && integrations.lightspeed_new.data?.connectedAt && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Connected on {new Date(integrations.lightspeed_new.data.connectedAt.toDate()).toLocaleDateString()} at {new Date(integrations.lightspeed_new.data.connectedAt.toDate()).toLocaleTimeString()}
+                </p>
+              )}
             </CardContent>
             <CardFooter>
               <Button 

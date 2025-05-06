@@ -959,18 +959,7 @@ export default function DashboardPage() {
           
           console.log('Exchanging code for token...')
           // Exchange code for token
-          const response = await fetch('/api/lightspeed/new', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              code,
-              state,
-              merchantId,
-              codeVerifier
-            })
-          })
+          const response = await fetch(`/api/lightspeed/new?code=${code}&merchantId=${merchantId}&codeVerifier=${codeVerifier}`)
           
           console.log('Token exchange response status:', response.status)
           const data = await response.json()
@@ -978,24 +967,16 @@ export default function DashboardPage() {
           
           if (data.success) {
             console.log('Lightspeed New connection successful')
-            
-            // Verify the integration was stored correctly
-            try {
-              const integrationCheck = await fetch(`/api/integrations/check?merchantId=${merchantId}&integration=lightspeed_new`)
-              const checkResult = await integrationCheck.json()
-              console.log('Integration check result:', checkResult)
-              
-              if (!checkResult.connected) {
-                console.warn('Integration check shows not connected despite successful token exchange')
-              }
-            } catch (checkError) {
-              console.error('Error checking integration status:', checkError)
-            }
-            
             toast({
               title: "Success!",
               description: "Your Lightspeed account has been connected.",
             })
+            
+            // Refresh the page or update the state to show the connected status
+            // This ensures the UI shows the updated connection status
+            setTimeout(() => {
+              window.location.href = '/integrations';
+            }, 1500)
           } else {
             console.error('Lightspeed New connection failed:', data.error, data.details)
             throw new Error(data.error || 'Failed to connect Lightspeed account')
@@ -1005,10 +986,6 @@ export default function DashboardPage() {
           localStorage.removeItem('lightspeed_new_state')
           localStorage.removeItem('lightspeed_new_merchant_id')
           localStorage.removeItem('lightspeed_new_code_verifier')
-          
-          // Redirect to integrations page
-          console.log('Redirecting to integrations page')
-          router.push('/integrations')
         } catch (error) {
           console.error('Error handling Lightspeed New callback:', error)
           toast({
@@ -1016,6 +993,16 @@ export default function DashboardPage() {
             description: "We couldn't connect your Lightspeed account. Please try again.",
             variant: "destructive"
           })
+          
+          // Clear state from localStorage even on error
+          localStorage.removeItem('lightspeed_new_state')
+          localStorage.removeItem('lightspeed_new_merchant_id')
+          localStorage.removeItem('lightspeed_new_code_verifier')
+          
+          // Redirect to integrations page even on error
+          setTimeout(() => {
+            window.location.href = '/integrations';
+          }, 2000)
         }
       } else if (code && state) {
         // If we have code and state but no matching stored state, log this information

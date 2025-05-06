@@ -2,85 +2,89 @@
 
 ## Overview
 
-We have successfully implemented a new integration with Lightspeed Retail POS (R-Series) using OAuth 2.0 with PKCE (Proof Key for Code Exchange) for enhanced security. This integration allows merchants to connect their Lightspeed accounts to our application and synchronize data between the two platforms.
+The Lightspeed New integration connects our platform to Lightspeed Retail POS (R-Series) using their REST API. This integration enables merchants to synchronize inventory, manage customers, and track transactions between the two systems.
 
-## Components Implemented
+## Implementation Details
 
-1. **Integration UI**
-   - Added a new "Lightspeed New" card to the integrations page
-   - Implemented connect/disconnect functionality
-   - Added status indicators to show connection state
+### Components Created
 
-2. **OAuth Flow with PKCE**
-   - Created utility functions for generating code verifiers and challenges
-   - Implemented secure state management to prevent CSRF attacks
-   - Added PKCE support for enhanced security against authorization code interception
+1. **Integration Card**
+   - Added to the integrations page
+   - Shows connection status and timestamp
+   - Provides connect/disconnect functionality
+
+2. **OAuth Flow**
+   - Implemented OAuth 2.0 with PKCE for secure authentication
+   - Created code verifier and challenge generation functions
+   - Added state parameter validation to prevent CSRF attacks
+   - Stored tokens securely in Firestore
 
 3. **API Endpoints**
-   - Created a token exchange endpoint at `/api/lightspeed/new`
-   - Implemented proper error handling and logging
-   - Added secure storage of tokens in Firestore
+   - Created `/api/lightspeed/new` endpoint for token exchange
+   - Implemented proper error handling and validation
+   - Stored connection data in Firestore under `merchants/{merchantId}/integrations/lightspeed_new`
 
-4. **Dashboard OAuth Callback Handler**
-   - Added support for handling Lightspeed OAuth redirects
-   - Implemented code verifier validation
-   - Added proper error handling and user feedback
+4. **Dashboard OAuth Callback**
+   - Updated dashboard page to handle Lightspeed New OAuth callbacks
+   - Added validation for state parameter and code verifier
+   - Implemented proper error handling and user feedback
+   - Added automatic redirect back to integrations page
 
-5. **Documentation**
-   - Created comprehensive documentation in `LIGHTSPEED_NEW_INTEGRATION.md`
-   - Added environment variables to `.env.example` and `.env.local`
+5. **Utility Functions**
+   - Created functions for PKCE implementation:
+     - `generateCodeVerifier`: Creates a random string for code verifier
+     - `generateCodeChallenge`: Hashes the code verifier using SHA-256
+     - `base64URLEncode`: Encodes binary data to base64url format
 
-## Security Features
+6. **Connection Management**
+   - Added refresh functionality to check connection status
+   - Implemented disconnect functionality to remove the integration
+   - Added timestamp display for when the integration was connected
 
-1. **PKCE Implementation**
-   - Code verifier generation with cryptographically secure randomness
-   - SHA-256 hashing for code challenge generation
-   - Secure storage of verifiers and challenges
+7. **Documentation**
+   - Created `LIGHTSPEED_NEW_INTEGRATION.md` with detailed information
+   - Created this summary document
 
-2. **Token Security**
-   - Tokens are never exposed to the client-side
-   - Access tokens and refresh tokens are stored securely in Firestore
-   - Token expiration is properly handled
+## Security Measures
 
-3. **State Validation**
-   - Random state parameter to prevent CSRF attacks
-   - Validation of state parameter during OAuth callback
+1. **OAuth 2.0 with PKCE**
+   - Prevents authorization code interception attacks
+   - Uses cryptographically secure random strings for code verifier
+   - Implements SHA-256 hashing for code challenge
 
-## Configuration
+2. **State Parameter Validation**
+   - Prevents cross-site request forgery (CSRF) attacks
+   - Uses random string stored in localStorage
+   - Validates state parameter on callback
 
-The integration uses the following credentials:
+3. **Secure Token Storage**
+   - Stores access and refresh tokens in Firestore
+   - Never exposes tokens to client-side code
+   - Includes connection timestamp for auditing
 
-- **Client ID**: 0be25ce25b4988b26b5759aecca02248cfe561d7594edd46e7d6807c141ee72e
-- **Client Secret**: 0b9c2fb76f1504ce387939066958a68cc28ec9212f571108fcbdba7b3c378f3e
+## Environment Variables
 
-These credentials are stored as environment variables:
-- `LIGHTSPEED_NEW_CLIENT_ID`
-- `LIGHTSPEED_NEW_CLIENT_SECRET`
+The integration requires the following environment variables:
 
-## OAuth Scopes
-
-The integration requests the following permissions:
-
-- `employee:register`: Access to register operations
-- `employee:inventory`: Access to inventory management
-- `employee:customers`: Access to customer data
+```
+NEXT_PUBLIC_LIGHTSPEED_NEW_CLIENT_ID=your_client_id
+LIGHTSPEED_NEW_CLIENT_SECRET=your_client_secret
+```
 
 ## Next Steps
 
-1. **Implement Token Refresh**
-   - Add functionality to automatically refresh access tokens when they expire
-   - Create a background job to check token expiration and refresh as needed
+1. **Inventory Synchronization**
+   - Implement periodic inventory sync from Lightspeed
+   - Add manual sync option for merchants
 
-2. **Add Data Synchronization**
-   - Implement endpoints for fetching customer data
-   - Add inventory synchronization
-   - Create transaction tracking functionality
+2. **Customer Data Integration**
+   - Sync customer profiles between systems
+   - Match customers based on email or phone number
 
-3. **Enhanced Error Handling**
-   - Add more detailed error messages and recovery options
-   - Implement retry logic for transient errors
+3. **Transaction Tracking**
+   - Monitor transactions for loyalty point allocation
+   - Create reports on transaction history
 
-4. **Testing**
-   - Create comprehensive tests for the OAuth flow
-   - Test token refresh functionality
-   - Verify data synchronization accuracy 
+4. **Error Monitoring**
+   - Add logging for integration errors
+   - Create alerts for token expiration or failed refreshes 

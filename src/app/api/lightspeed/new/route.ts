@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
-import { doc, setDoc } from 'firebase/firestore'
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 
 // Lightspeed API credentials
 const LIGHTSPEED_CLIENT_ID = process.env.LIGHTSPEED_NEW_CLIENT_ID || "0be25ce25b4988b26b5759aecca02248cfe561d7594edd46e7d6807c141ee72e"
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       hasCode: !!data.code, 
       hasMerchantId: !!data.merchantId, 
       hasState: !!data.state,
-      hasCodeVerifier: !!data.codeVerifier
+      hasCodeVerifier: !!data.codeVerifier 
     })
     
     const { code, merchantId, state, codeVerifier } = data
@@ -33,10 +33,8 @@ export async function POST(request: NextRequest) {
     
     console.log('Exchanging code for access token...')
     
-    // Get the redirect URI - this must match what was used in the authorization request
-    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/dashboard`
-    
-    // Exchange code for access token using the client_secret, code_verifier, and redirect_uri
+    // Exchange code for access token using the client_secret and code_verifier
+    // Note: We don't include redirect_uri as it's configured in the Lightspeed portal
     const tokenResponse = await fetch('https://cloud.lightspeedapp.com/auth/oauth/token', {
       method: 'POST',
       headers: {
@@ -47,20 +45,13 @@ export async function POST(request: NextRequest) {
         client_secret: LIGHTSPEED_CLIENT_SECRET,
         code,
         grant_type: 'authorization_code',
-        code_verifier: codeVerifier,
-        redirect_uri: redirectUri
+        code_verifier: codeVerifier
       })
     })
     
     const tokenData = await tokenResponse.json()
     console.log('Token response status:', tokenResponse.status)
-    console.log('Token response data:', {
-      hasAccessToken: !!tokenData.access_token,
-      hasRefreshToken: !!tokenData.refresh_token,
-      hasExpiresIn: !!tokenData.expires_in,
-      error: tokenData.error,
-      errorDescription: tokenData.error_description
-    })
+    console.log('Token data received (keys only):', Object.keys(tokenData))
     
     if (!tokenResponse.ok) {
       console.error('Lightspeed OAuth token error:', tokenData)
@@ -74,24 +65,20 @@ export async function POST(request: NextRequest) {
     console.log('Successfully obtained access token, storing in Firestore...')
     
     try {
-      // Calculate expiration timestamp safely
-      const now = new Date();
-      const expiresInSeconds = tokenData.expires_in || 3600;
-      const expiresAt = new Date(now.getTime() + (expiresInSeconds * 1000));
-      
-      // Store the integration data in Firestore with proper date handling
-      await setDoc(doc(db, 'merchants', merchantId, 'integrations', 'lightspeed_new'), {
+      // Store the token data in Firestore
+      const integrationDocRef = doc(db, `merchants/${merchantId}/integrations/lightspeed_new`);
+      await setDoc(integrationDocRef, {
         connected: true,
-        accessToken: tokenData.access_token || '',
-        refreshToken: tokenData.refresh_token || '',
-        expiresAt: expiresAt,  // Store as Date object which Firestore can handle
-        connectedAt: new Date(),  // Store as Date object
-        connectionState: state,
-        tokenType: tokenData.token_type || 'Bearer',
-        scope: tokenData.scope || ''
-      })
-      
-      console.log('Successfully stored Lightspeed integration data in Firestore')
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        expires_in: tokenData.expires_in,
+        token_type: tokenData.token_type,
+        scope: tokenData.scope,
+        instance_url: tokenData.instance_url,
+        connectedAt: serverTimestamp(),
+      });
+
+      console.log('Lightspeed New integration connected successfully');
       return NextResponse.json({ success: true })
     } catch (firestoreError) {
       console.error('Error storing data in Firestore:', firestoreError)

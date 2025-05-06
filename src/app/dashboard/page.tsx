@@ -59,6 +59,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
+import { BasicRewardWizard } from "@/components/basic-reward-wizard"
+import { CreateRewardSheet } from "@/components/create-reward-sheet"
 
 type TimeframeType = "today" | "yesterday" | "7days" | "30days"
 
@@ -2127,7 +2129,7 @@ export default function DashboardPage() {
       )}
 
       {/* Create Reward Dialog */}
-      <CreateRewardDialog
+      <CreateRewardSheet
         open={isRewardDialogOpen}
         onOpenChange={setIsRewardDialogOpen}
         customerId={selectedCustomer?.id}

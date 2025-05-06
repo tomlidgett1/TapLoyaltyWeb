@@ -21,6 +21,7 @@ import { TapAiButton } from "@/components/tap-ai-button"
 import Link from "next/link"
 import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
+import { CreateRewardSheet } from "@/components/create-reward-sheet"
 import { SendBroadcastDialog } from "@/components/send-broadcast-dialog"
 import { CreatePointsRuleDialog } from "@/components/create-points-rule-dialog"
 import { useAuth } from "@/contexts/auth-context"
@@ -700,7 +701,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         open={showBannerDialog} 
         onOpenChange={setShowBannerDialog}
       />
-      <CreateRewardDialog 
+      <CreateRewardSheet 
         open={showRewardDialog} 
         onOpenChange={setShowRewardDialog}
       />

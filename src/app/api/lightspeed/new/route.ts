@@ -77,12 +77,15 @@ export async function GET(request: NextRequest) {
     console.log('Token response status:', tokenResponse.status)
     console.log('Token response headers:', Object.fromEntries([...tokenResponse.headers.entries()]))
     
+    // Read response body **once** then attempt to parse. This avoids the
+    // "Body has already been read" runtime error that occurs when we try to
+    // consume the same body twice (first via .json() then via .text()).
     let tokenData: any
+    const rawBody = await tokenResponse.text()
     try {
-      tokenData = await tokenResponse.json()
+      tokenData = JSON.parse(rawBody)
     } catch (parseErr) {
-      const raw = await tokenResponse.text()
-      console.error('Token JSON parse failed, raw response:', raw.slice(0,200))
+      console.error('Token JSON parse failed, raw response:', rawBody.slice(0, 200))
       throw new Error('Invalid JSON from Lightspeed token endpoint')
     }
     
@@ -307,12 +310,15 @@ export async function POST(request: NextRequest) {
     console.log('Token response status:', tokenResponse.status)
     console.log('Token response headers:', Object.fromEntries([...tokenResponse.headers.entries()]))
     
+    // Read response body **once** then attempt to parse. This avoids the
+    // "Body has already been read" runtime error that occurs when we try to
+    // consume the same body twice (first via .json() then via .text()).
     let tokenData: any
+    const rawBody = await tokenResponse.text()
     try {
-      tokenData = await tokenResponse.json()
+      tokenData = JSON.parse(rawBody)
     } catch (parseErr) {
-      const raw = await tokenResponse.text()
-      console.error('Token JSON parse failed, raw response:', raw.slice(0,200))
+      console.error('Token JSON parse failed, raw response:', rawBody.slice(0, 200))
       throw new Error('Invalid JSON from Lightspeed token endpoint')
     }
     

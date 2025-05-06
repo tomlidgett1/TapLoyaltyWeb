@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore"
+import { doc, getDoc, setDoc, updateDoc, DocumentData } from "firebase/firestore"
 import { toast } from "@/components/ui/use-toast"
 
 // Import icons for different POS systems
@@ -15,10 +15,23 @@ import { SquareIcon } from "@/components/icons/square-icon"
 import { CloverIcon } from "@/components/icons/clover-icon"
 import { ShopifyIcon } from "@/components/icons/shopify-icon"
 
+// Define integration state type
+interface IntegrationState {
+  connected: boolean;
+  data: DocumentData | null;
+}
+
+interface IntegrationsState {
+  lightspeed: IntegrationState;
+  square: IntegrationState;
+  clover: IntegrationState;
+  shopify: IntegrationState;
+}
+
 export default function IntegrationsPage() {
   const { user } = useAuth()
   const [connecting, setConnecting] = useState<string | null>(null)
-  const [integrations, setIntegrations] = useState({
+  const [integrations, setIntegrations] = useState<IntegrationsState>({
     lightspeed: { connected: false, data: null },
     square: { connected: false, data: null },
     clover: { connected: false, data: null },
@@ -41,6 +54,18 @@ export default function IntegrationsPage() {
             lightspeed: { 
               connected: true, 
               data: lightspeedDoc.data() 
+            }
+          }))
+        }
+        
+        // Check Square integration status
+        const squareDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'square'))
+        if (squareDoc.exists() && squareDoc.data().connected) {
+          setIntegrations(prev => ({
+            ...prev,
+            square: { 
+              connected: true, 
+              data: squareDoc.data() 
             }
           }))
         }
@@ -159,6 +184,86 @@ export default function IntegrationsPage() {
     }
   }
 
+  // Square integration
+  const connectSquare = async () => {
+    if (!user) return
+    
+    setConnecting("square")
+    
+    try {
+      // Square OAuth parameters
+      const clientId = "sq0idp-4LAqjdrwhjauSthYdTRFtA" // Production application ID
+      
+      // Store the state in localStorage to verify when the user returns
+      const state = Math.random().toString(36).substring(2, 15)
+      localStorage.setItem('square_state', state)
+      
+      // Store the merchant ID in localStorage to associate with the integration
+      localStorage.setItem('merchant_id', user.uid)
+      
+      // Add redirect_uri to the authorization URL
+      const redirectUri = `${window.location.origin}/dashboard`
+      
+      // Prepare scopes for Square OAuth
+      const scopes = [
+        'MERCHANT_PROFILE_READ',
+        'CUSTOMERS_READ',
+        'CUSTOMERS_WRITE',
+        'ORDERS_READ',
+        'ORDERS_WRITE',
+        'PAYMENTS_READ',
+        'PAYMENTS_WRITE',
+        'ITEMS_READ',
+        'ITEMS_WRITE'
+      ].join(' ')
+      
+      // Build the authorization URL for production
+      const authUrl = `https://connect.squareup.com/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&scope=${encodeURIComponent(scopes)}&state=${encodeURIComponent(state)}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}`
+      
+      console.log("Redirecting to Square authorization URL:", authUrl)
+      
+      // Redirect to Square authorization page
+      window.location.href = authUrl
+    } catch (error) {
+      console.error("Error connecting to Square:", error)
+      toast({
+        title: "Connection Failed",
+        description: "Failed to connect to Square. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setConnecting(null)
+    }
+  }
+
+  // Disconnect Square
+  const disconnectSquare = async () => {
+    if (!user) return
+    
+    try {
+      await updateDoc(doc(db, 'merchants', user.uid, 'integrations', 'square'), {
+        connected: false
+      })
+      
+      setIntegrations(prev => ({
+        ...prev,
+        square: { connected: false, data: null }
+      }))
+      
+      toast({
+        title: "Disconnected",
+        description: "Your Square account has been disconnected."
+      })
+    } catch (error) {
+      console.error("Error disconnecting Square:", error)
+      toast({
+        title: "Error",
+        description: "Failed to disconnect Square. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
+
   return (
     <div className="p-4">
       <div className="mb-6">
@@ -236,6 +341,42 @@ export default function IntegrationsPage() {
               disabled={connectingApi === "lightspeed"}
             >
               {connectingApi === "lightspeed" ? "Connecting..." : "Connect to API"}
+            </Button>
+          </CardFooter>
+        </Card>
+        
+        {/* Square Integration Card */}
+        <Card className="rounded-lg overflow-hidden">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-10 w-10 rounded-md bg-[#006AFF] flex items-center justify-center">
+                  <SquareIcon className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Square</CardTitle>
+                  <CardDescription>Connect your Square POS</CardDescription>
+                </div>
+              </div>
+              <Badge variant={integrations.square.connected ? "default" : "outline"}>
+                {integrations.square.connected ? "Connected" : "Not Connected"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="pb-2">
+            <p className="text-sm text-muted-foreground">
+              Sync customer data, transactions, and inventory with your Square account for a seamless integration.
+            </p>
+          </CardContent>
+          <CardFooter>
+            <Button 
+              variant={integrations.square.connected ? "outline" : "default"}
+              className="w-full rounded-md"
+              onClick={integrations.square.connected ? disconnectSquare : connectSquare}
+              disabled={connecting === "square"}
+            >
+              {connecting === "square" ? "Connecting..." : 
+               integrations.square.connected ? "Disconnect" : "Connect to Square"}
             </Button>
           </CardFooter>
         </Card>

@@ -861,6 +861,73 @@ export default function DashboardPage() {
     );
   };
 
+  // Handle OAuth callbacks
+  useEffect(() => {
+    const handleOAuthCallback = async () => {
+      if (!searchParams) return
+      
+      // Get parameters from URL
+      const code = searchParams.get('code')
+      const state = searchParams.get('state')
+      
+      if (!code || !state || !user) return
+      
+      // Check if it's a Square callback
+      const storedSquareState = localStorage.getItem('square_state')
+      if (state === storedSquareState) {
+        try {
+          // Get merchant ID from localStorage
+          const merchantId = localStorage.getItem('merchant_id')
+          if (!merchantId) {
+            throw new Error('Missing merchant ID')
+          }
+          
+          // Exchange code for token
+          const response = await fetch('/api/oauth/square', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              code,
+              state,
+              merchantId
+            })
+          })
+          
+          const data = await response.json()
+          
+          if (data.success) {
+            toast({
+              title: "Success!",
+              description: "Your Square account has been connected.",
+            })
+          } else {
+            throw new Error(data.error || 'Failed to connect Square account')
+          }
+          
+          // Clear state from localStorage
+          localStorage.removeItem('square_state')
+          localStorage.removeItem('merchant_id')
+          
+          // Redirect to integrations page
+          router.push('/integrations')
+        } catch (error) {
+          console.error('Error handling Square callback:', error)
+          toast({
+            title: "Connection Failed",
+            description: "We couldn't connect your Square account. Please try again.",
+            variant: "destructive"
+          })
+        }
+      }
+      
+      // Handle other OAuth providers like Lightspeed as needed...
+    }
+    
+    handleOAuthCallback()
+  }, [searchParams, user, router])
+
   if (loading) {
     return (
       <PageTransition>

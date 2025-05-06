@@ -41,6 +41,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { storage } from "@/lib/firebase"
 import { firebase } from "@/lib/firebase"
 import { PageTransition } from "@/components/page-transition"
+import { PageHeader } from "@/components/page-header"
 
 const SettingsPage: React.FC = () => {
   const router = useRouter()

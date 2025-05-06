@@ -23,6 +23,8 @@ import { Calendar, Code } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { PageTransition } from "@/components/page-transition"
+import { PageHeader } from "@/components/page-header"
 
 // Define metrics array
 const metrics = [
@@ -349,336 +351,316 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight">Analytics</h2>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
-            <Filter className="mr-2 h-4 w-4" />
-            Filter
-          </Button>
-          <Button variant="outline" size="sm">
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-        </div>
-      </div>
-      
-      <Tabs defaultValue="overview" className="space-y-4" onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="customers">Customers</TabsTrigger>
-          <TabsTrigger value="rewards">Rewards</TabsTrigger>
-          <TabsTrigger value="points">Points</TabsTrigger>
-          <TabsTrigger value="custom">Custom Reports</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
-                <BarChart className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{analyticsData.totalCustomers}</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="text-green-500 inline-flex items-center">
-                    <ArrowUpRight className="mr-1 h-3 w-3" />
-                    +12%
-                  </span>{" "}
-                  from last month
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Rewards</CardTitle>
-                <PieChart className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{analyticsData.activeRewards}</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="text-green-500 inline-flex items-center">
-                    <ArrowUpRight className="mr-1 h-3 w-3" />
-                    +2
-                  </span>{" "}
-                  from last month
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Points Issued</CardTitle>
-                <LineChart className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{analyticsData.pointsIssued.toLocaleString()}</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="text-green-500 inline-flex items-center">
-                    <ArrowUpRight className="mr-1 h-3 w-3" />
-                    +18%
-                  </span>{" "}
-                  from last month
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Rewards Redeemed</CardTitle>
-                <BarChart className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{analyticsData.rewardsRedeemed}</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="text-green-500 inline-flex items-center">
-                    <ArrowUpRight className="mr-1 h-3 w-3" />
-                    +7%
-                  </span>{" "}
-                  from last month
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-          
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card className="col-span-1">
-              <CardHeader>
-                <CardTitle>Customer Growth</CardTitle>
-                <CardDescription>
-                  New customers over time
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[300px] flex items-center justify-center border rounded-md bg-muted/10">
-                  <p className="text-muted-foreground">Customer growth chart will appear here</p>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="col-span-1">
-              <CardHeader>
-                <CardTitle>Reward Redemptions</CardTitle>
-                <CardDescription>
-                  Rewards redeemed over time
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[300px] flex items-center justify-center border rounded-md bg-muted/10">
-                  <p className="text-muted-foreground">Reward redemptions chart will appear here</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-        
-        <TabsContent value="customers" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Customer Analytics</CardTitle>
-              <CardDescription>
-                Detailed insights about your customer base
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[400px] flex items-center justify-center border rounded-md bg-muted/10">
-                <p className="text-muted-foreground">Customer analytics will appear here</p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="rewards" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Rewards Analytics</CardTitle>
-              <CardDescription>
-                Performance metrics for your rewards program
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[400px] flex items-center justify-center border rounded-md bg-muted/10">
-                <p className="text-muted-foreground">Rewards analytics will appear here</p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="points" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Points Analytics</CardTitle>
-              <CardDescription>
-                Insights about your points system
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[400px] flex items-center justify-center border rounded-md bg-muted/10">
-                <p className="text-muted-foreground">Points analytics will appear here</p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="custom" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-medium">Dashboards</h3>
-              <Select value={activeDashboardId} onValueChange={setActiveDashboardId}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Select dashboard" />
-                </SelectTrigger>
-                <SelectContent>
-                  {dashboards.map(dashboard => (
-                    <SelectItem key={dashboard.id} value={dashboard.id}>
-                      {dashboard.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button variant="outline" size="sm" onClick={() => setIsCreatingDashboard(true)}>
-                <Plus className="h-4 w-4 mr-1" />
-                New Dashboard
-              </Button>
-            </div>
-            <Button onClick={() => setIsCreatingReport(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Report
+    <PageTransition>
+      <div className="p-6">
+        <PageHeader
+          title="Analytics"
+          subtitle="Track and analyze your business performance"
+        >
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-9"
+              onClick={() => {/* Export functionality */}}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+            <Button 
+              size="sm" 
+              className="h-9"
+              onClick={() => setIsCreatingReport(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Report
             </Button>
           </div>
+        </PageHeader>
+
+        <Tabs defaultValue="overview">
+          <TabsList className="grid grid-cols-4 mb-6">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="reports">Reports</TabsTrigger>
+            <TabsTrigger value="dashboards">Dashboards</TabsTrigger>
+            <TabsTrigger value="explorer">Data Explorer</TabsTrigger>
+          </TabsList>
           
-          {activeDashboard.reports.length === 0 ? (
+          <TabsContent value="overview" className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
+                  <BarChart className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{analyticsData.totalCustomers}</div>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="text-green-500 inline-flex items-center">
+                      <ArrowUpRight className="mr-1 h-3 w-3" />
+                      +12%
+                    </span>{" "}
+                    from last month
+                  </p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Active Rewards</CardTitle>
+                  <PieChart className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{analyticsData.activeRewards}</div>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="text-green-500 inline-flex items-center">
+                      <ArrowUpRight className="mr-1 h-3 w-3" />
+                      +2
+                    </span>{" "}
+                    from last month
+                  </p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Points Issued</CardTitle>
+                  <LineChart className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{analyticsData.pointsIssued.toLocaleString()}</div>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="text-green-500 inline-flex items-center">
+                      <ArrowUpRight className="mr-1 h-3 w-3" />
+                      +18%
+                    </span>{" "}
+                    from last month
+                  </p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Rewards Redeemed</CardTitle>
+                  <BarChart className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{analyticsData.rewardsRedeemed}</div>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="text-green-500 inline-flex items-center">
+                      <ArrowUpRight className="mr-1 h-3 w-3" />
+                      +7%
+                    </span>{" "}
+                    from last month
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+            
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card className="col-span-1">
+                <CardHeader>
+                  <CardTitle>Customer Growth</CardTitle>
+                  <CardDescription>
+                    New customers over time
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px] flex items-center justify-center border rounded-md bg-muted/10">
+                    <p className="text-muted-foreground">Customer growth chart will appear here</p>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="col-span-1">
+                <CardHeader>
+                  <CardTitle>Reward Redemptions</CardTitle>
+                  <CardDescription>
+                    Rewards redeemed over time
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px] flex items-center justify-center border rounded-md bg-muted/10">
+                    <p className="text-muted-foreground">Reward redemptions chart will appear here</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="reports" className="space-y-4">
             <Card>
-              <CardContent className="text-center p-8">
-                <h3 className="text-lg font-medium mb-2">No reports in this dashboard</h3>
-                <p className="text-muted-foreground mb-4">
-                  Create custom reports to add to this dashboard
-                </p>
-                <Button onClick={() => setIsCreatingReport(true)}>Create Report</Button>
+              <CardHeader>
+                <CardTitle>Customer Analytics</CardTitle>
+                <CardDescription>
+                  Detailed insights about your customer base
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[400px] flex items-center justify-center border rounded-md bg-muted/10">
+                  <p className="text-muted-foreground">Customer analytics will appear here</p>
+                </div>
               </CardContent>
             </Card>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {activeDashboard.reports.map(report => (
-                <Card key={report.id} className="group relative">
-                  <div className="absolute right-2 top-2 hidden group-hover:flex bg-white/90 rounded-md shadow-sm z-10">
-                    <Button variant="ghost" size="icon" onClick={() => setPreviewReport(report)}>
-                      <Maximize2 className="h-4 w-4" />
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <ChevronDown className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => {
-                          // Edit report logic
-                        }}>
-                          <Edit className="mr-2 h-4 w-4" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => {
-                          // Duplicate report logic
-                        }}>
-                          <Copy className="mr-2 h-4 w-4" />
-                          Duplicate
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          onClick={() => handleRemoveReportFromDashboard(activeDashboardId, report.id)}
-                          className="text-red-600 focus:bg-red-50 focus:text-red-600"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Remove
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  <CardHeader>
-                    <CardTitle>{report.name}</CardTitle>
-                    <CardDescription>
-                      {report.metrics.length} metrics, {report.dimensions.length} dimensions
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[200px]">
-                      <ReportVisualization report={report} />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+          </TabsContent>
+          
+          <TabsContent value="dashboards" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-medium">Dashboards</h3>
+                <Select value={activeDashboardId} onValueChange={setActiveDashboardId}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Select dashboard" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {dashboards.map(dashboard => (
+                      <SelectItem key={dashboard.id} value={dashboard.id}>
+                        {dashboard.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="sm" onClick={() => setIsCreatingDashboard(true)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  New Dashboard
+                </Button>
+              </div>
+              <Button onClick={() => setIsCreatingReport(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Report
+              </Button>
             </div>
-          )}
-          
-          <Dialog open={isCreatingReport} onOpenChange={setIsCreatingReport}>
-            <DialogContent className="sm:max-w-[600px]">
-              <DialogHeader>
-                <DialogTitle>Create Custom Report</DialogTitle>
-                <DialogDescription>
-                  Select metrics and dimensions to create a custom analytics report
-                </DialogDescription>
-              </DialogHeader>
-              <ReportBuilder 
-                onSave={(reportData) => {
-                  const newReport = {
-                    id: `report_${Date.now()}`,
-                    ...reportData
-                  }
-                  setCustomReports([...customReports, newReport])
-                  handleAddReportToDashboard(activeDashboardId, newReport)
-                  setIsCreatingReport(false)
-                }} 
-                onCancel={() => setIsCreatingReport(false)} 
-              />
-            </DialogContent>
-          </Dialog>
-          
-          <Dialog open={isCreatingDashboard} onOpenChange={setIsCreatingDashboard}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create Dashboard</DialogTitle>
-                <DialogDescription>
-                  Create a new dashboard to organize your reports
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="dashboard-name">Dashboard Name</Label>
-                  <Input 
-                    id="dashboard-name" 
-                    value={newDashboardName} 
-                    onChange={(e) => setNewDashboardName(e.target.value)} 
-                    placeholder="My Dashboard"
-                  />
+            
+            {activeDashboard.reports.length === 0 ? (
+              <Card>
+                <CardContent className="text-center p-8">
+                  <h3 className="text-lg font-medium mb-2">No reports in this dashboard</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Create custom reports to add to this dashboard
+                  </p>
+                  <Button onClick={() => setIsCreatingReport(true)}>Create Report</Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {activeDashboard.reports.map(report => (
+                  <Card key={report.id} className="group relative">
+                    <div className="absolute right-2 top-2 hidden group-hover:flex bg-white/90 rounded-md shadow-sm z-10">
+                      <Button variant="ghost" size="icon" onClick={() => setPreviewReport(report)}>
+                        <Maximize2 className="h-4 w-4" />
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <ChevronDown className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => {
+                            // Edit report logic
+                          }}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            // Duplicate report logic
+                          }}>
+                            <Copy className="mr-2 h-4 w-4" />
+                            Duplicate
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            onClick={() => handleRemoveReportFromDashboard(activeDashboardId, report.id)}
+                            className="text-red-600 focus:bg-red-50 focus:text-red-600"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Remove
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    <CardHeader>
+                      <CardTitle>{report.name}</CardTitle>
+                      <CardDescription>
+                        {report.metrics.length} metrics, {report.dimensions.length} dimensions
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[200px]">
+                        <ReportVisualization report={report} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+            
+            <Dialog open={isCreatingReport} onOpenChange={setIsCreatingReport}>
+              <DialogContent className="sm:max-w-[600px]">
+                <DialogHeader>
+                  <DialogTitle>Create Custom Report</DialogTitle>
+                  <DialogDescription>
+                    Select metrics and dimensions to create a custom analytics report
+                  </DialogDescription>
+                </DialogHeader>
+                <ReportBuilder 
+                  onSave={(reportData) => {
+                    const newReport = {
+                      id: `report_${Date.now()}`,
+                      ...reportData
+                    }
+                    setCustomReports([...customReports, newReport])
+                    handleAddReportToDashboard(activeDashboardId, newReport)
+                    setIsCreatingReport(false)
+                  }} 
+                  onCancel={() => setIsCreatingReport(false)} 
+                />
+              </DialogContent>
+            </Dialog>
+            
+            <Dialog open={isCreatingDashboard} onOpenChange={setIsCreatingDashboard}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create Dashboard</DialogTitle>
+                  <DialogDescription>
+                    Create a new dashboard to organize your reports
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="dashboard-name">Dashboard Name</Label>
+                    <Input 
+                      id="dashboard-name" 
+                      value={newDashboardName} 
+                      onChange={(e) => setNewDashboardName(e.target.value)} 
+                      placeholder="My Dashboard"
+                    />
+                  </div>
                 </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreatingDashboard(false)}>Cancel</Button>
-                <Button onClick={handleCreateDashboard}>Create</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          
-          <Dialog open={!!previewReport} onOpenChange={() => setPreviewReport(null)}>
-            <DialogContent className="sm:max-w-[800px] sm:max-h-[80vh]">
-              <DialogHeader>
-                <DialogTitle>{previewReport?.name}</DialogTitle>
-                <DialogDescription>
-                  {previewReport?.metrics.length} metrics, {previewReport?.dimensions.length} dimensions
-                </DialogDescription>
-              </DialogHeader>
-              <div className="h-[500px] overflow-auto">
-                {previewReport && <ReportVisualization report={previewReport} />}
-              </div>
-            </DialogContent>
-          </Dialog>
-        </TabsContent>
-      </Tabs>
-    </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsCreatingDashboard(false)}>Cancel</Button>
+                  <Button onClick={handleCreateDashboard}>Create</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            
+            <Dialog open={!!previewReport} onOpenChange={() => setPreviewReport(null)}>
+              <DialogContent className="sm:max-w-[800px] sm:max-h-[80vh]">
+                <DialogHeader>
+                  <DialogTitle>{previewReport?.name}</DialogTitle>
+                  <DialogDescription>
+                    {previewReport?.metrics.length} metrics, {previewReport?.dimensions.length} dimensions
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="h-[500px] overflow-auto">
+                  {previewReport && <ReportVisualization report={previewReport} />}
+                </div>
+              </DialogContent>
+            </Dialog>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </PageTransition>
   )
 }
 

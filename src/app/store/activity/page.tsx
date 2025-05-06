@@ -44,6 +44,8 @@ import { collection, query, getDocs, orderBy, limit, Timestamp, where, doc, getD
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
+import { PageTransition } from "@/components/page-transition"
+import { PageHeader } from "@/components/page-header"
 import {
   Popover,
   PopoverContent,
@@ -684,30 +686,33 @@ export default function ActivityPage() {
   }, [activityCategory, user?.uid])
 
   return (
-    <div className="p-6">
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Activity</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Track all transactions and redemptions
-            </p>
-          </div>
-          
+    <PageTransition>
+      <div className="p-6">
+        <PageHeader
+          title="Activity"
+          subtitle="Track transactions, redemptions, and sales activity"
+        >
           <div className="flex items-center gap-2">
             <Button 
               variant="outline" 
-              className="h-9 gap-2 rounded-md"
+              size="sm" 
+              className="h-9"
               onClick={handleExportPDF}
             >
-              <Download className="h-4 w-4" />
+              <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
-            <Button variant="outline" className="h-9 w-9 p-0 rounded-md">
-              <Calendar className="h-4 w-4" />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-9"
+              onClick={() => setShowFilters(!showFilters)}
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Filter
             </Button>
           </div>
-        </div>
+        </PageHeader>
         
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -1632,6 +1637,6 @@ export default function ActivityPage() {
           </div>
         </div>
       </div>
-    </div>
+    </PageTransition>
   )
 } 

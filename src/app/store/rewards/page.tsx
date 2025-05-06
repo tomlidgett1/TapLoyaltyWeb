@@ -47,7 +47,8 @@ import {
   Sparkles,
   HelpCircle,
   Package,
-  DollarSign
+  DollarSign,
+  Download
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -90,6 +91,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { IntroductoryRewardDialog } from "@/components/introductory-reward-dialog"
+import { PageTransition } from "@/components/page-transition"
+import { PageHeader } from "@/components/page-header"
 
 // Types
 type RewardCategory = "all" | "individual" | "customer-specific" | "programs"
@@ -1191,54 +1194,91 @@ export default function RewardsPage() {
     );
   };
 
+  // Add export PDF functionality
+  const handleExportPDF = async () => {
+    try {
+      // Dynamically import the necessary modules
+      const jspdfModule = await import('jspdf');
+      const autoTableModule = await import('jspdf-autotable');
+      
+      // Create a new document
+      const doc = new jspdfModule.default();
+      
+      // Manually add the plugin to the document
+      const autoTable = autoTableModule.default;
+      
+      // Add title
+      doc.setFontSize(18);
+      doc.text('Rewards Report', 14, 22);
+      
+      // Add date generated
+      doc.setFontSize(11);
+      doc.text(`Generated: ${format(new Date(), 'MMM d, yyyy h:mm a')}`, 14, 30);
+      
+      // Prepare data for export
+      const dataToExport = getFilteredRewards().map(reward => [
+        reward.rewardName,
+        reward.description || '',
+        reward.pointsCost || 0,
+        reward.isActive ? 'Active' : 'Inactive',
+        reward.type || '',
+        reward.redemptionCount || 0,
+        reward.createdAt ? format(reward.createdAt, 'MMM d, yyyy') : ''
+      ]);
+      
+      // Add the table
+      autoTable(doc, {
+        head: [['Name', 'Description', 'Points Cost', 'Status', 'Type', 'Redemptions', 'Created Date']],
+        body: dataToExport,
+        startY: 40,
+        styles: { fontSize: 10, cellPadding: 3 },
+        headStyles: { fillColor: [0, 102, 255], textColor: 255 }
+      });
+      
+      // Save the PDF
+      doc.save('rewards-report.pdf');
+      
+      toast({
+        title: "Export Successful",
+        description: "Your rewards report has been downloaded.",
+      });
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to generate the PDF report.",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
-    <div className="p-6">
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Rewards</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Manage your rewards, programs, and special offers
-            </p>
-          </div>
-          
+    <PageTransition>
+      <div className="p-6">
+        <PageHeader
+          title="Rewards"
+          subtitle="Manage and create rewards for your customers"
+        >
           <div className="flex items-center gap-2">
+            <Button 
+              variant="default" 
+              className="h-9 gap-2 rounded-md"
+              onClick={() => router.push('/create')}
+            >
+              <Plus className="h-4 w-4" />
+              Create Reward
+            </Button>
             <Button 
               variant="outline" 
               className="h-9 gap-2 rounded-md"
-              onClick={() => {
-                // Open help guide or documentation
-                window.open('/help/rewards', '_blank');
-              }}
+              onClick={handleExportPDF}
             >
-              <HelpCircle className="h-4 w-4" />
-              Help Guide
+              <Download className="h-4 w-4" />
+              Export
             </Button>
-            
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="default" 
-                className="h-9 gap-2 rounded-md bg-[#0066ff] hover:bg-[#0052cc] text-white"
-                onClick={() => router.push('/create')}
-              >
-                <Plus className="h-4 w-4" />
-                Create Reward
-              </Button>
-              
-              {!hasIntroReward && (
-                <Button 
-                  variant="outline" 
-                  className="gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 text-blue-700 hover:bg-blue-100 hover:text-blue-800"
-                  onClick={() => setIsIntroRewardDialogOpen(true)}
-                >
-                  <Sparkles className="h-4 w-4" />
-                  Create Introductory Reward
-                </Button>
-              )}
-            </div>
           </div>
-        </div>
-        
+        </PageHeader>
+
         <Tabs defaultValue="all" onValueChange={(value) => setRewardCategory(value as RewardCategory)}>
           <div className="flex items-center justify-between mb-4">
             <TabsList className="h-9 rounded-md">
@@ -2060,6 +2100,6 @@ export default function RewardsPage() {
         open={isIntroRewardDialogOpen} 
         onOpenChange={setIsIntroRewardDialogOpen} 
       />
-    </div>
+    </PageTransition>
   )
 } 

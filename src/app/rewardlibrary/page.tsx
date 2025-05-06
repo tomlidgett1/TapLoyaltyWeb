@@ -26,6 +26,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { useRouter } from "next/navigation"
 import { PageTransition } from "@/components/page-transition"
+import { PageHeader } from "@/components/page-header"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { RewardDetailsDialog } from "@/components/reward-details-dialog"
@@ -354,11 +355,12 @@ const rewardCategories = [
 
 export default function RewardLibraryPage() {
   const router = useRouter()
-  const [viewType, setViewType] = useState<'grid' | 'list'>('grid')
+  const [viewType, setViewType] = useState<"grid" | "list">("grid")
   const [searchQuery, setSearchQuery] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState("all")
   const [selectedReward, setSelectedReward] = useState<typeof rewardTemplates[0] | null>(null)
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [isCreateRewardOpen, setIsCreateRewardOpen] = useState(false)
 
   const filterRewards = (templates: typeof rewardTemplates, query: string) => {
     if (!query.trim()) return templates
@@ -378,14 +380,14 @@ export default function RewardLibraryPage() {
 
   const handleEdit = () => {
     setIsDetailsOpen(false)
-    setIsCreateOpen(true)
+    setIsCreateRewardOpen(true)
   }
 
   const handleCreate = () => {
     router.push(`/store/rewards/create?template=${selectedReward?.id}`)
   }
 
-  const renderRewardItem = (template, viewType) => {
+  const renderRewardItem = (template: typeof rewardTemplates[0], viewType: "grid" | "list") => {
     const Icon = template.icon || Gift
     
     // Count active conditions and limitations
@@ -472,7 +474,7 @@ export default function RewardLibraryPage() {
           </div>
           
           <div className="flex flex-wrap gap-2 mb-4">
-            {template.tags.map((tag) => (
+            {template.tags.map((tag: string) => (
               <Badge 
                 key={tag} 
                 variant="secondary"
@@ -528,21 +530,66 @@ export default function RewardLibraryPage() {
   return (
     <PageTransition>
       <div className="p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-semibold">Rewards Library</h1>
-            <p className="text-muted-foreground">Browse and customize pre-made reward templates</p>
-          </div>
-          <Button 
-            className="bg-[#007AFF] hover:bg-[#0063CC] text-white"
-            onClick={() => router.push("/store/rewards/create")}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Create Custom
+        <PageHeader
+          title="Rewards Library"
+          subtitle="Browse and create rewards from pre-made templates"
+        >
+          <Button onClick={() => setIsCreateRewardOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create New Reward
           </Button>
+        </PageHeader>
+        
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <Tabs defaultValue="all" value={selectedCategory} onValueChange={setSelectedCategory}>
+            <TabsList>
+              <TabsTrigger value="all">All Templates</TabsTrigger>
+              <TabsTrigger value="welcome">Welcome</TabsTrigger>
+              <TabsTrigger value="loyalty">Loyalty</TabsTrigger>
+              <TabsTrigger value="spending">Spending</TabsTrigger>
+              <TabsTrigger value="birthday">Birthday</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input 
+                type="search" 
+                placeholder="Search templates..." 
+                className="pl-9 h-9 w-[250px]"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            
+            <div className="border rounded-md flex">
+              <Button 
+                variant="ghost" 
+                size="icon"
+                className={cn(
+                  "h-9 w-9 rounded-none rounded-l-md",
+                  viewType === "grid" && "bg-muted"
+                )}
+                onClick={() => setViewType("grid")}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                className={cn(
+                  "h-9 w-9 rounded-none rounded-r-md",
+                  viewType === "list" && "bg-muted"
+                )}
+                onClick={() => setViewType("list")}
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </div>
-
+        
         {/* Main Tabs */}
         <Tabs defaultValue="individual" className="space-y-6">
           <div className="flex items-center justify-between">
@@ -560,34 +607,6 @@ export default function RewardLibraryPage() {
                 <span>Points Rules</span>
               </TabsTrigger>
             </TabsList>
-
-            <div className="flex items-center gap-3">
-              <div className="relative w-[200px]">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Search..." 
-                  className="pl-10 h-10"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-              <Button variant="outline" size="default" className="h-10">
-                <Filter className="h-4 w-4 mr-2" />
-                Filters
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-10 w-10"
-                onClick={() => setViewType(viewType === 'grid' ? 'list' : 'grid')}
-              >
-                {viewType === 'grid' ? (
-                  <List className="h-4 w-4" />
-                ) : (
-                  <LayoutGrid className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
           </div>
 
           {/* Individual Rewards Content with Sub-tabs */}
@@ -710,8 +729,8 @@ export default function RewardLibraryPage() {
               onCreate={handleCreate}
             />
             <CreateRewardDialog
-              open={isCreateOpen}
-              onOpenChange={setIsCreateOpen}
+              open={isCreateRewardOpen}
+              onOpenChange={setIsCreateRewardOpen}
               defaultValues={selectedReward}
             />
           </>

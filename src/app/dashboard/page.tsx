@@ -37,6 +37,7 @@ import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, where,
 import { toast } from "@/components/ui/use-toast"
 import { TapAiButton } from "@/components/tap-ai-button"
 import { PageTransition } from "@/components/page-transition"
+import { PageHeader } from "@/components/page-header"
 import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banner-preview"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import {
@@ -971,14 +972,10 @@ export default function DashboardPage() {
         <div className="space-y-8">
           {/* Welcome Section with Timeframe Tabs */}
           <div className="space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
-                <p className="text-sm text-gray-500 mt-1">
-                  Here's an overview of your business
-                </p>
-              </div>
-            </div>
+            <PageHeader
+              title="Welcome back"
+              subtitle="Here's an overview of your business"
+            />
 
             {/* Update the tabs layout to be side-by-side with a separator */}
             <div className="flex items-center gap-4">
@@ -1230,16 +1227,19 @@ export default function DashboardPage() {
             </Card>
 
             {/* Recent Activity - Takes slightly more width */}
-            <Card className="col-span-5 rounded-lg border border-gray-200 overflow-hidden">
-              <CardHeader className="py-3 px-6 bg-gray-50 border-b border-gray-100 flex flex-row justify-between items-center">
+            <Card className="col-span-5 rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+              <CardHeader className="py-4 px-6 bg-gradient-to-r from-blue-50 to-white border-b border-gray-100 flex flex-row justify-between items-center">
                 <div>
-                  <CardTitle className="text-base font-medium text-gray-900">Recent Activity</CardTitle>
+                  <CardTitle className="text-base font-medium text-gray-900 flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-blue-500" />
+                    Recent Activity
+                  </CardTitle>
                   <p className="text-sm text-gray-500 mt-0.5">Latest transactions and redemptions</p>
                 </div>
                 <Button 
-                  variant="ghost" 
+                  variant="outline" 
                   size="sm"
-                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50/50 h-8 px-2 ml-auto"
+                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50/50 h-8 px-3 ml-auto border-blue-200"
                   asChild
                 >
                   <Link href="/store/activity" className="flex items-center gap-1">
@@ -1254,18 +1254,28 @@ export default function DashboardPage() {
                     <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
                   </div>
                 ) : recentActivity.length === 0 ? (
-                  <div className="py-6 text-center">
-                    <Clock className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">No recent activity</p>
+                  <div className="py-8 text-center">
+                    <div className="bg-gray-50 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-3">
+                      <Clock className="h-8 w-8 text-gray-300" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-700">No recent activity</p>
+                    <p className="text-xs text-gray-500 mt-1">Transactions and redemptions will appear here</p>
                   </div>
                 ) : (
-                  <div className="divide-y">
-                    {recentActivity.map((activity) => (
-                      <div key={activity.id} className="px-6 py-2.5 hover:bg-gray-50">
-                        <div className="flex items-center gap-3">
+                  <div>
+                    {recentActivity.map((activity, index) => (
+                      <div 
+                        key={activity.id} 
+                        className={`px-6 py-3.5 hover:bg-blue-50/30 transition-colors ${
+                          index !== recentActivity.length - 1 ? 'border-b border-gray-100' : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-4">
                           {/* Left side - Customer Avatar */}
                           <div className="flex-shrink-0">
-                            <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
+                            <div className={`h-10 w-10 rounded-full ${
+                              activity.type === "transaction" ? 'bg-blue-50' : 'bg-purple-50'
+                            } flex items-center justify-center overflow-hidden shadow-sm`}>
                               {activity.customer?.profilePicture ? (
                                 <img 
                                   src={activity.customer.profilePicture} 
@@ -1273,8 +1283,10 @@ export default function DashboardPage() {
                                   className="h-full w-full object-cover"
                                   onError={() => {/* error handling */}}
                                 />
+                              ) : activity.type === "transaction" ? (
+                                <ShoppingCart className="h-5 w-5 text-blue-500" />
                               ) : (
-                                <Users className="h-4 w-4 text-gray-400" />
+                                <Gift className="h-5 w-5 text-purple-500" />
                               )}
                             </div>
                           </div>
@@ -1283,29 +1295,35 @@ export default function DashboardPage() {
                           <div className="flex-1 min-w-0 flex items-center justify-between">
                             <div>
                               <p className="font-medium text-sm text-gray-900">{activity.customer.name}</p>
-                              <div className="flex items-center gap-1 text-xs text-gray-500">
+                              <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
                                 {activity.type === "transaction" ? (
-                                  <div className="flex items-center gap-1">
-                                    <ShoppingCart className="h-3 w-3" />
-                                    <span>Purchase</span>
-                                  </div>
+                                  <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-100 flex items-center">
+                                    <ShoppingCart className="h-3 w-3 mr-1" />
+                                    Purchase
+                                  </span>
                                 ) : (
-                                  <div className="flex items-center gap-1">
-                                    <Gift className="h-3 w-3" />
-                                    <span>Redeemed {activity.rewardName}</span>
-                                  </div>
+                                  <span className="px-1.5 py-0.5 bg-purple-50 text-purple-700 text-xs rounded-full border border-purple-100 flex items-center">
+                                    <Gift className="h-3 w-3 mr-1" />
+                                    Redemption
+                                  </span>
                                 )}
+                                <span className="text-gray-400">&bull;</span>
+                                <span>{formatTimeAgo(activity.timestamp)}</span>
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="text-sm font-medium">
+                              <p className={`text-sm font-medium ${
+                                activity.type === "transaction" ? 'text-blue-600' : 'text-purple-600'
+                              }`}>
                                 {activity.type === "transaction" 
                                   ? `$${activity.amount.toFixed(2)}` 
                                   : `${activity.points} pts`}
                               </p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatTimeAgo(activity.timestamp)}
-                              </p>
+                              {activity.type !== "transaction" && (
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  {activity.rewardName}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1319,40 +1337,55 @@ export default function DashboardPage() {
 
           {/* Top Viewing Customers */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="rounded-lg border border-gray-200 overflow-hidden">
-              <CardHeader className="py-3 px-6 bg-gray-50 border-b border-gray-100 flex flex-row justify-between items-center">
+            <Card className="rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+              <CardHeader className="py-4 px-6 bg-gradient-to-r from-indigo-50 to-white border-b border-gray-100 flex flex-row justify-between items-center">
                 <div>
-                  <CardTitle className="text-base font-medium text-gray-900">Top Store Visitors</CardTitle>
+                  <CardTitle className="text-base font-medium text-gray-900 flex items-center gap-2">
+                    <Users className="h-4 w-4 text-indigo-500" />
+                    Top Store Visitors
+                  </CardTitle>
                   <p className="text-sm text-gray-500 mt-0.5">Customers who view your store most frequently</p>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
                 {topViewingCustomers.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <Users className="h-10 w-10 text-gray-300 mb-2" />
-                    <p className="text-sm text-gray-500">No store visitors data available yet</p>
+                  <div className="py-8 text-center">
+                    <div className="bg-gray-50 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-3">
+                      <Users className="h-8 w-8 text-gray-300" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-700">No visitor data available</p>
+                    <p className="text-xs text-gray-500 mt-1">Customer visits will appear here</p>
                   </div>
                 ) : (
-                  <div className="divide-y">
-                    {topViewingCustomers.map((customer) => (
-                      <div key={customer.id} className="px-6 py-3 hover:bg-gray-50">
+                  <div>
+                    {topViewingCustomers.map((customer, index) => (
+                      <div 
+                        key={customer.id} 
+                        className={`px-6 py-3.5 hover:bg-indigo-50/30 transition-colors ${
+                          index !== topViewingCustomers.length - 1 ? 'border-b border-gray-100' : ''
+                        }`}
+                      >
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="h-9 w-9 rounded-full bg-gray-100 flex items-center justify-center">
-                              <Users className="h-5 w-5 text-gray-500" />
+                          <div className="flex items-center gap-4">
+                            <div className="h-10 w-10 rounded-full bg-indigo-50 flex items-center justify-center shadow-sm">
+                              <Users className="h-5 w-5 text-indigo-500" />
                             </div>
                             <div>
-                              <p className="font-medium text-sm">{customer.name}</p>
-                              <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
-                                <p>{customer.viewCount} views</p>
-                                <p>Last visit: {formatDistanceToNow(customer.lastView, { addSuffix: true })}</p>
+                              <p className="font-medium text-sm text-gray-900">{customer.name}</p>
+                              <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 text-xs rounded-full border border-indigo-100 flex items-center">
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  {customer.viewCount} views
+                                </span>
+                                <span className="text-gray-400">&bull;</span>
+                                <span>Last visit: {formatDistanceToNow(customer.lastView, { addSuffix: true })}</span>
                               </div>
                             </div>
                           </div>
                           <Button 
                             size="sm" 
                             variant="outline" 
-                            className="h-8 gap-1"
+                            className="h-8 gap-1 border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"
                             onClick={() => {
                               setSelectedCustomer({
                                 id: customer.id,
@@ -1373,16 +1406,19 @@ export default function DashboardPage() {
             </Card>
 
             {/* Popular Rewards */}
-            <Card className="rounded-lg border border-gray-200 overflow-hidden">
-              <CardHeader className="py-3 px-6 bg-gray-50 border-b border-gray-100 flex flex-row justify-between items-center">
+            <Card className="rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+              <CardHeader className="py-4 px-6 bg-gradient-to-r from-purple-50 to-white border-b border-gray-100 flex flex-row justify-between items-center">
                 <div>
-                  <CardTitle className="text-base font-medium text-gray-900">Popular Rewards</CardTitle>
+                  <CardTitle className="text-base font-medium text-gray-900 flex items-center gap-2">
+                    <Gift className="h-4 w-4 text-purple-500" />
+                    Popular Rewards
+                  </CardTitle>
                   <p className="text-sm text-gray-500 mt-0.5">Most redeemed rewards by customers</p>
                 </div>
                 <Button 
-                  variant="ghost" 
+                  variant="outline" 
                   size="sm"
-                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50/50 h-8 px-2 ml-auto"
+                  className="text-purple-600 hover:text-purple-700 hover:bg-purple-50/50 h-8 px-3 ml-auto border-purple-200"
                   asChild
                 >
                   <Link href="/store/rewards" className="flex items-center gap-1">
@@ -1397,63 +1433,75 @@ export default function DashboardPage() {
                     <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
                   </div>
                 ) : popularRewards.length === 0 ? (
-                  <div className="py-6 text-center">
-                    <Gift className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">No rewards data available</p>
+                  <div className="py-8 text-center">
+                    <div className="bg-gray-50 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-3">
+                      <Gift className="h-8 w-8 text-gray-300" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-700">No rewards data available</p>
+                    <p className="text-xs text-gray-500 mt-1">Popular rewards will appear here</p>
                   </div>
                 ) : (
-                  <div className="divide-y">
-                    {popularRewards.map((reward) => (
-                      <div key={reward.id} className="px-6 py-2.5 hover:bg-gray-50">
+                  <div>
+                    {popularRewards.map((reward, index) => (
+                      <div 
+                        key={reward.id} 
+                        className={`px-6 py-3.5 hover:bg-purple-50/30 transition-colors ${
+                          index !== popularRewards.length - 1 ? 'border-b border-gray-100' : ''
+                        }`}
+                      >
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-md bg-purple-50 flex items-center justify-center">
+                          <div className="flex items-center gap-4">
+                            <div className={`h-10 w-10 rounded-full flex items-center justify-center shadow-sm
+                              ${reward.programtype === 'coffee' ? 'bg-blue-50' : 
+                                reward.programtype === 'voucher' ? 'bg-green-50' : 'bg-purple-50'}`}>
                               {reward.programtype === 'coffee' ? (
-                                <Coffee className="h-4 w-4 text-blue-600" />
+                                <Coffee className="h-5 w-5 text-blue-600" />
                               ) : reward.programtype === 'voucher' ? (
-                                <Ticket className="h-4 w-4 text-green-600" />
+                                <Ticket className="h-5 w-5 text-green-600" />
                               ) : (
-                                <Gift className="h-4 w-4 text-purple-500" />
+                                <Gift className="h-5 w-5 text-purple-500" />
                               )}
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <p className="font-medium text-sm">{reward.rewardName}</p>
+                                <p className="font-medium text-sm text-gray-900">{reward.rewardName}</p>
                                 {reward.programtype === 'coffee' && (
-                                  <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-md border border-blue-200 flex items-center">
+                                  <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-100 flex items-center">
                                     <Coffee className="h-3 w-3 mr-1" />
                                     Coffee Card
                                   </span>
                                 )}
                                 {reward.programtype === 'voucher' && (
-                                  <span className="px-1.5 py-0.5 bg-green-50 text-green-700 text-xs rounded-md border border-green-200 flex items-center">
+                                  <span className="px-1.5 py-0.5 bg-green-50 text-green-700 text-xs rounded-full border border-green-100 flex items-center">
                                     <Ticket className="h-3 w-3 mr-1" />
                                     Voucher
                                   </span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
-                                <p>{reward.pointsCost} points</p>
-                                
-                                {/* Add impressions with eye icon */}
+                              <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                                <span className="px-1.5 py-0.5 bg-purple-50 text-purple-700 text-xs rounded-full border border-purple-100">
+                                  {reward.pointsCost} points
+                                </span>
+                                <span className="text-gray-400">&bull;</span>
                                 <div className="flex items-center gap-1">
                                   <Eye className="h-3 w-3 text-gray-400" />
-                                  <span>{reward.impressions || 0} views</span>
+                                  <span>{reward.impressions || 0}</span>
                                 </div>
-                                
-                                {/* Add last redeemed time with clock icon */}
                                 {reward.lastRedeemedAt && (
-                                  <div className="flex items-center gap-1">
-                                    <Clock className="h-3 w-3 text-gray-400" />
-                                    <span>{formatDistanceToNow(reward.lastRedeemedAt, { addSuffix: true })}</span>
-                                  </div>
+                                  <>
+                                    <span className="text-gray-400">&bull;</span>
+                                    <div className="flex items-center gap-1">
+                                      <Clock className="h-3 w-3 text-gray-400" />
+                                      <span>{formatDistanceToNow(reward.lastRedeemedAt, { addSuffix: true })}</span>
+                                    </div>
+                                  </>
                                 )}
                               </div>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-medium">{reward.redemptionCount} redeemed</p>
-                            <div className="flex items-center justify-end gap-1 text-xs">
+                            <p className="text-sm font-medium text-purple-600">{reward.redemptionCount} redeemed</p>
+                            <div className="flex items-center justify-end gap-1 text-xs mt-0.5">
                               {reward.trend === "up" ? (
                                 <ArrowUp className="h-3 w-3 text-green-500" />
                               ) : (
@@ -1476,16 +1524,22 @@ export default function DashboardPage() {
           {/* Live and Scheduled Banners Section */}
           {(activeBanners.length > 0 || scheduledBanners.length > 0) && (
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center mb-2">
                 <div>
-                  <h2 className="text-lg font-medium">Banners</h2>
+                  <h2 className="text-lg font-medium flex items-center gap-2">
+                    <svg className="h-5 w-5 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+                    </svg>
+                    Banners
+                  </h2>
                   <p className="text-sm text-gray-500">Your active and scheduled banners</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button 
                     variant="outline"
                     size="sm"
-                    className="h-8 gap-2"
+                    className="h-8 gap-2 border-teal-200 text-teal-700 hover:bg-teal-50 hover:text-teal-800"
                     onClick={() => router.push('/store/banner?tab=scheduled')}
                   >
                     <Clock className="h-4 w-4" />
@@ -1494,7 +1548,7 @@ export default function DashboardPage() {
                   <Button 
                     variant="outline"
                     size="sm"
-                    className="h-8 gap-2"
+                    className="h-8 gap-2 border-teal-200 text-teal-700 hover:bg-teal-50 hover:text-teal-800"
                     asChild
                   >
                     <Link href="/store/banner">
@@ -1504,24 +1558,29 @@ export default function DashboardPage() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Live Banners First */}
                 {activeBanners.map((banner) => (
-                  <div key={banner.id} className="flex flex-col bg-gray-50 rounded-lg overflow-hidden">
+                  <div key={banner.id} className="flex flex-col bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm transition-shadow hover:shadow-md">
                     <div className="relative">
-                      <div className="absolute top-2 right-2 z-10 flex gap-2">
-                        <div className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full flex items-center">
+                      <div className="absolute top-3 right-3 z-10 flex gap-2">
+                        <div className="bg-green-100 text-green-800 text-xs px-2.5 py-1 rounded-full flex items-center shadow-sm">
                           <Eye className="h-3 w-3 mr-1" />
                           Live
                         </div>
-                        <div className="bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full flex items-center">
+                        <div className="bg-blue-50 text-blue-700 text-xs px-2.5 py-1 rounded-full flex items-center shadow-sm">
                           <Eye className="h-3 w-3 mr-1" />
                           {banner.impressions || 0} views
                         </div>
                       </div>
                       
-                      <div className="rounded-lg overflow-hidden shadow-sm">
+                      <div className="rounded-lg overflow-hidden">
                         <BannerPreview {...banner} />
+                      </div>
+                      
+                      <div className="p-3 bg-gradient-to-b from-white to-gray-50 border-t border-gray-100">
+                        <h3 className="font-medium text-sm truncate">{banner.title}</h3>
+                        <p className="text-xs text-gray-500 mt-1 truncate">{banner.description}</p>
                       </div>
                     </div>
                   </div>
@@ -1529,21 +1588,26 @@ export default function DashboardPage() {
 
                 {/* Then Scheduled Banners */}
                 {scheduledBanners.map((banner) => (
-                  <div key={banner.id} className="flex flex-col bg-gray-50 rounded-lg overflow-hidden">
+                  <div key={banner.id} className="flex flex-col bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm transition-shadow hover:shadow-md">
                     <div className="relative">
-                      <div className="absolute top-2 right-2 z-10 flex gap-2">
-                        <div className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center">
+                      <div className="absolute top-3 right-3 z-10 flex gap-2">
+                        <div className="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full flex items-center shadow-sm">
                           <Clock className="h-3 w-3 mr-1" />
                           Scheduled
                         </div>
-                        <div className="bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full flex items-center">
+                        <div className="bg-blue-50 text-blue-700 text-xs px-2.5 py-1 rounded-full flex items-center shadow-sm">
                           <Eye className="h-3 w-3 mr-1" />
                           {banner.impressions || 0} views
                         </div>
                       </div>
                       
-                      <div className="rounded-lg overflow-hidden shadow-sm">
+                      <div className="rounded-lg overflow-hidden">
                         <BannerPreview {...banner} />
+                      </div>
+                      
+                      <div className="p-3 bg-gradient-to-b from-white to-gray-50 border-t border-gray-100">
+                        <h3 className="font-medium text-sm truncate">{banner.title}</h3>
+                        <p className="text-xs text-gray-500 mt-1 truncate">{banner.description}</p>
                       </div>
                     </div>
                   </div>

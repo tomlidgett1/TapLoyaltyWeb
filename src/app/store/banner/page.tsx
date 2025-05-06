@@ -42,6 +42,7 @@ import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banne
 import { BannerScheduler } from "@/components/banner-scheduler"
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { PageHeader } from "@/components/page-header"
 
 /** 
  * Replace this interface with your actual banner data fields.
@@ -593,15 +594,10 @@ export default function BannerPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
 
-      {/* Page Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Banners</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Create and manage your store banners
-          </p>
-        </div>
-
+      <PageHeader
+        title="Banners"
+        subtitle="Create and manage your store banners"
+      >
         <div className="flex items-center gap-2">
           <Button 
             onClick={() => router.push('/store/banner/create')}
@@ -619,7 +615,7 @@ export default function BannerPage() {
             Export
           </Button>
         </div>
-      </div>
+      </PageHeader>
 
       <Tabs defaultValue="all" className="w-full">
         <div className="flex items-center justify-between mb-4">

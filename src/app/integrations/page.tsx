@@ -9,6 +9,8 @@ import { db } from "@/lib/firebase"
 import { doc, getDoc, setDoc, updateDoc, DocumentData } from "firebase/firestore"
 import { toast } from "@/components/ui/use-toast"
 import Link from "next/link"
+import { PageTransition } from "@/components/page-transition"
+import { PageHeader } from "@/components/page-header"
 
 // Import icons for different POS systems
 import { LightspeedIcon } from "@/components/icons/lightspeed-icon"
@@ -212,7 +214,8 @@ export default function IntegrationsPage() {
         'PAYMENTS_READ',
         'PAYMENTS_WRITE',
         'ITEMS_READ',
-        'ITEMS_WRITE'
+        'ITEMS_WRITE',
+        'INVENTORY_READ'
       ].join(' ')
       
       // Build the authorization URL for production
@@ -264,129 +267,124 @@ export default function IntegrationsPage() {
   }
 
   return (
-    <div className="p-4">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Integrations</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Connect your point of sale system to automatically sync customer data and transactions
-        </p>
-        <div className="mt-2">
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/test-square">Square Integration Test Page</Link>
-          </Button>
+    <PageTransition>
+      <div className="p-6">
+        <PageHeader
+          title="Integrations"
+          subtitle="Connect your POS system and other services"
+        />
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Lightspeed Integration Card */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="w-10 h-10 bg-gray-100 rounded-md flex items-center justify-center">
+                    <LightspeedIcon className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-medium">Lightspeed Retail</CardTitle>
+                    <CardDescription>Point of Sale Integration</CardDescription>
+                  </div>
+                </div>
+                {integrations.lightspeed.connected ? (
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Connected</Badge>
+                ) : null}
+              </div>
+            </CardHeader>
+            <CardContent className="pb-2">
+              <p className="text-sm text-muted-foreground">
+                Sync customer data, transactions, and inventory with your Lightspeed Retail account.
+              </p>
+            </CardContent>
+            <CardFooter>
+              <Button 
+                variant={integrations.lightspeed.connected ? "outline" : "default"}
+                className="w-full rounded-md"
+                onClick={integrations.lightspeed.connected ? disconnectLightspeed : connectLightspeed}
+                disabled={connecting === "lightspeed"}
+              >
+                {connecting === "lightspeed" ? "Connecting..." : 
+                 integrations.lightspeed.connected ? "Disconnect" : "Connect"}
+              </Button>
+            </CardFooter>
+          </Card>
+          
+          {/* New Lightspeed API Integration Card */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="w-10 h-10 bg-gray-100 rounded-md flex items-center justify-center">
+                    <LightspeedIcon className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-medium">Lightspeed Retail API</CardTitle>
+                    <CardDescription>Connect via Lightspeed API</CardDescription>
+                  </div>
+                </div>
+                <Badge variant="outline">
+                  Not Connected
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pb-2">
+              <p className="text-sm text-muted-foreground">
+                Connect directly to the Lightspeed Retail API for advanced inventory and employee management.
+              </p>
+            </CardContent>
+            <CardFooter>
+              <Button 
+                variant="default"
+                className="w-full rounded-md"
+                onClick={connectLightspeedApi}
+                disabled={connectingApi === "lightspeed"}
+              >
+                {connectingApi === "lightspeed" ? "Connecting..." : "Connect to API"}
+              </Button>
+            </CardFooter>
+          </Card>
+          
+          {/* Square Integration Card */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="w-10 h-10 bg-gray-100 rounded-md flex items-center justify-center">
+                    <SquareIcon className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-medium">Square</CardTitle>
+                    <CardDescription>Point of Sale Integration</CardDescription>
+                  </div>
+                </div>
+                {integrations.square.connected ? (
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Connected</Badge>
+                ) : null}
+              </div>
+            </CardHeader>
+            <CardContent className="pb-2">
+              <p className="text-sm text-muted-foreground">
+                Sync customer data, transactions, and inventory with your Square account for a seamless integration.
+              </p>
+            </CardContent>
+            <CardFooter>
+              <Button 
+                variant={integrations.square.connected ? "outline" : "default"}
+                className="w-full rounded-md"
+                onClick={integrations.square.connected ? disconnectSquare : connectSquare}
+                disabled={connecting === "square"}
+              >
+                {connecting === "square" ? "Connecting..." : 
+                 integrations.square.connected ? "Disconnect" : "Connect to Square"}
+              </Button>
+            </CardFooter>
+          </Card>
+          
+          {/* Add other integration cards here */}
         </div>
       </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Lightspeed Integration Card */}
-        <Card className="rounded-lg overflow-hidden">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="h-10 w-10 rounded-md bg-[#FF6B00] flex items-center justify-center">
-                  <LightspeedIcon className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg">Lightspeed Retail</CardTitle>
-                  <CardDescription>Connect your Lightspeed POS</CardDescription>
-                </div>
-              </div>
-              <Badge variant={integrations.lightspeed.connected ? "default" : "outline"}>
-                {integrations.lightspeed.connected ? "Connected" : "Not Connected"}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="pb-2">
-            <p className="text-sm text-muted-foreground">
-              Sync customer data, transactions, and inventory with your Lightspeed Retail account.
-            </p>
-          </CardContent>
-          <CardFooter>
-            <Button 
-              variant={integrations.lightspeed.connected ? "outline" : "default"}
-              className="w-full rounded-md"
-              onClick={integrations.lightspeed.connected ? disconnectLightspeed : connectLightspeed}
-              disabled={connecting === "lightspeed"}
-            >
-              {connecting === "lightspeed" ? "Connecting..." : 
-               integrations.lightspeed.connected ? "Disconnect" : "Connect"}
-            </Button>
-          </CardFooter>
-        </Card>
-        
-        {/* New Lightspeed API Integration Card */}
-        <Card className="rounded-lg overflow-hidden">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="h-10 w-10 rounded-md bg-[#FF6B00] flex items-center justify-center">
-                  <LightspeedIcon className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg">Lightspeed Retail API</CardTitle>
-                  <CardDescription>Connect via Lightspeed API</CardDescription>
-                </div>
-              </div>
-              <Badge variant="outline">
-                Not Connected
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="pb-2">
-            <p className="text-sm text-muted-foreground">
-              Connect directly to the Lightspeed Retail API for advanced inventory and employee management.
-            </p>
-          </CardContent>
-          <CardFooter>
-            <Button 
-              variant="default"
-              className="w-full rounded-md"
-              onClick={connectLightspeedApi}
-              disabled={connectingApi === "lightspeed"}
-            >
-              {connectingApi === "lightspeed" ? "Connecting..." : "Connect to API"}
-            </Button>
-          </CardFooter>
-        </Card>
-        
-        {/* Square Integration Card */}
-        <Card className="rounded-lg overflow-hidden">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="h-10 w-10 rounded-md bg-[#006AFF] flex items-center justify-center">
-                  <SquareIcon className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg">Square</CardTitle>
-                  <CardDescription>Connect your Square POS</CardDescription>
-                </div>
-              </div>
-              <Badge variant={integrations.square.connected ? "default" : "outline"}>
-                {integrations.square.connected ? "Connected" : "Not Connected"}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="pb-2">
-            <p className="text-sm text-muted-foreground">
-              Sync customer data, transactions, and inventory with your Square account for a seamless integration.
-            </p>
-          </CardContent>
-          <CardFooter>
-            <Button 
-              variant={integrations.square.connected ? "outline" : "default"}
-              className="w-full rounded-md"
-              onClick={integrations.square.connected ? disconnectSquare : connectSquare}
-              disabled={connecting === "square"}
-            >
-              {connecting === "square" ? "Connecting..." : 
-               integrations.square.connected ? "Disconnect" : "Connect to Square"}
-            </Button>
-          </CardFooter>
-        </Card>
-        
-        {/* Add other integration cards here */}
-      </div>
-    </div>
+    </PageTransition>
   )
 } 

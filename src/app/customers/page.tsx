@@ -58,6 +58,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { SortField, SortDirection, CustomerCohort } from "@/lib/types"
 import { PageTransition } from "@/components/page-transition"
+import { PageHeader } from "@/components/page-header"
 
 export default function CustomersPage() {
   const router = useRouter()
@@ -202,14 +203,10 @@ export default function CustomersPage() {
     <PageTransition>
       <div className="p-6">
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Customers</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Manage and track your customer base
-              </p>
-            </div>
-            
+          <PageHeader 
+            title="Customers" 
+            subtitle="Manage and track your customer base"
+          >
             <Button 
               className="h-9 gap-2 rounded-md"
               onClick={() => router.push('/customers/invite')}
@@ -217,7 +214,7 @@ export default function CustomersPage() {
               <Users className="h-4 w-4" />
               Invite Customers
             </Button>
-          </div>
+          </PageHeader>
           
           <Tabs defaultValue="all" onValueChange={(value) => setCohort(value as CustomerCohort)}>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">

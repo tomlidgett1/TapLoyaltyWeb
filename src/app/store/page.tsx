@@ -45,6 +45,7 @@ import { format, formatDistanceToNow } from "date-fns"
 import Link from "next/link"
 import { toast } from "@/components/ui/use-toast"
 import { PageTransition } from "@/components/page-transition"
+import { PageHeader } from "@/components/page-header"
 
 interface StoreItem {
   id: string
@@ -173,7 +174,20 @@ export default function StorePage() {
 
   return (
     <PageTransition>
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="p-6">
+        <PageHeader
+          title="My Store"
+          subtitle="Manage your loyalty program and customer experience"
+        >
+          <Button 
+            className="h-9 gap-2 rounded-md"
+            onClick={() => router.push('/create')}
+          >
+            <Plus className="h-4 w-4" />
+            Create Reward
+          </Button>
+        </PageHeader>
+        
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>

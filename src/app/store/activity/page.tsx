@@ -35,7 +35,8 @@ import {
   ChevronDown,
   ChevronUp,
   Zap,
-  CalendarIcon
+  CalendarIcon,
+  DollarSign
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
@@ -106,7 +107,28 @@ interface CombinedActivity {
   originalData: Transaction | Redemption
 }
 
-type ActivityCategory = "all" | "transactions" | "redemptions"
+// Add a new interface for Square sales data
+interface SquareSale {
+  id: string;
+  orderId: string;
+  locationId: string;
+  createdAt: string;
+  updatedAt: string;
+  state: string;
+  totalAmount: number;
+  currency: string;
+  customerName: string;
+  customerId: string | null;
+  source: string;
+  lineItems: {
+    name: string;
+    quantity: string;
+    unitPrice: number;
+    totalPrice: number;
+  }[];
+}
+
+type ActivityCategory = "all" | "transactions" | "redemptions" | "sales"
 type SortField = "createdAt" | "amount" | "status" | "type" | "customerId" | "day"
 type SortDirection = "asc" | "desc"
 
@@ -138,6 +160,9 @@ export default function ActivityPage() {
     end: undefined
   })
   const [showCustomDateRange, setShowCustomDateRange] = useState(false)
+  const [squareSales, setSquareSales] = useState<SquareSale[]>([])
+  const [loadingSales, setLoadingSales] = useState(false)
+  const [salesError, setSalesError] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchActivity = async () => {
@@ -623,6 +648,41 @@ export default function ActivityPage() {
     }))
   }
 
+  // Add a function to fetch Square sales
+  const fetchSquareSales = async () => {
+    if (!user?.uid) return
+    
+    try {
+      setLoadingSales(true)
+      setSalesError(null)
+      
+      const response = await fetch(`/api/square/sales?merchantId=${user.uid}`)
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch sales data')
+      }
+      
+      if (data.success && Array.isArray(data.sales)) {
+        setSquareSales(data.sales)
+      } else {
+        setSquareSales([])
+      }
+    } catch (error) {
+      console.error('Error fetching Square sales:', error)
+      setSalesError(error instanceof Error ? error.message : 'An unknown error occurred')
+    } finally {
+      setLoadingSales(false)
+    }
+  }
+
+  // Call fetchSquareSales when the selected tab is "sales"
+  useEffect(() => {
+    if (activityCategory === 'sales' && user?.uid) {
+      fetchSquareSales()
+    }
+  }, [activityCategory, user?.uid])
+
   return (
     <div className="p-6">
       <div>
@@ -652,21 +712,27 @@ export default function ActivityPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <Tabs defaultValue="all" className="w-full" onValueChange={(value) => setActivityCategory(value as ActivityCategory)}>
+              <TabsList className="grid grid-cols-4 mb-4">
+                <TabsTrigger value="all" className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  All Activity
+                </TabsTrigger>
+                <TabsTrigger value="transactions" className="flex items-center gap-2">
+                  <ShoppingCart className="h-4 w-4" />
+                  Transactions
+                </TabsTrigger>
+                <TabsTrigger value="redemptions" className="flex items-center gap-2">
+                  <Gift className="h-4 w-4" />
+                  Redemptions
+                </TabsTrigger>
+                <TabsTrigger value="sales" className="flex items-center gap-2">
+                  <DollarSign className="h-4 w-4" />
+                  Square Sales
+                </TabsTrigger>
+              </TabsList>
+              
               <div className="flex items-center justify-between mb-4">
-                <TabsList>
-                  <TabsTrigger value="all" className="flex items-center gap-2">
-                    <Zap className="h-4 w-4" />
-                    All Activity
-                  </TabsTrigger>
-                  <TabsTrigger value="transactions" className="flex items-center gap-2">
-                    <ShoppingCart className="h-4 w-4" />
-                    Transactions
-                  </TabsTrigger>
-                  <TabsTrigger value="redemptions" className="flex items-center gap-2">
-                    <Gift className="h-4 w-4" />
-                    Redemptions
-                  </TabsTrigger>
-                </TabsList>
+                <div></div>
                 
                 <div className="flex items-center gap-2">
                   <div className="relative w-[250px]">
@@ -1468,6 +1534,97 @@ export default function ActivityPage() {
                             )}
                           </TableBody>
                         </Table>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="sales" className="space-y-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle>Square Sales</CardTitle>
+                    <CardDescription>
+                      Sales data from your connected Square account
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingSales ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+                      </div>
+                    ) : salesError ? (
+                      <div className="bg-red-50 border border-red-200 rounded-md p-4 text-center">
+                        <p className="text-red-800 mb-2">Failed to load sales data</p>
+                        <p className="text-sm text-red-600">{salesError}</p>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={fetchSquareSales} 
+                          className="mt-2"
+                        >
+                          Try Again
+                        </Button>
+                      </div>
+                    ) : squareSales.length === 0 ? (
+                      <div className="text-center py-8">
+                        <ShoppingCart className="h-12 w-12 mx-auto text-gray-300 mb-2" />
+                        <p className="text-gray-500">No sales data available</p>
+                        <p className="text-sm text-gray-400 mt-1">
+                          {user?.uid ? 'Connect your Square account to see sales data' : 'Please log in to view sales data'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Order ID</TableHead>
+                              <TableHead>Date</TableHead>
+                              <TableHead>Customer</TableHead>
+                              <TableHead>Amount</TableHead>
+                              <TableHead>Source</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {squareSales.map((sale) => (
+                              <TableRow key={sale.id}>
+                                <TableCell className="font-mono text-xs">{sale.orderId.substring(0, 8)}...</TableCell>
+                                <TableCell>{formatDate(sale.createdAt)}</TableCell>
+                                <TableCell>{sale.customerName}</TableCell>
+                                <TableCell className="font-medium">
+                                  {new Intl.NumberFormat('en-US', {
+                                    style: 'currency',
+                                    currency: sale.currency
+                                  }).format(sale.totalAmount)}
+                                </TableCell>
+                                <TableCell>{sale.source}</TableCell>
+                                <TableCell>
+                                  <Badge variant="default">
+                                    {sale.state}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem onClick={() => console.log('View details', sale)}>
+                                        <Eye className="h-4 w-4 mr-2" />
+                                        View Details
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>

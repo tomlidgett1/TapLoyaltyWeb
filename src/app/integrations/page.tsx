@@ -26,7 +26,6 @@ interface IntegrationState {
 }
 
 interface IntegrationsState {
-  lightspeed: IntegrationState;
   square: IntegrationState;
   clover: IntegrationState;
   shopify: IntegrationState;
@@ -37,15 +36,12 @@ export default function IntegrationsPage() {
   const { user } = useAuth()
   const [connecting, setConnecting] = useState<string | null>(null)
   const [integrations, setIntegrations] = useState<IntegrationsState>({
-    lightspeed: { connected: false, data: null },
     square: { connected: false, data: null },
     clover: { connected: false, data: null },
     shopify: { connected: false, data: null },
     lightspeed_new: { connected: false, data: null }
   })
   
-  // Add a new state for the API connection
-  const [connectingApi, setConnectingApi] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   
   // Function to manually refresh integration status
@@ -61,11 +57,6 @@ export default function IntegrationsPage() {
 
     setRefreshing(true);
     try {
-      // Check Lightspeed integration status
-      const lightspeedDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/lightspeed`));
-      const lightspeedConnected = lightspeedDoc.exists() && lightspeedDoc.data()?.connected === true;
-      console.log('Lightspeed integration status:', lightspeedConnected ? 'Connected' : 'Not connected');
-
       // Check Square integration status
       const squareDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/square`));
       const squareConnected = squareDoc.exists() && squareDoc.data()?.connected === true;
@@ -81,10 +72,6 @@ export default function IntegrationsPage() {
         
         setIntegrations(prev => ({
           ...prev,
-          lightspeed: {
-            connected: lightspeedConnected,
-            data: lightspeedDoc.exists() ? lightspeedDoc.data() : null
-          },
           square: {
             connected: squareConnected,
             data: squareDoc.exists() ? squareDoc.data() : null
@@ -98,10 +85,6 @@ export default function IntegrationsPage() {
         console.log('Lightspeed New integration not found');
         setIntegrations(prev => ({
           ...prev,
-          lightspeed: {
-            connected: lightspeedConnected,
-            data: lightspeedDoc.exists() ? lightspeedDoc.data() : null
-          },
           square: {
             connected: squareConnected,
             data: squareDoc.exists() ? squareDoc.data() : null
@@ -135,18 +118,6 @@ export default function IntegrationsPage() {
       if (!user?.uid) return
       
       try {
-        // Check Lightspeed integration status
-        const lightspeedDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'lightspeed'))
-        if (lightspeedDoc.exists() && lightspeedDoc.data().connected) {
-          setIntegrations(prev => ({
-            ...prev,
-            lightspeed: { 
-              connected: true, 
-              data: lightspeedDoc.data() 
-            }
-          }))
-        }
-        
         // Check Square integration status
         const squareDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'square'))
         if (squareDoc.exists() && squareDoc.data().connected) {
@@ -180,113 +151,6 @@ export default function IntegrationsPage() {
     
     checkIntegrations()
   }, [user])
-
-  // Lightspeed integration
-  const connectLightspeed = async () => {
-    if (!user) return
-    
-    setConnecting("lightspeed")
-    
-    try {
-      // Updated Lightspeed OAuth parameters with new client ID
-      const clientId = "808201776257e0984572c066974f81ee4f2aa156e4a6b67a957bec3761f5cdb2"
-      
-      // Store the state in localStorage to verify when the user returns
-      const state = Math.random().toString(36).substring(2, 15)
-      localStorage.setItem('lightspeed_state', state)
-      
-      // Store the merchant ID in localStorage to associate with the integration
-      localStorage.setItem('merchant_id', user.uid)
-      
-      // Add redirect_uri to the authorization URL
-      const redirectUri = `${window.location.origin}/dashboard`
-      
-      // Make sure there are no spaces or encoding issues in the URL parameters
-      const authUrl = `https://api.lightspeed.app/oidc/authorize?client_id=${encodeURIComponent(clientId)}&state=${encodeURIComponent(state)}&response_type=code&scope=openid&product=retail&redirect_uri=${encodeURIComponent(redirectUri)}`
-      
-      console.log("Redirecting to authorization URL:", authUrl)
-      
-      // Redirect to Lightspeed authorization page
-      window.location.href = authUrl
-    } catch (error) {
-      console.error("Error connecting to Lightspeed:", error)
-      toast({
-        title: "Connection Failed",
-        description: "Failed to connect to Lightspeed. Please try again.",
-        variant: "destructive"
-      })
-    } finally {
-      setConnecting(null)
-    }
-  }
-
-  // Disconnect Lightspeed
-  const disconnectLightspeed = async () => {
-    if (!user) return
-    
-    try {
-      await updateDoc(doc(db, 'merchants', user.uid, 'integrations', 'lightspeed'), {
-        connected: false
-      })
-      
-      setIntegrations(prev => ({
-        ...prev,
-        lightspeed: { connected: false, data: null }
-      }))
-      
-      toast({
-        title: "Disconnected",
-        description: "Your Lightspeed account has been disconnected."
-      })
-    } catch (error) {
-      console.error("Error disconnecting Lightspeed:", error)
-      toast({
-        title: "Error",
-        description: "Failed to disconnect Lightspeed. Please try again.",
-        variant: "destructive"
-      })
-    }
-  }
-
-  // New function for Lightspeed API connection
-  const connectLightspeedApi = async () => {
-    if (!user) return
-    
-    setConnectingApi("lightspeed")
-    
-    try {
-      // Lightspeed API OAuth parameters
-      const clientId = "808201776257e0984572c066974f81ee4f2aa156e4a6b67a957bec3761f5cdb2"
-      
-      // Store the state in localStorage to verify when the user returns
-      const state = Math.random().toString(36).substring(2, 15)
-      localStorage.setItem('lightspeed_api_state', state)
-      
-      // Store the merchant ID in localStorage to associate with the integration
-      localStorage.setItem('merchant_api_id', user.uid)
-      
-      // Add redirect_uri to the authorization URL
-      const redirectUri = `${window.location.origin}/dashboard`
-      
-      // Use the Lightspeed API authorization endpoint with employee:all scope
-      // This grants full read and write access to the account based on the authorizing user's permissions
-      const authUrl = `https://cloud.lightspeedapp.com/auth/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientId)}&scope=employee:all&state=${encodeURIComponent(state)}&redirect_uri=${encodeURIComponent(redirectUri)}`
-      
-      console.log("Redirecting to Lightspeed API authorization URL:", authUrl)
-      
-      // Redirect to Lightspeed authorization page
-      window.location.href = authUrl
-    } catch (error) {
-      console.error("Error connecting to Lightspeed API:", error)
-      toast({
-        title: "API Connection Failed",
-        description: "Failed to connect to Lightspeed API. Please try again.",
-        variant: "destructive"
-      })
-    } finally {
-      setConnectingApi(null)
-    }
-  }
 
   // Square integration
   const connectSquare = async () => {
@@ -494,77 +358,6 @@ export default function IntegrationsPage() {
         </PageHeader>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Lightspeed Integration Card */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-10 h-10 bg-gray-100 rounded-md flex items-center justify-center">
-                    <LightspeedIcon className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base font-medium">Lightspeed Retail</CardTitle>
-                    <CardDescription>Point of Sale Integration</CardDescription>
-                  </div>
-                </div>
-                {integrations.lightspeed.connected ? (
-                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Connected</Badge>
-                ) : null}
-              </div>
-            </CardHeader>
-            <CardContent className="pb-2">
-              <p className="text-sm text-muted-foreground">
-                Sync customer data, transactions, and inventory with your Lightspeed Retail account.
-              </p>
-            </CardContent>
-            <CardFooter>
-              <Button 
-                variant={integrations.lightspeed.connected ? "outline" : "default"}
-                className="w-full rounded-md"
-                onClick={integrations.lightspeed.connected ? disconnectLightspeed : connectLightspeed}
-                disabled={connecting === "lightspeed"}
-              >
-                {connecting === "lightspeed" ? "Connecting..." : 
-                 integrations.lightspeed.connected ? "Disconnect" : "Connect"}
-              </Button>
-            </CardFooter>
-          </Card>
-          
-          {/* New Lightspeed API Integration Card */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-10 h-10 bg-gray-100 rounded-md flex items-center justify-center">
-                    <LightspeedIcon className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base font-medium">Lightspeed Retail API</CardTitle>
-                    <CardDescription>Connect via Lightspeed API</CardDescription>
-                  </div>
-                </div>
-                <Badge variant="outline">
-                  Not Connected
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="pb-2">
-              <p className="text-sm text-muted-foreground">
-                Connect directly to the Lightspeed Retail API for advanced inventory and employee management.
-              </p>
-            </CardContent>
-            <CardFooter>
-              <Button 
-                variant="default"
-                className="w-full rounded-md"
-                onClick={connectLightspeedApi}
-                disabled={connectingApi === "lightspeed"}
-              >
-                {connectingApi === "lightspeed" ? "Connecting..." : "Connect to API"}
-              </Button>
-            </CardFooter>
-          </Card>
-          
           {/* Lightspeed New Integration Card */}
           <Card>
             <CardHeader className="pb-3">
@@ -574,7 +367,7 @@ export default function IntegrationsPage() {
                     <LightspeedIcon className="w-6 h-6" />
                   </div>
                   <div>
-                    <CardTitle className="text-base font-medium">Lightspeed New</CardTitle>
+                    <CardTitle className="text-base font-medium">Lightspeed Retail</CardTitle>
                     <CardDescription>R-Series API Integration</CardDescription>
                   </div>
                 </div>

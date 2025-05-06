@@ -18,9 +18,11 @@ The Lightspeed New integration connects our platform to Lightspeed Retail POS (R
    - Created code verifier and challenge generation functions
    - Added state parameter validation to prevent CSRF attacks
    - Stored tokens securely in Firestore
+   - **Important**: The redirect URI is pre-configured in the Lightspeed Developer Portal and not sent as a parameter in the authorization request
 
 3. **API Endpoints**
    - Created `/api/lightspeed/new` endpoint for token exchange
+   - Implemented both GET and POST handlers for flexibility
    - Implemented proper error handling and validation
    - Stored connection data in Firestore under `merchants/{merchantId}/integrations/lightspeed_new`
 
@@ -61,6 +63,15 @@ The Lightspeed New integration connects our platform to Lightspeed Retail POS (R
    - Stores access and refresh tokens in Firestore
    - Never exposes tokens to client-side code
    - Includes connection timestamp for auditing
+
+## Redirect URI Configuration
+
+The redirect URI must be pre-configured in the Lightspeed Developer Portal. Unlike some OAuth implementations, Lightspeed does not accept the `redirect_uri` as a parameter in the authorization request. Instead, it uses the redirect URI that was registered for the application in their developer portal.
+
+In our implementation:
+- The dashboard page (`/dashboard`) is used as the redirect URI
+- This page handles the OAuth callback by detecting the code and state parameters in the URL
+- When the user authorizes the application, Lightspeed redirects to this URI with the format: `https://{configured_redirect_uri}?code={authorization_code}&state={state}`
 
 ## Environment Variables
 

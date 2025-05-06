@@ -8,12 +8,12 @@ import { getFirebaseAdminApp } from '@/lib/firebase-admin'
 const LIGHTSPEED_CLIENT_ID = process.env.NEXT_PUBLIC_LIGHTSPEED_NEW_CLIENT_ID || process.env.LIGHTSPEED_NEW_CLIENT_ID || "0be25ce25b4988b26b5759aecca02248cfe561d7594edd46e7d6807c141ee72e"
 const LIGHTSPEED_CLIENT_SECRET = process.env.LIGHTSPEED_NEW_CLIENT_SECRET || "0b9c2fb76f1504ce387939066958a68cc28ec9212f571108fcbdba7b3c378f3e"
 
-// Initialize admin app once and get Firestore reference
-const { db: adminDb } = getFirebaseAdminApp();
-
 // GET handler for the OAuth callback
 export async function GET(request: NextRequest) {
   console.log('Lightspeed New OAuth token exchange GET endpoint called')
+  
+  // Initialize admin Firestore lazily (avoids build-time credentials error)
+  const { db: adminDb } = getFirebaseAdminApp();
   
   try {
     // Get parameters from query string
@@ -236,6 +236,9 @@ async function testFirestorePermissions(merchantId: string) {
 
 export async function POST(request: NextRequest) {
   console.log('Lightspeed New OAuth token exchange POST endpoint called')
+  
+  // Initialize admin Firestore lazily
+  const { db: adminDb } = getFirebaseAdminApp();
   
   try {
     const data = await request.json()

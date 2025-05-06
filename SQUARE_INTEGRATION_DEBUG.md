@@ -13,7 +13,14 @@
 
 3. **Verified API Parameters**:
    - Confirmed that the Square OAuth token exchange requires `client_id` and `client_secret` parameters
+   - Updated to use the correct OAuth application secret for the `client_secret` parameter
    - Confirmed that we're using the correct API endpoint and version
+
+## Credentials
+
+- **Application ID**: sq0idp-4LAqjdrwhjauSthYdTRFtA
+- **OAuth Application Secret**: sq0csp-Mtlvb4GHknGh25V8PfX5n5f9-s3TYNa7EPNiqAQRjx8
+- **API Version**: 2025-04-16
 
 ## How to Test the Integration
 
@@ -44,12 +51,13 @@ If the integration is still not working, follow these steps:
 
 3. **Verify Square Developer Settings**:
    - Ensure your redirect URI is correctly configured in the Square Developer Dashboard
-   - Confirm that your application ID and access token are correct
+   - Confirm that your application ID and OAuth secret are correct
    - Verify that the required OAuth scopes are enabled
 
 4. **Common Issues**:
    - **Invalid redirect_uri**: Make sure the redirect URI in Square Developer Dashboard matches exactly where Square redirects after authorization
    - **Token Exchange Failure**: Check if the authorization code is valid and not expired
+   - **Incorrect OAuth Secret**: Ensure you're using the OAuth application secret, not the access token
    - **Firestore Permissions**: Ensure your Firebase security rules allow writing to the integration document
 
 ## Integration Flow

@@ -5,7 +5,7 @@ import { headers } from 'next/headers'
 
 // Square API production constants
 const SQUARE_APP_ID = "sq0idp-4LAqjdrwhjauSthYdTRFtA"
-const SQUARE_ACCESS_TOKEN = "EAAAl3k6ZbVDkzAh8C9Ko1rnqYuPFc0Tzn3yvnw2aETua1cGNGm27l3RZmwa7BHl"
+const SQUARE_CLIENT_SECRET = "sq0csp-Mtlvb4GHknGh25V8PfX5n5f9-s3TYNa7EPNiqAQRjx8"
 const API_VERSION = '2025-04-16'
 
 export async function POST(request: NextRequest) {
@@ -29,8 +29,7 @@ export async function POST(request: NextRequest) {
     
     console.log('Exchanging code for access token...')
     
-    // Exchange code for access token
-    // Note: We don't include redirect_uri here as it's configured in the Square Developer Dashboard
+    // Exchange code for access token using the correct client_secret
     const tokenResponse = await fetch('https://connect.squareup.com/oauth2/token', {
       method: 'POST',
       headers: {
@@ -39,7 +38,7 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         client_id: SQUARE_APP_ID,
-        client_secret: SQUARE_ACCESS_TOKEN,
+        client_secret: SQUARE_CLIENT_SECRET,
         code,
         grant_type: 'authorization_code'
       })

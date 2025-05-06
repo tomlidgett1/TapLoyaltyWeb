@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     })
     
     // Exchange code for access token using the client_secret and code_verifier
-    const tokenResponse = await fetch('https://aus.merchantos.com/oauth/token', {
+    const tokenResponse = await fetch('https://aus.merchantos.com/oauth/access_token.php', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -85,8 +85,14 @@ export async function GET(request: NextRequest) {
     try {
       tokenData = JSON.parse(rawBody)
     } catch (parseErr) {
-      console.error('Token JSON parse failed, raw response:', rawBody.slice(0, 200))
-      throw new Error('Invalid JSON from Lightspeed token endpoint')
+      // Attempt fallback parse for URL-encoded responses (error cases)
+      try {
+        const params = new URLSearchParams(rawBody)
+        tokenData = Object.fromEntries(params)
+      } catch (_) {
+        console.error('Token parse failed, raw response:', rawBody.slice(0, 200))
+        throw new Error('Invalid JSON from Lightspeed token endpoint')
+      }
     }
     
     console.log('Token data received (keys only):', Object.keys(tokenData))
@@ -292,7 +298,7 @@ export async function POST(request: NextRequest) {
     })
     
     // Exchange code for access token using the client_secret and code_verifier
-    const tokenResponse = await fetch('https://aus.merchantos.com/oauth/token', {
+    const tokenResponse = await fetch('https://aus.merchantos.com/oauth/access_token.php', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -318,8 +324,14 @@ export async function POST(request: NextRequest) {
     try {
       tokenData = JSON.parse(rawBody)
     } catch (parseErr) {
-      console.error('Token JSON parse failed, raw response:', rawBody.slice(0, 200))
-      throw new Error('Invalid JSON from Lightspeed token endpoint')
+      // Attempt fallback parse for URL-encoded responses (error cases)
+      try {
+        const params = new URLSearchParams(rawBody)
+        tokenData = Object.fromEntries(params)
+      } catch (_) {
+        console.error('Token parse failed, raw response:', rawBody.slice(0, 200))
+        throw new Error('Invalid JSON from Lightspeed token endpoint')
+      }
     }
     
     console.log('Token data received (keys only):', Object.keys(tokenData))

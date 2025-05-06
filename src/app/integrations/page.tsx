@@ -259,7 +259,8 @@ export default function IntegrationsPage() {
       const codeChallenge = await generateCodeChallenge(codeVerifier);
       
       // Define the scopes needed for the integration
-      const scope = "employee:inventory_read employee:inventory_write";
+      // Using employee:all for full access as per documentation
+      const scope = "employee:all";
       
       // Lightspeed New API credentials with fallback value
       const clientId = process.env.NEXT_PUBLIC_LIGHTSPEED_NEW_CLIENT_ID || "0be25ce25b4988b26b5759aecca02248cfe561d7594edd46e7d6807c141ee72e";
@@ -276,9 +277,9 @@ export default function IntegrationsPage() {
         return;
       }
       
-      // Construct the authorization URL
+      // Construct the authorization URL as per Lightspeed API documentation
       // Note: redirect_uri is not included as it's configured in the Lightspeed portal
-      const authUrl = `https://cloud.lightspeedapp.com/oauth/authorize?response_type=code&client_id=${clientId}&scope=${encodeURIComponent(scope)}&state=${state}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+      const authUrl = `https://cloud.lightspeedapp.com/auth/oauth/authorize?response_type=code&client_id=${clientId}&scope=${encodeURIComponent(scope)}&state=${state}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
       
       console.log("Redirecting to Lightspeed New authorization URL:", authUrl);
       
@@ -380,7 +381,7 @@ export default function IntegrationsPage() {
                   </div>
                   <div>
                     <CardTitle className="text-base font-medium">Lightspeed Retail</CardTitle>
-                    <CardDescription>R-Series API Integration</CardDescription>
+                    <CardDescription>Point of Sale Integration</CardDescription>
                   </div>
                 </div>
                 {integrations.lightspeed_new.connected ? (

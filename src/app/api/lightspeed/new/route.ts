@@ -36,7 +36,6 @@ export async function GET(request: NextRequest) {
     console.log('Exchanging code for access token...')
     
     // Exchange code for access token using the client_secret and code_verifier
-    // Note: We don't include redirect_uri as it's configured in the Lightspeed portal
     const tokenResponse = await fetch('https://cloud.lightspeedapp.com/oauth/token', {
       method: 'POST',
       headers: {
@@ -128,7 +127,6 @@ export async function POST(request: NextRequest) {
     console.log('Exchanging code for access token...')
     
     // Exchange code for access token using the client_secret and code_verifier
-    // Note: We don't include redirect_uri as it's configured in the Lightspeed portal
     const tokenResponse = await fetch('https://cloud.lightspeedapp.com/oauth/token', {
       method: 'POST',
       headers: {

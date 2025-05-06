@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Exchange code for access token
+    // Note: We don't include redirect_uri here as it's configured in the Square Developer Dashboard
     const tokenResponse = await fetch('https://connect.squareup.com/oauth2/token', {
       method: 'POST',
       headers: {

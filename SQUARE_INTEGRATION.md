@@ -26,7 +26,11 @@ The integration uses Square's OAuth 2.0 flow to securely connect merchant accoun
 - **Application ID**: sq0idp-4LAqjdrwhjauSthYdTRFtA
 - **API Version**: 2025-04-16
 - **Environment**: Production
-- **Redirect URL**: https://yourdomain.com/dashboard
+- **Redirect URL**: Must be configured in the Square Developer Dashboard
+  - Log in to the [Square Developer Dashboard](https://developer.squareup.com/apps)
+  - Select your application
+  - Navigate to the OAuth section
+  - Add your application's callback URL (e.g., https://app.taployalty.com.au/dashboard)
 
 ## OAuth Scopes
 
@@ -60,7 +64,7 @@ The integration requests the following permissions:
 
 Common issues and their solutions:
 
-1. **Connection Failed**: Verify that the correct application ID is being used and that the redirect URL is properly configured in the Square Developer Dashboard.
+1. **Connection Failed - Invalid redirect_uri**: Ensure that the redirect URL is properly configured in the Square Developer Dashboard. The URL in your dashboard must exactly match the URL where Square will redirect after authorization.
 2. **API Permission Errors**: Ensure that all required OAuth scopes are requested during authorization.
 3. **Token Expiration**: Implement a token refresh mechanism to handle expired access tokens.
 

@@ -201,9 +201,6 @@ export default function IntegrationsPage() {
       // Store the merchant ID in localStorage to associate with the integration
       localStorage.setItem('merchant_id', user.uid)
       
-      // Add redirect_uri to the authorization URL
-      const redirectUri = `${window.location.origin}/dashboard`
-      
       // Prepare scopes for Square OAuth
       const scopes = [
         'MERCHANT_PROFILE_READ',
@@ -218,7 +215,8 @@ export default function IntegrationsPage() {
       ].join(' ')
       
       // Build the authorization URL for production
-      const authUrl = `https://connect.squareup.com/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&scope=${encodeURIComponent(scopes)}&state=${encodeURIComponent(state)}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}`
+      // Remove redirect_uri parameter as it's configured in the Square Developer Dashboard
+      const authUrl = `https://connect.squareup.com/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&scope=${encodeURIComponent(scopes)}&state=${encodeURIComponent(state)}&response_type=code`
       
       console.log("Redirecting to Square authorization URL:", authUrl)
       

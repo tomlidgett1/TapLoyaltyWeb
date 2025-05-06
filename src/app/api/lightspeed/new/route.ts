@@ -34,6 +34,12 @@ export async function GET(request: NextRequest) {
     }
     
     console.log('Exchanging code for access token...')
+    console.log('Parameters for token exchange:', {
+      clientId: LIGHTSPEED_CLIENT_ID.substring(0, 10) + '...',
+      hasClientSecret: !!LIGHTSPEED_CLIENT_SECRET,
+      codeLength: code.length,
+      codeVerifierLength: codeVerifier.length
+    })
     
     // Exchange code for access token using the client_secret and code_verifier
     const tokenResponse = await fetch('https://cloud.lightspeedapp.com/oauth/token', {
@@ -63,12 +69,32 @@ export async function GET(request: NextRequest) {
       }, { status: 500 })
     }
     
+    // Check if we have all required token data
+    if (!tokenData.access_token || !tokenData.refresh_token) {
+      console.error('Incomplete token data received from Lightspeed API:', {
+        hasAccessToken: !!tokenData.access_token,
+        hasRefreshToken: !!tokenData.refresh_token
+      })
+      
+      return NextResponse.json({
+        success: false,
+        error: 'Incomplete token data received from Lightspeed API',
+        details: {
+          hasAccessToken: !!tokenData.access_token,
+          hasRefreshToken: !!tokenData.refresh_token,
+          tokenDataKeys: Object.keys(tokenData)
+        }
+      }, { status: 500 })
+    }
+    
     console.log('Successfully obtained access token, storing in Firestore...')
+    console.log('Firestore document path:', `merchants/${merchantId}/integrations/lightspeed_new`)
     
     try {
       // Store the token data in Firestore
       const integrationDocRef = doc(db, `merchants/${merchantId}/integrations/lightspeed_new`);
-      await setDoc(integrationDocRef, {
+      
+      const dataToStore = {
         connected: true,
         access_token: tokenData.access_token,
         refresh_token: tokenData.refresh_token,
@@ -77,10 +103,28 @@ export async function GET(request: NextRequest) {
         scope: tokenData.scope,
         instance_url: tokenData.instance_url,
         connectedAt: serverTimestamp(),
+      };
+      
+      console.log('Data to store in Firestore:', {
+        ...dataToStore,
+        access_token: dataToStore.access_token ? '***[REDACTED]***' : null,
+        refresh_token: dataToStore.refresh_token ? '***[REDACTED]***' : null,
       });
+      
+      await setDoc(integrationDocRef, dataToStore);
 
       console.log('Lightspeed New integration connected successfully');
-      return NextResponse.json({ success: true })
+      return NextResponse.json({ 
+        success: true,
+        tokenInfo: {
+          expiresIn: tokenData.expires_in,
+          scope: tokenData.scope,
+          tokenType: tokenData.token_type,
+          hasAccessToken: !!tokenData.access_token,
+          hasRefreshToken: !!tokenData.refresh_token,
+          instanceUrl: tokenData.instance_url
+        }
+      })
     } catch (firestoreError) {
       console.error('Error storing data in Firestore:', firestoreError)
       return NextResponse.json({ 
@@ -113,7 +157,7 @@ export async function POST(request: NextRequest) {
     
     const { code, merchantId, state, codeVerifier } = data
     
-    // Validate required paramssdf
+    // Validate required parameters
     if (!code || !merchantId || !state || !codeVerifier) {
       console.error('Missing required parameters:', { 
         code: !!code, 
@@ -125,6 +169,12 @@ export async function POST(request: NextRequest) {
     }
     
     console.log('Exchanging code for access token...')
+    console.log('Parameters for token exchange:', {
+      clientId: LIGHTSPEED_CLIENT_ID.substring(0, 10) + '...',
+      hasClientSecret: !!LIGHTSPEED_CLIENT_SECRET,
+      codeLength: code.length,
+      codeVerifierLength: codeVerifier.length
+    })
     
     // Exchange code for access token using the client_secret and code_verifier
     const tokenResponse = await fetch('https://cloud.lightspeedapp.com/oauth/token', {
@@ -154,12 +204,32 @@ export async function POST(request: NextRequest) {
       }, { status: 500 })
     }
     
+    // Check if we have all required token data
+    if (!tokenData.access_token || !tokenData.refresh_token) {
+      console.error('Incomplete token data received from Lightspeed API:', {
+        hasAccessToken: !!tokenData.access_token,
+        hasRefreshToken: !!tokenData.refresh_token
+      })
+      
+      return NextResponse.json({
+        success: false,
+        error: 'Incomplete token data received from Lightspeed API',
+        details: {
+          hasAccessToken: !!tokenData.access_token,
+          hasRefreshToken: !!tokenData.refresh_token,
+          tokenDataKeys: Object.keys(tokenData)
+        }
+      }, { status: 500 })
+    }
+    
     console.log('Successfully obtained access token, storing in Firestore...')
+    console.log('Firestore document path:', `merchants/${merchantId}/integrations/lightspeed_new`)
     
     try {
       // Store the token data in Firestore
       const integrationDocRef = doc(db, `merchants/${merchantId}/integrations/lightspeed_new`);
-      await setDoc(integrationDocRef, {
+      
+      const dataToStore = {
         connected: true,
         access_token: tokenData.access_token,
         refresh_token: tokenData.refresh_token,
@@ -168,10 +238,28 @@ export async function POST(request: NextRequest) {
         scope: tokenData.scope,
         instance_url: tokenData.instance_url,
         connectedAt: serverTimestamp(),
+      };
+      
+      console.log('Data to store in Firestore:', {
+        ...dataToStore,
+        access_token: dataToStore.access_token ? '***[REDACTED]***' : null,
+        refresh_token: dataToStore.refresh_token ? '***[REDACTED]***' : null,
       });
+      
+      await setDoc(integrationDocRef, dataToStore);
 
       console.log('Lightspeed New integration connected successfully');
-      return NextResponse.json({ success: true })
+      return NextResponse.json({ 
+        success: true,
+        tokenInfo: {
+          expiresIn: tokenData.expires_in,
+          scope: tokenData.scope,
+          tokenType: tokenData.token_type,
+          hasAccessToken: !!tokenData.access_token,
+          hasRefreshToken: !!tokenData.refresh_token,
+          instanceUrl: tokenData.instance_url
+        }
+      })
     } catch (firestoreError) {
       console.error('Error storing data in Firestore:', firestoreError)
       return NextResponse.json({ 

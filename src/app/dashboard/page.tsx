@@ -872,6 +872,8 @@ export default function DashboardPage() {
       const state = searchParams.get('state')
       
       console.log('OAuth callback detected:', { hasCode: !!code, hasState: !!state, hasUser: !!user })
+      console.log('URL parameters:', { code: code?.substring(0, 20) + '...', state })
+      console.log('Current path:', window.location.pathname)
       
       if (!code || !state || !user) return
       
@@ -946,6 +948,7 @@ export default function DashboardPage() {
           
           console.log('Merchant ID from localStorage:', merchantId)
           console.log('Code verifier exists:', !!codeVerifier)
+          console.log('Code verifier length:', codeVerifier ? codeVerifier.length : 0)
           
           if (!merchantId) {
             console.error('Missing merchant ID in localStorage')
@@ -958,8 +961,19 @@ export default function DashboardPage() {
           }
           
           console.log('Exchanging code for token...')
-          // Exchange code for token
-          const response = await fetch(`/api/lightspeed/new?code=${code}&merchantId=${merchantId}&codeVerifier=${codeVerifier}`)
+          // Exchange code for token - POST method for more reliable handling
+          const response = await fetch('/api/lightspeed/new', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              code,
+              merchantId,
+              state,
+              codeVerifier
+            })
+          })
           
           console.log('Token exchange response status:', response.status)
           const data = await response.json()
@@ -1009,7 +1023,8 @@ export default function DashboardPage() {
         console.log('OAuth callback received but no matching state found in localStorage', {
           availableLocalStorageKeys: Object.keys(localStorage),
           squareStateExists: !!localStorage.getItem('square_state'),
-          lightspeedNewStateExists: !!localStorage.getItem('lightspeed_new_state')
+          lightspeedNewStateExists: !!localStorage.getItem('lightspeed_new_state'),
+          lightspeedNewState: localStorage.getItem('lightspeed_new_state')
         })
       }
     }

@@ -45,17 +45,40 @@ export default function Home() {
     
     if (code && state && user) {
       console.log('OAuth callback detected on root page:', { hasCode: true, hasState: true, hasUser: true })
+      console.log('OAuth parameters:', { 
+        codePrefix: code.substring(0, 20) + '...', 
+        state,
+        userUid: user.uid 
+      })
       
-      // Check if it's a Lightspeed callback by looking at the stored state
-      if (state === localStorage.getItem('lightspeed_new_state')) {
-        console.log('Lightspeed OAuth callback detected, processing...')
-        
-        const merchantId = localStorage.getItem('lightspeed_new_merchant_id')
-        const codeVerifier = localStorage.getItem('lightspeed_new_code_verifier')
-        
-        if (merchantId && codeVerifier) {
-          // Process the Lightspeed callback
-          fetch('/api/lightspeed/new', {
+      // Function to handle Lightspeed OAuth callback
+      const handleLightspeedCallback = async () => {
+        try {
+          console.log('Lightspeed OAuth callback detected, processing...')
+          
+          const merchantId = localStorage.getItem('lightspeed_new_merchant_id')
+          const codeVerifier = localStorage.getItem('lightspeed_new_code_verifier')
+          
+          console.log('Retrieved from localStorage:', { 
+            merchantId, 
+            hasCodeVerifier: !!codeVerifier,
+            codeVerifierLength: codeVerifier ? codeVerifier.length : 0,
+            storedState: localStorage.getItem('lightspeed_new_state')
+          })
+          
+          if (!merchantId || !codeVerifier) {
+            throw new Error(`Missing required data: merchantId=${!!merchantId}, codeVerifier=${!!codeVerifier}`)
+          }
+          
+          // Show a toast to indicate we're processing
+          toast({
+            title: "Processing",
+            description: "Connecting your Lightspeed account...",
+          })
+          
+          console.log('Sending token exchange request...')
+          // Process the Lightspeed callback with await to ensure it completes
+          const response = await fetch('/api/lightspeed/new', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -67,58 +90,82 @@ export default function Home() {
               codeVerifier
             })
           })
-          .then(response => response.json())
-          .then(data => {
-            if (data.success) {
-              toast({
-                title: "Success!",
-                description: "Your Lightspeed account has been connected."
-              })
-              
-              // Clear localStorage items
-              localStorage.removeItem('lightspeed_new_state')
-              localStorage.removeItem('lightspeed_new_merchant_id')
-              localStorage.removeItem('lightspeed_new_code_verifier')
-              
-              // Redirect to integrations page
-              setTimeout(() => {
-                router.push('/integrations')
-              }, 1500)
-            } else {
-              throw new Error(data.error || 'Failed to connect Lightspeed account')
-            }
-          })
-          .catch(error => {
-            console.error('Error processing Lightspeed callback:', error)
+          
+          console.log('Token exchange response status:', response.status)
+          const data = await response.json()
+          console.log('Token exchange response data:', data)
+          
+          if (data.success) {
+            console.log('Lightspeed connection successful!')
             toast({
-              title: "Connection Failed",
-              description: "We couldn't connect your Lightspeed account. Please try again."
+              title: "Success!",
+              description: "Your Lightspeed account has been connected."
             })
             
-            // Clear localStorage items even on error
+            // Clear localStorage items
             localStorage.removeItem('lightspeed_new_state')
             localStorage.removeItem('lightspeed_new_merchant_id')
             localStorage.removeItem('lightspeed_new_code_verifier')
             
-            // Redirect to dashboard
+            // Redirect to integrations page after a longer delay to ensure data is saved
+            console.log('Redirecting to integrations page...')
             setTimeout(() => {
-              router.push('/dashboard')
-            }, 1500)
+              router.push('/integrations')
+            }, 3000)
+          } else {
+            console.error('Lightspeed connection failed:', data.error, data.details)
+            throw new Error(data.error || 'Failed to connect Lightspeed account')
+          }
+        } catch (error) {
+          console.error('Error processing Lightspeed callback:', error)
+          toast({
+            title: "Connection Failed",
+            description: "We couldn't connect your Lightspeed account. Please try again."
           })
           
-          return // Prevent immediate redirect
+          // Clear localStorage items even on error
+          localStorage.removeItem('lightspeed_new_state')
+          localStorage.removeItem('lightspeed_new_merchant_id')
+          localStorage.removeItem('lightspeed_new_code_verifier')
+          
+          // Redirect to dashboard
+          setTimeout(() => {
+            router.push('/dashboard')
+          }, 3000)
         }
       }
       
-      // Check if it's a Square callback
-      if (state === localStorage.getItem('square_state')) {
-        console.log('Square OAuth callback detected, processing...')
-        
-        const merchantId = localStorage.getItem('merchant_id')
-        
-        if (merchantId) {
-          // Process the Square callback
-          fetch('/api/oauth/square', {
+      // Check if it's a Lightspeed callback by looking at the stored state
+      if (state === localStorage.getItem('lightspeed_new_state')) {
+        handleLightspeedCallback()
+        return // Prevent immediate redirect
+      }
+      
+      // Function to handle Square OAuth callback
+      const handleSquareCallback = async () => {
+        try {
+          console.log('Square OAuth callback detected, processing...')
+          
+          const merchantId = localStorage.getItem('merchant_id')
+          
+          console.log('Retrieved from localStorage:', { 
+            merchantId,
+            storedState: localStorage.getItem('square_state')
+          })
+          
+          if (!merchantId) {
+            throw new Error('Missing merchantId in localStorage')
+          }
+          
+          // Show a toast to indicate we're processing
+          toast({
+            title: "Processing",
+            description: "Connecting your Square account...",
+          })
+          
+          console.log('Sending token exchange request...')
+          // Process the Square callback with await to ensure it completes
+          const response = await fetch('/api/oauth/square', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -129,46 +176,61 @@ export default function Home() {
               merchantId
             })
           })
-          .then(response => response.json())
-          .then(data => {
-            if (data.success) {
-              toast({
-                title: "Success!",
-                description: "Your Square account has been connected."
-              })
-              
-              // Clear localStorage items
-              localStorage.removeItem('square_state')
-              localStorage.removeItem('merchant_id')
-              
-              // Redirect to integrations page
-              setTimeout(() => {
-                router.push('/integrations')
-              }, 1500)
-            } else {
-              throw new Error(data.error || 'Failed to connect Square account')
-            }
-          })
-          .catch(error => {
-            console.error('Error processing Square callback:', error)
+          
+          console.log('Token exchange response status:', response.status)
+          const data = await response.json()
+          console.log('Token exchange response data:', data)
+          
+          if (data.success) {
+            console.log('Square connection successful!')
             toast({
-              title: "Connection Failed",
-              description: "We couldn't connect your Square account. Please try again."
+              title: "Success!",
+              description: "Your Square account has been connected."
             })
             
-            // Clear localStorage items even on error
+            // Clear localStorage items
             localStorage.removeItem('square_state')
             localStorage.removeItem('merchant_id')
             
-            // Redirect to dashboard
+            // Redirect to integrations page after a longer delay to ensure data is saved
+            console.log('Redirecting to integrations page...')
             setTimeout(() => {
-              router.push('/dashboard')
-            }, 1500)
+              router.push('/integrations')
+            }, 3000)
+          } else {
+            console.error('Square connection failed:', data.error, data.details)
+            throw new Error(data.error || 'Failed to connect Square account')
+          }
+        } catch (error) {
+          console.error('Error processing Square callback:', error)
+          toast({
+            title: "Connection Failed",
+            description: "We couldn't connect your Square account. Please try again."
           })
           
-          return // Prevent immediate redirect
+          // Clear localStorage items even on error
+          localStorage.removeItem('square_state')
+          localStorage.removeItem('merchant_id')
+          
+          // Redirect to dashboard
+          setTimeout(() => {
+            router.push('/dashboard')
+          }, 3000)
         }
       }
+      
+      // Check if it's a Square callback
+      if (state === localStorage.getItem('square_state')) {
+        handleSquareCallback()
+        return // Prevent immediate redirect
+      }
+      
+      console.log('OAuth callback detected but no matching state found in localStorage', {
+        availableLocalStorageKeys: Object.keys(localStorage),
+        squareStateExists: !!localStorage.getItem('square_state'),
+        lightspeedNewStateExists: !!localStorage.getItem('lightspeed_new_state'),
+        lightspeedNewState: localStorage.getItem('lightspeed_new_state')
+      })
     }
     
     // If not an OAuth callback or already processed, redirect to dashboard

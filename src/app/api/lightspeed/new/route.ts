@@ -20,7 +20,9 @@ export async function GET(request: NextRequest) {
     console.log('Query parameters received:', { 
       hasCode: !!code, 
       hasMerchantId: !!merchantId,
-      hasCodeVerifier: !!codeVerifier 
+      hasCodeVerifier: !!codeVerifier,
+      codeLength: code ? code.length : 0,
+      merchantIdValue: merchantId
     })
     
     // Validate required parameters
@@ -37,12 +39,13 @@ export async function GET(request: NextRequest) {
     console.log('Parameters for token exchange:', {
       clientId: LIGHTSPEED_CLIENT_ID.substring(0, 10) + '...',
       hasClientSecret: !!LIGHTSPEED_CLIENT_SECRET,
+      clientSecretLength: LIGHTSPEED_CLIENT_SECRET ? LIGHTSPEED_CLIENT_SECRET.length : 0,
       codeLength: code.length,
       codeVerifierLength: codeVerifier.length
     })
     
     // Exchange code for access token using the client_secret and code_verifier
-    const tokenResponse = await fetch('https://cloud.lightspeedapp.com/oauth/token', {
+    const tokenResponse = await fetch('https://aus.merchantos.com/oauth/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -56,16 +59,36 @@ export async function GET(request: NextRequest) {
       })
     })
     
-    const tokenData = await tokenResponse.json()
     console.log('Token response status:', tokenResponse.status)
+    console.log('Token response headers:', Object.fromEntries([...tokenResponse.headers.entries()]))
+    
+    const tokenData = await tokenResponse.json()
     console.log('Token data received (keys only):', Object.keys(tokenData))
     
+    // Log token data with sensitive information redacted
+    console.log('Token response data (redacted):', {
+      ...tokenData,
+      access_token: tokenData.access_token ? `${tokenData.access_token.substring(0, 10)}...` : null,
+      refresh_token: tokenData.refresh_token ? `${tokenData.refresh_token.substring(0, 10)}...` : null,
+      error: tokenData.error,
+      error_description: tokenData.error_description
+    })
+    
     if (!tokenResponse.ok) {
-      console.error('Lightspeed OAuth token error:', tokenData)
+      console.error('Lightspeed OAuth token error:', {
+        status: tokenResponse.status,
+        statusText: tokenResponse.statusText,
+        error: tokenData.error,
+        error_description: tokenData.error_description
+      })
       return NextResponse.json({ 
         success: false, 
         error: `Failed to exchange code for token: ${tokenData.error || tokenResponse.statusText}`,
-        details: tokenData
+        details: {
+          error: tokenData.error,
+          error_description: tokenData.error_description,
+          status: tokenResponse.status
+        }
       }, { status: 500 })
     }
     
@@ -103,6 +126,9 @@ export async function GET(request: NextRequest) {
         scope: tokenData.scope,
         instance_url: tokenData.instance_url,
         connectedAt: serverTimestamp(),
+        // Store information about which API endpoint was used (Australian regional endpoint)
+        apiEndpoint: 'https://aus.merchantos.com',
+        region: 'aus',
       };
       
       console.log('Data to store in Firestore:', {
@@ -111,7 +137,29 @@ export async function GET(request: NextRequest) {
         refresh_token: dataToStore.refresh_token ? '***[REDACTED]***' : null,
       });
       
-      await setDoc(integrationDocRef, dataToStore);
+      try {
+        await setDoc(integrationDocRef, dataToStore);
+        console.log('Lightspeed New integration connected successfully and data stored in Firestore');
+      } catch (firestoreWriteError) {
+        console.error('Error writing to Firestore:', firestoreWriteError);
+        // Attempt to write again with fewer fields in case there's an issue with one of the fields
+        try {
+          const essentialData = {
+            connected: true,
+            access_token: tokenData.access_token,
+            refresh_token: tokenData.refresh_token,
+            connectedAt: serverTimestamp(),
+            apiEndpoint: 'https://aus.merchantos.com',
+          };
+          
+          console.log('Attempting to write essential data only...');
+          await setDoc(integrationDocRef, essentialData);
+          console.log('Essential Lightspeed integration data stored successfully');
+        } catch (retryError) {
+          console.error('Second attempt to write to Firestore failed:', retryError);
+          throw retryError; // Re-throw to be caught by outer catch
+        }
+      }
 
       console.log('Lightspeed New integration connected successfully');
       return NextResponse.json({ 
@@ -122,7 +170,9 @@ export async function GET(request: NextRequest) {
           tokenType: tokenData.token_type,
           hasAccessToken: !!tokenData.access_token,
           hasRefreshToken: !!tokenData.refresh_token,
-          instanceUrl: tokenData.instance_url
+          instanceUrl: tokenData.instance_url,
+          region: 'aus',
+          apiEndpoint: 'https://aus.merchantos.com'
         }
       })
     } catch (firestoreError) {
@@ -152,7 +202,9 @@ export async function POST(request: NextRequest) {
       hasCode: !!data.code, 
       hasMerchantId: !!data.merchantId, 
       hasState: !!data.state,
-      hasCodeVerifier: !!data.codeVerifier 
+      hasCodeVerifier: !!data.codeVerifier,
+      codeLength: data.code ? data.code.length : 0,
+      stateValue: data.state
     })
     
     const { code, merchantId, state, codeVerifier } = data
@@ -172,12 +224,13 @@ export async function POST(request: NextRequest) {
     console.log('Parameters for token exchange:', {
       clientId: LIGHTSPEED_CLIENT_ID.substring(0, 10) + '...',
       hasClientSecret: !!LIGHTSPEED_CLIENT_SECRET,
+      clientSecretLength: LIGHTSPEED_CLIENT_SECRET ? LIGHTSPEED_CLIENT_SECRET.length : 0,
       codeLength: code.length,
       codeVerifierLength: codeVerifier.length
     })
     
     // Exchange code for access token using the client_secret and code_verifier
-    const tokenResponse = await fetch('https://cloud.lightspeedapp.com/oauth/token', {
+    const tokenResponse = await fetch('https://aus.merchantos.com/oauth/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -191,16 +244,36 @@ export async function POST(request: NextRequest) {
       })
     })
     
-    const tokenData = await tokenResponse.json()
     console.log('Token response status:', tokenResponse.status)
+    console.log('Token response headers:', Object.fromEntries([...tokenResponse.headers.entries()]))
+    
+    const tokenData = await tokenResponse.json()
     console.log('Token data received (keys only):', Object.keys(tokenData))
     
+    // Log token data with sensitive information redacted
+    console.log('Token response data (redacted):', {
+      ...tokenData,
+      access_token: tokenData.access_token ? `${tokenData.access_token.substring(0, 10)}...` : null,
+      refresh_token: tokenData.refresh_token ? `${tokenData.refresh_token.substring(0, 10)}...` : null,
+      error: tokenData.error,
+      error_description: tokenData.error_description
+    })
+    
     if (!tokenResponse.ok) {
-      console.error('Lightspeed OAuth token error:', tokenData)
+      console.error('Lightspeed OAuth token error:', {
+        status: tokenResponse.status,
+        statusText: tokenResponse.statusText,
+        error: tokenData.error,
+        error_description: tokenData.error_description
+      })
       return NextResponse.json({ 
         success: false, 
         error: `Failed to exchange code for token: ${tokenData.error || tokenResponse.statusText}`,
-        details: tokenData
+        details: {
+          error: tokenData.error,
+          error_description: tokenData.error_description,
+          status: tokenResponse.status
+        }
       }, { status: 500 })
     }
     
@@ -238,6 +311,9 @@ export async function POST(request: NextRequest) {
         scope: tokenData.scope,
         instance_url: tokenData.instance_url,
         connectedAt: serverTimestamp(),
+        // Store information about which API endpoint was used (Australian regional endpoint)
+        apiEndpoint: 'https://aus.merchantos.com',
+        region: 'aus',
       };
       
       console.log('Data to store in Firestore:', {
@@ -246,7 +322,29 @@ export async function POST(request: NextRequest) {
         refresh_token: dataToStore.refresh_token ? '***[REDACTED]***' : null,
       });
       
-      await setDoc(integrationDocRef, dataToStore);
+      try {
+        await setDoc(integrationDocRef, dataToStore);
+        console.log('Lightspeed New integration connected successfully and data stored in Firestore');
+      } catch (firestoreWriteError) {
+        console.error('Error writing to Firestore:', firestoreWriteError);
+        // Attempt to write again with fewer fields in case there's an issue with one of the fields
+        try {
+          const essentialData = {
+            connected: true,
+            access_token: tokenData.access_token,
+            refresh_token: tokenData.refresh_token,
+            connectedAt: serverTimestamp(),
+            apiEndpoint: 'https://aus.merchantos.com',
+          };
+          
+          console.log('Attempting to write essential data only...');
+          await setDoc(integrationDocRef, essentialData);
+          console.log('Essential Lightspeed integration data stored successfully');
+        } catch (retryError) {
+          console.error('Second attempt to write to Firestore failed:', retryError);
+          throw retryError; // Re-throw to be caught by outer catch
+        }
+      }
 
       console.log('Lightspeed New integration connected successfully');
       return NextResponse.json({ 
@@ -257,7 +355,9 @@ export async function POST(request: NextRequest) {
           tokenType: tokenData.token_type,
           hasAccessToken: !!tokenData.access_token,
           hasRefreshToken: !!tokenData.refresh_token,
-          instanceUrl: tokenData.instance_url
+          instanceUrl: tokenData.instance_url,
+          region: 'aus',
+          apiEndpoint: 'https://aus.merchantos.com'
         }
       })
     } catch (firestoreError) {

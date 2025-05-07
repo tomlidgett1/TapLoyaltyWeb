@@ -16,10 +16,12 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const code = searchParams.get('code')
     const state = searchParams.get('state')
+    const codeVerifier = searchParams.get('code_verifier')
     
     console.log('Query parameters received:', { 
       hasCode: !!code, 
       hasState: !!state,
+      hasCodeVerifier: !!codeVerifier,
       codeLength: code ? code.length : 0,
       stateValue: state
     })
@@ -53,23 +55,33 @@ export async function GET(request: NextRequest) {
       hasClientSecret: !!LIGHTSPEED_CLIENT_SECRET,
       clientSecretLength: LIGHTSPEED_CLIENT_SECRET ? LIGHTSPEED_CLIENT_SECRET.length : 0,
       codeLength: code.length,
+      hasCodeVerifier: !!codeVerifier,
+      codeVerifierLength: codeVerifier ? codeVerifier.length : 0
     })
     
-    // Exchange code for access token using the client_secret according to Lightspeed docs
-    const tokenRequestBody = {
+    // Prepare request parameters - include code_verifier if available
+    const tokenParams = new URLSearchParams({
       client_id: LIGHTSPEED_CLIENT_ID,
       client_secret: LIGHTSPEED_CLIENT_SECRET,
-      code,
+      code: code,
       grant_type: 'authorization_code'
+    });
+    
+    // Add code_verifier if it was provided (for PKCE flow)
+    if (codeVerifier) {
+      tokenParams.append('code_verifier', codeVerifier);
+      console.log('Including code_verifier in token request');
     }
 
+    console.log('Sending token request as form-encoded data...');
+    
     // Use the correct token endpoint as per Lightspeed docs
     const tokenResponse = await fetch('https://cloud.lightspeedapp.com/auth/oauth/token', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: JSON.stringify(tokenRequestBody)
+      body: tokenParams.toString()
     })
     
     console.log('Token response status:', tokenResponse.status)
@@ -81,12 +93,21 @@ export async function GET(request: NextRequest) {
     try {
       tokenData = JSON.parse(rawBody)
     } catch (parseErr) {
-      console.error('Token parse failed, raw response:', rawBody.slice(0, 200))
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Invalid response from Lightspeed token endpoint',
-        details: rawBody.slice(0, 200)
-      }, { status: 500 })
+      console.error('Token parse failed, raw response:', rawBody.slice(0, 200));
+      
+      // Attempt to parse as URL-encoded (some OAuth servers respond this way for errors)
+      try {
+        const params = new URLSearchParams(rawBody);
+        tokenData = Object.fromEntries(params.entries());
+        console.log('Parsed response as URL-encoded form data:', tokenData);
+      } catch (formParseErr) {
+        console.error('Failed to parse response as form data');
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Invalid response from Lightspeed token endpoint',
+          details: rawBody.slice(0, 200)
+        }, { status: 500 });
+      }
     }
     
     console.log('Token data received (keys only):', Object.keys(tokenData))
@@ -237,7 +258,7 @@ async function testFirestorePermissions(merchantId: string) {
   }
 }
 
-// Updated POST method to match the GET method's approach
+// Updated POST method to handle code_verifier
 export async function POST(request: NextRequest) {
   console.log('Lightspeed New OAuth token exchange POST endpoint called')
   
@@ -247,16 +268,23 @@ export async function POST(request: NextRequest) {
       hasCode: !!data.code, 
       hasMerchantId: !!data.merchantId, 
       hasState: !!data.state,
+      hasCodeVerifier: !!data.codeVerifier,
       codeLength: data.code ? data.code.length : 0,
+      codeVerifierLength: data.codeVerifier ? data.codeVerifier.length : 0,
       stateValue: data.state
     })
     
-    const { code, merchantId, state } = data
+    const { code, merchantId, state, codeVerifier } = data
     
     // Validate required parameters
     if (!code) {
       console.error('Missing required code parameter')
       return NextResponse.json({ success: false, error: 'Missing authorization code' }, { status: 400 })
+    }
+    
+    if (!codeVerifier) {
+      console.error('Missing required code_verifier parameter')
+      return NextResponse.json({ success: false, error: 'Missing code_verifier' }, { status: 400 })
     }
     
     // Use merchantId from request or fallback to state or default
@@ -281,24 +309,28 @@ export async function POST(request: NextRequest) {
       hasClientSecret: !!LIGHTSPEED_CLIENT_SECRET,
       clientSecretLength: LIGHTSPEED_CLIENT_SECRET ? LIGHTSPEED_CLIENT_SECRET.length : 0,
       codeLength: code.length,
+      codeVerifierLength: codeVerifier.length
     })
     
-    // Exchange code for access token using the client_secret according to Lightspeed docs
-    const tokenRequestBody = {
+    // Try both formats for the token request
+    // First attempt: Form-encoded with code_verifier (PKCE flow)
+    const tokenParams = new URLSearchParams({
       client_id: LIGHTSPEED_CLIENT_ID,
       client_secret: LIGHTSPEED_CLIENT_SECRET,
-      code,
-      grant_type: 'authorization_code'
-    }
+      code: code,
+      grant_type: 'authorization_code',
+      code_verifier: codeVerifier
+    });
 
-    // Use the correct token endpoint as per Lightspeed docs
+    console.log('Attempting token exchange with form-encoded request and code_verifier...');
+    
     const tokenResponse = await fetch('https://cloud.lightspeedapp.com/auth/oauth/token', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: JSON.stringify(tokenRequestBody)
-    })
+      body: tokenParams.toString()
+    });
     
     console.log('Token response status:', tokenResponse.status)
     console.log('Token response headers:', Object.fromEntries([...tokenResponse.headers.entries()]))
@@ -309,12 +341,21 @@ export async function POST(request: NextRequest) {
     try {
       tokenData = JSON.parse(rawBody)
     } catch (parseErr) {
-      console.error('Token parse failed, raw response:', rawBody.slice(0, 200))
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Invalid response from Lightspeed token endpoint',
-        details: rawBody.slice(0, 200)
-      }, { status: 500 })
+      console.error('Token parse failed, raw response:', rawBody.slice(0, 200));
+      
+      // Attempt to parse as URL-encoded (some OAuth servers respond this way for errors)
+      try {
+        const params = new URLSearchParams(rawBody);
+        tokenData = Object.fromEntries(params.entries());
+        console.log('Parsed response as URL-encoded form data:', tokenData);
+      } catch (formParseErr) {
+        console.error('Failed to parse response as form data');
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Invalid response from Lightspeed token endpoint',
+          details: rawBody.slice(0, 200)
+        }, { status: 500 });
+      }
     }
     
     console.log('Token data received (keys only):', Object.keys(tokenData))

@@ -126,7 +126,7 @@ export function BusinessBrandForm({ data, onChange }: BusinessBrandFormProps) {
           Define your business identity and brand voice.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6 p-0 mt-6">
+      <CardContent className="space-y-6 p-0 mt-4">
         <div className="space-y-4">
           <div className="grid gap-2">
             <Label htmlFor="businessName">Business Name</Label>

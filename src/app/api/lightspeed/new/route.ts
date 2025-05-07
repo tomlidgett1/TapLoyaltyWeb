@@ -15,26 +15,24 @@ export async function GET(request: NextRequest) {
     // Get parameters from query string
     const { searchParams } = new URL(request.url)
     const code = searchParams.get('code')
-    const merchantId = searchParams.get('merchantId')
-    const codeVerifier = searchParams.get('codeVerifier')
+    const state = searchParams.get('state')
     
     console.log('Query parameters received:', { 
       hasCode: !!code, 
-      hasMerchantId: !!merchantId,
-      hasCodeVerifier: !!codeVerifier,
+      hasState: !!state,
       codeLength: code ? code.length : 0,
-      merchantIdValue: merchantId
+      stateValue: state
     })
     
     // Validate required parameters
-    if (!code || !merchantId || !codeVerifier) {
-      console.error('Missing required parameters:', { 
-        code: !!code, 
-        merchantId: !!merchantId,
-        codeVerifier: !!codeVerifier 
-      })
-      return NextResponse.json({ success: false, error: 'Missing required parameters' }, { status: 400 })
+    if (!code) {
+      console.error('Missing required code parameter')
+      return NextResponse.json({ success: false, error: 'Missing authorization code' }, { status: 400 })
     }
+    
+    // Extract merchantId from state if possible, or use a default
+    // In a production environment, you should have a proper state management system
+    const merchantId = state || 'default_merchant'
     
     // Test Firestore permissions before proceeding
     const hasFirestorePermissions = await testFirestorePermissions(merchantId);
@@ -55,48 +53,40 @@ export async function GET(request: NextRequest) {
       hasClientSecret: !!LIGHTSPEED_CLIENT_SECRET,
       clientSecretLength: LIGHTSPEED_CLIENT_SECRET ? LIGHTSPEED_CLIENT_SECRET.length : 0,
       codeLength: code.length,
-      codeVerifierLength: codeVerifier.length
     })
     
-    // Exchange code for access token using the client_secret and code_verifier
-    const tokenParams = new URLSearchParams({
+    // Exchange code for access token using the client_secret according to Lightspeed docs
+    const tokenRequestBody = {
       client_id: LIGHTSPEED_CLIENT_ID,
-      // If using PKCE you can omit client_secret, but including it is allowed as long as it matches your app.
       client_secret: LIGHTSPEED_CLIENT_SECRET,
       code,
-      grant_type: 'authorization_code',
-      code_verifier: codeVerifier,
-      // DO NOT send redirect_uri because it must match exactly the one used during authorisation –
-      // omitting avoids accidental mismatch (Lightspeed will use the registered URI).
-    })
+      grant_type: 'authorization_code'
+    }
 
-    const tokenResponse = await fetch('https://aus.merchantos.com/oauth/access_token.php', {
+    // Use the correct token endpoint as per Lightspeed docs
+    const tokenResponse = await fetch('https://cloud.lightspeedapp.com/auth/oauth/token', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Content-Type': 'application/json'
       },
-      body: tokenParams.toString()
+      body: JSON.stringify(tokenRequestBody)
     })
     
     console.log('Token response status:', tokenResponse.status)
     console.log('Token response headers:', Object.fromEntries([...tokenResponse.headers.entries()]))
     
-    // Read response body **once** then attempt to parse. This avoids the
-    // "Body has already been read" runtime error that occurs when we try to
-    // consume the same body twice (first via .json() then via .text()).
+    // Read response body **once** then attempt to parse
     let tokenData: any
     const rawBody = await tokenResponse.text()
     try {
       tokenData = JSON.parse(rawBody)
     } catch (parseErr) {
-      // Attempt fallback parse for URL-encoded responses (error cases)
-      try {
-        const params = new URLSearchParams(rawBody)
-        tokenData = Object.fromEntries(params)
-      } catch (_) {
-        console.error('Token parse failed, raw response:', rawBody.slice(0, 200))
-        throw new Error('Invalid JSON from Lightspeed token endpoint')
-      }
+      console.error('Token parse failed, raw response:', rawBody.slice(0, 200))
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Invalid response from Lightspeed token endpoint',
+        details: rawBody.slice(0, 200)
+      }, { status: 500 })
     }
     
     console.log('Token data received (keys only):', Object.keys(tokenData))
@@ -160,12 +150,10 @@ export async function GET(request: NextRequest) {
         refresh_token: tokenData.refresh_token,
         expires_in: tokenData.expires_in,
         token_type: tokenData.token_type,
-        scope: tokenData.scope,
-        instance_url: tokenData.instance_url,
+        scope: tokenData.scope || '',
         connectedAt: serverTimestamp(),
-        // Store information about which API endpoint was used (Australian regional endpoint)
-        apiEndpoint: 'https://aus.merchantos.com',
-        region: 'aus',
+        // Store information about API endpoint
+        apiEndpoint: 'https://cloud.lightspeedapp.com',
       };
       
       console.log('Data structure to store in Firestore:', {
@@ -190,7 +178,7 @@ export async function GET(request: NextRequest) {
             access_token: tokenData.access_token,
             refresh_token: tokenData.refresh_token,
             connectedAt: serverTimestamp(),
-            apiEndpoint: 'https://aus.merchantos.com',
+            apiEndpoint: 'https://cloud.lightspeedapp.com',
           };
           
           console.log('Attempting to write essential data only...');
@@ -208,13 +196,10 @@ export async function GET(request: NextRequest) {
         success: true,
         tokenInfo: {
           expiresIn: tokenData.expires_in,
-          scope: tokenData.scope,
+          scope: tokenData.scope || '',
           tokenType: tokenData.token_type,
           hasAccessToken: !!tokenData.access_token,
-          hasRefreshToken: !!tokenData.refresh_token,
-          instanceUrl: tokenData.instance_url,
-          region: 'aus',
-          apiEndpoint: 'https://aus.merchantos.com'
+          hasRefreshToken: !!tokenData.refresh_token
         }
       })
     } catch (firestoreError) {
@@ -252,6 +237,7 @@ async function testFirestorePermissions(merchantId: string) {
   }
 }
 
+// Updated POST method to match the GET method's approach
 export async function POST(request: NextRequest) {
   console.log('Lightspeed New OAuth token exchange POST endpoint called')
   
@@ -261,34 +247,31 @@ export async function POST(request: NextRequest) {
       hasCode: !!data.code, 
       hasMerchantId: !!data.merchantId, 
       hasState: !!data.state,
-      hasCodeVerifier: !!data.codeVerifier,
       codeLength: data.code ? data.code.length : 0,
       stateValue: data.state
     })
     
-    const { code, merchantId, state, codeVerifier } = data
+    const { code, merchantId, state } = data
     
     // Validate required parameters
-    if (!code || !merchantId || !state || !codeVerifier) {
-      console.error('Missing required parameters:', { 
-        code: !!code, 
-        merchantId: !!merchantId, 
-        state: !!state,
-        codeVerifier: !!codeVerifier 
-      })
-      return NextResponse.json({ success: false, error: 'Missing required parameters' }, { status: 400 })
+    if (!code) {
+      console.error('Missing required code parameter')
+      return NextResponse.json({ success: false, error: 'Missing authorization code' }, { status: 400 })
     }
     
+    // Use merchantId from request or fallback to state or default
+    const effectiveMerchantId = merchantId || state || 'default_merchant'
+    
     // Test Firestore permissions before proceeding
-    const hasFirestorePermissions = await testFirestorePermissions(merchantId);
+    const hasFirestorePermissions = await testFirestorePermissions(effectiveMerchantId);
     console.log('Firestore permission test result:', hasFirestorePermissions ? 'SUCCESS' : 'FAILED');
     
     if (!hasFirestorePermissions) {
-      console.error('Insufficient Firestore permissions for merchant ID:', merchantId);
+      console.error('Insufficient Firestore permissions for merchant ID:', effectiveMerchantId);
       return NextResponse.json({ 
         success: false, 
         error: 'Insufficient permissions to write to Firestore',
-        details: { merchantId }
+        details: { merchantId: effectiveMerchantId }
       }, { status: 500 });
     }
     
@@ -298,45 +281,40 @@ export async function POST(request: NextRequest) {
       hasClientSecret: !!LIGHTSPEED_CLIENT_SECRET,
       clientSecretLength: LIGHTSPEED_CLIENT_SECRET ? LIGHTSPEED_CLIENT_SECRET.length : 0,
       codeLength: code.length,
-      codeVerifierLength: codeVerifier.length
     })
     
-    // Exchange code for access token using the client_secret and code_verifier
-    const tokenParams2 = new URLSearchParams({
+    // Exchange code for access token using the client_secret according to Lightspeed docs
+    const tokenRequestBody = {
       client_id: LIGHTSPEED_CLIENT_ID,
       client_secret: LIGHTSPEED_CLIENT_SECRET,
       code,
-      grant_type: 'authorization_code',
-      code_verifier: codeVerifier,
-    })
+      grant_type: 'authorization_code'
+    }
 
-    const tokenResponse = await fetch('https://aus.merchantos.com/oauth/access_token.php', {
+    // Use the correct token endpoint as per Lightspeed docs
+    const tokenResponse = await fetch('https://cloud.lightspeedapp.com/auth/oauth/token', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Content-Type': 'application/json'
       },
-      body: tokenParams2.toString()
+      body: JSON.stringify(tokenRequestBody)
     })
     
     console.log('Token response status:', tokenResponse.status)
     console.log('Token response headers:', Object.fromEntries([...tokenResponse.headers.entries()]))
     
-    // Read response body **once** then attempt to parse. This avoids the
-    // "Body has already been read" runtime error that occurs when we try to
-    // consume the same body twice (first via .json() then via .text()).
+    // Read response body **once** then attempt to parse
     let tokenData: any
     const rawBody = await tokenResponse.text()
     try {
       tokenData = JSON.parse(rawBody)
     } catch (parseErr) {
-      // Attempt fallback parse for URL-encoded responses (error cases)
-      try {
-        const params = new URLSearchParams(rawBody)
-        tokenData = Object.fromEntries(params)
-      } catch (_) {
-        console.error('Token parse failed, raw response:', rawBody.slice(0, 200))
-        throw new Error('Invalid JSON from Lightspeed token endpoint')
-      }
+      console.error('Token parse failed, raw response:', rawBody.slice(0, 200))
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Invalid response from Lightspeed token endpoint',
+        details: rawBody.slice(0, 200)
+      }, { status: 500 })
     }
     
     console.log('Token data received (keys only):', Object.keys(tokenData))
@@ -387,12 +365,12 @@ export async function POST(request: NextRequest) {
     }
     
     console.log('Successfully obtained access token, storing in Firestore...')
-    console.log('Firestore document path:', `merchants/${merchantId}/integrations/lightspeed_new`)
+    console.log('Firestore document path:', `merchants/${effectiveMerchantId}/integrations/lightspeed_new`)
     
     try {
       // Store the token data in Firestore using Web SDK
-      const integrationDocRef = doc(db, `merchants/${merchantId}/integrations/lightspeed_new`);
-      console.log('Firestore document reference created for path:', `merchants/${merchantId}/integrations/lightspeed_new`);
+      const integrationDocRef = doc(db, `merchants/${effectiveMerchantId}/integrations/lightspeed_new`);
+      console.log('Firestore document reference created for path:', `merchants/${effectiveMerchantId}/integrations/lightspeed_new`);
       
       const dataToStore = {
         connected: true,
@@ -400,12 +378,10 @@ export async function POST(request: NextRequest) {
         refresh_token: tokenData.refresh_token,
         expires_in: tokenData.expires_in,
         token_type: tokenData.token_type,
-        scope: tokenData.scope,
-        instance_url: tokenData.instance_url,
+        scope: tokenData.scope || '',
         connectedAt: serverTimestamp(),
-        // Store information about which API endpoint was used (Australian regional endpoint)
-        apiEndpoint: 'https://aus.merchantos.com',
-        region: 'aus',
+        // Store information about API endpoint
+        apiEndpoint: 'https://cloud.lightspeedapp.com',
       };
       
       console.log('Data structure to store in Firestore:', {
@@ -430,7 +406,7 @@ export async function POST(request: NextRequest) {
             access_token: tokenData.access_token,
             refresh_token: tokenData.refresh_token,
             connectedAt: serverTimestamp(),
-            apiEndpoint: 'https://aus.merchantos.com',
+            apiEndpoint: 'https://cloud.lightspeedapp.com',
           };
           
           console.log('Attempting to write essential data only...');
@@ -448,13 +424,10 @@ export async function POST(request: NextRequest) {
         success: true,
         tokenInfo: {
           expiresIn: tokenData.expires_in,
-          scope: tokenData.scope,
+          scope: tokenData.scope || '',
           tokenType: tokenData.token_type,
           hasAccessToken: !!tokenData.access_token,
-          hasRefreshToken: !!tokenData.refresh_token,
-          instanceUrl: tokenData.instance_url,
-          region: 'aus',
-          apiEndpoint: 'https://aus.merchantos.com'
+          hasRefreshToken: !!tokenData.refresh_token
         }
       })
     } catch (firestoreError) {

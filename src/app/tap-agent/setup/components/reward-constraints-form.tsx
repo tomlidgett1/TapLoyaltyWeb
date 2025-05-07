@@ -18,7 +18,7 @@ interface RewardConstraints {
     percentageDiscount: boolean
     fixedAmount: boolean
     buyXGetY: boolean
-    mysteryGift?: boolean // Made optional for backward compatibility
+    mysteryGift: boolean // Required field, not optional
   }
   concurrencyCeiling: number
 }
@@ -32,7 +32,8 @@ const rewardTypeDescriptions = {
   freeItem: "Offer a free product or item",
   percentageDiscount: "Offer a percentage discount on products",
   fixedAmount: "Offer a fixed amount discount",
-  buyXGetY: "Buy X items, get Y items free"
+  buyXGetY: "Buy X items, get Y items free",
+  mysteryGift: "Surprise customers with a mystery gift or reward"
 }
 
 export function RewardConstraintsForm({ data, onChange }: RewardConstraintsFormProps) {
@@ -54,10 +55,8 @@ export function RewardConstraintsForm({ data, onChange }: RewardConstraintsFormP
     })
   }
   
-  // Filter out mysteryGift for display and interaction
-  const displayTypes = Object.entries(data.allowedTypes).filter(
-    ([key]) => key !== 'mysteryGift' && key in rewardTypeDescriptions
-  ) as [keyof typeof rewardTypeDescriptions, boolean][];
+  // Get all the allowed reward types for display
+  const displayTypes = Object.entries(data.allowedTypes) as [keyof typeof rewardTypeDescriptions, boolean][];
 
   return (
     <Card className="border-none shadow-none">

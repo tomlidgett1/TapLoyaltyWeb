@@ -54,6 +54,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import React from "react"
 
 // Define types for Square Catalog objects
 interface SquareCatalogObject {
@@ -164,6 +165,8 @@ export default function InventoryPage() {
   // Add state for existing tap agent inventory
   const [existingTapAgentItems, setExistingTapAgentItems] = useState<POSInventoryItem[]>([])
   const [loadingExistingItems, setLoadingExistingItems] = useState(false)
+  // Add state for all items sheet
+  const [isAllItemsSheetOpen, setIsAllItemsSheetOpen] = useState(false)
 
   // Fetch inventory data from Square
   useEffect(() => {
@@ -1115,6 +1118,15 @@ export default function InventoryPage() {
           </>
         )}
         
+        {/* Add global style to prevent double backdrop when both sheets are open */}
+        {isAllItemsSheetOpen && isTapAgentSheetOpen && (
+          <style jsx global>{`
+            body > div[role="presentation"] + div[role="presentation"] {
+              display: none;
+            }
+          `}</style>
+        )}
+
         {/* Side panel for item details */}
         <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
           <SheetContent className="w-full sm:max-w-md overflow-y-auto">
@@ -1173,33 +1185,38 @@ export default function InventoryPage() {
                     </SheetDescription>
                   </SheetHeader>
                   
-                  {/* Existing Tap Agent Items Section */}
+                  {/* Existing Tap Agent Items Section - Simplified to a single summary row */}
                   {existingTapAgentItems.length > 0 && (
-                    <div className="mb-6">
-                      <h3 className="text-sm font-semibold mb-2">Already Added Items</h3>
-                      <div className="bg-muted rounded-md p-2">
-                        <div className="space-y-1">
-                          {existingTapAgentItems.map(item => (
-                            <div key={`existing-${item.id}`} className="flex items-center justify-between border-b border-gray-200 py-2 last:border-0">
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium text-sm truncate">{item.name}</p>
-                                <div className="flex items-center text-xs text-muted-foreground">
-                                  <span className="mr-2">Cost: ${item.costOfGoods.toFixed(2)}</span>
-                                  {item.retailPrice && (
-                                    <span>Price: ${item.retailPrice.toFixed(2)}</span>
-                                  )}
-                                </div>
-                              </div>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => handleRemoveFromTapAgent(item.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between">
+                        <div className="bg-blue-50 rounded-md py-2 px-3 flex-1 flex items-center mr-2">
+                          <div className="mr-2 text-blue-600">
+                            <Zap className="h-4 w-4" />
+                          </div>
+                          <div className="flex-1 min-w-0 flex items-center">
+                            <div className="truncate">
+                              <span className="text-sm font-medium text-blue-800">
+                                {existingTapAgentItems.length === 1 ? (
+                                  existingTapAgentItems[0].name
+                                ) : (
+                                  `${existingTapAgentItems[0].name}${existingTapAgentItems.length > 1 ? "..." : ""}`
+                                )}
+                              </span>
                             </div>
-                          ))}
+                            {existingTapAgentItems.length > 1 && (
+                              <span className="text-sm text-blue-600 font-medium whitespace-nowrap ml-1">
+                                +{existingTapAgentItems.length - 1} items
+                              </span>
+                            )}
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-100 px-2 py-0 whitespace-nowrap ml-2 flex-shrink-0"
+                            onClick={() => setIsAllItemsSheetOpen(true)}
+                          >
+                            View all
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -1224,10 +1241,10 @@ export default function InventoryPage() {
                   <Separator className="my-2" />
                 </div>
                 
-                {/* Scrollable content */}
+                {/* Scrollable content - Fix the height calculation */}
                 <div className="flex-grow overflow-hidden">
-                  <ScrollArea className="h-[calc(100vh-15rem)] pr-2 scrollbar-thin">
-                    <div className="space-y-1">
+                  <ScrollArea className="h-[calc(100vh-22rem)] pr-2">
+                    <div className="space-y-1 pb-16">
                       {tapAgentItems
                         // Filter out items that already exist in Tap Agent
                         .filter(item => !existingTapAgentItems.some(existing => existing.id === item.id))
@@ -1290,7 +1307,7 @@ export default function InventoryPage() {
                 </div>
                 
                 {/* Sticky footer with submit button */}
-                <div className="flex-none pt-4 mt-2 border-t bg-background sticky bottom-0">
+                <div className="flex-none pt-4 mt-2 border-t bg-background sticky bottom-0 z-10">
                   <Button 
                     className="w-full" 
                     onClick={handleSubmitToTapAgent}
@@ -1301,6 +1318,60 @@ export default function InventoryPage() {
                 </div>
               </>
             )}
+          </SheetContent>
+        </Sheet>
+
+        {/* Secondary sheet for displaying all Tap Agent items */}
+        <Sheet open={isAllItemsSheetOpen} onOpenChange={setIsAllItemsSheetOpen}>
+          <SheetContent className="w-full sm:max-w-md overflow-y-auto flex flex-col">
+            <SheetHeader className="pb-4">
+              <SheetTitle>
+                All <GradientText>Tap Agent</GradientText> Items
+              </SheetTitle>
+              <SheetDescription>
+                {existingTapAgentItems.length} items in your Tap Agent catalog
+              </SheetDescription>
+            </SheetHeader>
+            <Separator className="mb-4" />
+            
+            <ScrollArea className="flex-grow pr-2 h-[calc(100vh-8rem)]">
+              <div className="space-y-1">
+                {existingTapAgentItems.map(item => (
+                  <div key={`all-items-${item.id}`} className="flex items-center justify-between border-b border-gray-200 py-3 last:border-0">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm">{item.name}</p>
+                      <div className="flex items-center text-xs text-muted-foreground mt-1">
+                        <span className="mr-2">Cost: ${item.costOfGoods.toFixed(2)}</span>
+                        {item.retailPrice && (
+                          <span>Price: ${item.retailPrice.toFixed(2)}</span>
+                        )}
+                        <span className="ml-2 px-1.5 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full">
+                          {item.type === 'ITEM' ? 'Item' : 'Variation'}
+                        </span>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => handleRemoveFromTapAgent(item.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+            
+            <div className="flex-none pt-4 mt-2 border-t">
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                onClick={() => setIsAllItemsSheetOpen(false)}
+              >
+                Close
+              </Button>
+            </div>
           </SheetContent>
         </Sheet>
       </div>

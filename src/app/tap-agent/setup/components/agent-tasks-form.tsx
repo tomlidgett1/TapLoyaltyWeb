@@ -15,6 +15,8 @@ interface AgentTasks {
   reEngagement: boolean
   bannerCreation: boolean
   customerMessaging: boolean
+  emailMarketing: boolean
+  performanceAnalysis: boolean
 }
 
 interface AgentTasksFormProps {
@@ -26,7 +28,9 @@ const taskDescriptions = {
   rewardsGeneration: "Automatically generate targeted rewards for customers based on their behavior and preferences.",
   reEngagement: "Create campaigns to re-engage dormant or churned customers.",
   bannerCreation: "Design promotional banners for your store's app and website.",
-  customerMessaging: "Send personalized messages to customers via Push Notification or in-app message depending on the user's settings."
+  customerMessaging: "Send personalized messages to customers via Push Notification or in-app message depending on the user's settings.",
+  emailMarketing: "Send personalized email campaigns to customers.",
+  performanceAnalysis: "Analyze performance of rewards and marketing campaigns and provide insights."
 }
 
 export function AgentTasksForm({ data, onChange }: AgentTasksFormProps) {
@@ -38,15 +42,6 @@ export function AgentTasksForm({ data, onChange }: AgentTasksFormProps) {
     })
   }
   
-  // Filter out removed tasks if they exist in old data
-  const compatibleData = {...data};
-  if ('emailMarketing' in compatibleData) {
-    delete (compatibleData as any).emailMarketing;
-  }
-  if ('performanceAnalysis' in compatibleData) {
-    delete (compatibleData as any).performanceAnalysis;
-  }
-  
   return (
     <Card className="border-none shadow-none">
       <CardHeader className="p-0">
@@ -55,9 +50,9 @@ export function AgentTasksForm({ data, onChange }: AgentTasksFormProps) {
           Enable or disable specific tasks for your Tap Agent.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6 p-0 mt-6">
+      <CardContent className="space-y-6 p-0 mt-4">
         <div className="space-y-6">
-          {(Object.keys(compatibleData) as Array<keyof AgentTasks>).filter(task => 
+          {(Object.keys(data) as Array<keyof AgentTasks>).filter(task => 
             // Only show tasks that are in our current schema
             Object.keys(taskDescriptions).includes(task)
           ).map((task) => (

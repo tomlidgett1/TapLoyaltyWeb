@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select"
-import { X, PlusCircle, Trash2, Coffee, Utensils, Pizza, CupSoda, IceCream, Croissant, ChevronDown, Beer, Wine, Beef, ShoppingBag } from "lucide-react"
+import { X, PlusCircle, Trash2, Coffee, Utensils, Pizza, CupSoda, IceCream, Croissant, ChevronDown, Beer, Wine, Beef, ShoppingBag, Edit, Package as PackageIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
 import {
@@ -26,12 +26,25 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { useAuth } from "@/contexts/auth-context"
+import { db } from "@/lib/firebase"
+import { doc, getDoc, updateDoc } from "firebase/firestore"
+import { Loader2 } from "lucide-react"
+import { toast } from "@/components/ui/use-toast"
 
 interface Product {
   name: string
   price: number
   cost: number
   category: string
+}
+
+interface POSInventoryItem {
+  id: string
+  name: string
+  retailPrice?: number
+  costOfGoods: number
+  type: string
 }
 
 interface HeroProduct {
@@ -51,6 +64,7 @@ interface ProductPricing {
   products: Product[]
   heroProducts: HeroProduct[]
   lowVelocityProducts: LowVelocityProduct[]
+  posInventory?: POSInventoryItem[]
 }
 
 interface ProductPricingFormProps {
@@ -179,6 +193,12 @@ export function ProductPricingForm({ data, onChange }: ProductPricingFormProps) 
     rrp: 0,
     cost: 0
   })
+  
+  const { user } = useAuth()
+  const [posInventoryItems, setPosInventoryItems] = useState<POSInventoryItem[]>([])
+  const [loadingPosInventory, setLoadingPosInventory] = useState(false)
+  const [editingItem, setEditingItem] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState<string>("")
   
   // Get current product categories based on selected industry
   const productCategories = productCategoriesByIndustry[industry as keyof typeof productCategoriesByIndustry] || productCategoriesByIndustry.other;
@@ -525,6 +545,159 @@ export function ProductPricingForm({ data, onChange }: ProductPricingFormProps) 
     }
   }, [industry, productCategories, newProduct.category]);
 
+  // Fetch POS inventory items from Firestore
+  useEffect(() => {
+    async function fetchPOSInventory() {
+      if (!user?.uid) return
+      
+      try {
+        setLoadingPosInventory(true)
+        
+        console.log("Fetching POS inventory for user:", user.uid)
+        
+        // Check if the merchant has a document in the agents collection
+        const agentDocRef = doc(db, 'agents', user.uid)
+        const agentDoc = await getDoc(agentDocRef)
+        
+        // If the agent document exists, fetch the posInventory items
+        if (agentDoc.exists()) {
+          const agentData = agentDoc.data()
+          console.log("Agent data retrieved:", agentData)
+          
+          if (agentData.posInventory && Array.isArray(agentData.posInventory)) {
+            console.log("POS Inventory found:", agentData.posInventory)
+            setPosInventoryItems(agentData.posInventory)
+            
+            // No need to call onChange here - this was causing an infinite loop
+            // We'll just update our local state
+          } else {
+            console.log("No posInventory array found or it's empty")
+            setPosInventoryItems([])
+          }
+        } else {
+          console.log("No agent document exists for user")
+          setPosInventoryItems([])
+        }
+      } catch (error) {
+        console.error("Error fetching POS inventory:", error)
+        setPosInventoryItems([])
+      } finally {
+        setLoadingPosInventory(false)
+      }
+    }
+    
+    fetchPOSInventory()
+    // Remove data from the dependency array to prevent loops
+  }, [user])
+  
+  // Handle retail price edit
+  const handleSaveRetailPrice = async (itemId: string) => {
+    if (!user?.uid || !editValue) {
+      setEditingItem(null)
+      return
+    }
+    
+    const price = parseFloat(editValue)
+    if (isNaN(price) || price <= 0) {
+      toast({
+        title: "Invalid price",
+        description: "Please enter a valid price greater than zero.",
+        variant: "destructive"
+      })
+      setEditingItem(null)
+      return
+    }
+    
+    try {
+      console.log(`Updating retail price for item ${itemId} to ${price}`)
+      
+      // Update local state
+      const updatedItems = posInventoryItems.map(item => 
+        item.id === itemId 
+          ? { ...item, retailPrice: price } 
+          : item
+      )
+      
+      console.log("Updated items:", updatedItems)
+      setPosInventoryItems(updatedItems)
+      
+      // Update in Firestore
+      const agentDocRef = doc(db, 'agents', user.uid)
+      console.log("Saving to Firestore path:", `agents/${user.uid}`)
+      
+      await updateDoc(agentDocRef, {
+        posInventory: updatedItems
+      })
+      
+      console.log("Successfully updated in Firestore")
+      
+      // Also update the main data context
+      onChange({
+        ...data,
+        posInventory: updatedItems
+      })
+      
+      // Show success message
+      toast({
+        title: "Price updated",
+        description: "Retail price has been saved successfully.",
+      })
+      
+    } catch (error) {
+      console.error("Error updating retail price:", error)
+      toast({
+        title: "Error saving price",
+        description: "There was a problem updating the retail price. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setEditingItem(null)
+    }
+  }
+  
+  // Handle removing an item
+  const handleRemovePosItem = async (itemId: string) => {
+    if (!user?.uid) return
+    
+    try {
+      console.log(`Removing item ${itemId} from inventory`)
+      
+      // Filter out the item to be removed
+      const updatedItems = posInventoryItems.filter(item => item.id !== itemId)
+      
+      // Update local state
+      setPosInventoryItems(updatedItems)
+      
+      // Update in Firestore
+      const agentDocRef = doc(db, 'agents', user.uid)
+      await updateDoc(agentDocRef, {
+        posInventory: updatedItems
+      })
+      
+      console.log("Successfully removed item from Firestore")
+      
+      // Also update the main data context
+      onChange({
+        ...data,
+        posInventory: updatedItems
+      })
+      
+      // Show success message
+      toast({
+        title: "Item removed",
+        description: "Product has been removed from your catalog.",
+      })
+      
+    } catch (error) {
+      console.error("Error removing item:", error)
+      toast({
+        title: "Error removing item",
+        description: "There was a problem removing the product. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
+
   return (
     <Card className="border-none shadow-none">
       <CardHeader className="p-0">
@@ -579,6 +752,161 @@ export function ProductPricingForm({ data, onChange }: ProductPricingFormProps) 
               placeholder="0.00"
             />
           </div>
+        </div>
+        
+        {/* Product Catalog from POS Inventory */}
+        <div className="space-y-4 border-t pt-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-medium flex items-center">
+                <PackageIcon className="h-5 w-5 mr-2 text-primary" />
+                Product Catalog
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Your imported products from the inventory system
+              </p>
+            </div>
+          </div>
+          
+          {loadingPosInventory ? (
+            <div className="flex justify-center py-6">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : posInventoryItems.length === 0 ? (
+            <div className="text-center py-6 border rounded-md">
+              <ShoppingBag className="h-12 w-12 mx-auto text-muted-foreground opacity-40 mb-2" />
+              <h3 className="font-medium text-base">No products added yet</h3>
+              <p className="text-sm text-muted-foreground">
+                Import products from your inventory page to manage them here
+              </p>
+            </div>
+          ) : (
+            <div className="border rounded-md">
+              <div className="mb-2 px-4 py-2 bg-muted/20 text-xs text-muted-foreground">
+                {posInventoryItems.length} product{posInventoryItems.length !== 1 ? 's' : ''} in catalog
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product Name</TableHead>
+                    <TableHead>Cost Price ($)</TableHead>
+                    <TableHead>Retail Price ($)</TableHead>
+                    <TableHead className="w-[80px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {posInventoryItems.map((item) => (
+                    <TableRow key={item.id || 'unknown'}>
+                      <TableCell className="font-medium">
+                        {item.name || 'Unnamed Product'}
+                        {item.type && (
+                          <Badge variant="outline" className="ml-2 text-xs">
+                            {item.type === 'ITEM' ? 'Product' : 'Variation'}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {typeof item.costOfGoods === 'number' ? 
+                          item.costOfGoods.toFixed(2) : 
+                          (item.costOfGoods ? String(item.costOfGoods) : 'Not set')}
+                      </TableCell>
+                      <TableCell>
+                        {editingItem === item.id ? (
+                          <div className="flex items-center space-x-2">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              className="w-20 h-7 text-sm"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleSaveRetailPrice(item.id)
+                                } else if (e.key === 'Escape') {
+                                  setEditingItem(null)
+                                }
+                              }}
+                              autoFocus
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2"
+                              onClick={() => handleSaveRetailPrice(item.id)}
+                            >
+                              Save
+                            </Button>
+                          </div>
+                        ) : (
+                          <div 
+                            className="flex items-center group cursor-pointer"
+                            onClick={() => {
+                              setEditingItem(item.id)
+                              setEditValue(
+                                typeof item.retailPrice === 'number' 
+                                  ? item.retailPrice.toString() 
+                                  : item.retailPrice || "0"
+                              )
+                            }}
+                          >
+                            <span>
+                              {typeof item.retailPrice === 'number' 
+                                ? item.retailPrice.toFixed(2)
+                                : (item.retailPrice ? String(item.retailPrice) : "Not set")}
+                            </span>
+                            <Edit className="h-3.5 w-3.5 ml-1 opacity-0 group-hover:opacity-100 text-muted-foreground" />
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => handleRemovePosItem(item.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <div className="p-3 border-t bg-blue-50/50 text-sm">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 mr-2 mt-0.5 text-blue-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="16" x2="12" y2="12"></line>
+                      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                  </div>
+                  <div className="text-blue-800 text-xs">
+                    <span className="font-medium">Recommendation:</span> Ensure all products have both cost and retail prices. 
+                    This helps Tap Agent create more effective reward campaigns by accurately calculating margins 
+                    and selecting the most profitable products to include in rewards.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {posInventoryItems.length === 0 && (
+            <div className="flex items-start p-3 bg-blue-50/50 rounded-md mt-2 text-sm">
+              <div className="flex-shrink-0 mr-2 mt-0.5 text-blue-500">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="16" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+              </div>
+              <div className="text-blue-800 text-xs">
+                <span className="font-medium">Tip:</span> Import products from the inventory page and set both cost and retail prices.
+                Complete product information helps Tap Agent make intelligent decisions when creating personalized rewards for your customers.
+              </div>
+            </div>
+          )}
         </div>
         
         {/* Special Product Categories */}

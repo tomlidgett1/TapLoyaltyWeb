@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, getDocs, query, getDoc, doc as firestoreDoc } from "firebase/firestore"
+import { collection, getDocs, query, getDoc, doc as firestoreDoc, where } from "firebase/firestore"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
@@ -21,13 +21,152 @@ import {
   Zap, 
   DollarSign,
   BarChart3,
-  Calendar
+  Calendar,
+  Percent,
+  Package,
+  ShoppingBag,
+  Award,
+  Coffee,
+  Tag,
+  ShoppingCart,
+  Brain,
+  TrendingUp,
+  Banknote,
+  Repeat,
+  Star,
+  Megaphone,
+  Bell,
+  Activity
 } from "lucide-react"
 import { format, formatDistanceToNow } from "date-fns"
 import { Skeleton } from "@/components/ui/skeleton"
 import Link from "next/link"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
+import { 
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetClose
+} from "@/components/ui/sheet"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
+import { Progress } from "@/components/ui/progress"
+
+// Format date helper function (global scope)
+const formatDate = (timestamp: any) => {
+  if (!timestamp) return 'N/A';
+  
+  try {
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    }).format(date);
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Invalid date';
+  }
+};
+
+// Format time ago helper function (global scope)
+const formatTimeAgo = (timestamp: any) => {
+  if (!timestamp) return '';
+  
+  try {
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return formatDistanceToNow(date, { addSuffix: true });
+  } catch (error) {
+    console.error('Error formatting time ago:', error);
+    return 'Unknown time';
+  }
+};
+
+// Calculate customer score based on RFM model
+const calculateCustomerScore = (customer: Customer) => {
+  if (!customer) return 0;
+  
+  // Calculate recency score (0-5)
+  // Lower days since last visit is better
+  const recencyScore = customer.daysSinceLastVisit <= 7 ? 5 :
+                      customer.daysSinceLastVisit <= 14 ? 4 :
+                      customer.daysSinceLastVisit <= 30 ? 3 :
+                      customer.daysSinceLastVisit <= 60 ? 2 :
+                      customer.daysSinceLastVisit <= 90 ? 1 : 0;
+  
+  // Calculate frequency score (0-5)
+  // Higher transaction count is better
+  const frequencyScore = customer.lifetimeTransactionCount >= 20 ? 5 :
+                        customer.lifetimeTransactionCount >= 10 ? 4 :
+                        customer.lifetimeTransactionCount >= 5 ? 3 :
+                        customer.lifetimeTransactionCount >= 3 ? 2 :
+                        customer.lifetimeTransactionCount >= 1 ? 1 : 0;
+                        
+  // Calculate monetary score (0-5)
+  // Higher lifetime spend is better
+  const monetaryScore = customer.totalLifetimeSpend >= 500 ? 5 :
+                       customer.totalLifetimeSpend >= 300 ? 4 :
+                       customer.totalLifetimeSpend >= 200 ? 3 :
+                       customer.totalLifetimeSpend >= 100 ? 2 :
+                       customer.totalLifetimeSpend >= 50 ? 1 : 0;
+  
+  // Calculate weighted score - recency is most important
+  const weightedScore = (recencyScore * 0.45) + (frequencyScore * 0.30) + (monetaryScore * 0.25);
+  
+  // Return score on scale of 1-10, rounded
+  return Math.max(1, Math.round(weightedScore * 2));
+};
+
+// MetricCard component for displaying customer metrics
+interface MetricCardProps {
+  icon: React.ReactNode;
+  value: string;
+  label: string;
+}
+
+function MetricCard({ icon, value, label }: MetricCardProps) {
+  return (
+    <Card className="rounded-md bg-gray-50 border">
+      <CardContent className="px-4 py-3 flex flex-col justify-center items-center text-center">
+        <div className="mb-1">{icon}</div>
+        <div className="font-medium">{value}</div>
+        <div className="text-xs text-gray-500">{label}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface BannerActivity {
+  bannerId: string;
+  bannerAction: string;
+  buttonText: string;
+  color: string;
+  secondaryColor: string;
+  createdAt: any;
+  description: string;
+  isActive: boolean;
+  merchantId: string;
+  merchantName: string;
+  style: string;
+  title: string;
+  type: string;
+}
+
+interface WeeklyAgentActivity {
+  weekId: string;
+  createdAt: any;
+  runDate?: any;
+  banners: BannerActivity[];
+  rewards?: any[];
+  pushNotifications?: {
+    sent: boolean;
+    timestamp?: any;
+    content?: string;
+  }[];
+}
 
 interface Customer {
   customerId: string
@@ -69,6 +208,8 @@ interface Customer {
     createdAt: any
     profileDescription: string
   }>
+  // Weekly agent activities
+  weeklyAgentActivities?: WeeklyAgentActivity[]
 }
 
 interface AgentReward {
@@ -88,14 +229,47 @@ interface AgentReward {
   redeemedDate?: any
 }
 
+// Helper function to get appropriate icon for reward type
+const getRewardTypeIcon = (type: string) => {
+  switch (type?.toLowerCase()) {
+    case 'percentage':
+    case 'percentagediscount':
+      return <Percent className="h-4 w-4 text-purple-600" />;
+    case 'fixed':
+    case 'fixeddiscount':
+      return <Tag className="h-4 w-4 text-indigo-600" />;
+    case 'freeitem':
+      return <Gift className="h-4 w-4 text-pink-600" />;
+    case 'buyxgety':
+      return <ShoppingBag className="h-4 w-4 text-orange-600" />;
+    case 'mystery':
+    case 'mysterygift':
+      return <Package className="h-4 w-4 text-amber-600" />;
+    case 'coffee':
+      return <Coffee className="h-4 w-4 text-blue-600" />;
+    default:
+      return <Award className="h-4 w-4 text-blue-600" />;
+  }
+};
+
 export function CustomersList() {
   const { user } = useAuth()
-  const [loading, setLoading] = useState(true)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
+  const [selectedCohort, setSelectedCohort] = useState<string | null>(null)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [isCustomerSheetOpen, setIsCustomerSheetOpen] = useState(false)
   const [hoveredCustomerId, setHoveredCustomerId] = useState<string | null>(null)
+  const [customerProfiles, setCustomerProfiles] = useState<any[]>([])
+  const [customerRewards, setCustomerRewards] = useState<any[]>([])
+  const [customerTransactions, setCustomerTransactions] = useState<any[]>([])
+  const [customerRedemptions, setCustomerRedemptions] = useState<any[]>([])
+  const [loadingProfiles, setLoadingProfiles] = useState(false)
+  const [loadingRewards, setLoadingRewards] = useState(false)
+  const [weeklyAgentActivities, setWeeklyAgentActivities] = useState<WeeklyAgentActivity[]>([])
+  const [loadingAgentActivities, setLoadingAgentActivities] = useState(false)
 
   // Update search handler
   const handleSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -129,20 +303,26 @@ export function CustomersList() {
       }
       
       try {
-        const customersRef = collection(db, 'customers')
-        const customersSnap = await getDocs(customersRef)
+        // Step 1: Fetch merchant-specific customer data
+        const merchantCustomersRef = collection(db, 'merchants', user.uid, 'customers')
+        const merchantCustomersSnap = await getDocs(merchantCustomersRef)
         
-        if (customersSnap.empty) {
+        if (merchantCustomersSnap.empty) {
           setLoading(false)
           return
         }
         
-        // Create an array of promises for fetching both customer data and profiles
-        const customerPromises = customersSnap.docs.map(async (doc) => {
-          const data = doc.data()
+        // Step 2: Create an array of promises to fetch each customer's data and profiles
+        const customerPromises = merchantCustomersSnap.docs.map(async (doc) => {
+          const merchantCustomerData = doc.data()
           const customerId = doc.id
           
-          // Fetch customer profiles
+          // Step 3: Fetch additional customer data from top-level customers collection
+          const customerProfileRef = firestoreDoc(db, 'customers', customerId)
+          const customerProfileSnap = await getDoc(customerProfileRef)
+          const profileData = customerProfileSnap.exists() ? customerProfileSnap.data() : {}
+          
+          // Step 4: Fetch customer AI profiles
           const profilesRef = collection(db, 'customers', customerId, 'profiles')
           const profilesSnap = await getDocs(profilesRef)
           
@@ -159,31 +339,73 @@ export function CustomersList() {
             })
             .filter(profile => profile.merchantId === user.uid)
             .sort((a, b) => {
-              const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
-              const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+              const dateA = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime()) : 0
+              const dateB = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime()) : 0
               return dateB - dateA
             })
           
-          // Build the customer object with all required fields
+          // Step 5: Fetch customer agent rewards
+          const rewardsRef = collection(db, 'customers', customerId, 'rewards')
+          const rewardsQuery = query(rewardsRef, where('merchantId', '==', user.uid))
+          const rewardsSnap = await getDocs(rewardsQuery)
+          
+          // Map rewards data
+          const agentRewards = rewardsSnap.docs.map(rewardDoc => {
+            const rewardData = rewardDoc.data()
+            return {
+              id: rewardDoc.id,
+              rewardName: rewardData.rewardName || 'Unnamed Reward',
+              description: rewardData.description || '',
+              type: rewardData.type || 'unknown',
+              pointsCost: rewardData.pointsCost || 0,
+              status: rewardData.status || 'active',
+              createdAt: rewardData.createdAt || null,
+              generationReason: rewardData.generationReason || '',
+              reason: rewardData.reason || '',
+              reasoning: rewardData.reasoning || '',
+              merchantId: rewardData.merchantId,
+              basedOn: rewardData.basedOn || [],
+              isRedeemed: rewardData.isRedeemed || false,
+              redeemedDate: rewardData.redeemedDate || null
+            }
+          })
+          
+          // Build the customer object by merging merchant-specific metrics with profile data
           const customer: Customer = {
             customerId,
-            fullName: data.fullName || 'Unknown',
-            pointsBalance: data.pointsBalance || 0,
-            membershipTier: data.membershipTier || '',
-            lifetimeTransactionCount: data.lifetimeTransactionCount || 0,
-            totalLifetimeSpend: data.totalLifetimeSpend || 0,
-            daysSinceLastVisit: data.daysSinceLastVisit || 0,
-            daysSinceFirstPurchase: data.daysSinceFirstPurchase || 0,
-            redemptionCount: data.redemptionCount || 0,
-            firstTransactionDate: data.firstTransactionDate || null,
-            lastTransactionDate: data.lastTransactionDate || null,
-            highestTransactionAmount: data.highestTransactionAmount || 0,
-            currentCohort: data.currentCohort || null,
-            cohort: data.cohort || 'New Customer',
+            fullName: profileData.fullName || merchantCustomerData.fullName || 'Unknown',
+            pointsBalance: merchantCustomerData.pointsBalance || 0,
+            membershipTier: merchantCustomerData.membershipTier || '',
+            lifetimeTransactionCount: merchantCustomerData.lifetimeTransactionCount || 0,
+            totalLifetimeSpend: merchantCustomerData.totalLifetimeSpend || 0,
+            daysSinceLastVisit: merchantCustomerData.daysSinceLastVisit || 0,
+            daysSinceFirstPurchase: merchantCustomerData.daysSinceFirstPurchase || 0,
+            redemptionCount: merchantCustomerData.redemptionCount || 0,
+            firstTransactionDate: merchantCustomerData.firstTransactionDate || null,
+            lastTransactionDate: merchantCustomerData.lastTransactionDate || null,
+            highestTransactionAmount: merchantCustomerData.highestTransactionAmount || 0,
+            currentCohort: merchantCustomerData.currentCohort || null,
+            cohort: merchantCustomerData.cohort || determineCustomerCohort(
+              merchantCustomerData.daysSinceLastVisit || 0,
+              merchantCustomerData.lifetimeTransactionCount || 0,
+              merchantCustomerData.daysSinceFirstPurchase || 0
+            ),
             customerProfiles: profilesData,
-            // Calculate agent rewards and behaviors from data
-            agentRewards: data.agentRewards || [],
-            recentBehavior: data.recentBehavior || 'No recent behavior data available.'
+            agentRewards: agentRewards.length > 0 ? agentRewards : mockAgentRewards(
+              merchantCustomerData.daysSinceLastVisit || 0,
+              merchantCustomerData.lifetimeTransactionCount || 0
+            ),
+            recentBehavior: merchantCustomerData.recentBehavior || generateBehaviorSummary({
+              daysSinceLastVisit: merchantCustomerData.daysSinceLastVisit || 0,
+              lifetimeTransactionCount: merchantCustomerData.lifetimeTransactionCount || 0,
+              daysSinceFirstPurchase: merchantCustomerData.daysSinceFirstPurchase || 0,
+              highestTransactionAmount: merchantCustomerData.highestTransactionAmount || 0
+            }),
+            // Add profile data for avatar, etc.
+            profileData: {
+              profilePictureUrl: profileData.profilePictureUrl,
+              shareProfileWithMerchants: profileData.shareProfileWithMerchants
+            }
           }
           
           return customer
@@ -195,6 +417,46 @@ export function CustomersList() {
         // Set customers data state
         setCustomers(customersData)
         setFilteredCustomers(customersData)
+
+        // Set mock transaction and redemption data
+        const mockTransactions = [
+          {
+            timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+            items: [{ name: 'Cappuccino' }, { name: 'Croissant' }],
+            amount: 15.75,
+            pointsEarned: 16
+          },
+          {
+            timestamp: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+            items: [{ name: 'Latte' }, { name: 'Blueberry Muffin' }],
+            amount: 12.50,
+            pointsEarned: 13
+          },
+          {
+            timestamp: new Date(Date.now() - 24 * 24 * 60 * 60 * 1000),
+            items: [{ name: 'Cold Brew Coffee' }],
+            amount: 5.95,
+            pointsEarned: 6
+          }
+        ];
+        
+        const mockRedemptions = [
+          {
+            timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+            rewardName: 'Free Coffee',
+            status: 'completed',
+            pointsCost: 100
+          },
+          {
+            timestamp: new Date(Date.now() - 18 * 24 * 60 * 60 * 1000),
+            rewardName: '10% Off Next Purchase',
+            status: 'completed',
+            pointsCost: 50
+          }
+        ];
+        
+        setCustomerTransactions(mockTransactions);
+        setCustomerRedemptions(mockRedemptions);
       } catch (error) {
         console.error('Error fetching customers:', error)
         setCustomers([])
@@ -311,32 +573,6 @@ export function CustomersList() {
     return rewards
   }
 
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return 'N/A'
-    
-    try {
-      // Handle Firestore Timestamp
-      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
-      return format(date, 'MMM d, yyyy')
-    } catch (error) {
-      console.error('Error formatting date:', error)
-      return 'Invalid date'
-    }
-  }
-
-  const formatTimeAgo = (timestamp: any) => {
-    if (!timestamp) return 'N/A'
-    
-    try {
-      // Handle Firestore Timestamp
-      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
-      return formatDistanceToNow(date, { addSuffix: true })
-    } catch (error) {
-      console.error('Error formatting date:', error)
-      return 'Invalid date'
-    }
-  }
-
   // Function to get cohort badge style
   const getCohortBadgeStyle = (cohort: string | undefined) => {
     switch (cohort?.toLowerCase()) {
@@ -351,6 +587,12 @@ export function CustomersList() {
       default:
         return "bg-gray-100 text-gray-800 hover:bg-gray-200"
     }
+  }
+
+  // Helper function to open customer details in sheet
+  const handleViewCustomer = (customer: Customer) => {
+    setSelectedCustomer(customer)
+    setIsCustomerSheetOpen(true)
   }
 
   if (loading) {
@@ -371,90 +613,90 @@ export function CustomersList() {
   }
 
   return (
-    <div className="py-6 space-y-6">
-      {!selectedCustomer ? (
         <>
           {/* Header with search */}
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-[#111827]">Customers</h2>
-            <div className="relative w-[280px]">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#6B7280]" />
+      <div className="pb-3 pt-0">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+          <h1 className="text-xl font-semibold tracking-tight">Customers</h1>
+          <div className="w-full max-w-xs relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search customers..."
-                className="pl-9 h-10 border-[#D1D5DB] rounded-md focus:border-[#0D6EFD] focus:ring-2 focus:ring-[#0D6EFD] focus:ring-opacity-20 transition-all duration-150 ease-in-out"
+              className="pl-8 h-9"
                 value={searchQuery}
                 onChange={handleSearch}
               />
             </div>
           </div>
-
-          {/* Metrics row */}
-          <div className="grid grid-cols-4 gap-6">
-            <MetricCard 
-              icon={<Users className="h-5 w-5 text-[#0D6EFD]" />}
-              value={customers.length.toString()}
-              label="Total Customers"
-            />
-            
-            <MetricCard 
-              icon={<Gift className="h-5 w-5 text-[#0D6EFD]" />}
-              value={customers.reduce((total, customer) => total + (customer.agentRewards?.length || 0), 0).toString()}
-              label="Total Rewards"
-            />
-            
-            <MetricCard 
-              icon={<CheckCircle className="h-5 w-5 text-[#0D6EFD]" />}
-              value={(() => {
-                const allRewards = customers.flatMap(c => c.agentRewards || [])
-                const redeemedRewards = allRewards.filter(r => r.isRedeemed)
-                return allRewards.length ? Math.round((redeemedRewards.length / allRewards.length) * 100) + "%" : "0%"
-              })()}
-              label="Redemption Rate"
-            />
-            
-            <MetricCard 
-              icon={<Zap className="h-5 w-5 text-[#0D6EFD]" />}
-              value={customers.filter(c => c.cohort === "Active").length.toString()}
-              label="Active Customers"
-            />
           </div>
 
-          {/* Customer table */}
-          <div className="border border-[#E2E4E8] rounded-lg overflow-hidden">
+      {/* Customers table */}
+      <div className="pb-6">
+        <div className="rounded-md overflow-hidden border border-gray-200">
+          <div className="overflow-x-auto">
             <Table>
-              <TableHeader className="bg-[#F6F6F7]">
-                <TableRow className="border-b border-[#E2E4E8]">
-                  <TableHead className="py-3 font-semibold text-[#111827]">Customer</TableHead>
-                  <TableHead className="py-3 font-semibold text-[#111827]">Cohort</TableHead>
-                  <TableHead className="py-3 font-semibold text-[#111827]">Last Visit</TableHead>
-                  <TableHead className="py-3 font-semibold text-[#111827]">Total Visits</TableHead>
-                  <TableHead className="py-3 font-semibold text-[#111827]">Rewards</TableHead>
-                  <TableHead className="w-[40px]"></TableHead>
+              <TableHeader>
+                <TableRow className="bg-slate-50 hover:bg-slate-50">
+                  <TableHead className="w-[250px]">Customer</TableHead>
+                  <TableHead>Cohort</TableHead>
+                  <TableHead>Spend</TableHead>
+                  <TableHead>Points</TableHead>
+                  <TableHead>Last Activity</TableHead>
+                  <TableHead className="text-right"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredCustomers.length > 0 ? (
-                  filteredCustomers.map((customer) => (
+                {filteredCustomers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-24 text-center">
+                      {searchQuery ? (
+                        <div className="flex flex-col items-center justify-center py-4">
+                          <Users className="h-10 w-10 text-gray-300 mb-2" />
+                          <p className="text-sm text-muted-foreground">No customers found matching your search.</p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-4">
+                          <Users className="h-10 w-10 text-gray-300 mb-2" />
+                          <p className="text-sm text-muted-foreground">No customers found.</p>
+                          <p className="text-xs text-muted-foreground mt-1">Customers will appear here once they interact with your store.</p>
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredCustomers.map(customer => (
                     <TableRow 
                       key={customer.customerId} 
-                      onClick={() => setSelectedCustomer(customer)} 
-                      className="cursor-pointer hover:bg-[#F9FAFB] transition-colors duration-150 ease-in-out border-b border-[#E2E4E8]"
+                      className="cursor-pointer"
+                      onMouseEnter={() => setHoveredCustomerId(customer.customerId)}
+                      onMouseLeave={() => setHoveredCustomerId(null)}
+                      onClick={() => handleViewCustomer(customer)}
                     >
-                      <TableCell className="py-4">
+                      <TableCell>
                         <div className="flex items-center gap-3">
-                          <Avatar className="h-9 w-9 border border-[#E2E4E8]">
+                          <Avatar className="h-10 w-10 rounded-full border bg-gray-50">
                             {customer.profileData?.shareProfileWithMerchants && customer.profileData?.profilePictureUrl ? (
-                              <AvatarImage src={customer.profileData.profilePictureUrl} alt={customer.fullName} />
+                              <AvatarImage 
+                                src={customer.profileData.profilePictureUrl} 
+                                alt={customer.fullName} 
+                              />
                             ) : (
-                              <AvatarFallback className="bg-[#F0F2F4] text-[#6B7280]">
-                                {customer.fullName.substring(0, 2).toUpperCase()}
+                              <AvatarFallback className="bg-blue-50 text-blue-500">
+                                {customer.fullName.charAt(0).toUpperCase()}
                               </AvatarFallback>
                             )}
                           </Avatar>
                           <div>
-                            <div className="font-medium text-[#111827]">{customer.fullName}</div>
-                            <div className="text-xs text-[#6B7280]">
-                              Since {formatDate(customer.firstTransactionDate)}
+                            <div className="font-medium">{customer.fullName}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {customer.customerProfiles && customer.customerProfiles.length > 0 ? (
+                                <span className="flex items-center gap-1 text-green-600">
+                                  <CheckCircle className="h-3 w-3" />
+                                  Profiled
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">No profile</span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -462,120 +704,503 @@ export function CustomersList() {
                       <TableCell>
                         <CohortBadge cohort={customer.currentCohort?.name || customer.cohort} />
                       </TableCell>
-                      <TableCell className="text-[#111827]">
-                        <div className="flex items-center gap-1.5">
-                          <Clock className="h-3.5 w-3.5 text-[#6B7280]" />
-                          <span>{customer.daysSinceLastVisit} days ago</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-[#111827]">{customer.lifetimeTransactionCount}</TableCell>
-                      <TableCell className="text-[#111827]">{customer.agentRewards?.length || 0}</TableCell>
                       <TableCell>
-                        <ChevronRight className="h-4 w-4 text-[#6B7280]" />
+                        <span className="font-medium">${customer.totalLifetimeSpend}</span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-medium">{customer.pointsBalance}</span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">
+                          {customer.lastTransactionDate ? formatTimeAgo(customer.lastTransactionDate) : 'N/A'}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          className={`h-8 w-8 rounded-md ${hoveredCustomerId === customer.customerId ? 'opacity-100' : 'opacity-0'}`}
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={6} className="h-[300px]">
-                      <div className="flex flex-col items-center justify-center text-[#6B7280]">
-                        <User className="h-12 w-12 mb-3 text-[#E2E4E8]" />
-                        {searchQuery ? (
-                          <p className="text-sm">No customers match your search</p>
-                        ) : (
-                          <p className="text-sm">No customers found</p>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
                 )}
               </TableBody>
             </Table>
           </div>
+        </div>
+      </div>
 
-          {/* Sticky action row */}
-          <div className="sticky bottom-0 bg-white py-4 border-t border-[#E2E4E8] flex justify-end">
-            <Button 
-              variant="outline" 
-              className="h-10 px-4 border-[#D1D5DB] text-[#111827] hover:bg-[#F0F2F4] transition-all duration-150 ease-in-out active:scale-[0.98]"
-            >
-              Export Customer Data
-            </Button>
+      {/* Customer Details Sheet */}
+      <Sheet open={isCustomerSheetOpen} onOpenChange={setIsCustomerSheetOpen}>
+        <SheetContent className="sm:max-w-lg w-full border-l overflow-y-auto p-0">
+          {selectedCustomer && (
+            <div className="flex flex-col h-full">
+              <SheetHeader className="px-6 py-4 border-b">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-12 w-12 rounded-full border bg-gray-50">
+                      {selectedCustomer.profileData?.shareProfileWithMerchants && selectedCustomer.profileData?.profilePictureUrl ? (
+                        <AvatarImage 
+                          src={selectedCustomer.profileData.profilePictureUrl} 
+                          alt={selectedCustomer.fullName} 
+                        />
+                      ) : (
+                        <AvatarFallback className="bg-blue-50 text-blue-500 text-xl">
+                          {selectedCustomer.fullName.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      )}
+                    </Avatar>
+                    <div>
+                      <SheetTitle className="text-xl font-semibold tracking-tight text-left">
+                        {selectedCustomer.fullName}
+                      </SheetTitle>
+                      <div className="flex items-center gap-2 mt-1">
+                        <CohortBadge cohort={selectedCustomer.currentCohort?.name || selectedCustomer.cohort} />
+                        {selectedCustomer.membershipTier && (
+                          <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                            {selectedCustomer.membershipTier}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <SheetClose className="rounded-full opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                    <div className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-gray-100">
+                      <ChevronRight className="h-4 w-4" />
+                    </div>
+                  </SheetClose>
+                </div>
+              </SheetHeader>
+
+              <Tabs defaultValue="overview" className="flex-grow flex flex-col">
+                <div className="px-6 pt-4 pb-2 border-b">
+                  <TabsList className="border border-[#E2E4E8] p-0.5 bg-[#F6F6F7] rounded-md">
+                    <TabsTrigger 
+                      value="overview"
+                      className="rounded-sm px-4 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:text-[#111827] data-[state=active]:shadow-sm text-[#6B7280] transition-all duration-150 ease-in-out"
+                    >
+                      Overview
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="transactions"
+                      className="rounded-sm px-4 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:text-[#111827] data-[state=active]:shadow-sm text-[#6B7280] transition-all duration-150 ease-in-out"
+                    >
+                      Transactions
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="redemptions"
+                      className="rounded-sm px-4 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:text-[#111827] data-[state=active]:shadow-sm text-[#6B7280] transition-all duration-150 ease-in-out"
+                    >
+                      Redemptions
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="agent"
+                      className="rounded-sm px-4 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:text-[#111827] data-[state=active]:shadow-sm text-[#6B7280] transition-all duration-150 ease-in-out"
+                    >
+                      Agent
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
+                
+                <ScrollArea className="flex-grow">
+                  <TabsContent value="overview" className="pt-4 pb-20 px-6 data-[state=active]:block">
+                    {/* Customer Score Section */}
+                    <div className="mb-6">
+                      <h3 className="text-sm font-medium mb-3">Customer Value Score</h3>
+                      <div className="rounded-md border p-4 bg-gray-50">
+                        <div className="flex justify-between items-center mb-3">
+                          <div>
+                            <p className="font-medium">RFM Score</p>
+                            <p className="text-sm text-gray-500">Based on recency, frequency & monetary value</p>
+                          </div>
+                          <div className="text-2xl font-bold">{calculateCustomerScore(selectedCustomer)}/10</div>
+                        </div>
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-sm">
+                              <span>Recency</span>
+                              <span className="font-medium">
+                                {selectedCustomer.daysSinceLastVisit < 7 ? 'Excellent' : 
+                                 selectedCustomer.daysSinceLastVisit < 30 ? 'Good' : 
+                                 selectedCustomer.daysSinceLastVisit < 90 ? 'Average' : 'Poor'}
+                              </span>
+                            </div>
+                            <Progress 
+                              value={Math.max(0, 100 - (selectedCustomer.daysSinceLastVisit / 90 * 100))} 
+                              className="h-2 rounded-sm" 
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-sm">
+                              <span>Frequency</span>
+                              <span className="font-medium">
+                                {selectedCustomer.lifetimeTransactionCount > 10 ? 'Excellent' : 
+                                 selectedCustomer.lifetimeTransactionCount > 5 ? 'Good' : 
+                                 selectedCustomer.lifetimeTransactionCount > 2 ? 'Average' : 'Poor'}
+                              </span>
+                            </div>
+                            <Progress 
+                              value={Math.min(100, selectedCustomer.lifetimeTransactionCount * 10)} 
+                              className="h-2 rounded-sm" 
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-sm">
+                              <span>Monetary</span>
+                              <span className="font-medium">
+                                {selectedCustomer.totalLifetimeSpend > 300 ? 'Excellent' : 
+                                 selectedCustomer.totalLifetimeSpend > 150 ? 'Good' : 
+                                 selectedCustomer.totalLifetimeSpend > 50 ? 'Average' : 'Poor'}
+                              </span>
+                            </div>
+                            <Progress 
+                              value={Math.min(100, selectedCustomer.totalLifetimeSpend / 3)} 
+                              className="h-2 rounded-sm" 
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Customer Metrics Grid */}
+                    <div className="mb-6">
+                      <h3 className="text-sm font-medium mb-3">Customer Metrics</h3>
+                      <div className="grid grid-cols-3 gap-3">
+                        <MetricCard 
+                          icon={<Clock className="h-4 w-4 text-blue-500" />}
+                          value={selectedCustomer.daysSinceLastVisit.toString()}
+                          label="Days Since Visit"
+                        />
+                        <MetricCard 
+                          icon={<Calendar className="h-4 w-4 text-blue-500" />}
+                          value={selectedCustomer.daysSinceFirstPurchase.toString()}
+                          label="Days as Customer"
+                        />
+                        <MetricCard 
+                          icon={<DollarSign className="h-4 w-4 text-blue-500" />}
+                          value={`$${(selectedCustomer.totalLifetimeSpend / selectedCustomer.lifetimeTransactionCount || 0).toFixed(2)}`}
+                          label="Average Order Value"
+                        />
+                        <MetricCard 
+                          icon={<Repeat className="h-4 w-4 text-blue-500" />}
+                          value={selectedCustomer.lifetimeTransactionCount.toString()}
+                          label="Total Transactions"
+                        />
+                        <MetricCard 
+                          icon={<TrendingUp className="h-4 w-4 text-blue-500" />}
+                          value={`$${selectedCustomer.highestTransactionAmount.toFixed(2)}`}
+                          label="Highest Transaction"
+                        />
+                        <MetricCard 
+                          icon={<Star className="h-4 w-4 text-blue-500" />}
+                          value={selectedCustomer.membershipTier || "None"}
+                          label="Membership Tier"
+                        />
+                        <MetricCard 
+                          icon={<Banknote className="h-4 w-4 text-blue-500" />}
+                          value={`$${selectedCustomer.totalLifetimeSpend.toFixed(2)}`}
+                          label="Lifetime Spend"
+                        />
+                        <MetricCard 
+                          icon={<Tag className="h-4 w-4 text-blue-500" />}
+                          value={selectedCustomer.pointsBalance.toString()}
+                          label="Points Balance"
+                        />
+                        <MetricCard 
+                          icon={<Gift className="h-4 w-4 text-blue-500" />}
+                          value={selectedCustomer.redemptionCount?.toString() || "0"}
+                          label="Redemptions"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Agent Rewards */}
+                    <div className="mb-6">
+                      <h3 className="text-sm font-medium mb-3">Suggested Rewards</h3>
+                      {selectedCustomer.agentRewards && selectedCustomer.agentRewards.length > 0 ? (
+                        <div className="space-y-3">
+                          {selectedCustomer.agentRewards.map((reward) => (
+                            <div key={reward.id} className="border rounded-md p-4 hover:bg-gray-50 transition-colors">
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-start gap-3">
+                                  <div className="p-2 rounded-md bg-blue-50 text-blue-600 mt-0.5">
+                                    {getRewardTypeIcon(reward.type)}
+                                  </div>
+                                  <div>
+                                    <h4 className="font-medium">{reward.rewardName}</h4>
+                                    <p className="text-sm text-gray-500 mt-1">{reward.description}</p>
+                                    {reward.reason && (
+                                      <div className="text-xs text-gray-500 mt-2 italic">
+                                        &ldquo;{reward.reason}&rdquo;
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <Badge 
+                                    variant={reward.isRedeemed ? "default" : "outline"}
+                                    className="text-xs"
+                                  >
+                                    {reward.isRedeemed ? "Redeemed" : "Available"}
+                                  </Badge>
+                                  <p className="text-sm mt-1">
+                                    {reward.pointsCost} points
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 border border-dashed rounded">
+                          <Gift className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                          <p className="text-gray-500">No rewards suggestions yet</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Customer Profiles */}
+                    <div>
+                      <h3 className="text-sm font-medium mb-3">Tap Agent Profile</h3>
+                      {selectedCustomer.customerProfiles && selectedCustomer.customerProfiles.length > 0 ? (
+                        <div className="border rounded-md p-4 hover:bg-gray-50 transition-colors">
+                          <div className="flex items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-1.5 rounded-md bg-purple-50 text-purple-600">
+                                    <Brain className="h-4 w-4" />
+                                  </div>
+                                  <h4 className="font-medium text-sm">Tap Agent Profile</h4>
+                                  {selectedCustomer.customerProfiles[0].createdAt && (
+                                    <span className="text-xs text-gray-500">
+                                      {formatTimeAgo(selectedCustomer.customerProfiles[0].createdAt)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <p className="mt-2 text-sm">{selectedCustomer.customerProfiles[0].profileDescription}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 border border-dashed rounded">
+                          <Brain className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                          <p className="text-gray-500">No profile information yet</p>
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="transactions" className="pt-4 pb-20 px-6 data-[state=active]:block">
+                    <Card className="rounded-md border shadow-none">
+                      <CardHeader className="px-4 py-3 border-b bg-gray-50 rounded-t-md">
+                        <CardTitle className="text-sm font-medium">Transaction History</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        {customerTransactions.length > 0 ? (
+                          <Table>
+                            <TableHeader className="bg-gray-50">
+                  <TableRow>
+                                <TableHead className="w-[120px] font-medium">Date</TableHead>
+                                <TableHead className="font-medium">Items</TableHead>
+                                <TableHead className="text-right font-medium">Amount</TableHead>
+                                <TableHead className="text-right w-[100px] font-medium">Points</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {customerTransactions.map((transaction, index) => (
+                                <TableRow key={index}>
+                                  <TableCell className="text-sm py-3">
+                                    {transaction.timestamp ? (
+                                      <div>
+                                        <div>{formatDate(transaction.timestamp)}</div>
+                                        <div className="text-xs text-gray-500">{formatTimeAgo(transaction.timestamp)}</div>
+                                      </div>
+                                    ) : (
+                                      'N/A'
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-sm py-3">
+                                    {transaction.items ? (
+                                      <div>
+                                        <div>{transaction.items[0]?.name || 'Unknown item'}</div>
+                                        {transaction.items.length > 1 && (
+                                          <div className="text-xs text-gray-500">+{transaction.items.length - 1} more items</div>
+                        )}
+                      </div>
+                                    ) : (
+                                      'N/A'
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-right text-sm py-3">
+                                    ${transaction.amount.toFixed(2)}
+                                  </TableCell>
+                                  <TableCell className="text-right text-sm py-3">
+                                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 rounded">
+                                      +{transaction.pointsEarned || 0}
+                                    </Badge>
+                    </TableCell>
+                  </TableRow>
+                              ))}
+              </TableBody>
+            </Table>
+                        ) : (
+                          <div className="text-center py-8">
+                            <ShoppingCart className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                            <p className="text-gray-500">No transaction history</p>
           </div>
-        </>
-      ) : (
-        <CustomerDetail 
-          customer={selectedCustomer} 
-          onBack={() => setSelectedCustomer(null)}
-        />
-      )}
+                        )}
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  <TabsContent value="redemptions" className="pt-4 pb-20 px-6 data-[state=active]:block">
+                    <Card className="rounded-md border shadow-none">
+                      <CardHeader className="px-4 py-3 border-b bg-gray-50 rounded-t-md">
+                        <CardTitle className="text-sm font-medium">Redemption History</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        {customerRedemptions.length > 0 ? (
+                          <Table>
+                            <TableHeader className="bg-gray-50">
+                              <TableRow>
+                                <TableHead className="w-[120px] font-medium">Date</TableHead>
+                                <TableHead className="font-medium">Reward</TableHead>
+                                <TableHead className="text-right font-medium">Status</TableHead>
+                                <TableHead className="text-right w-[100px] font-medium">Points</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {customerRedemptions.map((redemption, index) => (
+                                <TableRow key={index}>
+                                  <TableCell className="text-sm py-3">
+                                    {redemption.timestamp ? (
+                                      <div>
+                                        <div>{formatDate(redemption.timestamp)}</div>
+                                        <div className="text-xs text-gray-500">{formatTimeAgo(redemption.timestamp)}</div>
+          </div>
+                                    ) : (
+                                      'N/A'
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-sm py-3">
+                                    {redemption.rewardName || 'Unknown reward'}
+                                  </TableCell>
+                                  <TableCell className="text-right text-sm py-3">
+                                    <Badge variant="outline" 
+                                      className={`rounded ${
+                                        redemption.status === 'completed'
+                                          ? 'bg-green-50 text-green-700 border-green-200'
+                                          : redemption.status === 'pending'
+                                          ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                          : 'bg-gray-50 text-gray-700 border-gray-200'
+                                      }`}
+                                    >
+                                      {redemption.status || 'Unknown'}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-right text-sm py-3">
+                                    <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 rounded">
+                                      -{redemption.pointsCost || 0}
+                                    </Badge>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        ) : (
+                          <div className="text-center py-8">
+                            <Gift className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                            <p className="text-gray-500">No redemption history</p>
     </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  <TabsContent value="agent" className="pt-4 pb-20 px-6 data-[state=active]:block">
+                    <AgentTab 
+                      customer={selectedCustomer} 
+                      weeklyAgentActivities={weeklyAgentActivities} 
+                      loading={loadingAgentActivities} 
+                    />
+                  </TabsContent>
+                </ScrollArea>
+              </Tabs>
+
+              <div className="border-t p-4 flex justify-between mt-auto">
+                <Button variant="outline" onClick={() => setIsCustomerSheetOpen(false)}>
+                  Close
+                </Button>
+                <Button>
+                  <Gift className="mr-2 h-4 w-4" />
+                  Create Reward
+                </Button>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+    </>
   )
 }
 
 function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () => void }) {
   const { user } = useAuth()
-  const [rewards, setRewards] = useState<AgentReward[]>([])
-  const [loadingRewards, setLoadingRewards] = useState(true)
-  const [activeTab, setActiveTab] = useState("overview")
-  const [customerProfiles, setCustomerProfiles] = useState<Array<{
-    profileId: string
-    merchantId: string
-    createdAt: any
-    profileDescription: string
-  }>>([])
-  const [loadingProfiles, setLoadingProfiles] = useState(true)
+  const [rewards, setRewards] = useState<any[]>([])
+  const [loadingRewards, setLoadingRewards] = useState(false)
+  const [customerProfiles, setCustomerProfiles] = useState<any[]>([])
+  const [loadingProfiles, setLoadingProfiles] = useState(false)
+  const [customerTransactions, setCustomerTransactions] = useState<any[]>([])
+  const [customerRedemptions, setCustomerRedemptions] = useState<any[]>([])
+  const [weeklyAgentActivities, setWeeklyAgentActivities] = useState<WeeklyAgentActivity[]>([])
+  const [loadingAgentActivities, setLoadingAgentActivities] = useState(false)
+  const [avgSpend, setAvgSpend] = useState(
+    customer.totalLifetimeSpend && customer.lifetimeTransactionCount 
+      ? (customer.totalLifetimeSpend / customer.lifetimeTransactionCount).toFixed(2) 
+      : '0.00'
+  )
+  const [visitFrequency, setVisitFrequency] = useState(
+    customer.daysSinceFirstPurchase && customer.lifetimeTransactionCount && customer.lifetimeTransactionCount > 1
+      ? Math.round(customer.daysSinceFirstPurchase / (customer.lifetimeTransactionCount - 1))
+      : 0
+  )
 
   // Add useEffect to fetch customer rewards when component mounts
   useEffect(() => {
     async function fetchCustomerRewards() {
-      if (!user?.uid || !customer.customerId) {
-        setLoadingRewards(false)
-        return
-      }
+      if (!user?.uid || !customer.customerId) return
 
       try {
-        // Get rewards from the customer's rewards collection
+        setLoadingRewards(true)
+        // Fetch rewards from the customer's rewards subcollection
         const rewardsRef = collection(db, 'customers', customer.customerId, 'rewards')
-        const rewardsSnap = await getDocs(rewardsRef)
+        const rewardsQuery = query(rewardsRef, where('merchantId', '==', user.uid))
+        const rewardsSnap = await getDocs(rewardsQuery)
         
-        const rewardsData: AgentReward[] = []
+        if (rewardsSnap.empty) {
+          setRewards([])
+          setLoadingRewards(false)
+          return
+        }
         
-        // Process each reward document
-        rewardsSnap.docs.forEach(doc => {
+        // Map the rewards data
+        const rewardsData = rewardsSnap.docs.map(doc => {
           const data = doc.data()
-          
-          // Only include rewards for this merchant
-          if (data.merchantId === user.uid) {
-            rewardsData.push({
+          return {
               id: doc.id,
-              rewardName: data.rewardName || 'Unnamed Reward',
-              description: data.description || '',
-              type: data.type || 'unknown',
-              pointsCost: data.pointsCost || 0,
-              status: data.status || 'active',
-              createdAt: data.createdAt || null,
-              generationReason: data.generationReason || '',
-              reason: data.reason || '',
-              reasoning: data.reasoning || '',
-              merchantId: data.merchantId,
-              basedOn: data.basedOn || [],
-              isRedeemed: data.isRedeemed || false,
-              redeemedDate: data.redeemedDate || null
-            })
+            ...data
           }
-        })
-        
-        // Sort rewards by creation date (newest first)
-        rewardsData.sort((a, b) => {
-          const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
-          const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
-          return dateB - dateA
         })
         
         setRewards(rewardsData)
       } catch (error) {
         console.error('Error fetching customer rewards:', error)
+        setRewards([])
       } finally {
         setLoadingRewards(false)
       }
@@ -584,26 +1209,26 @@ function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () =
     fetchCustomerRewards()
   }, [user?.uid, customer.customerId])
 
-  // Add useEffect to fetch customer profiles
+  // Add useEffect to fetch customer profiles when component mounts
   useEffect(() => {
     async function fetchCustomerProfiles() {
-      if (!user?.uid || !customer.customerId) {
-        setLoadingProfiles(false)
-        return
-      }
+      if (!user?.uid || !customer.customerId) return
 
       try {
-        // Get profiles from the customer's profiles collection
+        setLoadingProfiles(true)
+        // Fetch profiles from the customer's profiles subcollection
         const profilesRef = collection(db, 'customers', customer.customerId, 'profiles')
-        const profilesSnap = await getDocs(profilesRef)
+        const profilesQuery = query(profilesRef, where('merchantId', '==', user.uid))
+        const profilesSnap = await getDocs(profilesQuery)
         
         if (profilesSnap.empty) {
+          setCustomerProfiles([])
           setLoadingProfiles(false)
           return
         }
 
-        const profilesData = profilesSnap.docs
-          .map(doc => {
+        // Map the profiles data
+        const profilesData = profilesSnap.docs.map(doc => {
             const data = doc.data()
             return {
               profileId: doc.id,
@@ -612,18 +1237,11 @@ function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () =
               profileDescription: data.profileDescription || ''
             }
           })
-          // Filter for profiles that match this merchant
-          .filter(profile => profile.merchantId === user.uid)
-          // Sort by createdAt (newest first)
-          .sort((a, b) => {
-            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
-            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
-            return dateB - dateA
-          })
         
         setCustomerProfiles(profilesData)
       } catch (error) {
         console.error('Error fetching customer profiles:', error)
+        setCustomerProfiles([])
       } finally {
         setLoadingProfiles(false)
       }
@@ -632,56 +1250,51 @@ function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () =
     fetchCustomerProfiles()
   }, [user?.uid, customer.customerId])
 
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return 'N/A'
+  // Add useEffect to fetch weekly agent activities
+  useEffect(() => {
+    async function fetchWeeklyAgentActivities() {
+      if (!user?.uid || !customer.customerId) return;
+      
+      setLoadingAgentActivities(true);
+      
+      try {
+        // Fetch weekly agent activities from the Firestore path: merchants/{merchantId}/customers/{customerId}/weeklyAgentActivity
+        const weeklyActivitiesRef = collection(db, 'merchants', user.uid, 'customers', customer.customerId, 'weeklyAgentActivity');
+        const weeklyActivitiesSnap = await getDocs(weeklyActivitiesRef);
+        
+        if (weeklyActivitiesSnap.empty) {
+          setWeeklyAgentActivities([]);
+          setLoadingAgentActivities(false);
+          return;
+        }
+        
+        // Map the weekly activities data
+        const activitiesData = weeklyActivitiesSnap.docs.map(doc => {
+          const data = doc.data();
+          return {
+            weekId: doc.id,
+            ...data
+          } as WeeklyAgentActivity;
+        }).sort((a, b) => {
+          // Sort by weekId in descending order (most recent first)
+          return b.weekId.localeCompare(a.weekId);
+        });
+        
+        console.log("Weekly agent activities fetched:", activitiesData);
+        setWeeklyAgentActivities(activitiesData);
+      } catch (error) {
+        console.error('Error fetching weekly agent activities:', error);
+        setWeeklyAgentActivities([]);
+      } finally {
+        setLoadingAgentActivities(false);
+      }
+    }
     
-    try {
-      // Handle Firestore Timestamp
-      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
-      return format(date, 'MMM d, yyyy')
-    } catch (error) {
-      console.error('Error formatting date:', error)
-      return 'Invalid date'
-    }
-  }
-
-  const formatTimeAgo = (timestamp: any) => {
-    if (!timestamp) return 'N/A'
-    
-    try {
-      // Handle Firestore Timestamp
-      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
-      return formatDistanceToNow(date, { addSuffix: true })
-    } catch (error) {
-      console.error('Error formatting date:', error)
-      return 'Invalid date'
-    }
-  }
-
-  // Function to get icon based on reward type with more distinct colors
-  const getRewardTypeIcon = (type: string) => {
-    switch (type.toLowerCase()) {
-      case 'percentagediscount':
-        return <div className="bg-blue-50 p-2 rounded-md border border-blue-100"><span className="text-blue-700 font-semibold text-lg">%</span></div>
-      case 'fixeddiscount':
-        return <div className="bg-green-50 p-2 rounded-md border border-green-100"><span className="text-green-700 font-semibold text-lg">$</span></div>
-      case 'freeitem':
-        return <div className="bg-purple-50 p-2 rounded-md border border-purple-100"><Gift className="h-4 w-4 text-purple-700" /></div>
-      case 'buyxgety':
-        return <div className="bg-amber-50 p-2 rounded-md border border-amber-100"><span className="text-amber-700 font-semibold text-sm">B1G1</span></div>
-      default:
-        return <div className="bg-gray-100 p-2 rounded-md border border-gray-200"><Gift className="h-4 w-4 text-gray-700" /></div>
-    }
-  }
+    fetchWeeklyAgentActivities();
+  }, [user?.uid, customer.customerId]);
 
   // Calculate customer statistics
   const daysActive = customer.daysSinceFirstPurchase || 0
-  const visitFrequency = customer.lifetimeTransactionCount > 0 && daysActive > 0 
-    ? Math.round(daysActive / customer.lifetimeTransactionCount) 
-    : 0
-  const avgSpend = customer.lifetimeTransactionCount > 0 
-    ? Math.round((customer.totalLifetimeSpend || 0) / customer.lifetimeTransactionCount)
-    : 0
 
   // Get the most recent profile that matches this merchant
   const latestProfile = customerProfiles.length > 0 ? customerProfiles[0] : null
@@ -713,8 +1326,6 @@ function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () =
       {/* OpenAI-style tabs */}
       <Tabs 
         defaultValue="overview" 
-        value={activeTab} 
-        onValueChange={setActiveTab}
         className="mt-4"
       >
         <TabsList className="border border-[#E2E4E8] p-0.5 bg-[#F6F6F7] rounded-md mb-6">
@@ -725,192 +1336,235 @@ function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () =
             Overview
           </TabsTrigger>
           <TabsTrigger 
-            value="rewards"
-            className="rounded-sm px-4 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:text-[#111827] data-[state=active]:shadow-sm text-[#6B7280] transition-all duration-150 ease-in-out"
-          >
-            Rewards
-          </TabsTrigger>
-          <TabsTrigger 
             value="transactions"
             className="rounded-sm px-4 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:text-[#111827] data-[state=active]:shadow-sm text-[#6B7280] transition-all duration-150 ease-in-out"
           >
             Transactions
           </TabsTrigger>
+          <TabsTrigger 
+            value="redemptions"
+            className="rounded-sm px-4 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:text-[#111827] data-[state=active]:shadow-sm text-[#6B7280] transition-all duration-150 ease-in-out"
+          >
+            Redemptions
+          </TabsTrigger>
+          <TabsTrigger 
+            value="agent"
+            className="rounded-sm px-4 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:text-[#111827] data-[state=active]:shadow-sm text-[#6B7280] transition-all duration-150 ease-in-out"
+          >
+            Agent
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6">
-          {/* Key metrics row */}
-          <div className="grid grid-cols-4 gap-6">
-            <MetricCard 
-              icon={<Clock className="h-5 w-5 text-[#0D6EFD]" />}
-              value={`${customer.daysSinceLastVisit} days ago`}
-              label="Last Visit"
-            />
-
-            <MetricCard 
-              icon={<BarChart3 className="h-5 w-5 text-[#0D6EFD]" />}
-              value={customer.lifetimeTransactionCount.toString()}
-              label="Total Visits"
-            />
-
-            <MetricCard 
-              icon={<DollarSign className="h-5 w-5 text-[#0D6EFD]" />}
-              value={`$${customer.totalLifetimeSpend || 0}`}
-              label="Total Spend"
-            />
-
-            <MetricCard 
-              icon={<Gift className="h-5 w-5 text-[#0D6EFD]" />}
-              value={(customer.redemptionCount || 0).toString()}
-              label="Rewards Used"
-            />
-          </div>
-
-          {/* Profile summary */}
-          {loadingProfiles ? (
-            <div className="border border-[#E2E4E8] rounded-lg p-5">
-              <h3 className="text-base font-semibold text-[#111827] mb-4">Customer Profile</h3>
-              <div className="flex justify-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-2 border-[#0D6EFD] border-opacity-30 border-t-[#0D6EFD]"></div>
-              </div>
-            </div>
-          ) : latestProfile ? (
-            <div className="border border-[#E2E4E8] rounded-lg p-5">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-base font-semibold text-[#111827]">Customer Profile</h3>
-                <span className="text-xs text-[#6B7280]">
-                  Updated {formatTimeAgo(latestProfile.createdAt)}
-                </span>
-              </div>
-              <p className="text-[#6B7280] text-sm leading-relaxed">{latestProfile.profileDescription}</p>
-            </div>
-          ) : (
-            <div className="border border-[#E2E4E8] rounded-lg p-5">
-              <h3 className="text-base font-semibold text-[#111827] mb-4">Customer Profile</h3>
-              <p className="text-[#6B7280] text-sm">No profile information available for this customer.</p>
-            </div>
-          )}
-
-          {/* Analytics section */}
-          <div className="grid grid-cols-2 gap-6">
-            {/* Spending patterns */}
-            <div className="border border-[#E2E4E8] rounded-lg p-5">
-              <h3 className="text-base font-semibold text-[#111827] mb-4">Spending Patterns</h3>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <div className="text-xs uppercase font-medium text-[#6B7280] mb-1">Avg. Transaction</div>
-                  <div className="text-xl font-semibold text-[#111827]">${avgSpend}</div>
-                </div>
-                <div>
-                  <div className="text-xs uppercase font-medium text-[#6B7280] mb-1">Visit Frequency</div>
-                  <div className="text-xl font-semibold text-[#111827]">
-                    {visitFrequency > 0 ? `${visitFrequency} days` : 'N/A'}
+        <ScrollArea className="flex-grow">
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="pt-4 pb-20 px-6 data-[state=active]:block">
+            {/* Customer Score Section */}
+            <div className="mb-6">
+              <h3 className="text-sm font-medium mb-3">Customer Value Score</h3>
+              <div className="rounded-md border p-4 bg-gray-50">
+                <div className="flex justify-between items-center mb-3">
+                  <div>
+                    <p className="font-medium">RFM Score</p>
+                    <p className="text-sm text-gray-500">Based on recency, frequency & monetary value</p>
                   </div>
+                  <div className="text-2xl font-bold">{calculateCustomerScore(customer)}/10</div>
                 </div>
-              </div>
-            </div>
-
-            {/* Points & rewards */}
-            <div className="border border-[#E2E4E8] rounded-lg p-5">
-              <h3 className="text-base font-semibold text-[#111827] mb-4">Loyalty Points</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs uppercase font-medium text-[#6B7280]">Current Balance</span>
-                  <span className="text-xl font-semibold text-[#111827]">{customer.pointsBalance || 0}</span>
-                </div>
-                <div className="mt-2">
-                  <div className="h-2 w-full bg-[#F3F4F6] rounded-full">
-                    <div 
-                      className="h-2 bg-[#0D6EFD] rounded-full" 
-                      style={{ width: `${Math.min(100, Math.max(5, (customer.pointsBalance || 0) / 10))}%` }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Customer behavior insights */}
-          <div className="border border-[#E2E4E8] rounded-lg p-5">
-            <h3 className="text-base font-semibold text-[#111827] mb-4">Behavior Insights</h3>
-            <p className="text-[#6B7280] text-sm leading-relaxed">{customer.recentBehavior}</p>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="rewards" className="space-y-6">
-          {loadingRewards ? (
-            <div className="flex justify-center items-center py-16">
-              <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#0D6EFD] border-opacity-30 border-t-[#0D6EFD]"></div>
-            </div>
-          ) : rewards.length > 0 ? (
-            <div className="border border-[#E2E4E8] rounded-lg divide-y divide-[#E2E4E8]">
-              {rewards.map(reward => (
-                <div key={reward.id} className="p-4 hover:bg-[#F9FAFB] transition-colors duration-150 ease-in-out">
-                  <div className="flex items-start gap-4">
-                    <div className="mt-1 flex-shrink-0">
-                      {getRewardTypeIcon(reward.type)}
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span>Recency</span>
+                      <span className="font-medium">
+                        {customer.daysSinceLastVisit < 7 ? 'Excellent' : 
+                         customer.daysSinceLastVisit < 30 ? 'Good' : 
+                         customer.daysSinceLastVisit < 90 ? 'Average' : 'Poor'}
+                      </span>
                     </div>
-                    <div className="flex-grow min-w-0">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <h4 className="font-medium text-[#111827] truncate">{reward.rewardName}</h4>
-                        {reward.isRedeemed ? (
-                          <Badge className="rounded-full px-2.5 py-0.5 bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0] font-medium text-xs">
-                            Redeemed
+                    <Progress 
+                      value={Math.max(0, 100 - (customer.daysSinceLastVisit / 90 * 100))} 
+                      className="h-2 rounded-sm" 
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span>Frequency</span>
+                      <span className="font-medium">
+                        {customer.lifetimeTransactionCount > 10 ? 'Excellent' : 
+                         customer.lifetimeTransactionCount > 5 ? 'Good' : 
+                         customer.lifetimeTransactionCount > 2 ? 'Average' : 'Poor'}
+                      </span>
+                    </div>
+                    <Progress 
+                      value={Math.min(100, customer.lifetimeTransactionCount * 10)} 
+                      className="h-2 rounded-sm" 
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span>Monetary</span>
+                      <span className="font-medium">
+                        {customer.totalLifetimeSpend > 300 ? 'Excellent' : 
+                         customer.totalLifetimeSpend > 150 ? 'Good' : 
+                         customer.totalLifetimeSpend > 50 ? 'Average' : 'Poor'}
+                      </span>
+                    </div>
+                    <Progress 
+                      value={Math.min(100, customer.totalLifetimeSpend / 3)} 
+                      className="h-2 rounded-sm" 
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Customer Metrics Grid */}
+            <div className="mb-6">
+              <h3 className="text-sm font-medium mb-3">Customer Metrics</h3>
+              <div className="grid grid-cols-3 gap-3">
+                <MetricCard 
+                  icon={<Clock className="h-4 w-4 text-blue-500" />}
+                  value={customer.daysSinceLastVisit.toString()}
+                  label="Days Since Visit"
+                />
+                <MetricCard 
+                  icon={<Calendar className="h-4 w-4 text-blue-500" />}
+                  value={customer.daysSinceFirstPurchase.toString()}
+                  label="Days as Customer"
+                />
+                <MetricCard 
+                  icon={<DollarSign className="h-4 w-4 text-blue-500" />}
+                  value={`$${(customer.totalLifetimeSpend / customer.lifetimeTransactionCount || 0).toFixed(2)}`}
+                  label="Average Order Value"
+                />
+                <MetricCard 
+                  icon={<Repeat className="h-4 w-4 text-blue-500" />}
+                  value={customer.lifetimeTransactionCount.toString()}
+                  label="Total Transactions"
+                />
+                <MetricCard 
+                  icon={<TrendingUp className="h-4 w-4 text-blue-500" />}
+                  value={`$${customer.highestTransactionAmount.toFixed(2)}`}
+                  label="Highest Transaction"
+                />
+                <MetricCard 
+                  icon={<Star className="h-4 w-4 text-blue-500" />}
+                  value={customer.membershipTier || "None"}
+                  label="Membership Tier"
+                />
+                <MetricCard 
+                  icon={<Banknote className="h-4 w-4 text-blue-500" />}
+                  value={`$${customer.totalLifetimeSpend.toFixed(2)}`}
+                  label="Lifetime Spend"
+                />
+                <MetricCard 
+                  icon={<Tag className="h-4 w-4 text-blue-500" />}
+                  value={customer.pointsBalance.toString()}
+                  label="Points Balance"
+                />
+                <MetricCard 
+                  icon={<Gift className="h-4 w-4 text-blue-500" />}
+                  value={customer.redemptionCount?.toString() || "0"}
+                  label="Redemptions"
+                />
+              </div>
+            </div>
+
+            {/* Agent Rewards */}
+            <div className="mb-6">
+              <h3 className="text-sm font-medium mb-3">Suggested Rewards</h3>
+              {customer.agentRewards && customer.agentRewards.length > 0 ? (
+                <div className="space-y-3">
+                  {customer.agentRewards.map((reward) => (
+                    <div key={reward.id} className="border rounded-md p-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 rounded-md bg-blue-50 text-blue-600 mt-0.5">
+                            {getRewardTypeIcon(reward.type)}
+                          </div>
+                          <div>
+                            <h4 className="font-medium">{reward.rewardName}</h4>
+                            <p className="text-sm text-gray-500 mt-1">{reward.description}</p>
+                            {reward.reason && (
+                              <div className="text-xs text-gray-500 mt-2 italic">
+                                &ldquo;{reward.reason}&rdquo;
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <Badge 
+                            variant={reward.isRedeemed ? "default" : "outline"}
+                            className="text-xs"
+                          >
+                            {reward.isRedeemed ? "Redeemed" : "Available"}
                           </Badge>
-                        ) : (
-                          <Badge className="rounded-full px-2.5 py-0.5 bg-[#EBF5FF] text-[#1E40AF] border border-[#BFDBFE] font-medium text-xs">
-                            Active
-                          </Badge>
-                        )}
+                          <p className="text-sm mt-1">
+                            {reward.pointsCost} points
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-sm text-[#6B7280] mb-2">{reward.description}</p>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-[#6B7280]">
-                          Created {formatTimeAgo(reward.createdAt)}
-                        </span>
-                        {reward.pointsCost > 0 && (
-                          <span className="font-medium text-[#111827]">{reward.pointsCost} pts</span>
-                        )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 border border-dashed rounded">
+                  <Gift className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-gray-500">No rewards suggestions yet</p>
+                </div>
+              )}
+            </div>
+
+            {/* Customer Profiles */}
+            <div>
+              <h3 className="text-sm font-medium mb-3">Tap Agent Profile</h3>
+              {customer.customerProfiles && customer.customerProfiles.length > 0 ? (
+                <div className="border rounded-md p-4 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 rounded-md bg-purple-50 text-purple-600">
+                            <Brain className="h-4 w-4" />
+                          </div>
+                          <h4 className="font-medium text-sm">Tap Agent Profile</h4>
+                          {customer.customerProfiles[0].createdAt && (
+                            <span className="text-xs text-gray-500">
+                              {formatTimeAgo(customer.customerProfiles[0].createdAt)}
+                            </span>
+                          )}
+                        </div>
                       </div>
+                      <p className="mt-2 text-sm">{customer.customerProfiles[0].profileDescription}</p>
                     </div>
                   </div>
                 </div>
-              ))}
+              ) : (
+                <div className="text-center py-8 border border-dashed rounded">
+                  <Brain className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-gray-500">No profile information yet</p>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="border border-[#E2E4E8] rounded-lg p-16 flex flex-col items-center justify-center">
-              <Gift className="h-12 w-12 text-[#E2E4E8] mb-4" />
-              <p className="text-[#6B7280] mb-1">No rewards available for this customer</p>
-              <p className="text-xs text-[#6B7280]">Rewards will appear here once created</p>
-            </div>
-          )}
-        </TabsContent>
+          </TabsContent>
 
-        <TabsContent value="transactions" className="space-y-6">
-          <div className="border border-[#E2E4E8] rounded-lg overflow-hidden">
-            <Table>
-              <TableHeader className="bg-[#F6F6F7]">
-                <TableRow className="border-b border-[#E2E4E8]">
-                  <TableHead className="py-3 font-semibold text-[#111827]">Date</TableHead>
-                  <TableHead className="py-3 font-semibold text-[#111827]">Amount</TableHead>
-                  <TableHead className="py-3 font-semibold text-[#111827]">Items</TableHead>
-                  <TableHead className="py-3 font-semibold text-[#111827]">Points</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow>
-                  <TableCell colSpan={4} className="h-[300px]">
-                    <div className="flex flex-col items-center justify-center text-[#6B7280]">
-                      <Calendar className="h-12 w-12 text-[#E2E4E8] mb-4" />
-                      <p className="text-[#6B7280] mb-1">Transaction history not available</p>
-                      <p className="text-xs text-[#6B7280]">This is a demo view</p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
-        </TabsContent>
+          {/* Transactions Tab */}
+          <TabsContent value="transactions" className="pt-4 pb-20 px-6 data-[state=active]:block">
+            {/* Existing transactions content */}
+          </TabsContent>
+
+          {/* Redemptions Tab */}
+          <TabsContent value="redemptions" className="pt-4 pb-20 px-6 data-[state=active]:block">
+            {/* Existing redemptions content */}
+          </TabsContent>
+
+          {/* Agent Tab */}
+          <TabsContent value="agent" className="pt-4 pb-20 px-6 data-[state=active]:block">
+            <AgentTab 
+              customer={customer} 
+              weeklyAgentActivities={weeklyAgentActivities} 
+              loading={loadingAgentActivities} 
+            />
+          </TabsContent>
+        </ScrollArea>
       </Tabs>
 
       {/* Sticky action row */}
@@ -931,32 +1585,298 @@ function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () =
   )
 }
 
-// Reusable components to follow the design system
-function MetricCard({ icon, value, label }: { icon: React.ReactNode, value: string, label: string }) {
+function CohortBadge({ cohort }: { cohort?: string }) {
+  if (!cohort) return null
+  
+  // Capitalize the first letter of the cohort
+  const capitalizedCohort = cohort.charAt(0).toUpperCase() + cohort.slice(1)
+  
+  const getColor = () => {
+    const lowerCohort = cohort.toLowerCase()
+    if (lowerCohort.includes('loyal') || lowerCohort.includes('regular')) return 'bg-green-50 text-green-700 border-green-200'
+    if (lowerCohort.includes('new')) return 'bg-blue-50 text-blue-700 border-blue-200'
+    if (lowerCohort.includes('risk') || lowerCohort.includes('churn')) return 'bg-orange-50 text-orange-700 border-orange-200'
+    if (lowerCohort.includes('lost') || lowerCohort.includes('inactive')) return 'bg-red-50 text-red-700 border-red-200'
+    if (lowerCohort.includes('vip') || lowerCohort.includes('premium')) return 'bg-purple-50 text-purple-700 border-purple-200'
+    return 'bg-gray-50 text-gray-700 border-gray-200'
+  }
+  
   return (
-    <div className="border border-[#E2E4E8] rounded-lg p-4 bg-white">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs uppercase font-medium text-[#6B7280]">{label}</span>
-        <div className="h-8 w-8 rounded-md bg-[#F0F2F4] flex items-center justify-center">
-          {icon}
-        </div>
-      </div>
-      <div className="text-xl font-semibold text-[#111827]">{value}</div>
-    </div>
+    <Badge variant="outline" className={`rounded ${getColor()}`}>
+      {capitalizedCohort}
+    </Badge>
   )
 }
 
-function CohortBadge({ cohort }: { cohort?: string }) {
-  switch (cohort?.toLowerCase()) {
-    case 'new':
-      return <Badge className="rounded-md bg-[#EBF5FF] text-[#1E40AF] border border-[#BFDBFE] font-medium">{cohort}</Badge>
-    case 'active':
-      return <Badge className="rounded-md bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0] font-medium">{cohort}</Badge>
-    case 'dormant':
-      return <Badge className="rounded-md bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] font-medium">{cohort}</Badge>
-    case 'churned':
-      return <Badge className="rounded-md bg-[#FEE2E2] text-[#991B1B] border border-[#FECACA] font-medium">{cohort}</Badge>
-    default:
-      return <Badge className="rounded-md bg-[#F3F4F6] text-[#4B5563] border border-[#E5E7EB] font-medium">{cohort || 'Unknown'}</Badge>
+interface WeeklyAgentActivity {
+  weekId?: string;
+  runDate?: string | Date;
+  timestamp?: any;
+  merchantId?: string;
+  customerId?: string;
+  customerName?: string;
+  cohort?: string;
+  rewards?: RewardActivity[];
+  banners?: BannerActivity[];
+  pushNotifications?: PushNotificationActivity[];
+}
+
+interface RewardActivity {
+  rewardId?: string;
+  rewardName?: string;
+  description?: string;
+  type?: string;
+  pointsCost?: number;
+  createdAt?: any;
+  isActive?: boolean;
+  expiresAt?: any;
+  hasBeenRedeemedByThisCustomer?: boolean;
+  redemptionCount?: number;
+  targetCohort?: string;
+  rewardVisibility?: string;
+  typeDetails?: {
+    type?: string;
+    discountType?: string;
+    discountValue?: number;
+    minimumPurchase?: number;
+    appliesTo?: string;
+    itemName?: string;
+    itemDescription?: string;
+  };
+}
+
+interface BannerActivity {
+  bannerId?: string;
+  title?: string;
+  description?: string;
+  color?: string;
+  style?: string;
+  isActive?: boolean;
+  createdAt?: any;
+}
+
+interface PushNotificationActivity {
+  content?: string;
+  timestamp?: any;
+  sent?: boolean;
+}
+
+interface AgentTabProps {
+  customer: Customer | null;
+  weeklyAgentActivities: WeeklyAgentActivity[];
+  loading: boolean;
+}
+
+function AgentTab({ customer, weeklyAgentActivities, loading }: AgentTabProps) {
+  if (loading) {
+    return (
+      <div className="flex flex-col space-y-2">
+        <Skeleton className="h-8 w-full" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    );
   }
+
+  if (!weeklyAgentActivities || weeklyAgentActivities.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-center">
+        <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center mb-4">
+          <Zap className="h-6 w-6 text-blue-500" />
+        </div>
+        <h3 className="text-lg font-medium mb-2">No Agent Activity Yet</h3>
+        <p className="text-muted-foreground text-sm max-w-md">
+          When Tap Agent creates rewards or banners for this customer, they will appear here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {weeklyAgentActivities.map((activity: WeeklyAgentActivity, index: number) => (
+        <Card key={activity.weekId || index} className="overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-blue-500 to-orange-500 text-white py-3">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-base font-medium">
+                Week of {activity.weekId ? new Date(activity.weekId.split('-')[0], parseInt(activity.weekId.split('-')[1]) - 1, parseInt(activity.weekId.split('-')[2])).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : 'Unknown'}
+              </CardTitle>
+              {activity.runDate && (
+                <div className="text-xs opacity-80">
+                  Generated on {typeof activity.runDate === 'string' 
+                    ? new Date(activity.runDate).toLocaleDateString() 
+                    : activity.runDate?.toDate?.()?.toLocaleDateString() || 'Unknown date'}
+                </div>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="p-4">
+            <div className="space-y-4">
+              {/* Rewards Section */}
+              {activity.rewards && activity.rewards.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold mb-3 flex items-center">
+                    <Gift className="h-4 w-4 mr-2 text-orange-500" />
+                    Rewards Created This Week
+                  </h4>
+                  <div className="space-y-2">
+                    {activity.rewards.map((reward: RewardActivity, idx: number) => (
+                      <div key={reward.rewardId || idx} className="border rounded-md p-3 bg-white">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="font-medium">{reward.rewardName}</div>
+                            <div className="text-sm text-muted-foreground mt-1">{reward.description}</div>
+                            <div className="flex flex-wrap items-center gap-2 mt-2">
+                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 rounded-full">
+                                {reward.type === "percentageDiscount" ? "Percentage Discount" : 
+                                 reward.type === "fixedDiscount" ? "Fixed Discount" : 
+                                 reward.type === "freeItem" ? "Free Item" : 
+                                 reward.type === "buyXGetY" ? "Buy X Get Y" : 
+                                 reward.type === "other" ? "Special Offer" : 
+                                 capitalizeFirstLetter(reward.type || "Reward")}
+                              </Badge>
+                              {reward.pointsCost > 0 ? (
+                                <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200 rounded-full">
+                                  {reward.pointsCost} points
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 rounded-full">
+                                  Free
+                                </Badge>
+                              )}
+                              {reward.hasBeenRedeemedByThisCustomer ? (
+                                <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 rounded-full">
+                                  Redeemed
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs bg-gray-50 text-gray-700 border-gray-200 rounded-full">
+                                  Not redeemed
+                                </Badge>
+                              )}
+                            </div>
+                            {reward.typeDetails && (
+                              <div className="text-xs text-muted-foreground mt-2">
+                                {reward.type === "percentageDiscount" && reward.typeDetails.discountValue && (
+                                  <span>{reward.typeDetails.discountValue}% off {reward.typeDetails.appliesTo || "any purchase"}</span>
+                                )}
+                                {reward.type === "fixedDiscount" && reward.typeDetails.discountValue && (
+                                  <span>${reward.typeDetails.discountValue} off {reward.typeDetails.minimumPurchase ? `when you spend $${reward.typeDetails.minimumPurchase} or more` : ""}</span>
+                                )}
+                                {reward.type === "freeItem" && reward.typeDetails.itemName && (
+                                  <span>Free {reward.typeDetails.itemName}{reward.typeDetails.itemDescription ? `: ${reward.typeDetails.itemDescription}` : ""}</span>
+                                )}
+                                {reward.type === "buyXGetY" && reward.typeDetails.itemName && (
+                                  <span>Buy X, get a free {reward.typeDetails.itemName}{reward.typeDetails.itemDescription ? `: ${reward.typeDetails.itemDescription}` : ""}</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {reward.createdAt?.toDate ? formatDate(reward.createdAt) : (reward.createdAt ? new Date(reward.createdAt).toLocaleDateString() : 'Unknown date')}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Banners Section */}
+              {activity.banners && activity.banners.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold mb-3 flex items-center">
+                    <svg className="h-4 w-4 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+                    </svg>
+                    Banners Created This Week
+                  </h4>
+                  <div className="space-y-2">
+                    {activity.banners.map((banner: BannerActivity, idx: number) => (
+                      <div key={banner.bannerId || idx} className="border rounded-md p-3 bg-white">
+                        <div className="font-medium">{banner.title}</div>
+                        <div className="text-sm text-muted-foreground mt-1">{banner.description}</div>
+                        <div className="flex items-center justify-between mt-2">
+                          <div className="flex gap-2">
+                            <div 
+                              className="h-4 w-4 rounded-full" 
+                              style={{ background: banner.color || '#0ea5e9' }}
+                            ></div>
+                            <Badge variant="outline" className="text-xs bg-gray-50 text-gray-700 border-gray-200 rounded-full">
+                              {banner.style || "Light"}
+                            </Badge>
+                            {banner.isActive ? (
+                              <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 rounded-full">
+                                Active
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 rounded-full">
+                                Scheduled
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {banner.createdAt?.toDate ? formatDate(banner.createdAt) : (banner.createdAt ? new Date(banner.createdAt).toLocaleDateString() : 'Unknown date')}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Push Notifications Section */}
+              {activity.pushNotifications && activity.pushNotifications.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold mb-3 flex items-center">
+                    <Bell className="h-4 w-4 mr-2 text-purple-500" />
+                    Push Notifications This Week
+                  </h4>
+                  <div className="space-y-2">
+                    {activity.pushNotifications.map((notification: PushNotificationActivity, idx: number) => (
+                      <div key={idx} className="border rounded-md p-3 bg-white">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="text-sm">{notification.content || "Notification content unavailable"}</div>
+                            <div className="flex items-center gap-2 mt-2">
+                              {notification.sent ? (
+                                <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 rounded-full">
+                                  Sent
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 rounded-full">
+                                  Pending
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {notification.timestamp?.toDate ? formatDate(notification.timestamp) : (notification.timestamp ? new Date(notification.timestamp).toLocaleDateString() : 'Unknown date')}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* No activities fallback */}
+              {(!activity.rewards || activity.rewards.length === 0) && 
+               (!activity.banners || activity.banners.length === 0) && 
+               (!activity.pushNotifications || activity.pushNotifications.length === 0) && (
+                <div className="text-center py-4 text-muted-foreground text-sm">
+                  No agent activities recorded this week.
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+// Helper function to capitalize first letter (add if doesn't exist)
+function capitalizeFirstLetter(string: string) {
+  return string.charAt(0).toUpperCase() + string.slice(1);
 } 

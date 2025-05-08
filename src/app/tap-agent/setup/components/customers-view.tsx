@@ -36,7 +36,15 @@ import {
   Star,
   Megaphone,
   Bell,
-  Activity
+  Activity,
+  RefreshCw,
+  Crown,
+  Target,
+  MessageSquare,
+  CheckCircle2,
+  X,
+  HelpCircle,
+  Image
 } from "lucide-react"
 import { format, formatDistanceToNow } from "date-fns"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -140,32 +148,33 @@ function MetricCard({ icon, value, label }: MetricCardProps) {
 }
 
 interface BannerActivity {
-  bannerId: string;
-  bannerAction: string;
-  buttonText: string;
-  color: string;
-  secondaryColor: string;
+  bannerId: string | undefined;
+  title: string | undefined;
+  description: string | undefined;
+  color: string | undefined;
+  secondaryColor?: string;
+  style: string | undefined;
+  isActive: boolean | undefined;
   createdAt: any;
-  description: string;
-  isActive: boolean;
-  merchantId: string;
-  merchantName: string;
-  style: string;
-  title: string;
-  type: string;
+  bannerAction?: string;
+  buttonText?: string;
+  merchantId?: string;
+  merchantName?: string;
+  type?: string;
 }
 
 interface WeeklyAgentActivity {
   weekId: string;
-  createdAt: any;
-  runDate?: any;
-  banners: BannerActivity[];
-  rewards?: any[];
-  pushNotifications?: {
-    sent: boolean;
-    timestamp?: any;
-    content?: string;
-  }[];
+  runDate?: string | Date;
+  timestamp?: any;
+  merchantId?: string;
+  customerId?: string;
+  customerName?: string;
+  cohort?: string;
+  rewards?: RewardActivity[];
+  banners?: BannerActivity[];
+  pushNotifications?: PushNotificationActivity[];
+  createdAt?: any;
 }
 
 interface Customer {
@@ -798,7 +807,7 @@ export function CustomersList() {
                     </TabsTrigger>
                     <TabsTrigger 
                       value="agent"
-                      className="rounded-sm px-4 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:text-[#111827] data-[state=active]:shadow-sm text-[#6B7280] transition-all duration-150 ease-in-out"
+                      className="rounded-sm px-4 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-transparent data-[state=active]:bg-clip-text data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-orange-500 text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-orange-500 transition-all duration-150 ease-in-out"
                     >
                       Agent
                     </TabsTrigger>
@@ -917,54 +926,11 @@ export function CustomersList() {
                       </div>
                     </div>
 
-                    {/* Agent Rewards */}
-                    <div className="mb-6">
-                      <h3 className="text-sm font-medium mb-3">Suggested Rewards</h3>
-                      {selectedCustomer.agentRewards && selectedCustomer.agentRewards.length > 0 ? (
-                        <div className="space-y-3">
-                          {selectedCustomer.agentRewards.map((reward) => (
-                            <div key={reward.id} className="border rounded-md p-4 hover:bg-gray-50 transition-colors">
-                              <div className="flex items-start justify-between">
-                                <div className="flex items-start gap-3">
-                                  <div className="p-2 rounded-md bg-blue-50 text-blue-600 mt-0.5">
-                                    {getRewardTypeIcon(reward.type)}
-                                  </div>
-                                  <div>
-                                    <h4 className="font-medium">{reward.rewardName}</h4>
-                                    <p className="text-sm text-gray-500 mt-1">{reward.description}</p>
-                                    {reward.reason && (
-                                      <div className="text-xs text-gray-500 mt-2 italic">
-                                        &ldquo;{reward.reason}&rdquo;
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <Badge 
-                                    variant={reward.isRedeemed ? "default" : "outline"}
-                                    className="text-xs"
-                                  >
-                                    {reward.isRedeemed ? "Redeemed" : "Available"}
-                                  </Badge>
-                                  <p className="text-sm mt-1">
-                                    {reward.pointsCost} points
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 border border-dashed rounded">
-                          <Gift className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                          <p className="text-gray-500">No rewards suggestions yet</p>
-                        </div>
-                      )}
-                    </div>
-
                     {/* Customer Profiles */}
                     <div>
-                      <h3 className="text-sm font-medium mb-3">Tap Agent Profile</h3>
+                      <h3 className="text-sm font-medium mb-3">
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-orange-500">Tap Agent</span> Profile
+                      </h3>
                       {selectedCustomer.customerProfiles && selectedCustomer.customerProfiles.length > 0 ? (
                         <div className="border rounded-md p-4 hover:bg-gray-50 transition-colors">
                           <div className="flex items-start">
@@ -974,7 +940,9 @@ export function CustomersList() {
                                   <div className="p-1.5 rounded-md bg-purple-50 text-purple-600">
                                     <Brain className="h-4 w-4" />
                                   </div>
-                                  <h4 className="font-medium text-sm">Tap Agent Profile</h4>
+                                  <h4 className="font-medium text-sm">
+                                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-orange-500">Tap Agent</span> Profile
+                                  </h4>
                                   {selectedCustomer.customerProfiles[0].createdAt && (
                                     <span className="text-xs text-gray-500">
                                       {formatTimeAgo(selectedCustomer.customerProfiles[0].createdAt)}
@@ -1300,7 +1268,7 @@ function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () =
   const latestProfile = customerProfiles.length > 0 ? customerProfiles[0] : null
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header with back button */}
       <div className="flex items-center gap-3">
         <Button 
@@ -1311,6 +1279,20 @@ function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () =
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
+        
+        <Avatar className="h-10 w-10 rounded-full border bg-gray-50">
+          {customer.profileData?.shareProfileWithMerchants && customer.profileData?.profilePictureUrl ? (
+            <AvatarImage 
+              src={customer.profileData.profilePictureUrl} 
+              alt={customer.fullName} 
+            />
+          ) : (
+            <AvatarFallback className="bg-blue-50 text-blue-500">
+              {customer.fullName.charAt(0).toUpperCase()}
+            </AvatarFallback>
+          )}
+        </Avatar>
+        
         <h2 className="text-xl font-semibold text-[#111827]">{customer.fullName}</h2>
         <CohortBadge cohort={customer.currentCohort?.name || customer.cohort} />
         {customer.membershipTier && (
@@ -1349,7 +1331,7 @@ function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () =
           </TabsTrigger>
           <TabsTrigger 
             value="agent"
-            className="rounded-sm px-4 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:text-[#111827] data-[state=active]:shadow-sm text-[#6B7280] transition-all duration-150 ease-in-out"
+            className="rounded-sm px-4 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-transparent data-[state=active]:bg-clip-text data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-orange-500 text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-orange-500 transition-all duration-150 ease-in-out"
           >
             Agent
           </TabsTrigger>
@@ -1468,54 +1450,11 @@ function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () =
               </div>
             </div>
 
-            {/* Agent Rewards */}
-            <div className="mb-6">
-              <h3 className="text-sm font-medium mb-3">Suggested Rewards</h3>
-              {customer.agentRewards && customer.agentRewards.length > 0 ? (
-                <div className="space-y-3">
-                  {customer.agentRewards.map((reward) => (
-                    <div key={reward.id} className="border rounded-md p-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-3">
-                          <div className="p-2 rounded-md bg-blue-50 text-blue-600 mt-0.5">
-                            {getRewardTypeIcon(reward.type)}
-                          </div>
-                          <div>
-                            <h4 className="font-medium">{reward.rewardName}</h4>
-                            <p className="text-sm text-gray-500 mt-1">{reward.description}</p>
-                            {reward.reason && (
-                              <div className="text-xs text-gray-500 mt-2 italic">
-                                &ldquo;{reward.reason}&rdquo;
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <Badge 
-                            variant={reward.isRedeemed ? "default" : "outline"}
-                            className="text-xs"
-                          >
-                            {reward.isRedeemed ? "Redeemed" : "Available"}
-                          </Badge>
-                          <p className="text-sm mt-1">
-                            {reward.pointsCost} points
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 border border-dashed rounded">
-                  <Gift className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                  <p className="text-gray-500">No rewards suggestions yet</p>
-                </div>
-              )}
-            </div>
-
             {/* Customer Profiles */}
             <div>
-              <h3 className="text-sm font-medium mb-3">Tap Agent Profile</h3>
+              <h3 className="text-sm font-medium mb-3">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-orange-500">Tap Agent</span> Profile
+              </h3>
               {customer.customerProfiles && customer.customerProfiles.length > 0 ? (
                 <div className="border rounded-md p-4 hover:bg-gray-50 transition-colors">
                   <div className="flex items-start">
@@ -1525,7 +1464,9 @@ function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () =
                           <div className="p-1.5 rounded-md bg-purple-50 text-purple-600">
                             <Brain className="h-4 w-4" />
                           </div>
-                          <h4 className="font-medium text-sm">Tap Agent Profile</h4>
+                          <h4 className="font-medium text-sm">
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-orange-500">Tap Agent</span> Profile
+                          </h4>
                           {customer.customerProfiles[0].createdAt && (
                             <span className="text-xs text-gray-500">
                               {formatTimeAgo(customer.customerProfiles[0].createdAt)}
@@ -1608,57 +1549,23 @@ function CohortBadge({ cohort }: { cohort?: string }) {
   )
 }
 
-interface WeeklyAgentActivity {
-  weekId?: string;
-  runDate?: string | Date;
-  timestamp?: any;
-  merchantId?: string;
-  customerId?: string;
-  customerName?: string;
-  cohort?: string;
-  rewards?: RewardActivity[];
-  banners?: BannerActivity[];
-  pushNotifications?: PushNotificationActivity[];
-}
-
 interface RewardActivity {
-  rewardId?: string;
-  rewardName?: string;
-  description?: string;
-  type?: string;
-  pointsCost?: number;
-  createdAt?: any;
-  isActive?: boolean;
-  expiresAt?: any;
-  hasBeenRedeemedByThisCustomer?: boolean;
-  redemptionCount?: number;
-  targetCohort?: string;
-  rewardVisibility?: string;
-  typeDetails?: {
-    type?: string;
-    discountType?: string;
-    discountValue?: number;
-    minimumPurchase?: number;
-    appliesTo?: string;
-    itemName?: string;
-    itemDescription?: string;
-  };
-}
-
-interface BannerActivity {
-  bannerId?: string;
-  title?: string;
-  description?: string;
-  color?: string;
-  style?: string;
-  isActive?: boolean;
-  createdAt?: any;
+  rewardId: string;
+  rewardName: string;
+  description: string;
+  type: string;
+  pointsCost: number;
+  isActive: boolean;
+  hasBeenRedeemedByThisCustomer: boolean;
+  reason?: string; // Adding optional reason property to fix linter errors
 }
 
 interface PushNotificationActivity {
   content?: string;
   timestamp?: any;
   sent?: boolean;
+  type?: 'push' | 'in-app';
+  clicked?: boolean;
 }
 
 interface AgentTabProps {
@@ -1668,210 +1575,444 @@ interface AgentTabProps {
 }
 
 function AgentTab({ customer, weeklyAgentActivities, loading }: AgentTabProps) {
+  const [activeWeekTab, setActiveWeekTab] = useState<'current' | 'previous'>('current');
+
+  // Handle loading state
   if (loading) {
     return (
-      <div className="flex flex-col space-y-2">
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-24 w-full" />
+      <div className="py-10 text-center">
+        <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-b-transparent border-gray-900"></div>
+        <p className="mt-2 text-gray-500">Loading agent activity...</p>
       </div>
     );
   }
 
-  if (!weeklyAgentActivities || weeklyAgentActivities.length === 0) {
+  // Determine customer cohort and strategy
+  const customerCohort = customer?.currentCohort?.name || customer?.cohort || 'Unknown';
+  const cohortLower = customerCohort.toLowerCase();
+  
+  // Define strategy based on cohort
+  const getCustomerStrategy = () => {
+    if (cohortLower.includes('new')) {
+      return {
+        title: 'New Customer Strategy',
+        description: 'Focus on welcoming and demonstrating value',
+        steps: [
+          'Offer welcome rewards to encourage repeat visits',
+          'Personalize communications based on first purchases',
+          'Showcase core product/service value'
+        ]
+      };
+    }
+    if (cohortLower.includes('loyal') || cohortLower.includes('active')) {
+      return {
+        title: 'Active Customer Strategy',
+        description: 'Maintain engagement and increase value',
+        steps: [
+          'Reward consistent patronage with exclusive offers',
+          'Encourage exploration of premium products/services',
+          'Recognize and appreciate loyalty'
+        ]
+      };
+    }
+    if (cohortLower.includes('risk') || cohortLower.includes('dormant')) {
+      return {
+        title: 'Re-engagement Strategy',
+        description: 'Bring this customer back before they churn',
+        steps: [
+          'Offer high-value incentives to return',
+          'Re-establish value proposition',
+          'Create easy pathways to re-engage'
+        ]
+      };
+    }
+    if (cohortLower.includes('churn') || cohortLower.includes('lost')) {
+      return {
+        title: 'Win-back Strategy',
+        description: 'Reconnect with this previous customer',
+        steps: [
+          'Provide significant "win-back" incentives',
+          'Communicate improvements since last visit',
+          'Remind of previous positive experiences'
+        ]
+      };
+    }
+    // Default strategy
+    return {
+      title: 'Customer Strategy',
+      description: 'Personalized engagement approach',
+      steps: [
+        'Offer targeted rewards based on behavior',
+        'Maintain relevant communications',
+        'Track engagement to refine approach'
+      ]
+    };
+  };
+  
+  const strategy = getCustomerStrategy();
+
+  // Sample data for demonstration purposes
+  const dummyCurrentWeek = {
+    weekId: 'current-week',
+    runDate: new Date(),
+    cohort: customer?.cohort || 'Active',
+    rewards: [
+      {
+        rewardId: 'reward-1',
+        rewardName: 'Weekend Special Discount',
+        description: '20% off your next purchase this weekend',
+        type: 'percentageDiscount',
+        pointsCost: 0,
+        isActive: true,
+        hasBeenRedeemedByThisCustomer: false,
+        reason: "Based on your recent purchasing patterns, we think you'd enjoy this weekend offer. Your last several visits were on weekends."
+      },
+      {
+        rewardId: 'reward-2',
+        rewardName: 'Free Coffee with Breakfast',
+        description: 'Buy any breakfast item and get a free coffee',
+        type: 'freeItem',
+        pointsCost: 0,
+        isActive: true,
+        hasBeenRedeemedByThisCustomer: true,
+        reason: "You've ordered breakfast items frequently but rarely with coffee. This offer encourages trying our coffee selection."
+      }
+    ],
+    banners: [
+      {
+        bannerId: 'banner-1',
+        title: 'Spring Collection Launch',
+        description: 'Check out our new spring items',
+        color: '#4CAF50',
+        secondaryColor: '#E8F5E9',
+        style: 'light',
+        isActive: true,
+        createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
+      },
+      {
+        bannerId: 'banner-2',
+        title: 'Loyalty Program Update',
+        description: "We've improved our rewards system",
+        color: '#2196F3',
+        secondaryColor: '#E3F2FD',
+        style: 'dark',
+        isActive: false,
+        createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000)
+      }
+    ],
+    pushNotifications: [
+      {
+        content: 'Your reward is waiting! Come claim your free item today.',
+        timestamp: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+        sent: false,
+        type: 'push',
+        clicked: false
+      },
+      {
+        content: 'Thank you for your recent purchase! How was your experience?',
+        timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        sent: true,
+        type: 'in-app',
+        clicked: true
+      }
+    ]
+  };
+
+  const dummyPreviousWeek = {
+    weekId: 'previous-week',
+    runDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+    cohort: customer?.cohort || 'Active',
+    rewards: [
+      {
+        rewardId: 'prev-reward-1',
+        rewardName: 'Happy Hour Discount',
+        description: '15% off drinks between 3-6pm',
+        type: 'percentageDiscount',
+        pointsCost: 0,
+        isActive: false,
+        hasBeenRedeemedByThisCustomer: true,
+        reason: "You've visited during afternoon hours several times. This promotion aligns with your typical visit pattern."
+      }
+    ],
+    banners: [
+      {
+        bannerId: 'prev-banner-1',
+        title: 'Weekend Flash Sale',
+        description: 'Up to 40% off select items',
+        color: '#FF9800',
+        secondaryColor: '#FFF3E0',
+        style: 'light',
+        isActive: false,
+        createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000)
+      }
+    ],
+    pushNotifications: [
+      {
+        content: "Don't miss our weekend promotion! Ends Sunday.",
+        timestamp: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+        sent: true,
+        type: 'push',
+        clicked: false
+      }
+    ]
+  };
+
+  // Use provided data or fallback to dummy data
+  const currentWeekActivity = weeklyAgentActivities && weeklyAgentActivities.length > 0 
+    ? weeklyAgentActivities[0] 
+    : dummyCurrentWeek;
+    
+  const previousWeekActivity = weeklyAgentActivities && weeklyAgentActivities.length > 1 
+    ? weeklyAgentActivities[1] 
+    : dummyPreviousWeek;
+  
+  // Get the active week data based on selected tab
+  const activeWeekData = activeWeekTab === 'current' 
+    ? currentWeekActivity 
+    : previousWeekActivity;
+
+  // Check if there's any agent activity
+  const hasAgentActivity = (
+    (activeWeekData.rewards && activeWeekData.rewards.length > 0) ||
+    (activeWeekData.banners && activeWeekData.banners.length > 0) ||
+    (activeWeekData.pushNotifications && activeWeekData.pushNotifications.length > 0)
+  );
+
+  // If no activity at all, show empty state
+  if (!hasAgentActivity) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 text-center">
-        <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center mb-4">
-          <Zap className="h-6 w-6 text-blue-500" />
-        </div>
-        <h3 className="text-lg font-medium mb-2">No Agent Activity Yet</h3>
-        <p className="text-muted-foreground text-sm max-w-md">
-          When Tap Agent creates rewards or banners for this customer, they will appear here.
+      <div className="py-16 text-center">
+        <Activity className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+        <h3 className="text-lg font-medium text-gray-800 mb-1">No Agent Activity Yet</h3>
+        <p className="text-gray-500 max-w-sm mx-auto">
+          Agent activity will appear here once strategies are created for this customer.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {weeklyAgentActivities.map((activity: WeeklyAgentActivity, index: number) => (
-        <Card key={activity.weekId || index} className="overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-blue-500 to-orange-500 text-white py-3">
-            <div className="flex justify-between items-center">
-              <CardTitle className="text-base font-medium">
-                Week of {activity.weekId ? new Date(activity.weekId.split('-')[0], parseInt(activity.weekId.split('-')[1]) - 1, parseInt(activity.weekId.split('-')[2])).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : 'Unknown'}
-              </CardTitle>
-              {activity.runDate && (
-                <div className="text-xs opacity-80">
-                  Generated on {typeof activity.runDate === 'string' 
-                    ? new Date(activity.runDate).toLocaleDateString() 
-                    : activity.runDate?.toDate?.()?.toLocaleDateString() || 'Unknown date'}
-                </div>
-              )}
+    <div>
+      {/* Strategy Section */}
+      <div className="mb-8">
+        <div className="rounded-md border bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <h3 className="font-medium text-gray-800">{strategy.title}</h3>
+              <CohortBadge cohort={customerCohort} />
             </div>
-          </CardHeader>
-          <CardContent className="p-4">
-            <div className="space-y-4">
-              {/* Rewards Section */}
-              {activity.rewards && activity.rewards.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-semibold mb-3 flex items-center">
-                    <Gift className="h-4 w-4 mr-2 text-orange-500" />
-                    Rewards Created This Week
-                  </h4>
-                  <div className="space-y-2">
-                    {activity.rewards.map((reward: RewardActivity, idx: number) => (
-                      <div key={reward.rewardId || idx} className="border rounded-md p-3 bg-white">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <div className="font-medium">{reward.rewardName}</div>
-                            <div className="text-sm text-muted-foreground mt-1">{reward.description}</div>
-                            <div className="flex flex-wrap items-center gap-2 mt-2">
-                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 rounded-full">
-                                {reward.type === "percentageDiscount" ? "Percentage Discount" : 
-                                 reward.type === "fixedDiscount" ? "Fixed Discount" : 
-                                 reward.type === "freeItem" ? "Free Item" : 
-                                 reward.type === "buyXGetY" ? "Buy X Get Y" : 
-                                 reward.type === "other" ? "Special Offer" : 
-                                 capitalizeFirstLetter(reward.type || "Reward")}
-                              </Badge>
-                              {reward.pointsCost > 0 ? (
-                                <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200 rounded-full">
-                                  {reward.pointsCost} points
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 rounded-full">
-                                  Free
-                                </Badge>
-                              )}
-                              {reward.hasBeenRedeemedByThisCustomer ? (
-                                <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 rounded-full">
-                                  Redeemed
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-xs bg-gray-50 text-gray-700 border-gray-200 rounded-full">
-                                  Not redeemed
-                                </Badge>
-                              )}
-                            </div>
-                            {reward.typeDetails && (
-                              <div className="text-xs text-muted-foreground mt-2">
-                                {reward.type === "percentageDiscount" && reward.typeDetails.discountValue && (
-                                  <span>{reward.typeDetails.discountValue}% off {reward.typeDetails.appliesTo || "any purchase"}</span>
-                                )}
-                                {reward.type === "fixedDiscount" && reward.typeDetails.discountValue && (
-                                  <span>${reward.typeDetails.discountValue} off {reward.typeDetails.minimumPurchase ? `when you spend $${reward.typeDetails.minimumPurchase} or more` : ""}</span>
-                                )}
-                                {reward.type === "freeItem" && reward.typeDetails.itemName && (
-                                  <span>Free {reward.typeDetails.itemName}{reward.typeDetails.itemDescription ? `: ${reward.typeDetails.itemDescription}` : ""}</span>
-                                )}
-                                {reward.type === "buyXGetY" && reward.typeDetails.itemName && (
-                                  <span>Buy X, get a free {reward.typeDetails.itemName}{reward.typeDetails.itemDescription ? `: ${reward.typeDetails.itemDescription}` : ""}</span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {reward.createdAt?.toDate ? formatDate(reward.createdAt) : (reward.createdAt ? new Date(reward.createdAt).toLocaleDateString() : 'Unknown date')}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Banners Section */}
-              {activity.banners && activity.banners.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-semibold mb-3 flex items-center">
-                    <svg className="h-4 w-4 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
-                    </svg>
-                    Banners Created This Week
-                  </h4>
-                  <div className="space-y-2">
-                    {activity.banners.map((banner: BannerActivity, idx: number) => (
-                      <div key={banner.bannerId || idx} className="border rounded-md p-3 bg-white">
-                        <div className="font-medium">{banner.title}</div>
-                        <div className="text-sm text-muted-foreground mt-1">{banner.description}</div>
-                        <div className="flex items-center justify-between mt-2">
-                          <div className="flex gap-2">
-                            <div 
-                              className="h-4 w-4 rounded-full" 
-                              style={{ background: banner.color || '#0ea5e9' }}
-                            ></div>
-                            <Badge variant="outline" className="text-xs bg-gray-50 text-gray-700 border-gray-200 rounded-full">
-                              {banner.style || "Light"}
-                            </Badge>
-                            {banner.isActive ? (
-                              <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 rounded-full">
-                                Active
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 rounded-full">
-                                Scheduled
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {banner.createdAt?.toDate ? formatDate(banner.createdAt) : (banner.createdAt ? new Date(banner.createdAt).toLocaleDateString() : 'Unknown date')}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Push Notifications Section */}
-              {activity.pushNotifications && activity.pushNotifications.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-semibold mb-3 flex items-center">
-                    <Bell className="h-4 w-4 mr-2 text-purple-500" />
-                    Push Notifications This Week
-                  </h4>
-                  <div className="space-y-2">
-                    {activity.pushNotifications.map((notification: PushNotificationActivity, idx: number) => (
-                      <div key={idx} className="border rounded-md p-3 bg-white">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <div className="text-sm">{notification.content || "Notification content unavailable"}</div>
-                            <div className="flex items-center gap-2 mt-2">
-                              {notification.sent ? (
-                                <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 rounded-full">
-                                  Sent
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 rounded-full">
-                                  Pending
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {notification.timestamp?.toDate ? formatDate(notification.timestamp) : (notification.timestamp ? new Date(notification.timestamp).toLocaleDateString() : 'Unknown date')}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* No activities fallback */}
-              {(!activity.rewards || activity.rewards.length === 0) && 
-               (!activity.banners || activity.banners.length === 0) && 
-               (!activity.pushNotifications || activity.pushNotifications.length === 0) && (
-                <div className="text-center py-4 text-muted-foreground text-sm">
-                  No agent activities recorded this week.
-                </div>
-              )}
+            <Badge variant="outline" className="bg-gray-50 text-gray-600 font-normal">
+              <Target className="h-3.5 w-3.5 mr-1.5" />
+              Tailored Strategy
+            </Badge>
+          </div>
+          
+          <p className="text-gray-600 mb-4 text-sm">{strategy.description}</p>
+          
+          <div className="bg-gray-50 p-4 rounded-md border border-gray-100">
+            <div className="flex items-center gap-1.5 mb-2.5 text-sm font-medium text-gray-700">
+              <Users className="h-4 w-4" />
+              Recommended Actions
             </div>
-          </CardContent>
-        </Card>
-      ))}
+            <div className="space-y-2 text-sm text-gray-600">
+              {strategy.steps.map((step, index) => (
+                <div key={index} className="flex items-start gap-2">
+                  <div className="h-5 w-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 text-xs">
+                    {index + 1}
+                  </div>
+                  <span>{step}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Week selector tabs */}
+      <div className="mb-6 border-b">
+        <div className="flex">
+          <button
+            onClick={() => setActiveWeekTab('current')}
+            className={`px-4 py-2 text-sm ${
+              activeWeekTab === 'current'
+                ? 'border-b-2 border-blue-500 text-blue-700 font-medium'
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Current Week
+          </button>
+          <button
+            onClick={() => setActiveWeekTab('previous')}
+            className={`px-4 py-2 text-sm ${
+              activeWeekTab === 'previous'
+                ? 'border-b-2 border-blue-500 text-blue-700 font-medium'
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Previous Week
+          </button>
+        </div>
+      </div>
+
+      <div className="text-sm text-gray-500 mb-6">
+        Generated {activeWeekData.runDate ? format(new Date(activeWeekData.runDate), 'MMM d, yyyy') : 'N/A'}
+      </div>
+
+      {/* Rewards Section */}
+      {activeWeekData.rewards && activeWeekData.rewards.length > 0 && (
+        <div className="mb-8">
+          <h3 className="font-medium mb-4 text-gray-800 flex items-center gap-2">
+            <Gift className="h-5 w-5 text-gray-600" />
+            Rewards
+          </h3>
+          
+          <div className="space-y-5">
+            {activeWeekData.rewards.map((reward, index) => (
+              <div key={reward.rewardId || index} className="rounded-md border p-4 bg-white shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-md bg-blue-50 text-blue-600 mt-0.5">
+                    {getRewardTypeIcon(reward.type || 'generic')}
+                  </div>
+                  
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium">{reward.rewardName}</h4>
+                      {reward.hasBeenRedeemedByThisCustomer ? (
+                        <Badge className="bg-green-50 text-green-700 border-none font-normal">
+                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                          Redeemed
+                        </Badge>
+                      ) : reward.isActive ? (
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-normal">
+                          Active
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-gray-100 text-gray-500 border-gray-200 font-normal">
+                          Inactive
+                        </Badge>
+                      )}
+                    </div>
+                    
+                    <p className="text-gray-600 my-1.5">{reward.description}</p>
+                    
+                    {reward.reason && (
+                      <div className="mt-2 text-sm text-gray-500 border-t pt-2">
+                        <div className="flex items-center gap-1 text-xs mb-1 text-gray-400">
+                          <HelpCircle className="h-3 w-3" />
+                          Why this reward:
+                        </div>
+                        {reward.reason}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Banners Section */}
+      {activeWeekData.banners && activeWeekData.banners.length > 0 && (
+        <div className="mb-8">
+          <h3 className="font-medium mb-4 text-gray-800 flex items-center gap-2">
+            <Image className="h-5 w-5 text-gray-600" />
+            App Banners
+          </h3>
+          
+          <div className="space-y-3">
+            {activeWeekData.banners.map((banner, index) => (
+              <div key={banner.bannerId || index} className="rounded-md border p-4 bg-white shadow-sm">
+                <div className="flex justify-between">
+                  <div>
+                    <h4 className="font-medium">{banner.title}</h4>
+                    <p className="text-gray-600 mt-1">{banner.description}</p>
+                  </div>
+                  
+                  <Badge variant={banner.isActive ? "default" : "outline"} className="h-fit">
+                    {banner.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Push Notifications - updated design with clearer sent/scheduled status */}
+      {activeWeekData.pushNotifications && activeWeekData.pushNotifications.length > 0 && (
+        <div>
+          <h3 className="font-medium mb-4 text-gray-800 flex items-center gap-2">
+            <Bell className="h-5 w-5 text-gray-600" />
+            Customer Communications
+          </h3>
+          
+          <div className="space-y-3">
+            {activeWeekData.pushNotifications.map((notification, index) => (
+              <div key={index} className={`rounded-md border bg-white shadow-sm ${notification.sent ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-amber-400'}`}>
+                <div className="flex items-center gap-2 border-b px-4 py-2 bg-gray-50">
+                  {/* Message type */}
+                  {notification.type === 'push' ? (
+                    <Badge variant="outline" className="bg-blue-50 border-blue-100 text-blue-700 font-normal">
+                      <Bell className="h-3.5 w-3.5 mr-1.5" />
+                      Push Notification
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-purple-50 border-purple-100 text-purple-700 font-normal">
+                      <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+                      In-App Message
+                    </Badge>
+                  )}
+                  
+                  {/* Sent/Scheduled status */}
+                  {notification.sent ? (
+                    <Badge className="bg-green-50 text-green-700 border-none">
+                      <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                      Sent
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-amber-50 text-amber-700 border-none">
+                      <Clock className="h-3.5 w-3.5 mr-1.5" />
+                      Scheduled
+                    </Badge>
+                  )}
+                  
+                  {/* Date information */}
+                  <div className="text-xs text-gray-500 ml-auto">
+                    {notification.sent 
+                      ? `Sent on ${notification.timestamp ? format(new Date(notification.timestamp), 'MMM d, yyyy') : 'N/A'}`
+                      : `Scheduled for ${notification.timestamp ? format(new Date(notification.timestamp), 'MMM d, yyyy') : 'N/A'}`
+                    }
+                  </div>
+                </div>
+                
+                <div className="p-4">
+                  <p className="text-gray-800 text-base">{notification.content}</p>
+                  
+                  {/* Customer interaction status - only show for sent messages */}
+                  {notification.sent && (
+                    <div className="mt-2 pt-2 border-t text-sm">
+                      <div className="flex items-center gap-1">
+                        {notification.clicked ? (
+                          <div className="flex items-center text-green-600">
+                            <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                            <span className="font-medium">Customer clicked</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center text-gray-500">
+                            <X className="h-4 w-4 mr-1.5" />
+                            <span>No customer interaction</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

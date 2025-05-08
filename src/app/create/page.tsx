@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
-import { CreatePointsRuleDialog } from "@/components/create-points-rule-dialog"
+import { CreatePointsRuleSheet } from "@/components/create-points-rule-sheet"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
 import { CreateBannerDialog } from "@/components/create-banner-dialog"
-import { SendBroadcastDialog } from "@/components/send-broadcast-dialog"
+import { SendBroadcastSheet } from "@/components/send-broadcast-sheet"
 import { IntroductoryRewardDialog } from "@/components/introductory-reward-dialog"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -210,7 +210,7 @@ export default function CreatePage() {
           onOpenChange={setCreateRecurringOpen}
         />
         
-        <CreatePointsRuleDialog 
+        <CreatePointsRuleSheet 
           open={createRuleOpen}
           onOpenChange={setCreateRuleOpen}
         />
@@ -220,7 +220,7 @@ export default function CreatePage() {
           onOpenChange={setCreateBannerOpen} 
         />
         
-        <SendBroadcastDialog
+        <SendBroadcastSheet
           open={broadcastDialogOpen}
           onOpenChange={setBroadcastDialogOpen}
         />

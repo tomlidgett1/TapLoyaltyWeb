@@ -46,7 +46,6 @@ import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, DocumentData } from "firebase/firestore"
 import { signOut, Auth, getAuth } from "firebase/auth"
-import { auth } from "@/lib/firebase"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { TapAiButton } from "@/components/tap-ai-button"
 import { Button } from "@/components/ui/button"
@@ -54,8 +53,8 @@ import { toast } from "@/components/ui/use-toast"
 import { collection, getDocs, query, where, limit } from "firebase/firestore"
 import { Input } from "@/components/ui/input"
 
-// Type assertion for auth
-const typedAuth: Auth = auth as Auth;
+// Get auth instance
+const auth = getAuth();
 
 // Custom scrollbar styles
 const scrollbarStyles = `
@@ -79,6 +78,23 @@ const navItems = [
     title: "Dashboard",
     href: "/dashboard",
     icon: Home
+  },
+  {
+    title: "Tap Agent",
+    href: "/tap-agent/intro",
+    icon: Sparkles,
+    subItems: [
+      {
+        title: "Introduction",
+        href: "/tap-agent/intro",
+        icon: Home
+      },
+      {
+        title: "Agent Setup",
+        href: "/tap-agent/setup",
+        icon: Settings
+      }
+    ]
   },
   {
     title: "My Store",
@@ -119,6 +135,11 @@ const navItems = [
         title: "Messages",
         href: "/store/messages",
         icon: MessageSquare
+      },
+      {
+        title: "Customers",
+        href: "/customers",
+        icon: Users
       }
     ]
   },
@@ -126,28 +147,6 @@ const navItems = [
     title: "Create",
     href: "/create",
     icon: PlusCircle
-  },
-  {
-    title: "Tap Agent",
-    href: "/tap-agent/intro",
-    icon: Sparkles,
-    subItems: [
-      {
-        title: "Introduction",
-        href: "/tap-agent/intro",
-        icon: Home
-      },
-      {
-        title: "Agent Setup",
-        href: "/tap-agent/setup",
-        icon: Settings
-      }
-    ]
-  },
-  {
-    title: "Customers",
-    href: "/customers",
-    icon: Users
   },
   {
     title: "Financials",
@@ -166,24 +165,26 @@ const navItems = [
     icon: Gift
   },
   {
-    title: "Analytics",
-    href: "/analytics",
-    icon: BarChart
-  },
-  {
-    title: "Integrations",
-    href: "/integrations",
-    icon: Layers
-  },
-  {
-    title: "Admin",
-    href: "/admin",
-    icon: ShieldCheck
-  },
-  {
     title: "Settings",
     href: "/dashboard/settings",
-    icon: Settings
+    icon: Settings,
+    subItems: [
+      {
+        title: "Integrations",
+        href: "/integrations",
+        icon: Layers
+      },
+      {
+        title: "Admin",
+        href: "/admin",
+        icon: ShieldCheck
+      },
+      {
+        title: "Settings",
+        href: "/dashboard/settings",
+        icon: Settings
+      }
+    ]
   },
   {
     title: "Onboarding Wizard",
@@ -228,7 +229,8 @@ export function SideNav() {
   const [showChecklist, setShowChecklist] = useState(true)
   const [openSections, setOpenSections] = useState<SectionState>({
     "My Store": true,
-    "Tap Agent": true
+    "Tap Agent": true,
+    "Settings": true
   })
   const [searchQuery, setSearchQuery] = useState("")
 
@@ -351,7 +353,7 @@ export function SideNav() {
 
   const handleLogout = async () => {
     try {
-      await signOut(typedAuth)
+      await signOut(auth)
       router.push('/login')
     } catch (error) {
       console.error("Error signing out:", error)
@@ -371,7 +373,7 @@ export function SideNav() {
   }
 
   return (
-    <div className="w-48 h-screen flex-shrink-0 bg-[#F5F5F5] flex flex-col">
+    <div className="w-48 h-screen flex-shrink-0 bg-[#F5F5F5] flex flex-col overflow-hidden">
       {/* Apply custom scrollbar styles */}
       <style jsx global>{scrollbarStyles}</style>
       
@@ -418,7 +420,7 @@ export function SideNav() {
         </div>
       </div>
       
-      <nav className="px-2 py-1.5 flex-1 overflow-y-auto custom-scrollbar">
+      <nav className="flex-1 overflow-y-auto custom-scrollbar px-2">
         <ul className="space-y-1">
           {/* Main pages without sub-items */}
           {navItems
@@ -451,25 +453,27 @@ export function SideNav() {
               )
           })}
           
-          {/* My Store section */}
+          {/* Tap Agent section */}
           {navItems
-            .filter(item => item.title === "My Store")
+            .filter(item => item.title === "Tap Agent")
             .map((item) => (
               <li key={item.title} className="mt-3">
                 <div className="px-3 mb-1">
                   <button 
-                    onClick={() => toggleSection("My Store")}
-                    className="text-[10px] font-medium text-gray-500 hover:text-[#007AFF] uppercase tracking-wider"
+                    onClick={() => toggleSection("Tap Agent")}
+                    className="text-[10px] font-medium uppercase tracking-wider"
                   >
-                    {item.title}
+                    <span className="bg-gradient-to-r from-[#007AFF] to-orange-500 bg-clip-text text-transparent font-semibold">
+                      {item.title}
+                    </span>
                   </button>
                 </div>
-                <Collapsible open={openSections["My Store"]}>
+                <Collapsible open={openSections["Tap Agent"]}>
                   <CollapsibleContent>
                     <ul className="space-y-1">
                       {item.subItems?.map((subItem) => {
                         const isSubActive = pathname === subItem.href || 
-                          pathname.startsWith(`${item.href}/`)
+                          pathname.startsWith(`${subItem.href}/`)
                         return (
                           <li key={subItem.title}>
                             <Link
@@ -499,25 +503,25 @@ export function SideNav() {
               </li>
             ))}
           
-          {/* Tap Agent section */}
+          {/* My Store section */}
           {navItems
-            .filter(item => item.title === "Tap Agent")
+            .filter(item => item.title === "My Store")
             .map((item) => (
               <li key={item.title} className="mt-3">
                 <div className="px-3 mb-1">
                   <button 
-                    onClick={() => toggleSection("Tap Agent")}
+                    onClick={() => toggleSection("My Store")}
                     className="text-[10px] font-medium text-gray-500 hover:text-[#007AFF] uppercase tracking-wider"
                   >
                     {item.title}
                   </button>
                 </div>
-                <Collapsible open={openSections["Tap Agent"]}>
+                <Collapsible open={openSections["My Store"]}>
                   <CollapsibleContent>
                     <ul className="space-y-1">
                       {item.subItems?.map((subItem) => {
                         const isSubActive = pathname === subItem.href || 
-                          pathname.startsWith(`${item.href}/`)
+                          pathname.startsWith(`${subItem.href}/`)
                         return (
                           <li key={subItem.title}>
                             <Link
@@ -548,12 +552,57 @@ export function SideNav() {
             ))}
           
           {/* Settings section */}
-          {/* Removing this section as Settings doesn't have subItems */}
+          {navItems
+            .filter(item => item.title === "Settings" && item.subItems)
+            .map((item) => (
+              <li key={item.title} className="mt-3">
+                <div className="px-3 mb-1">
+                  <button 
+                    onClick={() => toggleSection("Settings")}
+                    className="text-[10px] font-medium text-gray-500 hover:text-[#007AFF] uppercase tracking-wider"
+                  >
+                    {item.title}
+                  </button>
+                </div>
+                <Collapsible open={openSections["Settings"] !== false}>
+                  <CollapsibleContent>
+                    <ul className="space-y-1">
+                      {item.subItems?.map((subItem) => {
+                        const isSubActive = pathname === subItem.href || 
+                          pathname.startsWith(`${subItem.href}/`)
+                        return (
+                          <li key={subItem.title}>
+                            <Link
+                              href={subItem.href}
+                              className={cn(
+                                "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-normal transition-colors",
+                                isSubActive 
+                                  ? "bg-[#007AFF]/10 text-[#007AFF]" 
+                                  : "text-gray-800 hover:bg-[#007AFF]/5"
+                              )}
+                            >
+                              <subItem.icon className={cn("h-4 w-4 flex-shrink-0", 
+                                isSubActive 
+                                  ? "text-[#007AFF]" 
+                                  : "text-gray-500 group-hover:text-[#007AFF]"
+                              )} />
+                              <span className={isSubActive ? "text-[#007AFF]" : "group-hover:text-[#007AFF]"}>
+                                {subItem.title}
+                              </span>
+                            </Link>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </CollapsibleContent>
+                </Collapsible>
+              </li>
+            ))}
         </ul>
       </nav>
       
       {/* Account section at the bottom */}
-      <div className="mt-auto border-t border-gray-200 py-2 px-3">
+      <div className="flex-shrink-0 border-t border-gray-200 py-2 px-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3 overflow-hidden min-w-0 max-w-[80%]">
             <Avatar className="h-8 w-8 flex-shrink-0">

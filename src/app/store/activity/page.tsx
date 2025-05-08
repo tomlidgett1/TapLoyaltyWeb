@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { useState, useEffect, useMemo, useRef, useCallback } from "react"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -36,7 +36,15 @@ import {
   ChevronUp,
   Zap,
   CalendarIcon,
-  DollarSign
+  DollarSign,
+  AlertCircle,
+  RefreshCw,
+  Loader2,
+  Clock,
+  CreditCard,
+  ShoppingBag,
+  User,
+  X
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
@@ -62,6 +70,16 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Calendar as UiCalendar } from "@/components/ui/calendar"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import { Separator } from "@/components/ui/separator"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 // Define transaction type with Firestore timestamp
 interface Transaction {
@@ -130,8 +148,54 @@ interface SquareSale {
   }[];
 }
 
-type ActivityCategory = "all" | "transactions" | "redemptions" | "sales"
-type SortField = "createdAt" | "amount" | "status" | "type" | "customerId" | "day"
+// Add an interface for Lightspeed sales
+interface LightspeedSale {
+  saleID: string;
+  timeStamp: string;
+  discountPercent: string;
+  completed: string;
+  archived: string;
+  voided: string;
+  ticketNumber: string;
+  calcTotal: string;
+  calcSubtotal: string;
+  calcTaxable: string;
+  calcNonTaxable?: string; // Add this property as optional
+  calcTax1: string;
+  calcTax2?: string; // Make tax2 optional as well
+  total: string;
+  displayableTotal: string;
+  balance: string;
+  customerID: string;
+  employeeID: string;
+  registerID: string;
+  shopID: string;
+  isWorkOrder?: string;
+  customerName?: string;
+  items?: Array<{
+    itemID: string;
+    description: string;
+    unitPrice: string;
+    quantity: string;
+    extPrice: string;
+    name: string;
+  }>;
+}
+
+// Add interface for Lightspeed Account
+interface LightspeedAccount {
+  accountID: string;
+  name: string;
+}
+
+// Add a new interface for daily sales data
+interface ProcessedSale extends LightspeedSale {
+  // ProcessedSale extends LightspeedSale with any additional fields
+  // that might be added during processing
+}
+
+type ActivityCategory = "all" | "transactions" | "redemptions" | "sales" | "lightspeed_sales"
+type SortField = "createdAt" | "amount" | "status" | "type" | "customerId" | "day" | "saleID" | "timeStamp" | "ticketNumber" | "calcSubtotal" | "calcTax1" | "calcTax2" | "total" | "completed"
 type SortDirection = "asc" | "desc"
 
 export default function ActivityPage() {
@@ -165,7 +229,18 @@ export default function ActivityPage() {
   const [squareSales, setSquareSales] = useState<SquareSale[]>([])
   const [loadingSales, setLoadingSales] = useState(false)
   const [salesError, setSalesError] = useState<string | null>(null)
-
+  const [lightspeedSales, setLightspeedSales] = useState<LightspeedSale[]>([])
+  const [loadingLightspeedSales, setLoadingLightspeedSales] = useState(false)
+  const [lightspeedError, setLightspeedError] = useState<string | null>(null)
+  const [lightspeedAccountInfo, setLightspeedAccountInfo] = useState<LightspeedAccount | null>(null)
+  const [selectedLightspeedSale, setSelectedLightspeedSale] = useState<LightspeedSale | null>(null)
+  const [isLightspeedDrawerOpen, setIsLightspeedDrawerOpen] = useState(false)
+  // Add pagination state variables for Lightspeed sales
+  const [hasMoreLightspeedSales, setHasMoreLightspeedSales] = useState(true)
+  const [lightspeedPage, setLightspeedPage] = useState(1)
+  const [fetchingMoreSales, setFetchingMoreSales] = useState(false)
+  const salesListRef = useRef<HTMLDivElement>(null)
+  
   useEffect(() => {
     const fetchActivity = async () => {
       if (!user?.uid) return
@@ -685,6 +760,260 @@ export default function ActivityPage() {
     }
   }, [activityCategory, user?.uid])
 
+  // Add function to fetch Lightspeed account info
+  const fetchLightspeedAccountInfo = async () => {
+    if (!user?.uid) return
+    
+    try {
+      setLoadingLightspeedSales(true)
+      setLightspeedError(null)
+      
+      // Fetch account info
+      const response = await fetch(`/api/lightspeed/account?merchantId=${user.uid}`)
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch Lightspeed account information')
+      }
+      
+      if (data.success && data.account) {
+        setLightspeedAccountInfo(data.account)
+        
+        // Now fetch the sales data with the account ID
+        if (data.account.accountID) {
+          fetchLightspeedSales(data.account.accountID)
+        }
+      } else {
+        setLightspeedAccountInfo(null)
+        setLightspeedError('No Lightspeed account found or API returned no data')
+      }
+    } catch (error) {
+      console.error('Error fetching Lightspeed account:', error)
+      setLightspeedError(error instanceof Error ? error.message : 'An unknown error occurred')
+      setLoadingLightspeedSales(false)
+    }
+  }
+  
+  // Update the fetchLightspeedSales function to support pagination
+  const fetchLightspeedSales = async (accountId: string, isLoadingMore = false) => {
+    if (!user?.uid || !accountId) return
+    
+    try {
+      if (!isLoadingMore) {
+        setLoadingLightspeedSales(true)
+      } else {
+        setFetchingMoreSales(true)
+      }
+      
+      // Add page parameter
+      const page = isLoadingMore ? lightspeedPage + 1 : 1
+      
+      // Fetch sales data with pagination
+      const response = await fetch(`/api/lightspeed/sales?merchantId=${user.uid}&accountId=${accountId}&page=${page}`)
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch Lightspeed sales data')
+      }
+      
+      if (data.success && Array.isArray(data.sales)) {
+        // If loading more, append to existing data, otherwise replace
+        if (isLoadingMore) {
+          if (data.sales.length === 0) {
+            setHasMoreLightspeedSales(false)
+          } else {
+            setLightspeedSales(prev => [...prev, ...data.sales])
+            setLightspeedPage(page)
+          }
+        } else {
+          setLightspeedSales(data.sales)
+          setLightspeedPage(1)
+          setHasMoreLightspeedSales(data.sales.length >= 50) // Assuming 50 is the page size
+        }
+      } else {
+        if (!isLoadingMore) {
+          setLightspeedSales([])
+        }
+        setHasMoreLightspeedSales(false)
+      }
+    } catch (error) {
+      console.error('Error fetching Lightspeed sales:', error)
+      setLightspeedError(error instanceof Error ? error.message : 'An unknown error occurred')
+    } finally {
+      if (!isLoadingMore) {
+        setLoadingLightspeedSales(false)
+      } else {
+        setFetchingMoreSales(false)
+      }
+    }
+  }
+  
+  // Call fetchLightspeedAccountInfo when the selected tab is "lightspeed_sales"
+  useEffect(() => {
+    if (activityCategory === 'lightspeed_sales' && user?.uid) {
+      fetchLightspeedAccountInfo()
+    }
+  }, [activityCategory, user?.uid])
+
+  // Add function to handle opening the sale details drawer
+  const handleViewLightspeedSale = (sale: LightspeedSale) => {
+    setSelectedLightspeedSale(sale)
+    setIsLightspeedDrawerOpen(true)
+  }
+
+  // Add function to handle Lightspeed Sales sorting
+  const handleLightspeedSort = (field: string) => {
+    if (field === sortField) {
+      setSortDirection(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setSortField(field as SortField)
+      setSortDirection("desc")
+    }
+  }
+
+  // Add filter functions to apply the date filters to Lightspeed sales
+  const applyLightspeedFilters = useMemo(() => {
+    if (!lightspeedSales || lightspeedSales.length === 0) return [];
+    
+    return lightspeedSales.filter(sale => {
+      const saleDate = new Date(sale.timeStamp);
+      
+      // Apply date filters
+      if (dateFilter !== "all") {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+        
+        const startOfLastWeek = new Date(startOfWeek);
+        startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
+        
+        const endOfLastWeek = new Date(startOfWeek);
+        endOfLastWeek.setDate(endOfLastWeek.getDate() - 1);
+        
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        
+        const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+        
+        switch (dateFilter) {
+          case 'today':
+            if (saleDate < today || saleDate >= new Date(today.getTime() + 86400000)) return false;
+            break;
+          case 'yesterday':
+            if (saleDate < yesterday || saleDate >= today) return false;
+            break;
+          case 'thisWeek':
+            if (saleDate < startOfWeek) return false;
+            break;
+          case 'lastWeek':
+            if (saleDate < startOfLastWeek || saleDate >= startOfWeek) return false;
+            break;
+          case 'thisMonth':
+            if (saleDate < startOfMonth) return false;
+            break;
+          case 'lastMonth':
+            if (saleDate < startOfLastMonth || saleDate >= startOfMonth) return false;
+            break;
+          case 'custom':
+            if (customDateRange.start && saleDate < customDateRange.start) return false;
+            if (customDateRange.end) {
+              const endDateWithTime = new Date(customDateRange.end);
+              endDateWithTime.setHours(23, 59, 59, 999);
+              if (saleDate > endDateWithTime) return false;
+            }
+            break;
+        }
+      }
+      
+      // Apply search query if present
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        return (
+          sale.saleID.toLowerCase().includes(query) ||
+          sale.ticketNumber.toLowerCase().includes(query) ||
+          (sale.customerName && sale.customerName.toLowerCase().includes(query))
+        );
+      }
+      
+      return true;
+    });
+  }, [lightspeedSales, dateFilter, customDateRange.start, customDateRange.end, searchQuery]);
+
+  // Add sorting function for Lightspeed sales
+  const sortedLightspeedSales = useMemo(() => {
+    if (!applyLightspeedFilters || applyLightspeedFilters.length === 0) return [];
+    
+    return [...applyLightspeedFilters].sort((a, b) => {
+      let valA, valB;
+      
+      switch (sortField) {
+        case 'saleID':
+          valA = a.saleID;
+          valB = b.saleID;
+          break;
+        case 'timeStamp':
+          valA = new Date(a.timeStamp).getTime();
+          valB = new Date(b.timeStamp).getTime();
+          break;
+        case 'ticketNumber':
+          valA = a.ticketNumber;
+          valB = b.ticketNumber;
+          break;
+        case 'total':
+          valA = parseFloat(a.total);
+          valB = parseFloat(b.total);
+          break;
+        case 'calcSubtotal':
+          valA = parseFloat(a.calcSubtotal);
+          valB = parseFloat(b.calcSubtotal);
+          break;
+        case 'calcTax1':
+          valA = parseFloat(a.calcTax1);
+          valB = parseFloat(b.calcTax1);
+          break;
+        case 'completed':
+          valA = a.completed === 'true' ? 1 : 0;
+          valB = b.completed === 'true' ? 1 : 0;
+          break;
+        default:
+          valA = new Date(a.timeStamp).getTime();
+          valB = new Date(b.timeStamp).getTime();
+      }
+      
+      if (sortDirection === 'asc') {
+        return valA > valB ? 1 : -1;
+      } else {
+        return valA < valB ? 1 : -1;
+      }
+    });
+  }, [applyLightspeedFilters, sortField, sortDirection]);
+
+  // Add scroll handler for infinite scrolling
+  const handleScroll = useCallback(() => {
+    if (
+      salesListRef.current &&
+      window.innerHeight + window.scrollY >= salesListRef.current.offsetTop + salesListRef.current.clientHeight - 300 &&
+      hasMoreLightspeedSales &&
+      !fetchingMoreSales &&
+      !loadingLightspeedSales &&
+      activityCategory === 'lightspeed_sales' &&
+      lightspeedAccountInfo?.accountID
+    ) {
+      fetchLightspeedSales(lightspeedAccountInfo.accountID, true)
+    }
+  }, [fetchingMoreSales, hasMoreLightspeedSales, lightspeedAccountInfo, loadingLightspeedSales, activityCategory])
+
+  // Add effect for scroll handling
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [handleScroll])
+
   return (
     <PageTransition>
       <div className="p-6">
@@ -717,7 +1046,7 @@ export default function ActivityPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <Tabs defaultValue="all" className="w-full" onValueChange={(value) => setActivityCategory(value as ActivityCategory)}>
-              <TabsList className="grid grid-cols-4 mb-4">
+              <TabsList className="mx-auto mb-4">
                 <TabsTrigger value="all" className="flex items-center gap-2">
                   <Calendar className="h-4 w-4" />
                   All Activity
@@ -733,6 +1062,10 @@ export default function ActivityPage() {
                 <TabsTrigger value="sales" className="flex items-center gap-2">
                   <DollarSign className="h-4 w-4" />
                   Square Sales
+                </TabsTrigger>
+                <TabsTrigger value="lightspeed_sales" className="flex items-center gap-2">
+                  <DollarSign className="h-4 w-4" />
+                  Lightspeed Sales
                 </TabsTrigger>
               </TabsList>
               
@@ -957,73 +1290,55 @@ export default function ActivityPage() {
               
               <div className="flex flex-wrap items-center gap-2 mb-4 border-b pb-4">
                 <Button 
-                  variant={dateFilter === "today" ? "default" : "outline"} 
+                  variant={dateFilter === "today" ? "secondary" : "outline"} 
                   size="sm"
                   onClick={() => setDateFilter("today")}
-                  className={cn(
-                    "rounded-full",
-                    dateFilter === "today" && "bg-blue-600 hover:bg-blue-700"
-                  )}
+                  className="rounded-md"
                 >
                   <Calendar className="h-4 w-4 mr-2" />
                   Today
                 </Button>
                 <Button 
-                  variant={dateFilter === "yesterday" ? "default" : "outline"} 
+                  variant={dateFilter === "yesterday" ? "secondary" : "outline"} 
                   size="sm"
                   onClick={() => setDateFilter("yesterday")}
-                  className={cn(
-                    "rounded-full",
-                    dateFilter === "yesterday" && "bg-blue-600 hover:bg-blue-700"
-                  )}
+                  className="rounded-md"
                 >
                   <Calendar className="h-4 w-4 mr-2" />
                   Yesterday
                 </Button>
                 <Button 
-                  variant={dateFilter === "thisWeek" ? "default" : "outline"} 
+                  variant={dateFilter === "thisWeek" ? "secondary" : "outline"} 
                   size="sm"
                   onClick={() => setDateFilter("thisWeek")}
-                  className={cn(
-                    "rounded-full",
-                    dateFilter === "thisWeek" && "bg-blue-600 hover:bg-blue-700"
-                  )}
+                  className="rounded-md"
                 >
                   <Calendar className="h-4 w-4 mr-2" />
                   This Week
                 </Button>
                 <Button 
-                  variant={dateFilter === "lastWeek" ? "default" : "outline"} 
+                  variant={dateFilter === "lastWeek" ? "secondary" : "outline"} 
                   size="sm"
                   onClick={() => setDateFilter("lastWeek")}
-                  className={cn(
-                    "rounded-full",
-                    dateFilter === "lastWeek" && "bg-blue-600 hover:bg-blue-700"
-                  )}
+                  className="rounded-md"
                 >
                   <Calendar className="h-4 w-4 mr-2" />
                   Last Week
                 </Button>
                 <Button 
-                  variant={dateFilter === "thisMonth" ? "default" : "outline"} 
+                  variant={dateFilter === "thisMonth" ? "secondary" : "outline"} 
                   size="sm"
                   onClick={() => setDateFilter("thisMonth")}
-                  className={cn(
-                    "rounded-full",
-                    dateFilter === "thisMonth" && "bg-blue-600 hover:bg-blue-700"
-                  )}
+                  className="rounded-md"
                 >
                   <Calendar className="h-4 w-4 mr-2" />
                   This Month
                 </Button>
                 <Button 
-                  variant={dateFilter === "all" ? "default" : "outline"} 
+                  variant={dateFilter === "all" ? "secondary" : "outline"} 
                   size="sm"
                   onClick={() => setDateFilter("all")}
-                  className={cn(
-                    "rounded-full",
-                    dateFilter === "all" && "bg-blue-600 hover:bg-blue-700"
-                  )}
+                  className="rounded-md"
                 >
                   <Calendar className="h-4 w-4 mr-2" />
                   All Time
@@ -1633,10 +1948,441 @@ export default function ActivityPage() {
                   </CardContent>
                 </Card>
               </TabsContent>
+
+              <TabsContent value="lightspeed_sales" className="space-y-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle>Lightspeed Sales</CardTitle>
+                    <CardDescription>
+                      Sales data from your connected Lightspeed account
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingLightspeedSales ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+                      </div>
+                    ) : lightspeedError ? (
+                      <div className="bg-red-50 border border-red-200 rounded-md p-4 text-center">
+                        <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+                        <p className="text-red-800 mb-2">Failed to load Lightspeed sales data</p>
+                        <p className="text-sm text-red-600">{lightspeedError}</p>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={fetchLightspeedAccountInfo} 
+                          className="mt-2"
+                        >
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Try Again
+                        </Button>
+                      </div>
+                    ) : lightspeedSales.length === 0 ? (
+                      <div className="text-center py-8">
+                        <ShoppingCart className="h-12 w-12 mx-auto text-gray-300 mb-2" />
+                        <p className="text-gray-500">No Lightspeed sales data available</p>
+                        <p className="text-sm text-gray-400 mt-1">
+                          {lightspeedAccountInfo ? 'No sales records found in your Lightspeed account' : 'Connect your Lightspeed account to see sales data'}
+                        </p>
+                        {lightspeedAccountInfo && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={fetchLightspeedAccountInfo} 
+                            className="mt-4"
+                          >
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Refresh Data
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        {lightspeedAccountInfo && (
+                          <div className="mb-4 p-3 bg-blue-50 rounded-md border border-blue-200">
+                            <p className="text-sm text-blue-700">
+                              <span className="font-medium">Account:</span> {lightspeedAccountInfo.name} 
+                              <span className="ml-3 font-medium">ID:</span> {lightspeedAccountInfo.accountID}
+                            </p>
+                          </div>
+                        )}
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>
+                                <button 
+                                  className="flex items-center hover:text-primary transition-colors"
+                                  onClick={() => handleLightspeedSort('saleID')}
+                                >
+                                  Sale ID
+                                  {sortField === "saleID" && (
+                                    sortDirection === "asc" ? <ChevronUp className="h-4 w-4 ml-1" /> : <ChevronDown className="h-4 w-4 ml-1" />
+                                  )}
+                                </button>
+                              </TableHead>
+                              <TableHead>
+                                <button 
+                                  className="flex items-center hover:text-primary transition-colors"
+                                  onClick={() => handleLightspeedSort('timeStamp')}
+                                >
+                                  Date & Time
+                                  {sortField === "timeStamp" && (
+                                    sortDirection === "asc" ? <ChevronUp className="h-4 w-4 ml-1" /> : <ChevronDown className="h-4 w-4 ml-1" />
+                                  )}
+                                </button>
+                              </TableHead>
+                              <TableHead className="hidden md:table-cell">Items</TableHead>
+                              <TableHead>
+                                <button 
+                                  className="flex items-center hover:text-primary transition-colors"
+                                  onClick={() => handleLightspeedSort('ticketNumber')}
+                                >
+                                  Ticket Number
+                                  {sortField === "ticketNumber" && (
+                                    sortDirection === "asc" ? <ChevronUp className="h-4 w-4 ml-1" /> : <ChevronDown className="h-4 w-4 ml-1" />
+                                  )}
+                                </button>
+                              </TableHead>
+                              <TableHead className="hidden md:table-cell">
+                                <button 
+                                  className="flex items-center hover:text-primary transition-colors"
+                                  onClick={() => handleLightspeedSort('calcSubtotal')}
+                                >
+                                  Subtotal
+                                  {sortField === "calcSubtotal" && (
+                                    sortDirection === "asc" ? <ChevronUp className="h-4 w-4 ml-1" /> : <ChevronDown className="h-4 w-4 ml-1" />
+                                  )}
+                                </button>
+                              </TableHead>
+                              <TableHead className="hidden md:table-cell">
+                                <button 
+                                  className="flex items-center hover:text-primary transition-colors"
+                                  onClick={() => handleLightspeedSort('calcTax1')}
+                                >
+                                  Tax
+                                  {sortField === "calcTax1" && (
+                                    sortDirection === "asc" ? <ChevronUp className="h-4 w-4 ml-1" /> : <ChevronDown className="h-4 w-4 ml-1" />
+                                  )}
+                                </button>
+                              </TableHead>
+                              <TableHead>
+                                <button 
+                                  className="flex items-center hover:text-primary transition-colors"
+                                  onClick={() => handleLightspeedSort('total')}
+                                >
+                                  Total
+                                  {sortField === "total" && (
+                                    sortDirection === "asc" ? <ChevronUp className="h-4 w-4 ml-1" /> : <ChevronDown className="h-4 w-4 ml-1" />
+                                  )}
+                                </button>
+                              </TableHead>
+                              <TableHead>
+                                <button 
+                                  className="flex items-center hover:text-primary transition-colors"
+                                  onClick={() => handleLightspeedSort('completed')}
+                                >
+                                  Status
+                                  {sortField === "completed" && (
+                                    sortDirection === "asc" ? <ChevronUp className="h-4 w-4 ml-1" /> : <ChevronDown className="h-4 w-4 ml-1" />
+                                  )}
+                                </button>
+                              </TableHead>
+                              <TableHead>Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {sortedLightspeedSales.map((sale) => (
+                              <TableRow 
+                                key={sale.saleID} 
+                                className="cursor-pointer hover:bg-muted/50"
+                                onClick={() => handleViewLightspeedSale(sale)}
+                              >
+                                <TableCell className="font-mono text-xs">{sale.saleID}</TableCell>
+                                <TableCell>{formatDate(sale.timeStamp)}</TableCell>
+                                <TableCell className="hidden md:table-cell">
+                                  {sale.items && sale.items.length > 0 ? (
+                                    <div>
+                                      <span className="font-medium">{sale.items[0].name || 'Unnamed Item'}</span>
+                                      {sale.items.length > 1 && <span className="text-xs text-muted-foreground ml-2">+{sale.items.length - 1} more</span>}
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted-foreground">No items</span>
+                                  )}
+                                </TableCell>
+                                <TableCell>{sale.ticketNumber}</TableCell>
+                                <TableCell className="hidden md:table-cell">${parseFloat(sale.calcSubtotal).toFixed(2)}</TableCell>
+                                <TableCell className="hidden md:table-cell">${(parseFloat(sale.calcTax1) + parseFloat(sale.calcTax2 || '0')).toFixed(2)}</TableCell>
+                                <TableCell className="font-medium">${parseFloat(sale.total).toFixed(2)}</TableCell>
+                                <TableCell>
+                                  <Badge 
+                                    variant={sale.completed === "true" ? "default" : "outline"}
+                                    className={cn(
+                                      sale.voided === "true" ? "bg-red-100 text-red-700 border-red-200" : "",
+                                      sale.isWorkOrder === "true" ? "bg-blue-100 text-blue-700 border-blue-200" : ""
+                                    )}
+                                  >
+                                    {sale.isWorkOrder === "true" ? "Work Order" : 
+                                     sale.voided === "true" ? "Voided" : 
+                                     sale.completed === "true" ? "Completed" : "Pending"}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => {
+                                    e.stopPropagation(); // Prevent row click from triggering
+                                    handleViewLightspeedSale(sale);
+                                  }}>
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
             </Tabs>
           </div>
         </div>
       </div>
+
+      {/* Add the slide-out drawer for Lightspeed sale details */}
+      <Sheet open={isLightspeedDrawerOpen} onOpenChange={setIsLightspeedDrawerOpen}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader className="pb-4">
+            <SheetTitle className="flex items-center">
+              {selectedLightspeedSale?.isWorkOrder === "true" ? (
+                <span className="flex items-center">
+                  <AlertCircle className="w-5 h-5 mr-2 text-blue-500" />
+                  Work Order #{selectedLightspeedSale?.ticketNumber || selectedLightspeedSale?.saleID}
+                </span>
+              ) : (
+                <span className="flex items-center">
+                  <DollarSign className="w-5 h-5 mr-2 text-primary" />
+                  Sale #{selectedLightspeedSale?.ticketNumber || selectedLightspeedSale?.saleID}
+                </span>
+              )}
+            </SheetTitle>
+            <SheetDescription>
+              {selectedLightspeedSale ? formatDate(selectedLightspeedSale.timeStamp) : ''}
+            </SheetDescription>
+          </SheetHeader>
+          <Separator />
+          
+          {selectedLightspeedSale && (
+            <ScrollArea className="h-[calc(100vh-8rem)] py-4">
+              <div className="space-y-6">
+                {/* Sale Summary section */}
+                <div>
+                  <h3 className="text-lg font-medium mb-2">Sale Summary</h3>
+                  <p className="text-sm text-muted-foreground mb-3">Overview of transaction details</p>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="border rounded-lg p-4 bg-primary/5">
+                      <span className="text-sm text-muted-foreground">Total</span>
+                      <p className="text-2xl font-bold text-primary">${parseFloat(selectedLightspeedSale.total).toFixed(2)}</p>
+                    </div>
+                    <div className="border rounded-lg p-4 bg-muted/30">
+                      <span className="text-sm text-muted-foreground">Status</span>
+                      <div className="mt-2">
+                        <Badge 
+                          variant={selectedLightspeedSale.completed === "true" ? "default" : "outline"}
+                          className={cn(
+                            selectedLightspeedSale.voided === "true" ? "bg-red-100 text-red-700 border-red-200" : "",
+                            selectedLightspeedSale.isWorkOrder === "true" ? "bg-blue-100 text-blue-700 border-blue-200" : ""
+                          )}
+                        >
+                          {selectedLightspeedSale.isWorkOrder === "true" ? "Work Order" : 
+                           selectedLightspeedSale.voided === "true" ? "Voided" : 
+                           selectedLightspeedSale.completed === "true" ? "Completed" : "Pending"}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-3 mt-3">
+                    <div className="border rounded-lg p-3">
+                      <h4 className="text-xs font-medium text-muted-foreground mb-1">Subtotal</h4>
+                      <p className="text-sm font-medium">${parseFloat(selectedLightspeedSale.calcSubtotal).toFixed(2)}</p>
+                    </div>
+                    <div className="border rounded-lg p-3">
+                      <h4 className="text-xs font-medium text-muted-foreground mb-1">Tax</h4>
+                      <p className="text-sm font-medium">
+                        ${(parseFloat(selectedLightspeedSale.calcTax1) + parseFloat(selectedLightspeedSale.calcTax2 || '0')).toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="border rounded-lg p-3">
+                      <h4 className="text-xs font-medium text-muted-foreground mb-1">Discount</h4>
+                      <p className="text-sm font-medium">
+                        {parseFloat(selectedLightspeedSale.discountPercent) > 0 
+                          ? `${selectedLightspeedSale.discountPercent}%` 
+                          : "None"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <Separator />
+                
+                {/* Customer Information */}
+                <div>
+                  <h3 className="text-lg font-medium mb-2">Customer</h3>
+                  <div className="border rounded-lg p-4 bg-muted/10">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Users className="h-5 w-5 text-primary/80" />
+                      </div>
+                      <div>
+                        <p className="font-medium">
+                          {selectedLightspeedSale.customerName || 'No customer assigned'}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Customer ID: {selectedLightspeedSale.customerID !== "0" ? selectedLightspeedSale.customerID : "N/A"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <Separator />
+                
+                {/* Sale Items section */}
+                <div>
+                  <h3 className="text-lg font-medium mb-2">Items</h3>
+                  <p className="text-sm text-muted-foreground mb-3">Products and services in this sale</p>
+                  
+                  {selectedLightspeedSale.items && selectedLightspeedSale.items.length > 0 ? (
+                    <div className="border rounded-md overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Item Name</TableHead>
+                            <TableHead className="hidden sm:table-cell">Description</TableHead>
+                            <TableHead className="text-right">Qty</TableHead>
+                            <TableHead className="text-right">Price</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedLightspeedSale.items.map((item, index) => (
+                            <TableRow key={index}>
+                              <TableCell className="font-medium">{item.name || 'Unnamed Item'}</TableCell>
+                              <TableCell className="hidden sm:table-cell text-muted-foreground text-sm">
+                                {item.description || 'No description'}
+                              </TableCell>
+                              <TableCell className="text-right">{item.quantity}</TableCell>
+                              <TableCell className="text-right">${parseFloat(item.unitPrice).toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-medium">${parseFloat(item.extPrice).toFixed(2)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <div className="text-center p-6 border rounded-md bg-muted/5">
+                      <ShoppingCart className="h-8 w-8 mx-auto text-muted-foreground/60" />
+                      <p className="mt-2 text-muted-foreground">No item details available</p>
+                    </div>
+                  )}
+                </div>
+                
+                <Separator />
+                
+                {/* Sale Details section */}
+                <div>
+                  <h3 className="text-lg font-medium mb-2">Additional Details</h3>
+                  <p className="text-sm text-muted-foreground mb-3">Reference information</p>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="border rounded-lg p-4 space-y-3">
+                      <div>
+                        <h4 className="text-xs font-medium text-muted-foreground mb-1">Sale ID</h4>
+                        <p className="text-sm font-mono bg-muted/20 p-1 rounded">{selectedLightspeedSale.saleID}</p>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-medium text-muted-foreground mb-1">Ticket Number</h4>
+                        <p className="text-sm">{selectedLightspeedSale.ticketNumber}</p>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-medium text-muted-foreground mb-1">Date & Time</h4>
+                        <p className="text-sm">{formatDate(selectedLightspeedSale.timeStamp)}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="border rounded-lg p-4 space-y-3">
+                      <div>
+                        <h4 className="text-xs font-medium text-muted-foreground mb-1">Employee ID</h4>
+                        <p className="text-sm">{selectedLightspeedSale.employeeID}</p>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-medium text-muted-foreground mb-1">Register ID</h4>
+                        <p className="text-sm">{selectedLightspeedSale.registerID}</p>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-medium text-muted-foreground mb-1">Shop ID</h4>
+                        <p className="text-sm">{selectedLightspeedSale.shopID}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-3 mt-3">
+                    <div className="border rounded-lg p-3">
+                      <h4 className="text-xs font-medium text-muted-foreground mb-1">Completed</h4>
+                      <p className="text-sm">
+                        {selectedLightspeedSale.completed === "true" ? "Yes" : "No"}
+                      </p>
+                    </div>
+                    <div className="border rounded-lg p-3">
+                      <h4 className="text-xs font-medium text-muted-foreground mb-1">Voided</h4>
+                      <p className="text-sm">
+                        {selectedLightspeedSale.voided === "true" ? "Yes" : "No"}
+                      </p>
+                    </div>
+                    <div className="border rounded-lg p-3">
+                      <h4 className="text-xs font-medium text-muted-foreground mb-1">Archived</h4>
+                      <p className="text-sm">
+                        {selectedLightspeedSale.archived === "true" ? "Yes" : "No"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Action buttons */}
+                <div className="pt-4 mt-2 border-t sticky bottom-0 bg-background z-10">
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      className="flex-1"
+                      onClick={() => setIsLightspeedDrawerOpen(false)}
+                    >
+                      Close
+                    </Button>
+                    <Button 
+                      variant="default" 
+                      className="flex-1"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Export
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+          )}
+        </SheetContent>
+      </Sheet>
+      {/* Add loading indicator for infinite scrolling */}
+      {fetchingMoreSales && (
+        <div className="py-4 text-center">
+          <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-primary border-r-transparent"></div>
+          <p className="text-sm text-muted-foreground mt-2">Loading more sales...</p>
+        </div>
+      )}
+
+      {/* Add the ref for the sales list container */}
+      <div ref={salesListRef} className="h-4"></div>
     </PageTransition>
   )
 } 

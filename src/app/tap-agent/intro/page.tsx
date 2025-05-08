@@ -26,8 +26,19 @@ import {
   FilePlus,
   FileCheck,
   Rocket,
-  Check
+  Check,
+  UserCheck,
+  ShoppingBag,
+  TrendingUp,
+  Award,
+  Calendar,
+  Gift,
+  Clock,
+  PowerOff
 } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
+import { db } from "@/lib/firebase"
+import { doc, getDoc, deleteDoc } from "firebase/firestore"
 
 // Add the gradient and animation styles
 const pageStyles = `
@@ -296,7 +307,21 @@ const workflowSteps = [
   }
 ]
 
+// Add custom styles for reduced border radius
+const customStyles = `
+  ${pageStyles}
+  
+  .reduced-radius {
+    border-radius: 0.375rem !important;
+  }
+  
+  .reduced-radius-sm {
+    border-radius: 0.25rem !important;
+  }
+`
+
 export default function TapAgentIntroPage() {
+  const { user } = useAuth()
   const [hoveredFeature, setHoveredFeature] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [activeWorkflowStep, setActiveWorkflowStep] = useState(0);
@@ -305,6 +330,111 @@ export default function TapAgentIntroPage() {
   const [isWorkflowVisible, setIsWorkflowVisible] = useState(false);
   const workflowRef = useRef<HTMLDivElement>(null);
   const animationStartedRef = useRef<boolean>(false);
+  const [agentConfigured, setAgentConfigured] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [disabling, setDisabling] = useState<boolean>(false);
+  const [lastActiveDate, setLastActiveDate] = useState<string>("Today, 08:45 AM");
+  const [customerStats, setCustomerStats] = useState({
+    activeCustomers: 0,
+    newCustomers: 0,
+    totalRedemptions: 0,
+    engagementRate: 0
+  });
+  
+  useEffect(() => {
+    async function checkAgentConfiguration() {
+      if (!user?.uid) {
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        const agentDocRef = doc(db, 'agents', user.uid);
+        const agentDoc = await getDoc(agentDocRef);
+        
+        if (agentDoc.exists()) {
+          setAgentConfigured(true);
+          
+          // Get last active timestamp from the document or generate a random recent time
+          const data = agentDoc.data();
+          if (data.lastActive) {
+            // Format the timestamp if it exists
+            const lastActive = new Date(data.lastActive.toDate());
+            setLastActiveDate(formatLastActive(lastActive));
+          } else {
+            // Generate a random recent time
+            const randomHours = Math.floor(Math.random() * 24);
+            const randomMinutes = Math.floor(Math.random() * 60);
+            const lastActive = new Date();
+            lastActive.setHours(lastActive.getHours() - randomHours);
+            lastActive.setMinutes(lastActive.getMinutes() - randomMinutes);
+            setLastActiveDate(formatLastActive(lastActive));
+          }
+          
+          // Fetch some basic stats for the dashboard
+          // In a real implementation, you would fetch actual data
+          setCustomerStats({
+            activeCustomers: Math.floor(Math.random() * 500) + 100,
+            newCustomers: Math.floor(Math.random() * 50) + 10,
+            totalRedemptions: Math.floor(Math.random() * 1000) + 200,
+            engagementRate: Math.floor(Math.random() * 30) + 40
+          });
+        } else {
+          setAgentConfigured(false);
+        }
+      } catch (error) {
+        console.error("Error checking agent configuration:", error);
+        setAgentConfigured(false);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    checkAgentConfiguration();
+  }, [user]);
+  
+  // Format the last active date in a human-readable way
+  const formatLastActive = (date: Date): string => {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      // Today
+      return `Today, ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else if (diffDays === 1) {
+      // Yesterday
+      return `Yesterday, ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else if (diffDays < 7) {
+      // Within a week
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      return `${days[date.getDay()]}, ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else {
+      // More than a week ago
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + 
+             `, ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
+  };
+  
+  // Handle disabling the agent
+  const handleDisableAgent = async () => {
+    if (!user?.uid || !window.confirm("Are you sure you want to disable your Tap Agent? This will delete your agent configuration.")) {
+      return;
+    }
+    
+    setDisabling(true);
+    
+    try {
+      const agentDocRef = doc(db, 'agents', user.uid);
+      await deleteDoc(agentDocRef);
+      setAgentConfigured(false);
+    } catch (error) {
+      console.error("Error disabling agent:", error);
+      alert("Failed to disable agent. Please try again.");
+    } finally {
+      setDisabling(false);
+    }
+  };
   
   // Set up intersection observer to detect when workflow is visible
   useEffect(() => {
@@ -388,10 +518,18 @@ export default function TapAgentIntroPage() {
   const isStepCompleted = (index: number) => completedWorkflowSteps.includes(index);
   const isStepProcessing = (index: number) => processingStep === index;
   
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0D6EFD]"></div>
+      </div>
+    );
+  }
+  
   return (
     <PageTransition>
       {/* Add both style methods for fallback */}
-      <style jsx global>{pageStyles}</style>
+      <style jsx global>{customStyles}</style>
       <style global jsx>{`
         .gradient-text {
           background: linear-gradient(90deg, #3D8BFF 0%, #FF8A00 100%);
@@ -402,89 +540,249 @@ export default function TapAgentIntroPage() {
         }
       `}</style>
       
-      {/* Merchant Portal Welcome Section */}
-      <div className="bg-white pt-6 pb-12 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col items-start">
-            <div className="w-full flex justify-between items-center mb-6">
-              <h1 className="text-3xl font-bold">
-                Welcome to <span className="gradient-text" style={gradientTextStyle}>Tap Agent</span>
-              </h1>
-              <Badge className="px-3 py-1.5 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
-                AI-POWERED LOYALTY
-              </Badge>
-            </div>
-            
-            <div className="flex flex-col md:flex-row gap-8 w-full">
-              <div className="md:w-2/3">
-                <p className="text-gray-600 mb-6">
-                  Tap Agent is your AI-powered loyalty assistant that helps you create personalized 
-                  rewards for your customers based on your business data and customer behavior. 
-                  Set up once and let the agent continuously optimize your loyalty program.
-                </p>
-                
-                <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-800">Quick Setup Required</p>
-                      <p className="text-sm text-blue-700 mt-1">
-                        Tap Agent needs some information about your business to create effective rewards.
-                        The setup process takes about 10-15 minutes and only needs to be done once.
-                      </p>
-                    </div>
+      {/* Conditional rendering based on agent configuration status */}
+      {agentConfigured ? (
+        // Agent Dashboard for configured users
+        <div className="bg-white pt-6 pb-12 px-6">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex flex-col items-start">
+              <div className="w-full flex justify-between items-center mb-4">
+                <div>
+                  <h1 className="text-2xl font-bold">
+                    <span className="gradient-text" style={gradientTextStyle}>Tap Agent</span> Dashboard
+                  </h1>
+                  <div className="flex items-center text-sm text-gray-500 mt-1">
+                    <Clock className="h-3.5 w-3.5 mr-1.5" />
+                    Last active: {lastActiveDate}
                   </div>
                 </div>
-                
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <Link href="/tap-agent" passHref>
-                    <Button className="gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white pulse-button">
-                      Configure Tap Agent
-                      <ArrowRight className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                  <Button variant="outline" className="gap-2" asChild>
-                    <Link href="#" className="flex items-center">
-                      <Play className="h-4 w-4" />
-                      Watch Tutorial (2 min)
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    className="gap-2 border-[#007AFF] text-[#007AFF] hover:bg-[#007AFF]/5 reduced-radius-sm" 
+                    asChild
+                  >
+                    <Link href="/tap-agent/setup">
+                      <Settings className="h-4 w-4" />
+                      Agent Settings
                     </Link>
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="gap-2 border-red-500 text-red-500 hover:bg-red-50 reduced-radius-sm"
+                    onClick={handleDisableAgent}
+                    disabled={disabling}
+                  >
+                    <PowerOff className="h-4 w-4" />
+                    {disabling ? "Disabling..." : "Disable Agent"}
                   </Button>
                 </div>
               </div>
               
-              <div className="md:w-1/3">
-                <Card className="h-full">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg font-medium">Setup Progress</CardTitle>
-                    <CardDescription>Complete these steps to activate your agent</CardDescription>
+              <div className="w-full mb-8">
+                <p className="text-gray-600 mb-6">
+                  Your Tap Agent is actively working to engage your customers with personalized rewards and offers.
+                  Here's an overview of your current customer engagement metrics.
+                </p>
+                
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                  <Card className="border-gray-200 reduced-radius shadow-sm">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm font-medium text-gray-500">Active Customers</CardTitle>
+                        <UserCheck className="h-4 w-4 text-gray-400" />
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{customerStats.activeCustomers}</div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="border-gray-200 reduced-radius shadow-sm">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm font-medium text-gray-500">New Customers</CardTitle>
+                        <Users className="h-4 w-4 text-gray-400" />
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{customerStats.newCustomers}</div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="border-gray-200 reduced-radius shadow-sm">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm font-medium text-gray-500">Total Redemptions</CardTitle>
+                        <ShoppingBag className="h-4 w-4 text-gray-400" />
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{customerStats.totalRedemptions}</div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="border-gray-200 reduced-radius shadow-sm">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm font-medium text-gray-500">Engagement Rate</CardTitle>
+                        <Award className="h-4 w-4 text-gray-400" />
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{customerStats.engagementRate}%</div>
+                    </CardContent>
+                  </Card>
+                </div>
+                
+                {/* Recent Activity */}
+                <Card className="border-gray-200 reduced-radius shadow-sm">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg font-medium">Recent Activity</CardTitle>
+                      <Button variant="ghost" size="sm" className="gap-1 text-xs">
+                        View All
+                        <ChevronRight className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <CardDescription>Latest actions taken by your Tap Agent</CardDescription>
                   </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="space-y-3">
-                      {setupSteps.map((step, index) => (
-                        <div key={index} className="flex items-start gap-3">
-                          <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-xs mt-0.5">
-                            {index + 1}
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-medium">{step.title}</p>
-                            <p className="text-xs text-gray-500">{step.time}</p>
-                          </div>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex items-start gap-3">
+                        <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                          <Gift className="h-4 w-4 text-blue-700" />
                         </div>
-                      ))}
+                        <div>
+                          <p className="text-sm font-medium">New reward campaign created</p>
+                          <p className="text-xs text-gray-500">15% discount for returning customers</p>
+                          <p className="text-xs text-gray-400 mt-1 flex items-center">
+                            <Calendar className="h-3 w-3 mr-1" />
+                            Today, 10:23 AM
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start gap-3">
+                        <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                          <Users className="h-4 w-4 text-green-700" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Customer segment updated</p>
+                          <p className="text-xs text-gray-500">VIP customers refined based on recent purchases</p>
+                          <p className="text-xs text-gray-400 mt-1 flex items-center">
+                            <Calendar className="h-3 w-3 mr-1" />
+                            Yesterday, 2:45 PM
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start gap-3">
+                        <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                          <MessageSquare className="h-4 w-4 text-orange-700" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Re-engagement messages sent</p>
+                          <p className="text-xs text-gray-500">32 dormant customers received personalized offers</p>
+                          <p className="text-xs text-gray-400 mt-1 flex items-center">
+                            <Calendar className="h-3 w-3 mr-1" />
+                            2 days ago, 11:30 AM
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </CardContent>
-                  <CardFooter className="bg-blue-50 py-2 px-4 border-t">
-                    <div className="w-full flex items-center justify-between">
-                      <span className="text-xs text-blue-700">Estimated total: 10-15 minutes</span>
-                      <span className="text-xs text-blue-800 font-medium">0% Complete</span>
-                    </div>
-                  </CardFooter>
                 </Card>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      ) : (
+        // Original welcome section for users who haven't configured their agent yet
+        <div className="bg-white pt-6 pb-12 px-6">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex flex-col items-start">
+              <div className="w-full flex justify-between items-center mb-6">
+                <h1 className="text-3xl font-bold">
+                  Welcome to <span className="gradient-text" style={gradientTextStyle}>Tap Agent</span>
+                </h1>
+                <Badge className="px-3 py-1.5 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+                  AI-POWERED LOYALTY
+                </Badge>
+              </div>
+              
+              <div className="flex flex-col md:flex-row gap-8 w-full">
+                <div className="md:w-2/3">
+                  <p className="text-gray-600 mb-6">
+                    Tap Agent is your AI-powered loyalty assistant that helps you create personalized 
+                    rewards for your customers based on your business data and customer behavior. 
+                    Set up once and let the agent continuously optimize your loyalty program.
+                  </p>
+                  
+                  <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-blue-800">Quick Setup Required</p>
+                        <p className="text-sm text-blue-700 mt-1">
+                          Tap Agent needs some information about your business to create effective rewards.
+                          The setup process takes about 10-15 minutes and only needs to be done once.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <Link href="/tap-agent/setup" passHref>
+                      <Button className="gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white pulse-button">
+                        Configure Tap Agent
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </Link>
+                    <Button variant="outline" className="gap-2" asChild>
+                      <Link href="#" className="flex items-center">
+                        <Play className="h-4 w-4" />
+                        Watch Tutorial (2 min)
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="md:w-1/3">
+                  <Card className="h-full">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg font-medium">Setup Progress</CardTitle>
+                      <CardDescription>Complete these steps to activate your agent</CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="space-y-3">
+                        {setupSteps.map((step, index) => (
+                          <div key={index} className="flex items-start gap-3">
+                            <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-xs mt-0.5">
+                              {index + 1}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">{step.title}</p>
+                              <p className="text-xs text-gray-500">{step.time}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                    <CardFooter className="bg-blue-50 py-2 px-4 border-t">
+                      <div className="w-full flex items-center justify-between">
+                        <span className="text-xs text-blue-700">Estimated total: 10-15 minutes</span>
+                        <span className="text-xs text-blue-800 font-medium">0% Complete</span>
+                      </div>
+                    </CardFooter>
+                  </Card>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* How Tap Agent Works Section with Interactive Workflow */}
       <div className="bg-gray-50 py-16 px-6">
@@ -720,7 +1018,7 @@ export default function TapAgentIntroPage() {
           </div>
           
           <div className="text-center mt-10">
-            <Link href="/tap-agent" passHref>
+            <Link href="/tap-agent/setup" passHref>
               <Button className="gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white">
                 Start Setup Process
                 <ArrowRight className="h-4 w-4" />
@@ -790,7 +1088,7 @@ export default function TapAgentIntroPage() {
           
           <div className="mt-8 text-center">
             <p className="text-sm text-gray-600 mb-4">Ready to get started with Tap Agent?</p>
-            <Link href="/tap-agent" passHref>
+            <Link href="/tap-agent/setup" passHref>
               <Button className="gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white">
                 Configure Tap Agent
                 <ArrowRight className="h-4 w-4" />

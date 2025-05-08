@@ -25,7 +25,13 @@ import {
   Eye,
   Server,
   Ticket,
-  Lightbulb
+  Lightbulb,
+  PowerOff,
+  MessageSquare,
+  Settings,
+  ChevronDown,
+  ChevronUp,
+  ShoppingBag
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -61,6 +67,8 @@ import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
 import { BasicRewardWizard } from "@/components/basic-reward-wizard"
 import { CreateRewardSheet } from "@/components/create-reward-sheet"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { SalesSummary } from "@/components/sales-summary"
 
 type TimeframeType = "today" | "yesterday" | "7days" | "30days"
 
@@ -78,12 +86,24 @@ export default function DashboardPage() {
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const [timeframe, setTimeframe] = useState<TimeframeType>("today")
-  const [loading, setLoading] = useState(true)
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [metricsLoading, setMetricsLoading] = useState(false)
+  const [activityLoading, setActivityLoading] = useState(false)
+  const [rewardsLoading, setRewardsLoading] = useState(false)
   const [recentActivity, setRecentActivity] = useState<any[]>([])
   const [popularRewards, setPopularRewards] = useState<any[]>([])
   const [activeBanners, setActiveBanners] = useState<any[]>([])
   const [scheduledBanners, setScheduledBanners] = useState<any[]>([])
   const [metricsType, setMetricsType] = useState<"consumer" | "platform">("platform")
+  const [tapAgentMetrics, setTapAgentMetrics] = useState({
+    lastRun: null as Date | null,
+    rewardsCreated: 0,
+    bannersCreated: 0,
+    impressions: 0,
+    clicks: 0,
+    redemptions: 0,
+    loading: true
+  })
   const [metrics, setMetrics] = useState({
     totalCustomers: 0,
     activeCustomers: 0,
@@ -109,6 +129,7 @@ export default function DashboardPage() {
   const [insightData, setInsightData] = useState<any>(null)
   const [insightError, setInsightError] = useState<string | null>(null)
   const [topViewingCustomers, setTopViewingCustomers] = useState<any[]>([])
+  const [topCustomersLoading, setTopCustomersLoading] = useState(false)
   const [isRewardDialogOpen, setIsRewardDialogOpen] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<{id: string, name: string} | null>(null)
   const [isSetupWizardOpen, setIsSetupWizardOpen] = useState(false)
@@ -167,7 +188,7 @@ export default function DashboardPage() {
       if (!user?.uid) return
       
       try {
-        setLoading(true)
+        setActivityLoading(true)
         
         // Debug transactions query
         const transactionsRef = collection(db, 'merchants', user.uid, 'transactions')
@@ -308,7 +329,8 @@ export default function DashboardPage() {
           variant: "destructive"
         })
       } finally {
-        setLoading(false)
+        setActivityLoading(false)
+        setInitialLoading(false)
       }
     }
     
@@ -322,7 +344,7 @@ export default function DashboardPage() {
       if (!user?.uid) return
       
       try {
-        setLoading(true)
+        setRewardsLoading(true)
         const { start, end } = getDateRange(timeframe)
         
         // Create a query to get all rewards for the merchant
@@ -367,7 +389,7 @@ export default function DashboardPage() {
           variant: "destructive"
         })
       } finally {
-        setLoading(false)
+        setRewardsLoading(false)
       }
     }
     
@@ -446,7 +468,7 @@ export default function DashboardPage() {
       if (!user?.uid) return
       
       try {
-        setLoading(true)
+        setMetricsLoading(true)
         const { start, end } = getDateRange(timeframe)
         
         // Fetch total customers
@@ -585,7 +607,7 @@ export default function DashboardPage() {
           variant: "destructive"
         })
       } finally {
-        setLoading(false)
+        setMetricsLoading(false)
       }
     }
     
@@ -720,6 +742,7 @@ export default function DashboardPage() {
       if (!user?.uid) return
       
       try {
+        setTopCustomersLoading(true)
         // Fetch store views
         const storeViewsRef = collection(db, 'merchants', user.uid, 'storeViews')
         const storeViewsQuery = query(storeViewsRef, orderBy('timestamp', 'desc'), limit(20))
@@ -780,6 +803,8 @@ export default function DashboardPage() {
         
       } catch (error) {
         console.error('Error fetching top viewing customers:', error)
+      } finally {
+        setTopCustomersLoading(false)
       }
     }
     
@@ -1130,7 +1155,87 @@ export default function DashboardPage() {
     }))
   }
 
-  if (loading) {
+  // Add a new function to fetch Tap Agent metrics
+  useEffect(() => {
+    const fetchTapAgentMetrics = async () => {
+      if (!user?.uid) return;
+      
+      try {
+        setTapAgentMetrics(prev => ({ ...prev, loading: true }));
+        
+        // Check if the agent is configured
+        const agentDocRef = doc(db, 'agents', user.uid);
+        const agentDoc = await getDoc(agentDocRef);
+        
+        if (!agentDoc.exists()) {
+          setTapAgentMetrics(prev => ({ 
+            ...prev, 
+            loading: false,
+            lastRun: null
+          }));
+          return;
+        }
+        
+        const agentData = agentDoc.data();
+        
+        // Get rewards created by Tap Agent
+        const agentRewardsQuery = query(
+          collection(db, 'merchants', user.uid, 'rewards'),
+          where('createdBy', '==', 'tapAgent')
+        );
+        const agentRewardsSnapshot = await getDocs(agentRewardsQuery);
+        
+        // Get banners created by Tap Agent
+        const agentBannersQuery = query(
+          collection(db, 'merchants', user.uid, 'banners'),
+          where('createdBy', '==', 'tapAgent')
+        );
+        const agentBannersSnapshot = await getDocs(agentBannersQuery);
+        
+        // Get redemptions for agent-created rewards
+        const agentRewardIds = agentRewardsSnapshot.docs.map(doc => doc.id);
+        
+        let totalRedemptions = 0;
+        let totalImpressions = 0;
+        let totalClicks = 0;
+        
+        // Sum up metrics from agent-created rewards
+        agentRewardsSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          totalRedemptions += data.redemptionCount || 0;
+          totalImpressions += data.impressions || 0;
+          totalClicks += data.clicks || 0;
+        });
+        
+        // Sum up metrics from agent-created banners
+        agentBannersSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          totalImpressions += data.impressions || 0;
+          totalClicks += data.clicks || 0;
+        });
+        
+        setTapAgentMetrics({
+          lastRun: agentData.lastActive?.toDate() || new Date(),
+          rewardsCreated: agentRewardsSnapshot.docs.length,
+          bannersCreated: agentBannersSnapshot.docs.length,
+          impressions: totalImpressions,
+          clicks: totalClicks,
+          redemptions: totalRedemptions,
+          loading: false
+        });
+        
+      } catch (error) {
+        console.error('Error fetching Tap Agent metrics:', error);
+        setTapAgentMetrics(prev => ({ ...prev, loading: false }));
+      }
+    };
+    
+    if (user?.uid) {
+      fetchTapAgentMetrics();
+    }
+  }, [user?.uid]);
+
+  if (initialLoading) {
     return (
       <PageTransition>
         <div className="container mx-auto p-4">
@@ -1212,7 +1317,11 @@ export default function DashboardPage() {
                     <div className="flex justify-between">
                       <div className="space-y-0.5">
                         <p className="text-sm font-medium text-gray-500">Active Rewards</p>
-                        <div className="text-lg font-semibold">{metrics.activeRewards}</div>
+                        {metricsLoading ? (
+                          <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div>
+                        ) : (
+                          <div className="text-lg font-semibold">{metrics.activeRewards}</div>
+                        )}
                       </div>
                       <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
                         <Gift className="h-4 w-4 text-blue-500" />
@@ -1227,7 +1336,11 @@ export default function DashboardPage() {
                     <div className="flex justify-between">
                       <div className="space-y-0.5">
                         <p className="text-sm font-medium text-gray-500">Total Reward Views</p>
-                        <div className="text-lg font-semibold">{metrics.totalRewardViews}</div>
+                        {metricsLoading ? (
+                          <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div>
+                        ) : (
+                          <div className="text-lg font-semibold">{metrics.totalRewardViews}</div>
+                        )}
                       </div>
                       <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
                         <Eye className="h-4 w-4 text-blue-500" />
@@ -1242,7 +1355,11 @@ export default function DashboardPage() {
                     <div className="flex justify-between">
                       <div className="space-y-0.5">
                         <p className="text-sm font-medium text-gray-500">Total Points Issued</p>
-                        <div className="text-lg font-semibold">{metrics.totalPointsIssued}</div>
+                        {metricsLoading ? (
+                          <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div>
+                        ) : (
+                          <div className="text-lg font-semibold">{metrics.totalPointsIssued}</div>
+                        )}
                       </div>
                       <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
                         <Zap className="h-4 w-4 text-blue-500" />
@@ -1257,7 +1374,11 @@ export default function DashboardPage() {
                     <div className="flex justify-between">
                       <div className="space-y-0.5">
                         <p className="text-sm font-medium text-gray-500">Store Views</p>
-                        <div className="text-lg font-semibold">{metrics.totalStoreViews}</div>
+                        {metricsLoading ? (
+                          <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div>
+                        ) : (
+                          <div className="text-lg font-semibold">{metrics.totalStoreViews}</div>
+                        )}
                       </div>
                       <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
                         <Eye className="h-4 w-4 text-blue-500" />
@@ -1275,7 +1396,11 @@ export default function DashboardPage() {
                     <div className="flex justify-between">
                       <div className="space-y-0.5">
                         <p className="text-sm font-medium text-gray-500">Active Customers</p>
-                        <div className="text-lg font-semibold">{metrics.activeCustomers}</div>
+                        {metricsLoading ? (
+                          <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div>
+                        ) : (
+                          <div className="text-lg font-semibold">{metrics.activeCustomers}</div>
+                        )}
                       </div>
                       <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
                         <Users className="h-4 w-4 text-blue-500" />
@@ -1289,7 +1414,11 @@ export default function DashboardPage() {
                     <div className="flex justify-between">
                       <div className="space-y-0.5">
                         <p className="text-sm font-medium text-gray-500">Total Transactions</p>
-                        <div className="text-lg font-semibold">{metrics.totalTransactions}</div>
+                        {metricsLoading ? (
+                          <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div>
+                        ) : (
+                          <div className="text-lg font-semibold">{metrics.totalTransactions}</div>
+                        )}
                       </div>
                       <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
                         <ShoppingCart className="h-4 w-4 text-blue-500" />
@@ -1303,7 +1432,11 @@ export default function DashboardPage() {
                     <div className="flex justify-between">
                       <div className="space-y-0.5">
                         <p className="text-sm font-medium text-gray-500">Total Redemptions</p>
-                        <div className="text-lg font-semibold">{metrics.totalRedemptions}</div>
+                        {metricsLoading ? (
+                          <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div>
+                        ) : (
+                          <div className="text-lg font-semibold">{metrics.totalRedemptions}</div>
+                        )}
                       </div>
                       <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
                         <Gift className="h-4 w-4 text-blue-500" />
@@ -1317,7 +1450,11 @@ export default function DashboardPage() {
                     <div className="flex justify-between">
                       <div className="space-y-0.5">
                         <p className="text-sm font-medium text-gray-500">Avg Order Value</p>
-                        <div className="text-lg font-semibold">${metrics.avgOrderValue}</div>
+                        {metricsLoading ? (
+                          <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div>
+                        ) : (
+                          <div className="text-lg font-semibold">${metrics.avgOrderValue}</div>
+                        )}
                       </div>
                       <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
                         <DollarSign className="h-4 w-4 text-blue-500" />
@@ -1435,7 +1572,7 @@ export default function DashboardPage() {
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
-                {loading ? (
+                {activityLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
                   </div>
@@ -1521,8 +1658,9 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          {/* Top Viewing Customers */}
+          {/* Top Viewing Customers and Popular Rewards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Top Viewing Customers card */}
             <Card className="rounded-lg border border-gray-200 overflow-hidden shadow-sm">
               <CardHeader className="py-4 px-6 bg-gradient-to-r from-indigo-50 to-white border-b border-gray-100 flex flex-row justify-between items-center">
                 <div>
@@ -1534,7 +1672,11 @@ export default function DashboardPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                {topViewingCustomers.length === 0 ? (
+                {topCustomersLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+                  </div>
+                ) : topViewingCustomers.length === 0 ? (
                   <div className="py-8 text-center">
                     <div className="bg-gray-50 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-3">
                       <Users className="h-8 w-8 text-gray-300" />
@@ -1591,7 +1733,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
 
-            {/* Popular Rewards */}
+            {/* Popular Rewards card */}
             <Card className="rounded-lg border border-gray-200 overflow-hidden shadow-sm">
               <CardHeader className="py-4 px-6 bg-gradient-to-r from-purple-50 to-white border-b border-gray-100 flex flex-row justify-between items-center">
                 <div>
@@ -1614,7 +1756,7 @@ export default function DashboardPage() {
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
-                {loading ? (
+                {rewardsLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
                   </div>
@@ -1702,6 +1844,164 @@ export default function DashboardPage() {
                       </div>
                     ))}
                   </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Tap Agent Summary Section */}
+          <Separator className="my-6" />
+          <div className="space-y-4">
+            <div className="flex justify-between items-center mb-2">
+              <div>
+                <h2 className="text-lg font-medium flex items-center gap-2">
+                  <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-semibold">
+                    Tap Agent
+                  </span> 
+                  Summary
+                </h2>
+                <p className="text-sm text-gray-500">Intelligent loyalty assistant performance</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                  asChild
+                >
+                  <Link href="/tap-agent/setup">
+                    <ArrowRight className="h-4 w-4" />
+                    Manage Tap Agent
+                  </Link>
+                </Button>
+              </div>
+            </div>
+            
+            <Card className="border-gray-200 overflow-hidden">
+              <CardContent className="p-6">
+                {tapAgentMetrics.loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+                  </div>
+                ) : !tapAgentMetrics.lastRun ? (
+                  <div className="py-6 text-center">
+                    <div className="bg-gray-50 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-3">
+                      <Zap className="h-8 w-8 text-gray-300" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-700">Tap Agent not configured</p>
+                    <p className="text-xs text-gray-500 mt-1 mb-4">Configure your intelligent assistant to automate reward creation</p>
+                    <Button asChild>
+                      <Link href="/tap-agent/setup">Configure Tap Agent</Link>
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="h-12 w-12 rounded-full bg-gradient-to-r from-blue-500 to-orange-500 flex items-center justify-center text-white">
+                          <Zap className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <h3 className="font-medium">Tap Agent Status</h3>
+                          <p className="text-sm text-gray-500 flex items-center gap-1">
+                            <Clock className="h-3.5 w-3.5" />
+                            Last active: {formatDistanceToNow(tapAgentMetrics.lastRun, { addSuffix: true })}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge className="bg-green-100 text-green-800 border-green-200">Active</Badge>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+                      {/* Content Creation */}
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-medium text-gray-500">Content Creation</h4>
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
+                                <Gift className="h-4 w-4 text-blue-500" />
+                              </div>
+                              <span className="text-sm">Rewards Created</span>
+                            </div>
+                            <span className="font-medium">{tapAgentMetrics.rewardsCreated}</span>
+                          </div>
+                          
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
+                                <svg className="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+                                </svg>
+                              </div>
+                              <span className="text-sm">Banners Created</span>
+                            </div>
+                            <span className="font-medium">{tapAgentMetrics.bannersCreated}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Engagement */}
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-medium text-gray-500">Engagement</h4>
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-full bg-purple-50 flex items-center justify-center">
+                                <Eye className="h-4 w-4 text-purple-500" />
+                              </div>
+                              <span className="text-sm">Total Impressions</span>
+                            </div>
+                            <span className="font-medium">{tapAgentMetrics.impressions}</span>
+                          </div>
+                          
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-full bg-purple-50 flex items-center justify-center">
+                                <ArrowRight className="h-4 w-4 text-purple-500" />
+                              </div>
+                              <span className="text-sm">Total Clicks</span>
+                            </div>
+                            <span className="font-medium">{tapAgentMetrics.clicks}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Conversions */}
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-medium text-gray-500">Conversions</h4>
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-full bg-green-50 flex items-center justify-center">
+                                <Gift className="h-4 w-4 text-green-500" />
+                              </div>
+                              <span className="text-sm">Reward Redemptions</span>
+                            </div>
+                            <span className="font-medium">{tapAgentMetrics.redemptions}</span>
+                          </div>
+                          
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-full bg-green-50 flex items-center justify-center">
+                                <ArrowUp className="h-4 w-4 text-green-500" />
+                              </div>
+                              <span className="text-sm">Conversion Rate</span>
+                            </div>
+                            <span className="font-medium">
+                              {tapAgentMetrics.impressions > 0 
+                                ? Math.round((tapAgentMetrics.redemptions / tapAgentMetrics.impressions) * 100) 
+                                : 0}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Add the Sales Summary component */}
+                    <SalesSummary merchantId={user?.uid} />
+                  </>
                 )}
               </CardContent>
             </Card>

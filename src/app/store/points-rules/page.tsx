@@ -48,7 +48,7 @@ import { format } from "date-fns"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { collection, getDocs, query, doc, updateDoc, deleteDoc } from "firebase/firestore"
-import { CreatePointsRuleDialog } from "@/components/create-points-rule-dialog"
+import { CreatePointsRuleSheet } from "@/components/create-points-rule-sheet"
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -919,7 +919,7 @@ export default function PointsRulesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <CreatePointsRuleDialog 
+      <CreatePointsRuleSheet 
         open={createDialogOpen} 
         onOpenChange={setCreateDialogOpen} 
       />

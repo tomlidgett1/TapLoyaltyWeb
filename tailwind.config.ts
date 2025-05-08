@@ -14,9 +14,20 @@ export default {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
         },
+        gradientX: {
+          '0%, 100%': { 
+            'background-size': '200% 200%',
+            'background-position': 'left center'
+          },
+          '50%': {
+            'background-size': '200% 200%',
+            'background-position': 'right center'
+          },
+        },
       },
       animation: {
         fadeIn: 'fadeIn 0.5s ease-in-out',
+        'gradient-x': 'gradientX 3s ease infinite',
       },
   		colors: {
   			background: 'hsl(var(--background))',

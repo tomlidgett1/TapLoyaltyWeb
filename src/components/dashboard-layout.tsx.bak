@@ -22,9 +22,10 @@ import Link from "next/link"
 import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
 import { CreateRewardSheet } from "@/components/create-reward-sheet"
-import { CreatePointsRuleSheet } from "@/components/create-points-rule-sheet"
+import { SendBroadcastDialog } from "@/components/send-broadcast-dialog"
+import { CreatePointsRuleDialog } from "@/components/create-points-rule-dialog"
 import { useAuth } from "@/contexts/auth-context"
-import { db } from "@/lib/firebase"
+import { db, functions } from "@/lib/firebase"
 import { collection, query, where, getDocs, Timestamp, orderBy, limit, getDoc, doc } from "firebase/firestore"
 import {
   Tooltip,
@@ -41,7 +42,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { SendBroadcastSheet } from "@/components/send-broadcast-sheet"
+import { httpsCallable } from "firebase/functions"
+import { toast } from "@/components/ui/use-toast"
 
 // Custom scrollbar styles
 const scrollbarStyles = `
@@ -128,6 +130,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [showCompetitorAnalysis, setShowCompetitorAnalysis] = useState(false)
   const [competitorAnalysisLoading, setCompetitorAnalysisLoading] = useState(false)
   const [competitorAnalysisResults, setCompetitorAnalysisResults] = useState<any>(null)
+  const [competitorAnalysisError, setCompetitorAnalysisError] = useState<string | null>(null)
   
   // Add state for sales activity analysis
   const [showSalesAnalysis, setShowSalesAnalysis] = useState(false)
@@ -557,7 +560,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <style jsx global>{scrollbarStyles}</style>
         
         {/* Top Header */}
-        <header className="h-16 flex-shrink-0 flex items-center justify-between px-2">
+        <header className="h-16 flex items-center justify-between px-2">
           <div className="flex items-center gap-4">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -749,13 +752,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         open={showRewardDialog} 
         onOpenChange={setShowRewardDialog}
       />
-      <CreatePointsRuleSheet 
-        open={showPointsRuleDialog} 
-        onOpenChange={setShowPointsRuleDialog}
-      />
-      <SendBroadcastSheet 
+      <SendBroadcastDialog 
         open={showBroadcastDialog} 
         onOpenChange={setShowBroadcastDialog}
+      />
+      <CreatePointsRuleDialog 
+        open={showPointsRuleDialog} 
+        onOpenChange={setShowPointsRuleDialog}
       />
       <CreateRecurringRewardDialog
         open={showRecurringRewardDialog}
@@ -887,242 +890,76 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <div className="bg-gradient-to-r from-blue-50 to-orange-50 p-4 rounded-lg border border-blue-100">
                   <h3 className="font-medium text-blue-800 mb-2">Market Overview</h3>
                   <p className="text-gray-700">
-                    Your business is positioned in a moderately competitive market with 8 direct competitors in a 5-mile radius.
-                    The average customer satisfaction score in your area is 4.2/5, with your business currently at 4.5/5.
+                    {competitorAnalysisResults.businessName} in {competitorAnalysisResults.location} ({competitorAnalysisResults.category})
+                  </p>
+                  <p className="text-gray-700 mt-2">
+                    {competitorAnalysisResults.businessContext}
                   </p>
                 </div>
                 
-                {/* This would be populated with actual data from the Firebase function */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-medium border-b pb-2">Top Competitors</h3>
                   
-                  <div className="border rounded-lg p-4 hover:bg-gray-50 transition-all">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-medium">Competitor A</h4>
-                        <p className="text-sm text-gray-500 mt-1">0.8 miles away • 4.7/5 rating</p>
+                  {competitorAnalysisResults.competitors?.map((comp: any, i: number) => (
+                    <div key={i} className="border rounded-lg p-4 hover:bg-gray-50 transition-all">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium">{comp.name}</h4>
+                          <p className="text-sm text-gray-500 mt-1">{comp.description}</p>
+                        </div>
+                        <Badge className={`${i === 0 ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-blue-100 text-blue-800 hover:bg-blue-200'} border-none`}>
+                          {i === 0 ? 'High Impact' : 'Medium Impact'}
+                        </Badge>
                       </div>
-                      <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-none">
-                        High Threat
-                      </Badge>
+                      
+                      {comp.analysis && (
+                        <div className="mt-3 text-sm">
+                          {comp.analysis.promotions && (
+                            <p className="text-gray-700 mb-1">
+                              <span className="font-medium">Current Promotions:</span> {comp.analysis.promotions}
+                            </p>
+                          )}
+                          {comp.analysis.sentiment && (
+                            <p className="text-gray-700 mb-1">
+                              <span className="font-medium">Customer Sentiment:</span> {comp.analysis.sentiment}
+                            </p>
+                          )}
+                          {comp.analysis.uniqueSellingPoints && (
+                            <p className="text-gray-700">
+                              <span className="font-medium">Unique Selling Points:</span> {comp.analysis.uniqueSellingPoints}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <div className="mt-3 text-sm">
-                      <p className="text-gray-700">Strengths: Customer service, product variety</p>
-                      <p className="text-gray-700">Weaknesses: Higher pricing, limited hours</p>
-                    </div>
-                  </div>
-                  
-                  <div className="border rounded-lg p-4 hover:bg-gray-50 transition-all">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-medium">Competitor B</h4>
-                        <p className="text-sm text-gray-500 mt-1">1.2 miles away • 4.3/5 rating</p>
-                      </div>
-                      <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-none">
-                        Medium Threat
-                      </Badge>
-                    </div>
-                    <div className="mt-3 text-sm">
-                      <p className="text-gray-700">Strengths: Marketing, location</p>
-                      <p className="text-gray-700">Weaknesses: Product quality, staff turnover</p>
-                    </div>
-                  </div>
+                  ))}
                 </div>
                 
                 <div className="space-y-4">
                   <h3 className="text-lg font-medium border-b pb-2">Strategic Recommendations</h3>
                   
-                  <div className="space-y-2">
-                    <div className="flex items-start gap-3">
-                      <div className="h-6 w-6 rounded-full bg-gradient-to-r from-blue-500 to-orange-400 text-white flex items-center justify-center flex-shrink-0 text-xs">
-                        1
-                      </div>
-                      <div>
-                        <p className="font-medium">Highlight your superior customer satisfaction in marketing</p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          Your 4.5/5 rating exceeds the local average of 4.2/5
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start gap-3">
-                      <div className="h-6 w-6 rounded-full bg-gradient-to-r from-blue-500 to-orange-400 text-white flex items-center justify-center flex-shrink-0 text-xs">
-                        2
-                      </div>
-                      <div>
-                        <p className="font-medium">Consider extending business hours</p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          This would address a key weakness of your highest-rated competitor
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start gap-3">
-                      <div className="h-6 w-6 rounded-full bg-gradient-to-r from-blue-500 to-orange-400 text-white flex items-center justify-center flex-shrink-0 text-xs">
-                        3
-                      </div>
-                      <div>
-                        <p className="font-medium">Implement a loyalty program</p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          None of your top 3 competitors currently offer robust loyalty incentives
-                        </p>
-                      </div>
+                  <div className="bg-white p-4 rounded-lg border border-gray-200">
+                    <div className="whitespace-pre-line text-gray-700">
+                      {competitorAnalysisResults.recommendations}
                     </div>
                   </div>
                 </div>
               </div>
-            ) : (
-              <div>
-                <div className="flex justify-between items-start mb-2">
-                  <div className="max-w-md">
-                    <h3 className="text-lg font-medium text-gray-800 mb-1">Competitor Intelligence</h3>
-                    <p className="text-gray-500">
-                      Analyze your local market and competitors to gain strategic insights and recommendations.
-                    </p>
-                  </div>
-                  <Button 
-                    onClick={() => {
-                      setCompetitorAnalysisLoading(true);
-                      
-                      // Sequential animation with 3 seconds per step
-                      
-                      // Step 1 is already active
-                      
-                      // After 3 seconds, complete step 1 and activate step 2
-                      setTimeout(() => {
-                        // Complete step 1
-                        const step1Spinner = document.getElementById('step-1-spinner');
-                        const step1Check = document.getElementById('step-1-check');
-                        const step1Status = document.getElementById('step-1-status');
-                        
-                        if (step1Spinner) step1Spinner.classList.add('hidden');
-                        if (step1Check) step1Check.classList.remove('hidden');
-                        if (step1Status) step1Status.innerHTML = 'Complete';
-                        
-                        // Activate step 2
-                        const step2Container = document.getElementById('step-2-container');
-                        const step2Number = document.getElementById('step-2-number');
-                        const step2Spinner = document.getElementById('step-2-spinner');
-                        const step2Status = document.getElementById('step-2-status');
-                        
-                        if (step2Container) step2Container.className = 'w-full bg-white rounded-md p-3 border border-gray-200 shadow-sm';
-                        if (step2Number) step2Number.classList.add('hidden');
-                        if (step2Spinner) step2Spinner.classList.remove('hidden');
-                        if (step2Status) step2Status.innerHTML = '<span class="animate-pulse">Generating insights<span class="animate-ellipsis">...</span></span>';
-                      }, 3000);
-                      
-                      // After 6 seconds, complete step 2 and activate step 3
-                      setTimeout(() => {
-                        // Complete step 2
-                        const step2Spinner = document.getElementById('step-2-spinner');
-                        const step2Check = document.getElementById('step-2-check');
-                        const step2Status = document.getElementById('step-2-status');
-                        
-                        if (step2Spinner) step2Spinner.classList.add('hidden');
-                        if (step2Check) step2Check.classList.remove('hidden');
-                        if (step2Status) step2Status.innerHTML = 'Complete';
-                        
-                        // Activate step 3
-                        const step3Container = document.getElementById('step-3-container');
-                        const step3Number = document.getElementById('step-3-number');
-                        const step3Spinner = document.getElementById('step-3-spinner');
-                        const step3Status = document.getElementById('step-3-status');
-                        
-                        if (step3Container) step3Container.className = 'w-full bg-white rounded-md p-3 border border-gray-200 shadow-sm';
-                        if (step3Number) step3Number.classList.add('hidden');
-                        if (step3Spinner) step3Spinner.classList.remove('hidden');
-                        if (step3Status) step3Status.innerHTML = '<span class="animate-pulse">Analyzing opportunities<span class="animate-ellipsis">...</span></span>';
-                      }, 6000);
-                      
-                      // After 9 seconds, complete step 3 and activate step 4
-                      setTimeout(() => {
-                        // Complete step 3
-                        const step3Spinner = document.getElementById('step-3-spinner');
-                        const step3Check = document.getElementById('step-3-check');
-                        const step3Status = document.getElementById('step-3-status');
-                        
-                        if (step3Spinner) step3Spinner.classList.add('hidden');
-                        if (step3Check) step3Check.classList.remove('hidden');
-                        if (step3Status) step3Status.innerHTML = 'Complete';
-                        
-                        // Activate step 4
-                        const step4Container = document.getElementById('step-4-container');
-                        const step4Number = document.getElementById('step-4-number');
-                        const step4Spinner = document.getElementById('step-4-spinner');
-                        const step4Status = document.getElementById('step-4-status');
-                        
-                        if (step4Container) step4Container.className = 'w-full bg-white rounded-md p-3 border border-gray-200 shadow-sm';
-                        if (step4Number) step4Number.classList.add('hidden');
-                        if (step4Spinner) step4Spinner.classList.remove('hidden');
-                        if (step4Status) step4Status.innerHTML = '<span class="animate-pulse">Creating report<span class="animate-ellipsis">...</span></span>';
-                        
-                        // After showing step 4 for 3 seconds, complete it and show results
-                        setTimeout(() => {
-                          // Complete step 4
-                          const step4Spinner = document.getElementById('step-4-spinner');
-                          const step4Check = document.getElementById('step-4-check');
-                          const step4Status = document.getElementById('step-4-status');
-                          
-                          if (step4Spinner) step4Spinner.classList.add('hidden');
-                          if (step4Check) step4Check.classList.remove('hidden');
-                          if (step4Status) step4Status.innerHTML = 'Complete';
-                          
-                          // Show results after a brief pause
-                          setTimeout(() => {
-                            setCompetitorAnalysisLoading(false);
-                            setCompetitorAnalysisResults({
-                              // This would be populated with actual data from the Firebase function
-                              marketOverview: {
-                                competitorCount: 8,
-                                averageRating: 4.2,
-                                businessRating: 4.5
-                              },
-                              competitors: [
-                                {
-                                  name: "Competitor A",
-                                  distance: 0.8,
-                                  rating: 4.7,
-                                  threatLevel: "high",
-                                  strengths: ["Customer service", "product variety"],
-                                  weaknesses: ["Higher pricing", "limited hours"]
-                                },
-                                {
-                                  name: "Competitor B",
-                                  distance: 1.2,
-                                  rating: 4.3,
-                                  threatLevel: "medium",
-                                  strengths: ["Marketing", "location"],
-                                  weaknesses: ["Product quality", "staff turnover"]
-                                }
-                              ],
-                              recommendations: [
-                                {
-                                  title: "Highlight your superior customer satisfaction in marketing",
-                                  description: "Your 4.5/5 rating exceeds the local average of 4.2/5"
-                                },
-                                {
-                                  title: "Consider extending business hours",
-                                  description: "This would address a key weakness of your highest-rated competitor"
-                                },
-                                {
-                                  title: "Implement a loyalty program",
-                                  description: "None of your top 3 competitors currently offer robust loyalty incentives"
-                                }
-                              ]
-                            });
-                          }, 1000);
-                        }, 3000);
-                      }, 9000);
-                    }}
-                    className="bg-blue-500 hover:bg-blue-600 text-white"
-                  >
-                    Start Analysis
-                  </Button>
+            ) : competitorAnalysisError ? (
+              <div className="flex flex-col items-center justify-center h-64">
+                <div className="text-red-500 mb-4">
+                  <X className="h-12 w-12 mx-auto" />
                 </div>
-                
-                <div className="flex items-center justify-center h-48">
-                  <Target className="h-16 w-16 text-gray-200" />
-                </div>
+                <h3 className="text-lg font-medium text-gray-800 mb-2">Analysis Error</h3>
+                <p className="text-gray-500 text-center max-w-md">
+                  {competitorAnalysisError}
+                </p>
+                <Button 
+                  onClick={() => setCompetitorAnalysisError(null)}
+                  className="mt-4 bg-blue-500 hover:bg-blue-600 text-white"
+                >
+                  Try Again
+                </Button>
               </div>
             )}
           </div>
@@ -1139,270 +976,55 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               {competitorAnalysisResults && (
                 <Button 
                   className="bg-gradient-to-r from-blue-500 to-orange-400 hover:from-blue-600 hover:to-orange-500 text-white"
+                  onClick={() => {
+                    // Create a formatted text version of the report
+                    let report = "COMPETITOR INTELLIGENCE REPORT\n";
+                    report += "==============================\n";
+                    report += `Business: ${competitorAnalysisResults.businessName || 'Your Business'}\n`;
+                    report += `Location: ${competitorAnalysisResults.location || 'N/A'}\n`;
+                    report += `Category: ${competitorAnalysisResults.category || 'N/A'}\n\n`;
+                    
+                    report += "COMPETITORS\n";
+                    report += "----------\n";
+                    
+                    if (competitorAnalysisResults.competitors && competitorAnalysisResults.competitors.length > 0) {
+                      competitorAnalysisResults.competitors.forEach((comp: any, i: number) => {
+                        report += `${i+1}. ${comp.name}\n`;
+                        if (comp.description) report += `   ${comp.description}\n`;
+                        if (comp.analysis?.promotions) report += `   Promotions: ${comp.analysis.promotions}\n`;
+                        if (comp.analysis?.sentiment) report += `   Sentiment: ${comp.analysis.sentiment}\n`;
+                        if (comp.analysis?.uniqueSellingPoints) report += `   USPs: ${comp.analysis.uniqueSellingPoints}\n`;
+                        report += "\n";
+                      });
+                    } else {
+                      report += "No competitor data available.\n\n";
+                    }
+                    
+                    report += "RECOMMENDATIONS\n";
+                    report += "--------------\n";
+                    report += `${competitorAnalysisResults.recommendations || 'No recommendations available.'}\n`;
+                    
+                    // Create a blob and download it
+                    const blob = new Blob([report], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'competitor-intelligence-report.txt';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    toast({
+                      title: "Report Exported",
+                      description: "Competitor intelligence report has been downloaded.",
+                    });
+                  }}
                 >
                   Export Report
                 </Button>
               )}
             </div>
-          </div>
-        </SheetContent>
-      </Sheet>
-      
-      {/* Sales Activity Analysis Sheet */}
-      <Sheet open={showSalesAnalysis} onOpenChange={setShowSalesAnalysis}>
-        <SheetContent side="right" className="w-full sm:max-w-md md:max-w-xl lg:max-w-2xl overflow-hidden p-0 flex flex-col">
-          <div className="flex-none px-6 py-4 border-b">
-            <SheetHeader className="mb-2">
-              <SheetTitle className="text-xl font-bold flex items-center">
-                <BarChart className="h-5 w-5 mr-3 text-blue-500" />
-                <span className="bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent animate-gradient-x">Sales Activity Analysis</span>
-              </SheetTitle>
-              <SheetDescription>
-                AI-powered analysis of your recent sales activities and customer engagement
-              </SheetDescription>
-            </SheetHeader>
-          </div>
-          
-          <div className="flex-1 overflow-auto p-6">
-            {salesAnalysisLoading ? (
-              <div className="h-full">
-                <div className="mb-8 text-center">
-                  <h3 className="text-xl font-medium text-blue-600 animate-pulse">
-                    Tap Agent is thinking<span className="animate-ellipsis">...</span>
-                  </h3>
-                </div>
-                
-                {/* Agent workflow animation - steps appear one after another */}
-                <div className="w-full max-w-md mx-auto space-y-3">
-                  {/* Step 1: Always visible from the start */}
-                  <div 
-                    id="sales-step-1-container"
-                    className="bg-blue-50 rounded-lg p-4 border border-blue-100 transform transition-all duration-500 ease-in-out"
-                  >
-                    <div className="flex items-center">
-                      <div className="relative h-8 w-8 mr-3 flex-shrink-0">
-                        <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="font-medium text-blue-800">Processing transaction history</p>
-                        <p className="text-sm text-blue-600 mt-1">Analyzing data<span className="animate-ellipsis">...</span></p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Step 2: Hidden initially, appears with animation */}
-                  <div 
-                    id="sales-step-2-container"
-                    className="bg-blue-50 rounded-lg p-4 border border-blue-100 opacity-0 transform translate-y-4 transition-all duration-500 ease-in-out"
-                  >
-                    <div className="flex items-center">
-                      <div className="relative h-8 w-8 mr-3 flex-shrink-0">
-                        <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="font-medium text-blue-800">Identifying sales patterns</p>
-                        <p className="text-sm text-blue-600 mt-1">Discovering trends<span className="animate-ellipsis">...</span></p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Step 3: Hidden initially, appears with animation */}
-                  <div 
-                    id="sales-step-3-container"
-                    className="bg-blue-50 rounded-lg p-4 border border-blue-100 opacity-0 transform translate-y-4 transition-all duration-500 ease-in-out"
-                  >
-                    <div className="flex items-center">
-                      <div className="relative h-8 w-8 mr-3 flex-shrink-0">
-                        <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="font-medium text-blue-800">Analyzing customer engagement</p>
-                        <p className="text-sm text-blue-600 mt-1">Creating report<span className="animate-ellipsis">...</span></p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : salesAnalysisResults ? (
-              <div className="space-y-6">
-                <div className="bg-gradient-to-r from-blue-50 to-orange-50 p-4 rounded-lg border border-blue-100">
-                  <h3 className="font-medium text-blue-800 mb-2">Performance Summary</h3>
-                  <p className="text-gray-700">
-                    Your sales have increased by 12% compared to last month, with customer engagement up by 8%.
-                    Peak transaction times are between 11am-2pm and 5pm-7pm.
-                  </p>
-                </div>
-                
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium border-b pb-2">Top Performing Products</h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="border rounded-lg p-4 hover:bg-gray-50 transition-all">
-                      <div className="flex justify-between items-start">
-                        <h4 className="font-medium">Cappuccino</h4>
-                        <Badge className="bg-green-100 text-green-800 hover:bg-green-200 border-none">
-                          +18% ↑
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-gray-500 mt-1">42% of total coffee sales</p>
-                    </div>
-                    
-                    <div className="border rounded-lg p-4 hover:bg-gray-50 transition-all">
-                      <div className="flex justify-between items-start">
-                        <h4 className="font-medium">Croissant</h4>
-                        <Badge className="bg-green-100 text-green-800 hover:bg-green-200 border-none">
-                          +15% ↑
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-gray-500 mt-1">38% of total pastry sales</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium border-b pb-2">Customer Engagement</h3>
-                  
-                  <div className="space-y-2">
-                    <div className="flex items-start gap-3">
-                      <div className="h-6 w-6 rounded-full bg-gradient-to-r from-blue-500 to-orange-400 text-white flex items-center justify-center flex-shrink-0 text-xs">
-                        1
-                      </div>
-                      <div>
-                        <p className="font-medium">Loyalty program participation up 22%</p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          New customers are signing up at 2.3x the rate of last quarter
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start gap-3">
-                      <div className="h-6 w-6 rounded-full bg-gradient-to-r from-blue-500 to-orange-400 text-white flex items-center justify-center flex-shrink-0 text-xs">
-                        2
-                      </div>
-                      <div>
-                        <p className="font-medium">Average transaction value increased</p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          $8.75 per transaction, up from $7.20 last month
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start gap-3">
-                      <div className="h-6 w-6 rounded-full bg-gradient-to-r from-blue-500 to-orange-400 text-white flex items-center justify-center flex-shrink-0 text-xs">
-                        3
-                      </div>
-                      <div>
-                        <p className="font-medium">Repeat customer rate at 68%</p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          Industry average is 42% - your customer retention is excellent
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <div className="flex justify-between items-start mb-4">
-                  <div className="max-w-md">
-                    <h3 className="text-lg font-medium text-gray-800 mb-1">Sales Activity Analysis</h3>
-                    <p className="text-gray-500">
-                      Analyze your recent sales data to discover trends, top products, and customer engagement patterns.
-                    </p>
-                  </div>
-                  <Button 
-                    onClick={() => {
-                      setSalesAnalysisLoading(true);
-                      
-                      // Sequential loading animation - show steps one after another
-                      const step1 = document.getElementById('sales-step-1-container');
-                      const step2 = document.getElementById('sales-step-2-container');
-                      const step3 = document.getElementById('sales-step-3-container');
-                      
-                      // Make sure step 1 is visible
-                      if (step1) {
-                        step1.classList.remove('opacity-0', 'translate-y-4');
-                        step1.classList.add('opacity-100', 'translate-y-0');
-                      }
-                      
-                      // After 1.5 seconds, show step 2
-                      setTimeout(() => {
-                        if (step2) {
-                          step2.classList.remove('opacity-0', 'translate-y-4');
-                          step2.classList.add('opacity-100', 'translate-y-0');
-                        }
-                      }, 1500);
-                      
-                      // After 3 seconds, show step 3
-                      setTimeout(() => {
-                        if (step3) {
-                          step3.classList.remove('opacity-0', 'translate-y-4');
-                          step3.classList.add('opacity-100', 'translate-y-0');
-                        }
-                        
-                        // Complete the final step and show results after a short delay
-                        setTimeout(() => {
-                          setSalesAnalysisLoading(false);
-                          setSalesAnalysisResults({
-                            // This would be populated with actual data from a Firebase function
-                            performanceSummary: {
-                              salesIncrease: "12%",
-                              engagementIncrease: "8%",
-                              peakTimes: ["11am-2pm", "5pm-7pm"]
-                            },
-                            topProducts: [
-                              {
-                                name: "Cappuccino",
-                                increase: "+18%",
-                                percentageOfCategory: "42%"
-                              },
-                              {
-                                name: "Croissant",
-                                increase: "+15%",
-                                percentageOfCategory: "38%"
-                              }
-                            ],
-                            customerEngagement: [
-                              {
-                                metric: "Loyalty program participation",
-                                value: "up 22%",
-                                detail: "New customers are signing up at 2.3x the rate of last quarter"
-                              },
-                              {
-                                metric: "Average transaction value",
-                                value: "$8.75",
-                                detail: "Up from $7.20 last month"
-                              },
-                              {
-                                metric: "Repeat customer rate",
-                                value: "68%",
-                                detail: "Industry average is 42% - your customer retention is excellent"
-                              }
-                            ]
-                          });
-                        }, 1500);
-                      }, 3000);
-                    }}
-                    className="bg-gradient-to-r from-blue-500 to-orange-400 hover:from-blue-600 hover:to-orange-500 text-white"
-                  >
-                    Start Analysis
-                  </Button>
-                </div>
-                
-                <div className="flex items-center justify-center h-48">
-                  <BarChart className="h-16 w-16 text-gray-200" />
-                </div>
-              </div>
-            )}
           </div>
           
           <div className="flex-none px-6 py-4 border-t">
@@ -1629,74 +1251,145 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </div>
             ) : (
               <div>
-                <div className="flex justify-between items-start mb-8">
+                <div className="flex justify-between items-start mb-2">
                   <div className="max-w-md">
-                    <h3 className="text-lg font-medium text-gray-800 mb-2">Reward Generator</h3>
+                    <h3 className="text-lg font-medium text-gray-800 mb-1">Competitor Intelligence</h3>
                     <p className="text-gray-500">
-                      Let AI create unique reward ideas tailored to your business and customer preferences.
+                      Analyze your local market and competitors to gain strategic insights and recommendations.
                     </p>
                   </div>
                   <Button 
                     onClick={() => {
-                      setRewardGeneratorLoading(true);
+                      setCompetitorAnalysisLoading(true);
+                      setCompetitorAnalysisError(null);
                       
-                      // Sequential loading animation - show one step at a time
-                      const step1 = document.getElementById('reward-step-1-container');
-                      const step2 = document.getElementById('reward-step-2-container');
-                      const step3 = document.getElementById('reward-step-3-container');
+                      // Sequential animation with 3 seconds per step
                       
-                      // Make sure step 1 is visible and others are hidden
-                      if (step1) step1.classList.remove('hidden');
-                      if (step2) step2.classList.add('hidden');
-                      if (step3) step3.classList.add('hidden');
+                      // Step 1 is already active
                       
-                      // After 1.5 seconds, hide step 1 and show step 2
+                      // After 3 seconds, complete step 1 and activate step 2
                       setTimeout(() => {
-                        if (step1) step1.classList.add('hidden');
-                        if (step2) {
-                          step2.classList.remove('hidden');
-                          step2.classList.remove('opacity-0', 'translate-y-4');
-                          step2.classList.add('opacity-100', 'translate-y-0');
-                        }
-                      }, 1500);
-                      
-                      // After 3 seconds, hide step 2 and show step 3
-                      setTimeout(() => {
-                        if (step2) step2.classList.add('hidden');
-                        if (step3) {
-                          step3.classList.remove('hidden');
-                          step3.classList.remove('opacity-0', 'translate-y-4');
-                          step3.classList.add('opacity-100', 'translate-y-0');
-                        }
+                        // Complete step 1
+                        const step1Spinner = document.getElementById('step-1-spinner');
+                        const step1Check = document.getElementById('step-1-check');
+                        const step1Status = document.getElementById('step-1-status');
                         
-                        // After 4.5 seconds, show the results
-                        setTimeout(() => {
-                          setRewardGeneratorLoading(false);
-                          setGeneratedReward({
-                            name: "Midweek Morning Special",
-                            description: "Free pastry with any coffee purchase before 10am, Tuesday-Thursday. Designed to boost slower morning traffic.",
-                            pointsCost: 100,
-                            estimatedValue: "3.50",
-                            targetAudience: "Morning commuters",
-                            duration: "Ongoing",
-                            tips: [
-                              "Promote to customers who typically visit on weekends to encourage weekday visits",
-                              "Display prominent signage during the morning rush hour",
-                              "Consider adding a loyalty card element for repeat weekday visits",
-                              "Track morning sales increases to measure effectiveness"
-                            ]
-                          });
-                        }, 1500);
+                        if (step1Spinner) step1Spinner.classList.add('hidden');
+                        if (step1Check) step1Check.classList.remove('hidden');
+                        if (step1Status) step1Status.innerHTML = 'Complete';
+                        
+                        // Activate step 2
+                        const step2Container = document.getElementById('step-2-container');
+                        const step2Number = document.getElementById('step-2-number');
+                        const step2Spinner = document.getElementById('step-2-spinner');
+                        const step2Status = document.getElementById('step-2-status');
+                        
+                        if (step2Container) step2Container.className = 'w-full bg-white rounded-md p-3 border border-gray-200 shadow-sm';
+                        if (step2Number) step2Number.classList.add('hidden');
+                        if (step2Spinner) step2Spinner.classList.remove('hidden');
+                        if (step2Status) step2Status.innerHTML = '<span class="animate-pulse">Generating insights<span class="animate-ellipsis">...</span></span>';
                       }, 3000);
+                      
+                      // After 6 seconds, complete step 2 and activate step 3
+                      setTimeout(() => {
+                        // Complete step 2
+                        const step2Spinner = document.getElementById('step-2-spinner');
+                        const step2Check = document.getElementById('step-2-check');
+                        const step2Status = document.getElementById('step-2-status');
+                        
+                        if (step2Spinner) step2Spinner.classList.add('hidden');
+                        if (step2Check) step2Check.classList.remove('hidden');
+                        if (step2Status) step2Status.innerHTML = 'Complete';
+                        
+                        // Activate step 3
+                        const step3Container = document.getElementById('step-3-container');
+                        const step3Number = document.getElementById('step-3-number');
+                        const step3Spinner = document.getElementById('step-3-spinner');
+                        const step3Status = document.getElementById('step-3-status');
+                        
+                        if (step3Container) step3Container.className = 'w-full bg-white rounded-md p-3 border border-gray-200 shadow-sm';
+                        if (step3Number) step3Number.classList.add('hidden');
+                        if (step3Spinner) step3Spinner.classList.remove('hidden');
+                        if (step3Status) step3Status.innerHTML = '<span class="animate-pulse">Analyzing opportunities<span class="animate-ellipsis">...</span></span>';
+                      }, 6000);
+                      
+                      // After 9 seconds, complete step 3 and activate step 4
+                      setTimeout(() => {
+                        // Complete step 3
+                        const step3Spinner = document.getElementById('step-3-spinner');
+                        const step3Check = document.getElementById('step-3-check');
+                        const step3Status = document.getElementById('step-3-status');
+                        
+                        if (step3Spinner) step3Spinner.classList.add('hidden');
+                        if (step3Check) step3Check.classList.remove('hidden');
+                        if (step3Status) step3Status.innerHTML = 'Complete';
+                        
+                        // Activate step 4
+                        const step4Container = document.getElementById('step-4-container');
+                        const step4Number = document.getElementById('step-4-number');
+                        const step4Spinner = document.getElementById('step-4-spinner');
+                        const step4Status = document.getElementById('step-4-status');
+                        
+                        if (step4Container) step4Container.className = 'w-full bg-white rounded-md p-3 border border-gray-200 shadow-sm';
+                        if (step4Number) step4Number.classList.add('hidden');
+                        if (step4Spinner) step4Spinner.classList.remove('hidden');
+                        if (step4Status) step4Status.innerHTML = '<span class="animate-pulse">Creating report<span class="animate-ellipsis">...</span></span>';
+                        
+                        // Call the Firebase function to get competitor intelligence
+                        if (user?.uid) {
+                          const competitiveIntelligenceAgentcall = httpsCallable(functions, 'competitiveIntelligenceAgentcall');
+                          
+                          competitiveIntelligenceAgentcall({ merchantId: user.uid })
+                            .then((result) => {
+                              // Complete step 4
+                              const step4Spinner = document.getElementById('step-4-spinner');
+                              const step4Check = document.getElementById('step-4-check');
+                              const step4Status = document.getElementById('step-4-status');
+                              
+                              if (step4Spinner) step4Spinner.classList.add('hidden');
+                              if (step4Check) step4Check.classList.remove('hidden');
+                              if (step4Status) step4Status.innerHTML = 'Complete';
+                              
+                              // Show results after a brief pause
+                              setTimeout(() => {
+                                setCompetitorAnalysisLoading(false);
+                                setCompetitorAnalysisResults(result.data);
+                              }, 1000);
+                            })
+                            .catch((error) => {
+                              console.error("Error calling competitiveIntelligenceAgentcall:", error);
+                              setCompetitorAnalysisError("Failed to generate competitor analysis. Please try again later.");
+                              setCompetitorAnalysisLoading(false);
+                              
+                              toast({
+                                title: "Analysis Failed",
+                                description: "Could not generate competitor intelligence. Please try again.",
+                                variant: "destructive"
+                              });
+                            });
+                        } else {
+                          // If no user ID, show error after animation completes
+                          setTimeout(() => {
+                            setCompetitorAnalysisLoading(false);
+                            setCompetitorAnalysisError("User authentication required. Please log in and try again.");
+                            
+                            toast({
+                              title: "Authentication Required",
+                              description: "Please log in to use this feature.",
+                              variant: "destructive"
+                            });
+                          }, 3000);
+                        }
+                      }, 9000);
                     }}
-                    className="bg-gradient-to-r from-amber-500 to-orange-400 hover:from-amber-600 hover:to-orange-500 text-white"
+                    className="bg-blue-500 hover:bg-blue-600 text-white"
                   >
-                    Generate Reward
+                    Start Analysis
                   </Button>
                 </div>
                 
-                <div className="flex items-center justify-center h-64">
-                  <Lightbulb className="h-16 w-16 text-gray-200" />
+                <div className="flex items-center justify-center h-48">
+                  <Target className="h-16 w-16 text-gray-200" />
                 </div>
               </div>
             )}

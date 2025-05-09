@@ -31,7 +31,8 @@ import {
   Search,
   Command,
   DollarSign,
-  Package
+  Package,
+  Mail
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -141,6 +142,11 @@ const navItems = [
         title: "Messages",
         href: "/store/messages",
         icon: MessageSquare
+      },
+      {
+        title: "Emails",
+        href: "/store/emails",
+        icon: Mail
       },
       {
         title: "Customers",

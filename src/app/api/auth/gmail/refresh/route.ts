@@ -2,112 +2,104 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, query, collection, where, getDocs } from 'firebase/firestore';
 
-// Google OAuth client credentials from environment variables with fallbacks
-const CLIENT_ID = process.env.GMAIL_CLIENT_ID || "1035054543006-dq2fier1a540dbbfieevph8m6gu74j15.apps.googleusercontent.com";
-const CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET || "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";
+// Use environment variables without fallbacks in production
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.GMAIL_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || process.env.GMAIL_CLIENT_SECRET;
 
 export async function POST(request: NextRequest) {
-  // Check if required environment variables (or their fallbacks) are set
-  if (!CLIENT_ID || !CLIENT_SECRET) {
-    console.error("Missing required environment variables for Gmail OAuth");
-    return NextResponse.json(
-      { error: 'Server configuration error' },
-      { status: 500 }
-    );
-  }
+  console.log('Gmail token refresh request received');
   
   try {
-    // Check if this is an authorized request (should add proper authentication)
-    // This would typically be a scheduled server function or admin-only endpoint
+    // Parse the request body
+    const body = await request.json();
+    const { merchantId, refresh_token } = body;
     
-    // Get merchantId from request body
-    const { merchantId } = await request.json();
+    console.log('Refresh token request for merchant:', merchantId);
     
-    if (!merchantId) {
+    if (!merchantId || !refresh_token) {
+      console.error('Missing required fields in refresh token request');
       return NextResponse.json(
-        { error: 'Missing merchant ID' },
+        { error: 'Missing required fields' },
         { status: 400 }
       );
     }
     
-    // Get the integration data from Firestore
-    const integrationDoc = await getDoc(doc(db, 'merchants', merchantId, 'integrations', 'gmail'));
-    
-    if (!integrationDoc.exists() || !integrationDoc.data().connected) {
+    // Get client ID and secret from environment variables
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+      console.error('Missing Google API credentials in environment variables');
       return NextResponse.json(
-        { error: 'Gmail integration not found' },
-        { status: 404 }
+        { error: 'Google API credentials not configured' },
+        { status: 500 }
       );
     }
     
-    const integrationData = integrationDoc.data();
-    const { refresh_token, expires_at } = integrationData;
+    console.log('Refreshing token with Google OAuth API...');
     
-    // Check if the token needs to be refreshed
-    const currentTime = Date.now();
-    const tokenExpiresIn = expires_at - currentTime;
-    
-    // Only refresh if token expires in less than 5 minutes
-    if (tokenExpiresIn > 5 * 60 * 1000) {
-      return NextResponse.json({
-        message: 'Token still valid',
-        expiresIn: Math.floor(tokenExpiresIn / 1000)
-      });
-    }
-    
-    // Refresh the access token
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    // Refresh the token
+    const tokenEndpoint = 'https://oauth2.googleapis.com/token';
+    const tokenResponse = await fetch(tokenEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: new URLSearchParams({
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET,
-        refresh_token,
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        refresh_token: refresh_token,
         grant_type: 'refresh_token',
       }),
     });
     
     if (!tokenResponse.ok) {
-      const errorData = await tokenResponse.json();
-      console.error('Token refresh error:', errorData);
-      
-      // If refresh token is invalid, mark the integration as disconnected
-      if (errorData.error === 'invalid_grant') {
-        await updateDoc(doc(db, 'merchants', merchantId, 'integrations', 'gmail'), {
-          connected: false,
-        });
-        
-        return NextResponse.json(
-          { error: 'Invalid refresh token, integration disconnected' },
-          { status: 401 }
-        );
+      let errorMessage = `Token refresh failed with status ${tokenResponse.status}`;
+      try {
+        const errorData = await tokenResponse.json();
+        console.error('Token refresh failed:', errorData);
+        errorMessage = `${errorMessage}: ${JSON.stringify(errorData)}`;
+      } catch (e) {
+        const errorText = await tokenResponse.text();
+        console.error('Token refresh failed with text response:', errorText);
+        errorMessage = `${errorMessage}: ${errorText}`;
       }
       
       return NextResponse.json(
-        { error: 'Failed to refresh token' },
+        { error: errorMessage },
+        { status: tokenResponse.status }
+      );
+    }
+    
+    const tokenData = await tokenResponse.json();
+    console.log('Token refreshed successfully');
+    
+    if (!tokenData.access_token) {
+      console.error('No access token in response:', tokenData);
+      return NextResponse.json(
+        { error: 'Invalid token response from Google' },
         { status: 500 }
       );
     }
     
-    const { access_token, expires_in } = await tokenResponse.json();
+    // Calculate expiration time
+    const expiresAt = Math.floor(Date.now() / 1000) + tokenData.expires_in;
     
-    // Update the integration data in Firestore
+    // Update the token in Firestore
+    console.log('Updating token in Firestore...');
     await updateDoc(doc(db, 'merchants', merchantId, 'integrations', 'gmail'), {
-      access_token,
-      expires_at: Date.now() + expires_in * 1000,
+      access_token: tokenData.access_token,
+      expires_at: expiresAt,
     });
     
-    // Return success response
+    console.log('Token updated successfully');
+    
+    // Return the new access token
     return NextResponse.json({
-      success: true,
-      expiresIn: expires_in
+      access_token: tokenData.access_token,
+      expires_at: expiresAt,
     });
   } catch (error) {
-    console.error('Error refreshing Gmail token:', error);
+    console.error('Error in Gmail token refresh:', error);
     return NextResponse.json(
-      { error: 'Failed to refresh token' },
+      { error: `Failed to refresh token: ${error instanceof Error ? error.message : String(error)}` },
       { status: 500 }
     );
   }
@@ -116,7 +108,7 @@ export async function POST(request: NextRequest) {
 // This function would be used by a scheduled job to refresh tokens
 export async function GET() {
   // Check if required environment variables (or their fallbacks) are set
-  if (!CLIENT_ID || !CLIENT_SECRET) {
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
     console.error("Missing required environment variables for Gmail OAuth");
     return NextResponse.json(
       { error: 'Server configuration error' },

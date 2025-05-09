@@ -29,7 +29,8 @@ import {
   BookOpen,
   Coffee,
   Store,
-  Repeat
+  Repeat,
+  Sparkles
 } from "lucide-react"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
 import { CreateProgramDialog } from "@/components/create-program-dialog"
@@ -37,6 +38,7 @@ import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { TapAiDialog } from "@/components/tap-ai-dialog"
 import { CreatePointsRuleSheet } from "@/components/create-points-rule-sheet"
 import { SendBroadcastSheet } from "@/components/send-broadcast-sheet"
+import { IntroductoryRewardSheet } from "@/components/introductory-reward-sheet"
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false)
@@ -47,6 +49,7 @@ export function CommandPalette() {
   const [tapAIOpen, setTapAIOpen] = useState(false)
   const [createRuleOpen, setCreateRuleOpen] = useState(false)
   const [broadcastOpen, setBroadcastOpen] = useState(false)
+  const [introRewardOpen, setIntroRewardOpen] = useState(false)
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -156,6 +159,12 @@ export function CommandPalette() {
                 <Bell className="mr-2 h-4 w-4" />
                 <span>Send Broadcast</span>
               </CommandItem>
+              <CommandItem
+                onSelect={() => runCommand(() => setIntroRewardOpen(true))}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                <span>Create Introductory Reward</span>
+              </CommandItem>
             </CommandGroup>
             
             <CommandSeparator />
@@ -212,6 +221,11 @@ export function CommandPalette() {
       <SendBroadcastSheet 
         open={broadcastOpen} 
         onOpenChange={setBroadcastOpen} 
+      />
+      
+      <IntroductoryRewardSheet 
+        open={introRewardOpen} 
+        onOpenChange={setIntroRewardOpen} 
       />
     </>
   )

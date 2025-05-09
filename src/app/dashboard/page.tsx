@@ -29,9 +29,12 @@ import {
   PowerOff,
   MessageSquare,
   Settings,
+  Sparkles,
+  CheckCircle,
   ChevronDown,
-  ChevronUp,
-  ShoppingBag
+  Layers,
+  LineChart,
+  Percent
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -67,8 +70,7 @@ import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
 import { BasicRewardWizard } from "@/components/basic-reward-wizard"
 import { CreateRewardSheet } from "@/components/create-reward-sheet"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { SalesSummary } from "@/components/sales-summary"
+import { IntroductoryRewardSheet } from "@/components/introductory-reward-sheet"
 
 type TimeframeType = "today" | "yesterday" | "7days" | "30days"
 
@@ -133,6 +135,7 @@ export default function DashboardPage() {
   const [isRewardDialogOpen, setIsRewardDialogOpen] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<{id: string, name: string} | null>(null)
   const [isSetupWizardOpen, setIsSetupWizardOpen] = useState(false)
+  const [isIntroductoryRewardSheetOpen, setIsIntroductoryRewardSheetOpen] = useState(false)
   const [setupChecklist, setSetupChecklist] = useState({
     tapAgent: false,
     banner: false,
@@ -140,7 +143,8 @@ export default function DashboardPage() {
     pointsRule: false,
     posIntegration: false,
     openBanking: false,
-    customReward: false
+    customReward: false,
+    introductoryReward: false
   })
 
   const getDateRange = (tf: TimeframeType): { start: Date; end: Date } => {
@@ -1127,6 +1131,11 @@ export default function DashboardPage() {
         const rewardsRef = collection(db, 'merchants', user.uid, 'rewards')
         const rewardsSnapshot = await getDocs(rewardsRef)
         
+        // Check introductory reward
+        const merchantRef = doc(db, 'merchants', user.uid)
+        const merchantDoc = await getDoc(merchantRef)
+        const merchantData = merchantDoc.data()
+        
         setSetupChecklist({
           tapAgent: tapAgentDoc.exists(),
           banner: bannersSnapshot.docs.length > 0,
@@ -1134,7 +1143,8 @@ export default function DashboardPage() {
           pointsRule: pointsRulesSnapshot.docs.length > 0,
           posIntegration: integrationsDoc.exists() && integrationsDoc.data()?.connected === true,
           openBanking: openBankingDoc.exists() && openBankingDoc.data()?.connected === true,
-          customReward: rewardsSnapshot.docs.length > 0
+          customReward: rewardsSnapshot.docs.length > 0,
+          introductoryReward: merchantData?.hasIntroductoryReward === true
         })
         
       } catch (error) {
@@ -1249,10 +1259,10 @@ export default function DashboardPage() {
 
   return (
     <PageTransition>
-      <div className="p-6">
-        <div className="space-y-8">
+      <div className="p-6 py-4">
+        <div className="space-y-6">
           {/* Welcome Section with Timeframe Tabs */}
-          <div className="space-y-4">
+          <div>
             <PageHeader
               title="Welcome back"
               subtitle="Here's an overview of your business"
@@ -1912,7 +1922,7 @@ export default function DashboardPage() {
                       <Badge className="bg-green-100 text-green-800 border-green-200">Active</Badge>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       {/* Content Creation */}
                       <div className="space-y-4">
                         <h4 className="text-sm font-medium text-gray-500">Content Creation</h4>
@@ -1998,9 +2008,6 @@ export default function DashboardPage() {
                         </div>
                       </div>
                     </div>
-                    
-                    {/* Add the Sales Summary component */}
-                    <SalesSummary merchantId={user?.uid} />
                   </>
                 )}
               </CardContent>
@@ -2271,6 +2278,37 @@ export default function DashboardPage() {
                 </div>
               </div>
 
+              {/* Introductory Reward Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="introductory-reward-checkbox" 
+                      checked={setupChecklist.introductoryReward} 
+                      onCheckedChange={() => handleChecklistChange('introductoryReward')}
+                    />
+                    <label htmlFor="introductory-reward-checkbox" className="text-base font-medium cursor-pointer">
+                      Create Introductory Reward
+                    </label>
+                  </div>
+                  <Button variant="link" size="sm" asChild>
+                    <Link href="#" onClick={(e) => {
+                      e.preventDefault();
+                      setIsSetupWizardOpen(false);
+                      // Use a small timeout to allow the setup wizard to close first
+                      setTimeout(() => {
+                        setIsIntroductoryRewardSheetOpen(true);
+                      }, 100);
+                    }}>Create</Link>
+                  </Button>
+                </div>
+                <div className="pl-6">
+                  <p className="text-sm text-muted-foreground">
+                    Offer a special welcome gift to first-time customers, funded by Tap Loyalty. This helps attract new customers to your business.
+                  </p>
+                </div>
+              </div>
+
               {/* Custom Reward Section */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -2434,6 +2472,12 @@ export default function DashboardPage() {
         onOpenChange={setIsRewardDialogOpen}
         customerId={selectedCustomer?.id}
         customerName={selectedCustomer?.name}
+      />
+
+      {/* Introductory Reward Sheet */}
+      <IntroductoryRewardSheet
+        open={isIntroductoryRewardSheetOpen}
+        onOpenChange={setIsIntroductoryRewardSheetOpen}
       />
     </PageTransition>
   )

@@ -1,8 +1,8 @@
 import React from "react"
 
 interface PageHeaderProps {
-  title: string
-  subtitle?: string
+  title: React.ReactNode
+  subtitle?: React.ReactNode
   children?: React.ReactNode
 }
 

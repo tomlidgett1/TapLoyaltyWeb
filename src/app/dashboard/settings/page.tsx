@@ -584,34 +584,42 @@ const SettingsPage: React.FC = () => {
 
   return (
     <PageTransition>
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Manage your account and preferences
-            </p>
-          </div>
-          
-          {/* Store Activation Toggle - Updated with better colors */}
-          <div className={`flex items-center gap-3 p-3 rounded-lg ${storeActive ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-            <div className="text-right">
-              <p className="text-sm font-medium">Store Status</p>
-              <p className={`text-xs ${storeActive ? 'text-green-600' : 'text-red-600'} font-medium`}>
-                {storeActive ? "Active & Visible" : "Inactive & Hidden"}
+      <div className="p-6 py-4 max-w-7xl mx-auto space-y-6">
+        <div>
+          <div className="flex justify-between items-start mb-3">
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Manage your account and preferences
               </p>
             </div>
-            <Switch 
-              checked={storeActive} 
-              onCheckedChange={toggleStoreStatus}
-              disabled={loading}
-              className={storeActive ? "data-[state=checked]:bg-green-600" : "data-[state=unchecked]:bg-red-600"}
-            />
+            
+            {/* Store Activation Toggle - Updated without nested buttons */}
+            <div
+              onClick={!loading ? toggleStoreStatus : undefined}
+              className={`h-10 px-4 flex items-center gap-2 border rounded-md cursor-pointer ${
+                storeActive 
+                  ? 'bg-green-50 border-green-200 hover:bg-green-100 hover:border-green-300' 
+                  : 'bg-red-50 border-red-200 hover:bg-red-100 hover:border-red-300'
+              } ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+            >
+              <span className="text-sm font-medium">Store Status:</span>
+              <span className={`text-sm ${storeActive ? 'text-green-600' : 'text-red-600'} font-medium`}>
+                {storeActive ? "Active" : "Inactive"}
+              </span>
+              <Switch 
+                checked={storeActive}
+                onCheckedChange={toggleStoreStatus}
+                disabled={loading}
+                className={`ml-2 ${storeActive ? "data-[state=checked]:bg-green-600" : "data-[state=unchecked]:bg-red-600"}`}
+              />
+            </div>
           </div>
+          <div className="h-px w-full bg-gray-200 mt-1"></div>
         </div>
         
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="bg-muted/60">
+          <TabsList className="bg-muted/60 rounded-md">
             <TabsTrigger value="profile" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               <span>Profile</span>
@@ -654,7 +662,7 @@ const SettingsPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               {/* Left Submenu - New Design */}
               <div className="md:col-span-1">
-                <Card className="overflow-hidden">
+                <Card className="overflow-hidden rounded-md">
                   <div className="p-4 border-b flex flex-col items-center">
                     <div className="w-24 h-24 rounded-full overflow-hidden border mb-3">
                       {logoUrl ? (
@@ -688,7 +696,7 @@ const SettingsPage: React.FC = () => {
                             : 'hover:bg-gray-100'
                         }`}
                       >
-                        <div className={`p-1.5 rounded-full ${
+                        <div className={`p-1.5 rounded-md ${
                           profileSection === item.id 
                             ? 'bg-blue-100 text-blue-700' 
                             : 'bg-gray-100 text-gray-500'
@@ -704,7 +712,7 @@ const SettingsPage: React.FC = () => {
               
               {/* Right Content Area */}
               <div className="md:col-span-3">
-                <Card>
+                <Card className="rounded-md">
                   <CardHeader>
                     <CardTitle>
                       {profileSection === 'business' && "Business Information"}
@@ -890,7 +898,7 @@ const SettingsPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               {/* Left Submenu */}
               <div className="md:col-span-1">
-                <Card className="overflow-hidden">
+                <Card className="overflow-hidden rounded-md">
                   <div className="p-2">
                     {[
                       { id: 'channels', label: 'Notification Channels', icon: <Bell className="h-4 w-4" /> },
@@ -908,7 +916,7 @@ const SettingsPage: React.FC = () => {
                             : 'hover:bg-gray-100'
                         }`}
                       >
-                        <div className={`p-1.5 rounded-full ${
+                        <div className={`p-1.5 rounded-md ${
                           notificationSection === item.id 
                             ? 'bg-blue-100 text-blue-700' 
                             : 'bg-gray-100 text-gray-500'
@@ -924,7 +932,7 @@ const SettingsPage: React.FC = () => {
               
               {/* Right Content Area */}
               <div className="md:col-span-3">
-                <Card>
+                <Card className="rounded-md">
                   <CardHeader>
                     <CardTitle>
                       {notificationSection === 'channels' && "Notification Channels"}
@@ -1247,7 +1255,7 @@ const SettingsPage: React.FC = () => {
           </TabsContent>
           
           <TabsContent value="team">
-            <Card>
+            <Card className="rounded-md">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
@@ -1321,7 +1329,7 @@ const SettingsPage: React.FC = () => {
                     Invite colleagues to help manage your business
                   </p>
                   
-                  <div className="bg-muted/30 rounded-lg p-8 text-center">
+                  <div className="bg-muted/30 rounded-md p-8 text-center">
                     <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                     <p className="text-muted-foreground mb-4">
                       No team members yet. Invite someone to get started.
@@ -1336,7 +1344,7 @@ const SettingsPage: React.FC = () => {
           </TabsContent>
           
           <TabsContent value="store">
-            <Card>
+            <Card className="rounded-md">
               <CardHeader>
                 <CardTitle>Store Settings</CardTitle>
                 <CardDescription>
@@ -1426,7 +1434,7 @@ const SettingsPage: React.FC = () => {
           </TabsContent>
           
           <TabsContent value="security">
-            <Card>
+            <Card className="rounded-md">
               <CardHeader>
                 <CardTitle>Security Settings</CardTitle>
                 <CardDescription>
@@ -1451,7 +1459,7 @@ const SettingsPage: React.FC = () => {
                     <Label htmlFor="abnVerification">ABN Verification Document</Label>
                     <div className="border rounded-md p-4 bg-gray-50">
                       <div className="flex items-center justify-center w-full">
-                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-white hover:bg-gray-50">
+                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-md cursor-pointer bg-white hover:bg-gray-50">
                           <div className="flex flex-col items-center justify-center pt-5 pb-6">
                             {abnVerificationFile ? (
                               <div className="text-center">
@@ -1567,7 +1575,7 @@ const SettingsPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               {/* Left Submenu */}
               <div className="md:col-span-1">
-                <Card className="overflow-hidden">
+                <Card className="overflow-hidden rounded-md">
                   <div className="p-4 border-b">
                     <h3 className="font-medium text-sm">Tap Agent</h3>
                     <p className="text-xs text-muted-foreground mt-1">
@@ -1591,7 +1599,7 @@ const SettingsPage: React.FC = () => {
                             : 'hover:bg-gray-100'
                         }`}
                       >
-                        <div className={`p-1.5 rounded-full ${
+                        <div className={`p-1.5 rounded-md ${
                           agentSection === item.id 
                             ? 'bg-blue-100 text-blue-700' 
                             : 'bg-gray-100 text-gray-500'
@@ -1607,7 +1615,7 @@ const SettingsPage: React.FC = () => {
               
               {/* Right Content Area */}
               <div className="md:col-span-3">
-                <Card>
+                <Card className="rounded-md">
                   <CardHeader>
                     <CardTitle>
                       {agentSection === 'products' && "Products & Services"}
@@ -1917,7 +1925,7 @@ const SettingsPage: React.FC = () => {
           </TabsContent>
           
           <TabsContent value="files">
-            <Card>
+            <Card className="rounded-md">
               <CardHeader>
                 <CardTitle>Files & Documents</CardTitle>
                 <CardDescription>
@@ -1934,7 +1942,7 @@ const SettingsPage: React.FC = () => {
                       <div className="grid grid-cols-1 gap-4">
                         {/* ABN Verification Document */}
                         {abnVerificationUrl && (
-                          <div className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex items-center justify-between p-4 border rounded-md">
                             <div className="flex items-center gap-3">
                               <div className="p-2 bg-blue-50 rounded-md">
                                 <FileText className="h-5 w-5 text-blue-600" />
@@ -1966,7 +1974,7 @@ const SettingsPage: React.FC = () => {
                         
                         {/* Business Logo */}
                         {logoUrl && (
-                          <div className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex items-center justify-between p-4 border rounded-md">
                             <div className="flex items-center gap-3">
                               <div className="p-2 bg-blue-50 rounded-md">
                                 <Image className="h-5 w-5 text-blue-600" />
@@ -1998,7 +2006,7 @@ const SettingsPage: React.FC = () => {
                         
                         {/* Mock/Development Documents */}
                         {documents.map((doc, index) => (
-                          <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div key={index} className="flex items-center justify-between p-4 border rounded-md">
                             <div className="flex items-center gap-3">
                               <div className="p-2 bg-blue-50 rounded-md">
                                 <FileText className="h-5 w-5 text-blue-600" />
@@ -2028,7 +2036,7 @@ const SettingsPage: React.FC = () => {
                         ))}
                       </div>
                     ) : (
-                      <div className="bg-muted/30 rounded-lg p-8 text-center">
+                      <div className="bg-muted/30 rounded-md p-8 text-center">
                         <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                         <p className="text-muted-foreground mb-4">
                           No documents uploaded yet. Upload a file to get started.
@@ -2045,7 +2053,7 @@ const SettingsPage: React.FC = () => {
                   <h3 className="text-lg font-medium">Upload New Document</h3>
                   <div className="border rounded-md p-4 bg-gray-50">
                     <div className="flex items-center justify-center w-full">
-                      <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-white hover:bg-gray-50">
+                      <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-md cursor-pointer bg-white hover:bg-gray-50">
                         <div className="flex flex-col items-center justify-center pt-5 pb-6">
                           <Upload className="w-8 h-8 mb-2 text-gray-500" />
                           <p className="mb-2 text-sm text-gray-500">

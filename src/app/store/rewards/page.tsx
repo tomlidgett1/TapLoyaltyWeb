@@ -1254,7 +1254,7 @@ export default function RewardsPage() {
 
   return (
     <PageTransition>
-      <div className="p-6">
+      <div className="p-6 py-4">
         <PageHeader
           title="Rewards"
           subtitle="Manage and create rewards for your customers"

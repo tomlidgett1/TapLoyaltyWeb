@@ -6,13 +6,14 @@ import { CreatePointsRuleSheet } from "@/components/create-points-rule-sheet"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
 import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { SendBroadcastSheet } from "@/components/send-broadcast-sheet"
-import { IntroductoryRewardDialog } from "@/components/introductory-reward-dialog"
+import { IntroductoryRewardSheet } from "@/components/introductory-reward-sheet"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, getDoc } from "firebase/firestore"
 import { PageTransition } from "@/components/page-transition"
+import { PageHeader } from "@/components/page-header"
 import { 
   Gift, 
   Zap, 
@@ -134,13 +135,11 @@ export default function CreatePage() {
 
   return (
     <PageTransition>
-      <div className="p-6">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight">Create</h1>
-          <p className="text-gray-500 mt-2">
-            Create new rewards, points rules, and communication tools for your loyalty program
-          </p>
-        </div>
+      <div className="p-6 py-4">
+        <PageHeader 
+          title="Create" 
+          subtitle="Create new rewards, points rules, and communication tools for your loyalty program"
+        />
 
         <div className="space-y-10">
           {createOptions.map((section, idx) => (
@@ -225,7 +224,7 @@ export default function CreatePage() {
           onOpenChange={setBroadcastDialogOpen}
         />
         
-        <IntroductoryRewardDialog
+        <IntroductoryRewardSheet
           open={introRewardOpen}
           onOpenChange={setIntroRewardOpen}
         />

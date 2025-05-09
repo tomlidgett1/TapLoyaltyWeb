@@ -13,7 +13,11 @@ import {
   AlertCircle,
   Info,
   Award,
-  Loader2
+  Loader2,
+  Calendar,
+  ShoppingCart,
+  Gift,
+  Server
 } from "lucide-react"
 import { db } from "@/lib/firebase"
 import { 
@@ -65,6 +69,7 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "@/components/ui/use-toast"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
+import { PageHeader } from "@/components/page-header"
 
 // Types for the membership conditions
 interface Condition {
@@ -817,30 +822,26 @@ export default function MembershipsPage() {
   
   return (
     <div className="membership-page">
-      <div className="container px-6 py-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold">Membership Tiers</h1>
-            <p className="text-muted-foreground mt-1">
-              Create and manage membership tiers for your customers
-            </p>
-          </div>
-          
+      <div className="container px-6 py-4">
+        <PageHeader
+          title="Membership Tiers"
+          subtitle="Create and manage membership tiers for your customers"
+        >
           <Button 
             onClick={handleCreateMembership}
-            className="bg-[#007AFF] hover:bg-[#0071e3] text-white"
+            className="bg-[#007AFF] hover:bg-[#0071e3] text-white rounded-md shadow-sm h-9"
           >
             <PlusCircle className="h-4 w-4 mr-2" />
             Create Tier
           </Button>
-        </div>
+        </PageHeader>
         
         {isLoading ? (
           <div className="flex items-center justify-center h-64">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : memberships.length === 0 ? (
-          <div className="bg-muted/50 border rounded-lg p-8 text-center">
+          <div className="bg-muted/50 border rounded-md shadow-sm p-8 text-center">
             <Award className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium mb-2">No Membership Tiers</h3>
             <p className="text-muted-foreground mb-4 max-w-md mx-auto">
@@ -848,7 +849,7 @@ export default function MembershipsPage() {
             </p>
             <Button 
               onClick={handleCreateMembership}
-              className="bg-[#007AFF] hover:bg-[#0071e3] text-white"
+              className="bg-[#007AFF] hover:bg-[#0071e3] text-white rounded-md shadow-sm h-9"
             >
               <PlusCircle className="h-4 w-4 mr-2" />
               Create Your First Tier
@@ -856,7 +857,7 @@ export default function MembershipsPage() {
           </div>
         ) : (
           <>
-            <Alert className="mb-6 bg-blue-50 text-blue-800 border-blue-200">
+            <Alert className="mb-6 bg-blue-50 text-blue-800 border-blue-200 rounded-md">
               <Info className="h-4 w-4 text-blue-500" />
               <AlertTitle className="text-blue-800 font-medium">About Membership Tiers</AlertTitle>
               <AlertDescription className="text-blue-700">
@@ -875,7 +876,7 @@ export default function MembershipsPage() {
                 return (
                   <div key={safeMemb.id} className="flex flex-col space-y-4">
                     <Card 
-                      className={`overflow-hidden ${isBronzeTier(safeMemb) ? 'border-blue-200 bg-blue-50/30' : ''} flex flex-col h-full`}
+                      className={`overflow-hidden rounded-md ${isBronzeTier(safeMemb) ? 'border-blue-200 bg-blue-50/30' : 'border border-gray-200'} flex flex-col h-full shadow-sm`}
                     >
                       <CardHeader className="pb-3">
                         <div className="flex items-center justify-between">
@@ -980,6 +981,7 @@ export default function MembershipsPage() {
                               variant="outline" 
                               size="sm" 
                               onClick={() => handleDeleteClick(safeMemb)}
+                              className="rounded-md shadow-sm border-0 ring-1 ring-gray-200 hover:bg-gray-50 h-9"
                             >
                               <Trash2 className="h-4 w-4 mr-1" />
                               Delete
@@ -992,7 +994,7 @@ export default function MembershipsPage() {
                                   variant="outline"
                                   size="sm"
                                   onClick={() => handleEditMembership(safeMemb)}
-                                  className="bg-blue-100 hover:bg-blue-200 text-blue-800 border-blue-200"
+                                  className="bg-blue-100 hover:bg-blue-200 text-blue-800 border-blue-200 rounded-md shadow-sm h-9 border-0 ring-1 ring-blue-200"
                                 >
                                   <PlusCircle className="h-4 w-4 mr-1" />
                                   Set Up Now
@@ -1002,7 +1004,7 @@ export default function MembershipsPage() {
                                 variant="default" 
                                 size="sm" 
                                 onClick={() => handleEditMembership(safeMemb)}
-                                className="bg-[#007AFF] hover:bg-[#0071e3] text-white"
+                                className="bg-[#007AFF] hover:bg-[#0071e3] text-white rounded-md shadow-sm h-9"
                               >
                                 <Edit2 className="h-4 w-4 mr-1" />
                                 Edit
@@ -1018,7 +1020,7 @@ export default function MembershipsPage() {
                     
                     {/* Customer Table for this tier */}
                     {isExpanded && (
-                      <div className="border rounded-md overflow-hidden bg-white col-span-1">
+                      <div className="border rounded-md overflow-hidden bg-white col-span-1 shadow-sm">
                         <div className="p-4 bg-slate-50 border-b">
                           <h3 className="text-sm font-medium">{safeMemb.name} Tier Customers</h3>
                         </div>
@@ -1037,10 +1039,10 @@ export default function MembershipsPage() {
                           </div>
                         ) : (
                           <div className="overflow-x-auto">
-                            <table className="w-full border-collapse">
+                            <table className="w-full border-collapse rounded-md overflow-hidden">
                               <thead>
                                 <tr className="border-b bg-slate-50">
-                                  <th className="text-left p-3 text-sm font-medium text-slate-700">Customer</th>
+                                  <th className="text-left p-3 text-sm font-medium text-slate-700 first:rounded-tl-md last:rounded-tr-md">Customer</th>
                                   <th className="text-right p-3 text-sm font-medium text-slate-700">Points</th>
                                   <th className="text-right p-3 text-sm font-medium text-slate-700">Transactions</th>
                                   <th className="text-right p-3 text-sm font-medium text-slate-700">Spend</th>
@@ -1072,7 +1074,7 @@ export default function MembershipsPage() {
             <div className="mt-12">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {/* Bronze Tier Table */}
-                <Card className="overflow-hidden">
+                <Card className="overflow-hidden rounded-md border border-gray-200 shadow-sm">
                   <CardHeader className="pb-3 bg-slate-50 border-b">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
@@ -1085,7 +1087,7 @@ export default function MembershipsPage() {
                           setSelectedTierForReward("bronze")
                           setIsCreateRewardOpen(true)
                         }}
-                        className="bg-[#007AFF] hover:bg-[#0071e3] text-white"
+                        className="bg-[#007AFF] hover:bg-[#0071e3] text-white rounded-md shadow-sm h-9"
                       >
                         <PlusCircle className="h-4 w-4 mr-1" />
                         Create Reward
@@ -1100,10 +1102,10 @@ export default function MembershipsPage() {
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
-                        <table className="w-full border-collapse">
+                        <table className="w-full border-collapse rounded-md overflow-hidden">
                           <thead>
                             <tr className="border-b bg-slate-50">
-                              <th className="text-center p-3 text-sm font-medium text-slate-700">Customer</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700 first:rounded-tl-md last:rounded-tr-md">Customer</th>
                               <th className="text-center p-3 text-sm font-medium text-slate-700">Transactions</th>
                               <th className="text-center p-3 text-sm font-medium text-slate-700">Spend</th>
                               <th className="text-center p-3 text-sm font-medium text-slate-700">Redemptions</th>
@@ -1136,7 +1138,7 @@ export default function MembershipsPage() {
                 </Card>
                 
                 {/* Silver Tier Table */}
-                <Card className="overflow-hidden">
+                <Card className="overflow-hidden rounded-md border border-gray-200 shadow-sm">
                   <CardHeader className="pb-3 bg-slate-50 border-b">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
@@ -1149,7 +1151,7 @@ export default function MembershipsPage() {
                           setSelectedTierForReward("silver")
                           setIsCreateRewardOpen(true)
                         }}
-                        className="bg-[#007AFF] hover:bg-[#0071e3] text-white"
+                        className="bg-[#007AFF] hover:bg-[#0071e3] text-white rounded-md shadow-sm h-9"
                       >
                         <PlusCircle className="h-4 w-4 mr-1" />
                         Create Reward
@@ -1164,10 +1166,10 @@ export default function MembershipsPage() {
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
-                        <table className="w-full border-collapse">
+                        <table className="w-full border-collapse rounded-md overflow-hidden">
                           <thead>
                             <tr className="border-b bg-slate-50">
-                              <th className="text-center p-3 text-sm font-medium text-slate-700">Customer</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700 first:rounded-tl-md last:rounded-tr-md">Customer</th>
                               <th className="text-center p-3 text-sm font-medium text-slate-700">Transactions</th>
                               <th className="text-center p-3 text-sm font-medium text-slate-700">Spend</th>
                               <th className="text-center p-3 text-sm font-medium text-slate-700">Redemptions</th>
@@ -1200,7 +1202,7 @@ export default function MembershipsPage() {
                 </Card>
                 
                 {/* Gold Tier Table */}
-                <Card className="overflow-hidden">
+                <Card className="overflow-hidden rounded-md border border-gray-200 shadow-sm">
                   <CardHeader className="pb-3 bg-slate-50 border-b">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
@@ -1213,7 +1215,7 @@ export default function MembershipsPage() {
                           setSelectedTierForReward("gold")
                           setIsCreateRewardOpen(true)
                         }}
-                        className="bg-[#007AFF] hover:bg-[#0071e3] text-white"
+                        className="bg-[#007AFF] hover:bg-[#0071e3] text-white rounded-md shadow-sm h-9"
                       >
                         <PlusCircle className="h-4 w-4 mr-1" />
                         Create Reward
@@ -1228,10 +1230,10 @@ export default function MembershipsPage() {
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
-                        <table className="w-full border-collapse">
+                        <table className="w-full border-collapse rounded-md overflow-hidden">
                           <thead>
                             <tr className="border-b bg-slate-50">
-                              <th className="text-center p-3 text-sm font-medium text-slate-700">Customer</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700 first:rounded-tl-md last:rounded-tr-md">Customer</th>
                               <th className="text-center p-3 text-sm font-medium text-slate-700">Transactions</th>
                               <th className="text-center p-3 text-sm font-medium text-slate-700">Spend</th>
                               <th className="text-center p-3 text-sm font-medium text-slate-700">Redemptions</th>
@@ -1272,7 +1274,7 @@ export default function MembershipsPage() {
                 <Button 
                   variant="outline" 
                   onClick={toggleAllCustomers}
-                  className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                  className="text-blue-600 border-blue-200 hover:bg-blue-50 rounded-md shadow-sm h-9 border-0 ring-1 ring-blue-200"
                 >
                   <Users className="h-4 w-4 mr-2" />
                   {showAllCustomers ? "Hide" : "Show"} All Customers
@@ -1280,7 +1282,7 @@ export default function MembershipsPage() {
               </div>
               
               {showAllCustomers && (
-                <Card className="overflow-hidden">
+                <Card className="overflow-hidden rounded-md border border-gray-200 shadow-sm">
                   <CardHeader className="pb-3 bg-slate-50 border-b">
                     <CardTitle>Customer List</CardTitle>
                     <CardDescription>
@@ -1303,10 +1305,10 @@ export default function MembershipsPage() {
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
-                        <table className="w-full border-collapse">
+                        <table className="w-full border-collapse rounded-md overflow-hidden">
                           <thead>
                             <tr className="border-b bg-slate-50">
-                              <th className="text-center p-3 text-sm font-medium text-slate-700">Customer ID</th>
+                              <th className="text-center p-3 text-sm font-medium text-slate-700 first:rounded-tl-md last:rounded-tr-md">Customer ID</th>
                               <th className="text-center p-3 text-sm font-medium text-slate-700">Customer Name</th>
                               <th className="text-center p-3 text-sm font-medium text-slate-700">Membership Tier</th>
                               <th className="text-center p-3 text-sm font-medium text-slate-700">Points</th>
@@ -1345,7 +1347,7 @@ export default function MembershipsPage() {
         
         {/* Create/Edit Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="sm:max-w-md max-h-[97vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-md max-h-[97vh] overflow-y-auto rounded-md border-0 shadow-lg">
             <DialogHeader>
               <DialogTitle>
                 {selectedMembership ? `Edit ${selectedMembership.name}` : "Create Membership Tier"}
@@ -1358,12 +1360,12 @@ export default function MembershipsPage() {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Tier Name</Label>
-                <Input 
-                  id="name" 
-                  value={formData.name} 
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  placeholder="e.g. Platinum, Diamond"
-                  disabled={!!selectedMembership && ['silver', 'gold'].includes(selectedMembership.name.toLowerCase())}
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g. Gold"
+                  className="rounded-md"
                 />
                 {!!selectedMembership && ['silver', 'gold'].includes(selectedMembership.name.toLowerCase()) && (
                   <p className="text-xs text-muted-foreground mt-1">Default tier names cannot be changed</p>
@@ -1372,11 +1374,12 @@ export default function MembershipsPage() {
               
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
-                <Input 
-                  id="description" 
-                  value={formData.description} 
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  placeholder="Benefits of this membership tier"
+                <Input
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="e.g. Top tier customers"
+                  className="rounded-md"
                 />
               </div>
               
@@ -1410,21 +1413,20 @@ export default function MembershipsPage() {
                         id="lifetimeTransactionsEnabled" 
                         checked={conditionSettings.lifetimeTransactions.enabled} 
                         onCheckedChange={(checked) => handleConditionSettingChange("lifetimeTransactions", "enabled", checked)}
+                        className="rounded-full"
                       />
                     </div>
                     
                     {conditionSettings.lifetimeTransactions.enabled && (
                       <div className="pt-2">
-                        <Input 
-                          id="lifetimeTransactions" 
-                          type="number" 
-                          min={0}
-                          value={conditionSettings.lifetimeTransactions.value} 
-                          onChange={(e) => handleConditionSettingChange(
-                            "lifetimeTransactions", 
-                            "value", 
-                            parseInt(e.target.value) || 0
-                          )}
+                        <Input
+                          id="lifetimeTransactions"
+                          type="number"
+                          min="0"
+                          value={conditionSettings.lifetimeTransactions.value}
+                          onChange={(e) => handleConditionSettingChange('lifetimeTransactions', 'value', parseInt(e.target.value))}
+                          disabled={!conditionSettings.lifetimeTransactions.enabled}
+                          className="rounded-md"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
                           Customer qualifies after this many completed transactions
@@ -1444,22 +1446,20 @@ export default function MembershipsPage() {
                         id="lifetimeSpendEnabled" 
                         checked={conditionSettings.lifetimeSpend.enabled} 
                         onCheckedChange={(checked) => handleConditionSettingChange("lifetimeSpend", "enabled", checked)}
+                        className="rounded-full"
                       />
                     </div>
                     
                     {conditionSettings.lifetimeSpend.enabled && (
                       <div className="pt-2">
-                        <Input 
-                          id="lifetimeSpend" 
-                          type="number" 
-                          min={0}
-                          step={0.01}
-                          value={conditionSettings.lifetimeSpend.value} 
-                          onChange={(e) => handleConditionSettingChange(
-                            "lifetimeSpend", 
-                            "value", 
-                            parseFloat(e.target.value) || 0
-                          )}
+                        <Input
+                          id="lifetimeSpend"
+                          type="number"
+                          min="0"
+                          value={conditionSettings.lifetimeSpend.value}
+                          onChange={(e) => handleConditionSettingChange('lifetimeSpend', 'value', parseInt(e.target.value))}
+                          disabled={!conditionSettings.lifetimeSpend.enabled}
+                          className="rounded-md"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
                           Customer qualifies after spending this amount
@@ -1479,21 +1479,20 @@ export default function MembershipsPage() {
                         id="numberOfRedemptionsEnabled" 
                         checked={conditionSettings.numberOfRedemptions.enabled} 
                         onCheckedChange={(checked) => handleConditionSettingChange("numberOfRedemptions", "enabled", checked)}
+                        className="rounded-full"
                       />
                     </div>
                     
                     {conditionSettings.numberOfRedemptions.enabled && (
                       <div className="pt-2">
-                        <Input 
-                          id="numberOfRedemptions" 
-                          type="number" 
-                          min={0}
-                          value={conditionSettings.numberOfRedemptions.value} 
-                          onChange={(e) => handleConditionSettingChange(
-                            "numberOfRedemptions", 
-                            "value", 
-                            parseInt(e.target.value) || 0
-                          )}
+                        <Input
+                          id="numberOfRedemptions"
+                          type="number"
+                          min="0"
+                          value={conditionSettings.numberOfRedemptions.value}
+                          onChange={(e) => handleConditionSettingChange('numberOfRedemptions', 'value', parseInt(e.target.value))}
+                          disabled={!conditionSettings.numberOfRedemptions.enabled}
+                          className="rounded-md"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
                           Customer qualifies after redeeming this many rewards
@@ -1513,13 +1512,17 @@ export default function MembershipsPage() {
             </div>
             
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              <Button 
+                variant="outline" 
+                onClick={() => setIsEditDialogOpen(false)}
+                className="rounded-md shadow-sm border-0 ring-1 ring-gray-200 hover:bg-gray-50 h-9"
+              >
                 Cancel
               </Button>
               <Button 
                 type="submit" 
                 onClick={handleSaveMembership}
-                className="bg-[#007AFF] hover:bg-[#0071e3] text-white"
+                className="bg-[#007AFF] hover:bg-[#0071e3] text-white rounded-md shadow-sm h-9"
               >
                 {selectedMembership ? "Save Changes" : "Create Tier"}
               </Button>
@@ -1529,7 +1532,7 @@ export default function MembershipsPage() {
         
         {/* Delete Confirmation Dialog */}
         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <DialogContent className="sm:max-w-md max-h-[97vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-md max-h-[97vh] overflow-y-auto rounded-md border-0 shadow-lg">
             <DialogHeader>
               <DialogTitle>Delete Membership Tier</DialogTitle>
               <DialogDescription>
@@ -1539,7 +1542,7 @@ export default function MembershipsPage() {
             </DialogHeader>
             
             {selectedMembership?.customerCount && selectedMembership.customerCount > 0 ? (
-              <Alert variant="destructive" className="rounded-sm">
+              <Alert variant="destructive" className="rounded-md">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Cannot Delete</AlertTitle>
                 <AlertDescription>
@@ -1549,12 +1552,15 @@ export default function MembershipsPage() {
               </Alert>
             ) : (
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+                <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}
+                  className="rounded-md shadow-sm border-0 ring-1 ring-gray-200 hover:bg-gray-50 h-9"
+                >
                   Cancel
                 </Button>
                 <Button 
                   variant="destructive" 
                   onClick={handleDeleteMembership}
+                  className="rounded-md shadow-sm h-9"
                 >
                   Delete
                 </Button>

@@ -1016,7 +1016,7 @@ export default function ActivityPage() {
 
   return (
     <PageTransition>
-      <div className="p-6">
+      <div className="p-6 py-4">
         <PageHeader
           title="Activity"
           subtitle="Track transactions, redemptions, and sales activity"
@@ -1069,10 +1069,65 @@ export default function ActivityPage() {
                 </TabsTrigger>
               </TabsList>
               
-              <div className="flex items-center justify-between mb-4">
-                <div></div>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4 border-b pb-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button 
+                    variant={dateFilter === "today" ? "secondary" : "outline"} 
+                    size="sm"
+                    onClick={() => setDateFilter("today")}
+                    className="rounded-md"
+                  >
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Today
+                  </Button>
+                  <Button 
+                    variant={dateFilter === "yesterday" ? "secondary" : "outline"} 
+                    size="sm"
+                    onClick={() => setDateFilter("yesterday")}
+                    className="rounded-md"
+                  >
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Yesterday
+                  </Button>
+                  <Button 
+                    variant={dateFilter === "thisWeek" ? "secondary" : "outline"} 
+                    size="sm"
+                    onClick={() => setDateFilter("thisWeek")}
+                    className="rounded-md"
+                  >
+                    <Calendar className="h-4 w-4 mr-2" />
+                    This Week
+                  </Button>
+                  <Button 
+                    variant={dateFilter === "lastWeek" ? "secondary" : "outline"} 
+                    size="sm"
+                    onClick={() => setDateFilter("lastWeek")}
+                    className="rounded-md"
+                  >
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Last Week
+                  </Button>
+                  <Button 
+                    variant={dateFilter === "thisMonth" ? "secondary" : "outline"} 
+                    size="sm"
+                    onClick={() => setDateFilter("thisMonth")}
+                    className="rounded-md"
+                  >
+                    <Calendar className="h-4 w-4 mr-2" />
+                    This Month
+                  </Button>
+                  <Button 
+                    variant={dateFilter === "all" ? "secondary" : "outline"} 
+                    size="sm"
+                    onClick={() => setDateFilter("all")}
+                    className="rounded-md"
+                  >
+                    <Calendar className="h-4 w-4 mr-2" />
+                    All Time
+                  </Button>
+                </div>
                 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 mt-2 md:mt-0">
                   <div className="relative w-[250px]">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -1288,65 +1343,8 @@ export default function ActivityPage() {
                 </div>
               </div>
               
-              <div className="flex flex-wrap items-center gap-2 mb-4 border-b pb-4">
-                <Button 
-                  variant={dateFilter === "today" ? "secondary" : "outline"} 
-                  size="sm"
-                  onClick={() => setDateFilter("today")}
-                  className="rounded-md"
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Today
-                </Button>
-                <Button 
-                  variant={dateFilter === "yesterday" ? "secondary" : "outline"} 
-                  size="sm"
-                  onClick={() => setDateFilter("yesterday")}
-                  className="rounded-md"
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Yesterday
-                </Button>
-                <Button 
-                  variant={dateFilter === "thisWeek" ? "secondary" : "outline"} 
-                  size="sm"
-                  onClick={() => setDateFilter("thisWeek")}
-                  className="rounded-md"
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  This Week
-                </Button>
-                <Button 
-                  variant={dateFilter === "lastWeek" ? "secondary" : "outline"} 
-                  size="sm"
-                  onClick={() => setDateFilter("lastWeek")}
-                  className="rounded-md"
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Last Week
-                </Button>
-                <Button 
-                  variant={dateFilter === "thisMonth" ? "secondary" : "outline"} 
-                  size="sm"
-                  onClick={() => setDateFilter("thisMonth")}
-                  className="rounded-md"
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  This Month
-                </Button>
-                <Button 
-                  variant={dateFilter === "all" ? "secondary" : "outline"} 
-                  size="sm"
-                  onClick={() => setDateFilter("all")}
-                  className="rounded-md"
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  All Time
-                </Button>
-              </div>
-              
               <TabsContent value="all" className="space-y-4">
-                <Card>
+                <Card className="rounded-lg border border-gray-200">
                   <CardHeader className="py-4">
                     <CardTitle>All Activity</CardTitle>
                     <CardDescription>
@@ -1501,7 +1499,7 @@ export default function ActivityPage() {
               </TabsContent>
               
               <TabsContent value="transactions" className="space-y-4">
-                <Card>
+                <Card className="rounded-lg border border-gray-200">
                   <CardHeader className="py-4">
                         <CardTitle>Transactions</CardTitle>
                     <CardDescription>
@@ -1683,7 +1681,7 @@ export default function ActivityPage() {
               </TabsContent>
               
                   <TabsContent value="redemptions" className="space-y-4">
-                <Card>
+                <Card className="rounded-lg border border-gray-200">
                       <CardHeader className="py-4">
                         <CardTitle>Redemptions</CardTitle>
                     <CardDescription>
@@ -1859,7 +1857,7 @@ export default function ActivityPage() {
               </TabsContent>
 
               <TabsContent value="sales" className="space-y-4">
-                <Card>
+                <Card className="rounded-lg border border-gray-200">
                   <CardHeader className="pb-3">
                     <CardTitle>Square Sales</CardTitle>
                     <CardDescription>
@@ -1950,7 +1948,7 @@ export default function ActivityPage() {
               </TabsContent>
 
               <TabsContent value="lightspeed_sales" className="space-y-4">
-                <Card>
+                <Card className="rounded-lg border border-gray-200">
                   <CardHeader className="pb-3">
                     <CardTitle>Lightspeed Sales</CardTitle>
                     <CardDescription>

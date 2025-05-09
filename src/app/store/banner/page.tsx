@@ -592,7 +592,7 @@ export default function BannerPage() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-6 py-4">
 
       <PageHeader
         title="Banners"
@@ -608,7 +608,7 @@ export default function BannerPage() {
           </Button>
           <Button 
             variant="outline" 
-            className="h-9 gap-2 rounded-md"
+            className="h-9 gap-2 rounded-lg"
             onClick={handleExportPDF}
           >
             <Download className="h-4 w-4" />
@@ -1361,7 +1361,7 @@ export default function BannerPage() {
             />
             
             {/* Banner Library Section - Sleeker design */}
-            <div className="bg-white rounded-xl shadow-sm border p-6">
+            <div className="bg-white rounded-lg shadow-sm border p-6">
               <div className="flex justify-between items-center mb-5">
                 <h3 className="text-lg font-medium flex items-center">
                   <Library className="h-5 w-5 mr-2 text-gray-500" />

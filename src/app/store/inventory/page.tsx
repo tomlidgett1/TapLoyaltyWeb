@@ -883,7 +883,7 @@ export default function InventoryPage() {
 
   return (
     <PageTransition>
-      <div className="p-6">
+      <div className="p-6 py-4">
         <PageHeader
           title="Inventory"
           subtitle="Manage your product inventory from Square"

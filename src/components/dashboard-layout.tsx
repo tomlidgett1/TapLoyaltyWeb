@@ -42,6 +42,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { SendBroadcastSheet } from "@/components/send-broadcast-sheet"
+import { IntroductoryRewardSheet } from "@/components/introductory-reward-sheet"
 
 // Custom scrollbar styles
 const scrollbarStyles = `
@@ -138,6 +139,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [showRewardGenerator, setShowRewardGenerator] = useState(false)
   const [rewardGeneratorLoading, setRewardGeneratorLoading] = useState(false)
   const [generatedReward, setGeneratedReward] = useState<any>(null)
+  
+  const [showIntroRewardSheet, setShowIntroRewardSheet] = useState(false)
   
   useEffect(() => {
     // Check if current path is onboarding
@@ -557,7 +560,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <style jsx global>{scrollbarStyles}</style>
         
         {/* Top Header */}
-        <header className="h-16 flex-shrink-0 flex items-center justify-between px-2">
+        <header className="h-16 flex items-center justify-between px-2">
           <div className="flex items-center gap-4">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -591,6 +594,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <DropdownMenuItem onClick={() => setShowPointsRuleDialog(true)}>
                   <Zap className="h-4 w-4 mr-2" />
                   New Points Rule
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowIntroRewardSheet(true)}>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  <span>Introductory Reward</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1723,6 +1730,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </div>
         </SheetContent>
       </Sheet>
+      
+      {/* Add the IntroductoryRewardSheet component */}
+      <IntroductoryRewardSheet
+        open={showIntroRewardSheet}
+        onOpenChange={setShowIntroRewardSheet}
+      />
     </div>
   )
 } 

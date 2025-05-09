@@ -28,6 +28,8 @@ import { Label } from "@/components/ui/label"
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { toast } from '@/components/ui/use-toast'
+import { PageHeader } from '@/components/page-header'
+import { PageTransition } from '@/components/page-transition'
 
 // Import our new components
 import OpenBankingConnectCard from '@/components/financials/OpenBankingConnectCard'
@@ -956,183 +958,181 @@ export default function FinancialsPage() {
   };
   
   return (
-    <div className="min-h-screen bg-white">
-      <div className="p-6">
-        {/* Header with Last Updated and Settings */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Financial Insights</h1>
-            <p className="text-gray-500 text-sm mt-1">
-              {error ? 
-                <span className="text-red-500">Error: {error}</span> : 
-                `Last updated: ${lastUpdated || new Date().toLocaleString()}`
-              }
-            </p>
-          </div>
+    <PageTransition>
+      <div className="min-h-screen bg-white">
+        <div className="p-6 py-4">
+          {/* Header with Last Updated and Settings */}
+          <PageHeader
+            title="Financial Insights"
+            subtitle={error ? 
+              `Error: ${error}` : 
+              `Last updated: ${lastUpdated || new Date().toLocaleString()}`
+            }
+          >
+            <div className="flex items-center gap-3">
+              <Select 
+                defaultValue={selectedCurrency}
+                onValueChange={(value) => setSelectedCurrency(value)}
+              >
+                <SelectTrigger className="w-[120px] border-0 ring-1 ring-gray-200 bg-white shadow-sm rounded-xl">
+                  <SelectValue placeholder="Currency" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Currencies</SelectLabel>
+                    <SelectItem value="USD">USD ($)</SelectItem>
+                    <SelectItem value="EUR">EUR (€)</SelectItem>
+                    <SelectItem value="GBP">GBP (£)</SelectItem>
+                    <SelectItem value="CAD">CAD ($)</SelectItem>
+                    <SelectItem value="AUD">AUD ($)</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              
+              <Button 
+                variant="outline" 
+                className="border-0 ring-1 ring-gray-200 bg-white text-gray-700 shadow-sm rounded-xl"
+                onClick={refreshFinancialData}
+                disabled={isRefreshing}
+              >
+                {isRefreshing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Refreshing...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCcw className="h-4 w-4 mr-2" />
+                    Refresh
+                  </>
+                )}
+              </Button>
+              
+              <Button variant="ghost" size="icon" className="text-gray-500">
+                <Settings className="h-5 w-5" />
+              </Button>
+            </div>
+          </PageHeader>
 
-          <div className="flex items-center gap-3 mt-4 md:mt-0">
-            <Select 
-              defaultValue={selectedCurrency}
-              onValueChange={(value) => setSelectedCurrency(value)}
-            >
-              <SelectTrigger className="w-[120px] border-0 ring-1 ring-gray-200 bg-white shadow-sm rounded-xl">
-                <SelectValue placeholder="Currency" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectLabel>Currencies</SelectLabel>
-                  <SelectItem value="USD">USD ($)</SelectItem>
-                  <SelectItem value="EUR">EUR (€)</SelectItem>
-                  <SelectItem value="GBP">GBP (£)</SelectItem>
-                  <SelectItem value="CAD">CAD ($)</SelectItem>
-                  <SelectItem value="AUD">AUD ($)</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            
-            <Button 
-              variant="outline" 
-              className="border-0 ring-1 ring-gray-200 bg-white text-gray-700 shadow-sm rounded-xl"
-              onClick={refreshFinancialData}
-              disabled={isRefreshing}
-            >
-              {isRefreshing ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Refreshing...
-                </>
-              ) : (
-                <>
-                  <RefreshCcw className="h-4 w-4 mr-2" />
-                  Refresh
-                </>
-              )}
-            </Button>
-            
-            <Button variant="ghost" size="icon" className="text-gray-500">
-              <Settings className="h-5 w-5" />
-            </Button>
+          {/* Navigation Tabs */}
+          <div className="border-b border-gray-100 mb-8">
+            <nav className="flex space-x-8 -mb-px">
+              <button
+                onClick={() => setActiveSection('overview')}
+                className={`py-4 px-1 border-b-2 text-sm font-medium ${
+                  activeSection === 'overview'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Overview
+              </button>
+              <button
+                onClick={() => setActiveSection('expenses')}
+                className={`py-4 px-1 border-b-2 text-sm font-medium ${
+                  activeSection === 'expenses'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Expenses
+              </button>
+              <button
+                onClick={() => setActiveSection('benchmarks')}
+                className={`py-4 px-1 border-b-2 text-sm font-medium ${
+                  activeSection === 'benchmarks'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Benchmarks
+              </button>
+              <button
+                onClick={() => setActiveSection('transactions')}
+                className={`py-4 px-1 border-b-2 text-sm font-medium ${
+                  activeSection === 'transactions'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Transactions
+              </button>
+            </nav>
           </div>
-        </div>
-
-        {/* Navigation Tabs */}
-        <div className="border-b border-gray-100 mb-8">
-          <nav className="flex space-x-8 -mb-px">
-            <button
-              onClick={() => setActiveSection('overview')}
-              className={`py-4 px-1 border-b-2 text-sm font-medium ${
-                activeSection === 'overview'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Overview
-            </button>
-            <button
-              onClick={() => setActiveSection('expenses')}
-              className={`py-4 px-1 border-b-2 text-sm font-medium ${
-                activeSection === 'expenses'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Expenses
-            </button>
-            <button
-              onClick={() => setActiveSection('benchmarks')}
-              className={`py-4 px-1 border-b-2 text-sm font-medium ${
-                activeSection === 'benchmarks'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Benchmarks
-            </button>
-            <button
-              onClick={() => setActiveSection('transactions')}
-              className={`py-4 px-1 border-b-2 text-sm font-medium ${
-                activeSection === 'transactions'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Transactions
-            </button>
-          </nav>
+          
+          {/* Render the active section */}
+          {renderActiveSection()}
         </div>
         
-        {/* Render the active section */}
-        {renderActiveSection()}
+        {/* Bank Connection Dialog */}
+        <Dialog open={connectDialogOpen} onOpenChange={setConnectDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Connect Bank Account</DialogTitle>
+              <DialogDescription>
+                Enter your details to securely connect your bank account.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="firstName" className="text-right">
+                  First Name
+                </Label>
+                <Input
+                  id="firstName"
+                  name="firstName"
+                  value={bankConnectForm.firstName}
+                  onChange={handleFormChange}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="email" className="text-right">
+                  Email
+                </Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={bankConnectForm.email}
+                  onChange={handleFormChange}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="mobile" className="text-right">
+                  Mobile
+                </Label>
+                <Input
+                  id="mobile"
+                  name="mobile"
+                  value={bankConnectForm.mobile}
+                  onChange={handleFormChange}
+                  className="col-span-3"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConnectDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleConnectBank}
+                disabled={connectBankLoading}
+              >
+                {connectBankLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  'Connect'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
-      
-      {/* Bank Connection Dialog */}
-      <Dialog open={connectDialogOpen} onOpenChange={setConnectDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Connect Bank Account</DialogTitle>
-            <DialogDescription>
-              Enter your details to securely connect your bank account.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="firstName" className="text-right">
-                First Name
-              </Label>
-              <Input
-                id="firstName"
-                name="firstName"
-                value={bankConnectForm.firstName}
-                onChange={handleFormChange}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="email" className="text-right">
-                Email
-              </Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                value={bankConnectForm.email}
-                onChange={handleFormChange}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="mobile" className="text-right">
-                Mobile
-              </Label>
-              <Input
-                id="mobile"
-                name="mobile"
-                value={bankConnectForm.mobile}
-                onChange={handleFormChange}
-                className="col-span-3"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConnectDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleConnectBank}
-              disabled={connectBankLoading}
-            >
-              {connectBankLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Connecting...
-                </>
-              ) : (
-                'Connect'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+    </PageTransition>
   )
 } 

@@ -529,7 +529,7 @@ export default function RewardLibraryPage() {
 
   return (
     <PageTransition>
-      <div className="p-6">
+      <div className="p-6 py-4">
         <PageHeader
           title="Rewards Library"
           subtitle="Browse and create rewards from pre-made templates"

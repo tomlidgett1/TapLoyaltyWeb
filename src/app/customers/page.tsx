@@ -201,7 +201,7 @@ export default function CustomersPage() {
 
   return (
     <PageTransition>
-      <div className="p-6">
+      <div className="p-6 py-4">
         <div>
           <PageHeader 
             title="Customers" 

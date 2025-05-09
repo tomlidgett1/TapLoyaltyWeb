@@ -60,6 +60,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Separator } from "@/components/ui/separator"
+import { PageHeader } from "@/components/page-header"
 
 // Types
 type RuleCategory = "all" | "active" | "inactive"
@@ -447,28 +449,24 @@ export default function PointsRulesPage() {
   };
 
   return (
-    <div className="p-6">
+    <div className="p-6 py-4">
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Points Rules</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Manage how customers earn and redeem points
-            </p>
-          </div>
-          
+        <PageHeader
+          title="Points Rules"
+          subtitle="Manage how customers earn and redeem points"
+        >
           <Button 
-            className="h-9 gap-2 rounded-md"
+            className="h-9 gap-2 rounded-lg"
             onClick={() => setCreateDialogOpen(true)}
           >
             <Plus className="h-4 w-4" />
             Create Rule
           </Button>
-        </div>
+        </PageHeader>
         
         <Tabs defaultValue="all" onValueChange={(value) => setRuleCategory(value as RuleCategory)}>
           <div className="flex items-center justify-between mb-4">
-            <TabsList className="h-9 rounded-md">
+            <TabsList className="h-9 rounded-lg">
               <TabsTrigger value="all" className="flex items-center gap-1.5">
                 <ListFilter className="h-4 w-4" />
                 All Rules
@@ -490,7 +488,7 @@ export default function PointsRulesPage() {
                     variant="outline" 
                     size="sm" 
                     onClick={toggleSelectionMode}
-                    className="h-9 rounded-md"
+                    className="h-9 rounded-lg"
                   >
                     Cancel
                   </Button>
@@ -500,7 +498,7 @@ export default function PointsRulesPage() {
                       variant="destructive" 
                       size="sm" 
                       onClick={confirmBulkDelete}
-                      className="h-9 rounded-md"
+                      className="h-9 rounded-lg"
                     >
                       <Trash className="h-4 w-4 mr-2" />
                       Delete Selected ({selectedRules.length})
@@ -512,7 +510,7 @@ export default function PointsRulesPage() {
                   variant="outline" 
                   size="sm" 
                   onClick={toggleSelectionMode}
-                  className="h-9 rounded-md"
+                  className="h-9 rounded-lg"
                 >
                   <Check className="h-4 w-4 mr-2" />
                   Select
@@ -524,7 +522,7 @@ export default function PointsRulesPage() {
                 <Input 
                   type="search" 
                   placeholder="Search rules..." 
-                  className="w-[250px] pl-9 h-9 rounded-md"
+                  className="w-[250px] pl-9 h-9 rounded-lg"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -596,7 +594,7 @@ export default function PointsRulesPage() {
                             </p>
                             {!searchQuery && (
                               <Button 
-                                className="mt-4 h-9 gap-2 rounded-md"
+                                className="mt-4 h-9 gap-2 rounded-lg"
                                 onClick={() => setCreateDialogOpen(true)}
                               >
                                 <Plus className="h-4 w-4" />
@@ -682,7 +680,7 @@ export default function PointsRulesPage() {
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline" className={cn(
-                              "rounded-md",
+                              "rounded-lg",
                               rule.active ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-700 border-gray-200"
                             )}>
                               {rule.active ? "Active" : "Inactive"}
@@ -757,7 +755,7 @@ export default function PointsRulesPage() {
                     </p>
                     {!searchQuery && (
                       <Button 
-                        className="mt-4 h-9 gap-2 rounded-md"
+                        className="mt-4 h-9 gap-2 rounded-lg"
                         onClick={() => setCreateDialogOpen(true)}
                       >
                         <Plus className="h-4 w-4" />
@@ -771,7 +769,7 @@ export default function PointsRulesPage() {
                       <CardHeader className="p-4 pb-0">
                         <div className="flex justify-between items-start">
                           <Badge variant="outline" className={cn(
-                            "rounded-md mb-2",
+                            "rounded-lg mb-2",
                             getRuleType(rule) === "purchase" && "bg-green-50 text-green-700 border-green-200",
                             getRuleType(rule) === "referral" && "bg-blue-50 text-blue-700 border-blue-200",
                             getRuleType(rule) === "engagement" && "bg-purple-50 text-purple-700 border-purple-200"
@@ -783,7 +781,7 @@ export default function PointsRulesPage() {
                           </Badge>
                           
                           <Badge variant="outline" className={cn(
-                            "rounded-md",
+                            "rounded-lg",
                             rule.active ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-700 border-gray-200"
                           )}>
                             {rule.active ? "Active" : "Inactive"}
@@ -812,18 +810,22 @@ export default function PointsRulesPage() {
                           </div>
                         </div>
                         
-                        {rule.conditions && rule.conditions.minPurchase && (
+                        {/* Check if there's a condition with minPurchase property */}
+                        {rule.conditions && rule.conditions.some(c => c.type === 'minimumSpend') && (
                           <div className="mt-3">
                             <p className="text-sm text-muted-foreground mb-1">
-                              Min. Purchase: ${rule.conditions.minPurchase}
+                              Min. Purchase: ${rule.conditions.find(c => c.type === 'minimumSpend')?.amount || 0}
                             </p>
                           </div>
                         )}
                         
-                        {rule.conditions && rule.conditions.frequency && (
+                        {/* Check if there's a condition with a frequency-related type */}
+                        {rule.conditions && rule.conditions.some(c => c.type === 'visitNumber' || c.type === 'daysOfWeek') && (
                           <div className="mt-3">
                             <p className="text-sm text-muted-foreground mb-1">
-                              Frequency: {rule.conditions.frequency}
+                              Frequency: {rule.conditions.find(c => c.type === 'visitNumber')?.number || 
+                                         rule.conditions.find(c => c.type === 'daysOfWeek')?.days?.length + ' days/week' || 
+                                         'Custom'}
                             </p>
                           </div>
                         )}
@@ -831,7 +833,7 @@ export default function PointsRulesPage() {
                       <CardFooter className="p-4 pt-0 flex justify-between">
                         <Button 
                           variant="outline" 
-                          className="h-9 rounded-md"
+                          className="h-9 rounded-lg"
                           onClick={() => window.location.href = `/store/rules/${rule.id}`}
                         >
                           View Details
@@ -839,11 +841,11 @@ export default function PointsRulesPage() {
                         
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-9 w-9 p-0 rounded-md">
+                            <Button variant="ghost" className="h-9 w-9 p-0 rounded-lg">
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="rounded-md">
+                          <DropdownMenuContent align="end" className="rounded-lg">
                             <DropdownMenuItem onClick={() => window.location.href = `/store/rules/${rule.id}/edit`}>
                               <Edit className="h-4 w-4 mr-2" />
                               Edit
@@ -889,10 +891,10 @@ export default function PointsRulesPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-md">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-lg">Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleDeleteRule}
-              className="bg-red-600 hover:bg-red-700 rounded-md"
+              className="bg-red-600 hover:bg-red-700 rounded-lg"
             >
               Delete
             </AlertDialogAction>
@@ -909,10 +911,10 @@ export default function PointsRulesPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-md">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-lg">Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleBulkDelete}
-              className="bg-red-600 hover:bg-red-700 rounded-md"
+              className="bg-red-600 hover:bg-red-700 rounded-lg"
             >
               Delete {selectedRules.length} Rules
             </AlertDialogAction>

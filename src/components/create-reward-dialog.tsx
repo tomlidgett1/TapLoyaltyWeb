@@ -1699,7 +1699,7 @@ export function CreateRewardDialog({
         }
       `}</style>
       <DialogContent 
-        className="sm:max-w-[800px] h-[97vh] flex flex-col dialog-content"
+        className="sm:max-w-[800px] h-[97vh] flex flex-col dialog-content rounded-md"
       >
         <DialogHeader className="space-y-4">
           <div className="flex items-start justify-between">
@@ -1856,7 +1856,7 @@ export function CreateRewardDialog({
                 
                 <div className="space-y-6">
                   {/* Core Details Card */}
-                  <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3">
                       <div className="flex items-center gap-2">
                         <FileText className="h-5 w-5 text-blue-600" />
@@ -1902,7 +1902,7 @@ export function CreateRewardDialog({
                   </div>
                   
                   {/* Reward Type and Points Card */}
-                  <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3">
                       <div className="flex items-center gap-2">
                         <ShoppingBag className="h-5 w-5 text-blue-600" />
@@ -2138,7 +2138,7 @@ export function CreateRewardDialog({
                   </div>
                   
                   {/* Redemption PIN Card */}
-                  <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Lock className="h-5 w-5 text-blue-600" />
@@ -2178,7 +2178,7 @@ export function CreateRewardDialog({
 
                 <div className="space-y-6">
                   {/* Visibility Type Card */}
-                  <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Eye className="h-5 w-5 text-blue-600" />
@@ -2436,7 +2436,7 @@ export function CreateRewardDialog({
                   </div>
                   
                   {/* Progressive Unlock Card */}
-                  <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Lock className="h-5 w-5 text-blue-600" />
@@ -2525,7 +2525,7 @@ export function CreateRewardDialog({
                   </div>
                   
                   {/* Active Period Card */}
-                  <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <CalendarIcon className="h-5 w-5 text-blue-600" />
@@ -2648,7 +2648,7 @@ export function CreateRewardDialog({
                 </div>
                   
                 {/* New Customer Card - Always visible at the top */}
-                <div className="bg-white border rounded-lg shadow-sm mb-6 overflow-hidden">
+                <div className="bg-white border rounded-md shadow-sm mb-6 overflow-hidden">
                   <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <UserPlus className="h-5 w-5 text-blue-600" />
@@ -2715,7 +2715,7 @@ export function CreateRewardDialog({
 
                 <div className={`space-y-6 ${formData.rewardVisibility === 'new' ? 'opacity-50 pointer-events-none' : ''}`}>
                   {/* Transaction Card */}
-                  <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <ShoppingBag className="h-5 w-5 text-blue-600" />
@@ -2789,7 +2789,7 @@ export function CreateRewardDialog({
                   </div>
                   
                   {/* Spending Card */}
-                  <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <DollarSign className="h-5 w-5 text-blue-600" />
@@ -2863,7 +2863,7 @@ export function CreateRewardDialog({
                   </div>
                   
                   {/* Time Requirements Card */}
-                  <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Clock className="h-5 w-5 text-blue-600" />
@@ -2937,7 +2937,7 @@ export function CreateRewardDialog({
                   </div>
 
                   {/* Membership Level Card */}
-                  <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Award className="h-5 w-5 text-blue-600" />
@@ -3018,7 +3018,7 @@ export function CreateRewardDialog({
 
                 <div className="space-y-6">
                   {/* Redemption Limits Card */}
-                  <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3">
                       <div className="flex items-center gap-2">
                         <ListChecks className="h-5 w-5 text-blue-600" />
@@ -3080,7 +3080,7 @@ export function CreateRewardDialog({
                   </div>
                   
                   {/* Time Restrictions Card */}
-                  <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Clock className="h-5 w-5 text-blue-600" />
@@ -3219,7 +3219,7 @@ export function CreateRewardDialog({
                 
                 <div className="space-y-6">
                   {/* Basic Details Review Card */}
-                  <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                         <FileText className="h-5 w-5 text-blue-600" />
@@ -3324,7 +3324,7 @@ export function CreateRewardDialog({
                 </div>
 
                   {/* Visibility Review Card */}
-                  <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                         <Eye className="h-5 w-5 text-blue-600" />
@@ -3393,7 +3393,7 @@ export function CreateRewardDialog({
                 </div>
 
                   {/* Conditions Review Card */}
-                  <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                         <ListChecks className="h-5 w-5 text-blue-600" />
@@ -3506,7 +3506,7 @@ export function CreateRewardDialog({
                   </div>
                   
                   {/* Limitations Review Card */}
-                  <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                     <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                         <AlertTriangle className="h-5 w-5 text-blue-600" />

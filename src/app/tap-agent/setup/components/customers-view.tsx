@@ -44,7 +44,9 @@ import {
   CheckCircle2,
   X,
   HelpCircle,
-  Image
+  Image,
+  Eye,
+  MousePointerClick
 } from "lucide-react"
 import { format, formatDistanceToNow } from "date-fns"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -62,6 +64,12 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Progress } from "@/components/ui/progress"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 // Format date helper function (global scope)
 const formatDate = (timestamp: any) => {
@@ -147,20 +155,44 @@ function MetricCard({ icon, value, label }: MetricCardProps) {
   );
 }
 
+interface RewardActivity {
+  id: string;
+  rewardName: string;
+  rewardSummary: string;
+  rewardType: string;
+  pointsCost: number;
+  merchantId: string;
+  reasoning?: string;
+  rewardReason?: string;
+  expiryDate?: any;
+  createdAt?: any;
+  estrewardcost?: number;
+  // Keep these for backward compatibility
+  description?: string;
+  type?: string;
+  isActive?: boolean;
+  hasBeenRedeemedByThisCustomer?: boolean;
+  reason?: string;
+}
+
 interface BannerActivity {
-  bannerId: string | undefined;
-  title: string | undefined;
-  description: string | undefined;
-  color: string | undefined;
+  id: string;
+  title: string;
+  description: string;
+  color: string;
   secondaryColor?: string;
-  style: string | undefined;
-  isActive: boolean | undefined;
+  style: string;
+  isActive: boolean;
   createdAt: any;
+  expiresAt?: any;
   bannerAction?: string;
   buttonText?: string;
   merchantId?: string;
   merchantName?: string;
   type?: string;
+  message?: string;
+  // Keep these for backward compatibility
+  bannerId?: string;
 }
 
 interface WeeklyAgentActivity {
@@ -171,8 +203,11 @@ interface WeeklyAgentActivity {
   customerId?: string;
   customerName?: string;
   cohort?: string;
+  segments?: string[];
   rewards?: RewardActivity[];
   banners?: BannerActivity[];
+  rewardsCount?: number;
+  bannersCount?: number;
   pushNotifications?: PushNotificationActivity[];
   createdAt?: any;
 }
@@ -1221,16 +1256,46 @@ function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () =
   // Add useEffect to fetch weekly agent activities
   useEffect(() => {
     async function fetchWeeklyAgentActivities() {
-      if (!user?.uid || !customer.customerId) return;
+      if (!user?.uid || !customer.customerId) {
+        console.log("Missing user ID or customer ID", { userId: user?.uid, customerId: customer.customerId });
+        return;
+      }
       
       setLoadingAgentActivities(true);
       
       try {
-        // Fetch weekly agent activities from the Firestore path: merchants/{merchantId}/customers/{customerId}/weeklyAgentActivity
-        const weeklyActivitiesRef = collection(db, 'merchants', user.uid, 'customers', customer.customerId, 'weeklyAgentActivity');
+        console.log("Fetching weekly agent activities with path:", {
+          merchantId: user.uid,
+          customerId: customer.customerId,
+          path: `merchants/${user.uid}/customerAgentActivity/${customer.customerId}/weeks`
+        });
+        
+        // Try direct fetch of the example document
+        try {
+          // Example path: /merchants/fxOAb7aPMXPVRPjOvyqaeevydnZ2/customerAgentActivity/ZU6nlhrznNgyR3E3OvBOiMXgXur2/weeks/2025-05-05
+          const exampleDocRef = firestoreDoc(db, 'merchants', 'fxOAb7aPMXPVRPjOvyqaeevydnZ2', 'customerAgentActivity', 'ZU6nlhrznNgyR3E3OvBOiMXgXur2', 'weeks', '2025-05-05');
+          const exampleDocSnap = await getDoc(exampleDocRef);
+          
+          console.log("Example document check:", {
+            exists: exampleDocSnap.exists(),
+            data: exampleDocSnap.exists() ? exampleDocSnap.data() : null
+          });
+        } catch (exampleError) {
+          console.error("Error fetching example document:", exampleError);
+        }
+        
+        // Fetch weekly agent activities from the new Firestore path: merchants/{merchantId}/customerAgentActivity/{customerId}/weeks
+        const weeklyActivitiesRef = collection(db, 'merchants', user.uid, 'customerAgentActivity', customer.customerId, 'weeks');
         const weeklyActivitiesSnap = await getDocs(weeklyActivitiesRef);
         
+        console.log("Weekly activities query result:", {
+          empty: weeklyActivitiesSnap.empty,
+          size: weeklyActivitiesSnap.size,
+          docs: weeklyActivitiesSnap.docs.map(doc => doc.id)
+        });
+        
         if (weeklyActivitiesSnap.empty) {
+          console.log("No weekly activities found");
           setWeeklyAgentActivities([]);
           setLoadingAgentActivities(false);
           return;
@@ -1239,6 +1304,7 @@ function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () =
         // Map the weekly activities data
         const activitiesData = weeklyActivitiesSnap.docs.map(doc => {
           const data = doc.data();
+          console.log(`Data for week ${doc.id}:`, data);
           return {
             weekId: doc.id,
             ...data
@@ -1248,7 +1314,7 @@ function CustomerDetail({ customer, onBack }: { customer: Customer, onBack: () =
           return b.weekId.localeCompare(a.weekId);
         });
         
-        console.log("Weekly agent activities fetched:", activitiesData);
+        console.log("Weekly agent activities processed:", activitiesData);
         setWeeklyAgentActivities(activitiesData);
       } catch (error) {
         console.error('Error fetching weekly agent activities:', error);
@@ -1549,17 +1615,6 @@ function CohortBadge({ cohort }: { cohort?: string }) {
   )
 }
 
-interface RewardActivity {
-  rewardId: string;
-  rewardName: string;
-  description: string;
-  type: string;
-  pointsCost: number;
-  isActive: boolean;
-  hasBeenRedeemedByThisCustomer: boolean;
-  reason?: string; // Adding optional reason property to fix linter errors
-}
-
 interface PushNotificationActivity {
   content?: string;
   timestamp?: any;
@@ -1575,444 +1630,473 @@ interface AgentTabProps {
 }
 
 function AgentTab({ customer, weeklyAgentActivities, loading }: AgentTabProps) {
-  const [activeWeekTab, setActiveWeekTab] = useState<'current' | 'previous'>('current');
+  const { user } = useAuth();
+  const [activeWeekTab, setActiveWeekTab] = useState<string>('');
+  const [isFetchingData, setIsFetchingData] = useState(true);
+  const [customerData, setCustomerData] = useState<any>(null);
+  const [expandedReasonings, setExpandedReasonings] = useState<{[key: string]: boolean}>({});
+  const [availableWeeks, setAvailableWeeks] = useState<Array<{weekId: string, label: string}>>([]);
+  const [redemptions, setRedemptions] = useState<{[rewardId: string]: {redemptionId: string, redemptionDate: any}}>({});
+  const [bannerStats, setBannerStats] = useState<{[bannerId: string]: {impressions: number, clicks: number}}>({});
+
+  // Toggle reasoning visibility
+  const toggleReasoning = (rewardId: string) => {
+    setExpandedReasonings(prev => ({
+      ...prev,
+      [rewardId]: !prev[rewardId]
+    }));
+  };
+
+  // Function to format week ID for display
+  const formatWeekLabel = (weekId: string) => {
+    try {
+      const [year, month, day] = weekId.split('-').map(Number);
+      if (isNaN(year) || isNaN(month) || isNaN(day)) {
+        return weekId; // Return as is if not a valid date format
+      }
+      const date = new Date(year, month - 1, day);
+      return format(date, 'MMM d, yyyy');
+    } catch (error) {
+      return weekId;
+    }
+  };
+
+  // Handle week change
+  const handleWeekChange = (weekId: string) => {
+    setActiveWeekTab(weekId);
+    
+    // Find the data for the selected week
+    const selectedWeekData = weeklyAgentActivities.find(week => week.weekId === weekId);
+    
+    if (selectedWeekData) {
+      setCustomerData(selectedWeekData);
+    }
+  };
+
+  // Function to fetch redemptions for rewards
+  const fetchRedemptions = async () => {
+    if (!user?.uid) return;
+
+    try {
+      // Query redemptions collection for this merchant
+      const redemptionsRef = collection(db, 'merchants', user.uid, 'redemptions');
+      const redemptionsSnap = await getDocs(redemptionsRef);
+      
+      if (redemptionsSnap.empty) return;
+      
+      // Create a mapping of rewardId to redemption data
+      const redemptionsMap: {[rewardId: string]: {redemptionId: string, redemptionDate: any}} = {};
+      
+      redemptionsSnap.docs.forEach(doc => {
+        const redemptionData = doc.data();
+        if (redemptionData.rewardId && redemptionData.customerId === customer?.customerId) {
+          redemptionsMap[redemptionData.rewardId] = {
+            redemptionId: doc.id,
+            redemptionDate: redemptionData.redemptionDate || redemptionData.createdAt
+          };
+        }
+      });
+      
+      console.log("Redemptions found:", redemptionsMap);
+      setRedemptions(redemptionsMap);
+    } catch (error) {
+      console.error("Error fetching redemptions:", error);
+    }
+  };
+
+  // Function to fetch banner stats (impressions and clicks)
+  const fetchBannerStats = async () => {
+    if (!customer?.customerId) return;
+
+    try {
+      // Create a map to store banner stats
+      const statsMap: {[bannerId: string]: {impressions: number, clicks: number}} = {};
+      
+      // Check if customer data has banners
+      if (customerData?.banners && customerData.banners.length > 0) {
+        // For each banner, fetch stats
+        for (const banner of customerData.banners) {
+          if (banner.id) {
+            try {
+              const bannerRef = firestoreDoc(db, 'customers', customer.customerId, 'banners', banner.id);
+              const bannerSnap = await getDoc(bannerRef);
+              
+              if (bannerSnap.exists()) {
+                const bannerData = bannerSnap.data();
+                statsMap[banner.id] = {
+                  impressions: bannerData.impressions || 0,
+                  clicks: bannerData.clicks || 0
+                };
+              }
+            } catch (err) {
+              console.error(`Error fetching stats for banner ${banner.id}:`, err);
+            }
+          }
+        }
+      }
+      
+      console.log("Banner stats found:", statsMap);
+      setBannerStats(statsMap);
+    } catch (error) {
+      console.error("Error fetching banner stats:", error);
+    }
+  };
+
+  console.log("AgentTab render:", {
+    loading,
+    customer: customer?.customerId,
+    weeklyActivitiesCount: weeklyAgentActivities?.length,
+    weeklyActivities: weeklyAgentActivities
+  });
+
+  // Function to fetch data for the specific customer
+  const fetchCustomerData = async () => {
+    setIsFetchingData(true);
+    
+    try {
+      if (!user?.uid || !customer?.customerId) {
+        console.log("Missing user ID or customer ID", { userId: user?.uid, customerId: customer?.customerId });
+        throw new Error("Missing user ID or customer ID");
+      }
+      
+      console.log("Fetching customer-specific data with path:", {
+        merchantId: user.uid,
+        customerId: customer.customerId,
+        path: `merchants/${user.uid}/customerAgentActivity/${customer.customerId}/weeks`
+      });
+      
+      // Fetch weekly agent activities from the customer-specific path
+      const weeklyActivitiesRef = collection(db, 'merchants', user.uid, 'customerAgentActivity', customer.customerId, 'weeks');
+      const weeklyActivitiesSnap = await getDocs(weeklyActivitiesRef);
+      
+      console.log("Customer data query result:", {
+        empty: weeklyActivitiesSnap.empty,
+        size: weeklyActivitiesSnap.size,
+        docs: weeklyActivitiesSnap.docs.map(doc => doc.id)
+      });
+      
+      if (weeklyActivitiesSnap.empty) {
+        console.log("No customer-specific data found");
+        setCustomerData(null);
+        return;
+      }
+      
+      // Map the weekly activities data
+      const activitiesData = weeklyActivitiesSnap.docs.map(doc => {
+        const data = doc.data();
+        console.log(`Data for week ${doc.id}:`, data);
+        return {
+          weekId: doc.id,
+          ...data
+        };
+      }).sort((a, b) => {
+        // Sort by weekId in descending order (most recent first)
+        return b.weekId.localeCompare(a.weekId);
+      });
+      
+      console.log("Customer data processed:", activitiesData);
+      
+      if (activitiesData.length > 0) {
+        // Set available weeks for selection
+        const weeks = activitiesData.map(week => ({
+          weekId: week.weekId,
+          label: formatWeekLabel(week.weekId)
+        }));
+        
+        setAvailableWeeks(weeks);
+        setCustomerData(activitiesData[0]); // Use the most recent week
+        setActiveWeekTab(activitiesData[0].weekId);
+        
+        // Fetch redemptions and banner stats after setting customer data
+        await fetchRedemptions();
+        await fetchBannerStats();
+      } else {
+        console.log("No valid customer data found");
+        setCustomerData(null);
+      }
+    } catch (error) {
+      console.error('Error fetching customer data:', error);
+      setCustomerData(null);
+    } finally {
+      setIsFetchingData(false);
+    }
+  };
+
+  // Effect to fetch banner stats when customer data changes
+  useEffect(() => {
+    if (customerData?.banners && customerData.banners.length > 0) {
+      fetchBannerStats();
+    }
+  }, [customerData]);
+
+  // Fetch data on component mount
+  useEffect(() => {
+    fetchCustomerData();
+  }, [customer?.customerId, user?.uid]);
 
   // Handle loading state
-  if (loading) {
+  if (loading || isFetchingData) {
     return (
-      <div className="py-10 text-center">
-        <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-b-transparent border-gray-900"></div>
-        <p className="mt-2 text-gray-500">Loading agent activity...</p>
+      <div className="py-8 text-center">
+        <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-b-transparent border-gray-900"></div>
+        <p className="mt-2 text-xs text-gray-500">Loading agent activity...</p>
       </div>
     );
   }
 
-  // Determine customer cohort and strategy
-  const customerCohort = customer?.currentCohort?.name || customer?.cohort || 'Unknown';
-  const cohortLower = customerCohort.toLowerCase();
-  
-  // Define strategy based on cohort
-  const getCustomerStrategy = () => {
-    if (cohortLower.includes('new')) {
-      return {
-        title: 'New Customer Strategy',
-        description: 'Focus on welcoming and demonstrating value',
-        steps: [
-          'Offer welcome rewards to encourage repeat visits',
-          'Personalize communications based on first purchases',
-          'Showcase core product/service value'
-        ]
-      };
-    }
-    if (cohortLower.includes('loyal') || cohortLower.includes('active')) {
-      return {
-        title: 'Active Customer Strategy',
-        description: 'Maintain engagement and increase value',
-        steps: [
-          'Reward consistent patronage with exclusive offers',
-          'Encourage exploration of premium products/services',
-          'Recognize and appreciate loyalty'
-        ]
-      };
-    }
-    if (cohortLower.includes('risk') || cohortLower.includes('dormant')) {
-      return {
-        title: 'Re-engagement Strategy',
-        description: 'Bring this customer back before they churn',
-        steps: [
-          'Offer high-value incentives to return',
-          'Re-establish value proposition',
-          'Create easy pathways to re-engage'
-        ]
-      };
-    }
-    if (cohortLower.includes('churn') || cohortLower.includes('lost')) {
-      return {
-        title: 'Win-back Strategy',
-        description: 'Reconnect with this previous customer',
-        steps: [
-          'Provide significant "win-back" incentives',
-          'Communicate improvements since last visit',
-          'Remind of previous positive experiences'
-        ]
-      };
-    }
-    // Default strategy
-    return {
-      title: 'Customer Strategy',
-      description: 'Personalized engagement approach',
-      steps: [
-        'Offer targeted rewards based on behavior',
-        'Maintain relevant communications',
-        'Track engagement to refine approach'
-      ]
-    };
-  };
-  
-  const strategy = getCustomerStrategy();
-
-  // Sample data for demonstration purposes
-  const dummyCurrentWeek = {
-    weekId: 'current-week',
-    runDate: new Date(),
-    cohort: customer?.cohort || 'Active',
-    rewards: [
-      {
-        rewardId: 'reward-1',
-        rewardName: 'Weekend Special Discount',
-        description: '20% off your next purchase this weekend',
-        type: 'percentageDiscount',
-        pointsCost: 0,
-        isActive: true,
-        hasBeenRedeemedByThisCustomer: false,
-        reason: "Based on your recent purchasing patterns, we think you'd enjoy this weekend offer. Your last several visits were on weekends."
-      },
-      {
-        rewardId: 'reward-2',
-        rewardName: 'Free Coffee with Breakfast',
-        description: 'Buy any breakfast item and get a free coffee',
-        type: 'freeItem',
-        pointsCost: 0,
-        isActive: true,
-        hasBeenRedeemedByThisCustomer: true,
-        reason: "You've ordered breakfast items frequently but rarely with coffee. This offer encourages trying our coffee selection."
-      }
-    ],
-    banners: [
-      {
-        bannerId: 'banner-1',
-        title: 'Spring Collection Launch',
-        description: 'Check out our new spring items',
-        color: '#4CAF50',
-        secondaryColor: '#E8F5E9',
-        style: 'light',
-        isActive: true,
-        createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
-      },
-      {
-        bannerId: 'banner-2',
-        title: 'Loyalty Program Update',
-        description: "We've improved our rewards system",
-        color: '#2196F3',
-        secondaryColor: '#E3F2FD',
-        style: 'dark',
-        isActive: false,
-        createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000)
-      }
-    ],
-    pushNotifications: [
-      {
-        content: 'Your reward is waiting! Come claim your free item today.',
-        timestamp: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-        sent: false,
-        type: 'push',
-        clicked: false
-      },
-      {
-        content: 'Thank you for your recent purchase! How was your experience?',
-        timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-        sent: true,
-        type: 'in-app',
-        clicked: true
-      }
-    ]
-  };
-
-  const dummyPreviousWeek = {
-    weekId: 'previous-week',
-    runDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-    cohort: customer?.cohort || 'Active',
-    rewards: [
-      {
-        rewardId: 'prev-reward-1',
-        rewardName: 'Happy Hour Discount',
-        description: '15% off drinks between 3-6pm',
-        type: 'percentageDiscount',
-        pointsCost: 0,
-        isActive: false,
-        hasBeenRedeemedByThisCustomer: true,
-        reason: "You've visited during afternoon hours several times. This promotion aligns with your typical visit pattern."
-      }
-    ],
-    banners: [
-      {
-        bannerId: 'prev-banner-1',
-        title: 'Weekend Flash Sale',
-        description: 'Up to 40% off select items',
-        color: '#FF9800',
-        secondaryColor: '#FFF3E0',
-        style: 'light',
-        isActive: false,
-        createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000)
-      }
-    ],
-    pushNotifications: [
-      {
-        content: "Don't miss our weekend promotion! Ends Sunday.",
-        timestamp: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
-        sent: true,
-        type: 'push',
-        clicked: false
-      }
-    ]
-  };
-
-  // Use provided data or fallback to dummy data
-  const currentWeekActivity = weeklyAgentActivities && weeklyAgentActivities.length > 0 
-    ? weeklyAgentActivities[0] 
-    : dummyCurrentWeek;
-    
-  const previousWeekActivity = weeklyAgentActivities && weeklyAgentActivities.length > 1 
-    ? weeklyAgentActivities[1] 
-    : dummyPreviousWeek;
-  
-  // Get the active week data based on selected tab
-  const activeWeekData = activeWeekTab === 'current' 
-    ? currentWeekActivity 
-    : previousWeekActivity;
-
-  // Check if there's any agent activity
-  const hasAgentActivity = (
-    (activeWeekData.rewards && activeWeekData.rewards.length > 0) ||
-    (activeWeekData.banners && activeWeekData.banners.length > 0) ||
-    (activeWeekData.pushNotifications && activeWeekData.pushNotifications.length > 0)
-  );
-
-  // If no activity at all, show empty state
-  if (!hasAgentActivity) {
+  // If data was fetched, display it
+  if (customerData) {
     return (
-      <div className="py-16 text-center">
-        <Activity className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-        <h3 className="text-lg font-medium text-gray-800 mb-1">No Agent Activity Yet</h3>
-        <p className="text-gray-500 max-w-sm mx-auto">
-          Agent activity will appear here once strategies are created for this customer.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      {/* Strategy Section */}
-      <div className="mb-8">
-        <div className="rounded-md border bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <h3 className="font-medium text-gray-800">{strategy.title}</h3>
-              <CohortBadge cohort={customerCohort} />
+      <div>
+        {/* Week selector */}
+        {availableWeeks.length > 1 && (
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-1.5">
+              <h3 className="text-xs font-medium text-gray-700">Week</h3>
             </div>
-            <Badge variant="outline" className="bg-gray-50 text-gray-600 font-normal">
-              <Target className="h-3.5 w-3.5 mr-1.5" />
-              Tailored Strategy
-            </Badge>
-          </div>
-          
-          <p className="text-gray-600 mb-4 text-sm">{strategy.description}</p>
-          
-          <div className="bg-gray-50 p-4 rounded-md border border-gray-100">
-            <div className="flex items-center gap-1.5 mb-2.5 text-sm font-medium text-gray-700">
-              <Users className="h-4 w-4" />
-              Recommended Actions
-            </div>
-            <div className="space-y-2 text-sm text-gray-600">
-              {strategy.steps.map((step, index) => (
-                <div key={index} className="flex items-start gap-2">
-                  <div className="h-5 w-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 text-xs">
-                    {index + 1}
-                  </div>
-                  <span>{step}</span>
-                </div>
+            
+            <div className="flex flex-nowrap gap-1.5 overflow-x-auto pb-1.5 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+              {availableWeeks.map((week) => (
+                <Button
+                  key={week.weekId}
+                  variant={activeWeekTab === week.weekId ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleWeekChange(week.weekId)}
+                  className={`whitespace-nowrap text-xs h-7 px-2.5 ${
+                    activeWeekTab === week.weekId
+                      ? "bg-blue-600 hover:bg-blue-700"
+                      : "hover:bg-gray-100"
+                  }`}
+                >
+                  {week.label}
+                </Button>
               ))}
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Week selector tabs */}
-      <div className="mb-6 border-b">
-        <div className="flex">
-          <button
-            onClick={() => setActiveWeekTab('current')}
-            className={`px-4 py-2 text-sm ${
-              activeWeekTab === 'current'
-                ? 'border-b-2 border-blue-500 text-blue-700 font-medium'
-                : 'text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            Current Week
-          </button>
-          <button
-            onClick={() => setActiveWeekTab('previous')}
-            className={`px-4 py-2 text-sm ${
-              activeWeekTab === 'previous'
-                ? 'border-b-2 border-blue-500 text-blue-700 font-medium'
-                : 'text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            Previous Week
-          </button>
-        </div>
-      </div>
-
-      <div className="text-sm text-gray-500 mb-6">
-        Generated {activeWeekData.runDate ? format(new Date(activeWeekData.runDate), 'MMM d, yyyy') : 'N/A'}
-      </div>
-
-      {/* Rewards Section */}
-      {activeWeekData.rewards && activeWeekData.rewards.length > 0 && (
-        <div className="mb-8">
-          <h3 className="font-medium mb-4 text-gray-800 flex items-center gap-2">
-            <Gift className="h-5 w-5 text-gray-600" />
-            Rewards
-          </h3>
-          
-          <div className="space-y-5">
-            {activeWeekData.rewards.map((reward, index) => (
-              <div key={reward.rewardId || index} className="rounded-md border p-4 bg-white shadow-sm">
-                <div className="flex items-start gap-3">
-                  <div className="p-2.5 rounded-md bg-blue-50 text-blue-600 mt-0.5">
-                    {getRewardTypeIcon(reward.type || 'generic')}
-                  </div>
-                  
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium">{reward.rewardName}</h4>
-                      {reward.hasBeenRedeemedByThisCustomer ? (
-                        <Badge className="bg-green-50 text-green-700 border-none font-normal">
-                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                          Redeemed
-                        </Badge>
-                      ) : reward.isActive ? (
-                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-normal">
-                          Active
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="bg-gray-100 text-gray-500 border-gray-200 font-normal">
-                          Inactive
-                        </Badge>
-                      )}
-                    </div>
-                    
-                    <p className="text-gray-600 my-1.5">{reward.description}</p>
-                    
-                    {reward.reason && (
-                      <div className="mt-2 text-sm text-gray-500 border-t pt-2">
-                        <div className="flex items-center gap-1 text-xs mb-1 text-gray-400">
-                          <HelpCircle className="h-3 w-3" />
-                          Why this reward:
-                        </div>
-                        {reward.reason}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
+        )}
+        
+        {/* Customer cohort information */}
+        <div className="mb-4 p-3 bg-gray-50 rounded-md border">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xs font-medium text-gray-800">Customer Cohort</h3>
+              <p className="text-xs text-gray-600 mt-0.5">
+                {customerData.cohort || customer?.cohort || "No cohort information"}
+              </p>
+            </div>
+            <CohortBadge cohort={customerData.cohort || customer?.cohort} />
           </div>
         </div>
-      )}
-
-      {/* Banners Section */}
-      {activeWeekData.banners && activeWeekData.banners.length > 0 && (
-        <div className="mb-8">
-          <h3 className="font-medium mb-4 text-gray-800 flex items-center gap-2">
-            <Image className="h-5 w-5 text-gray-600" />
-            App Banners
-          </h3>
-          
-          <div className="space-y-3">
-            {activeWeekData.banners.map((banner, index) => (
-              <div key={banner.bannerId || index} className="rounded-md border p-4 bg-white shadow-sm">
-                <div className="flex justify-between">
-                  <div>
-                    <h4 className="font-medium">{banner.title}</h4>
-                    <p className="text-gray-600 mt-1">{banner.description}</p>
-                  </div>
-                  
-                  <Badge variant={banner.isActive ? "default" : "outline"} className="h-fit">
-                    {banner.isActive ? "Active" : "Inactive"}
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </div>
+        
+        {/* Show generation date */}
+        <div className="text-xs text-gray-500 mb-4">
+          Generated {customerData.runDate ? (typeof customerData.runDate === 'string' ? customerData.runDate : format(new Date(customerData.runDate), 'MMM d, yyyy')) : 'N/A'}
         </div>
-      )}
 
-      {/* Push Notifications - updated design with clearer sent/scheduled status */}
-      {activeWeekData.pushNotifications && activeWeekData.pushNotifications.length > 0 && (
-        <div>
-          <h3 className="font-medium mb-4 text-gray-800 flex items-center gap-2">
-            <Bell className="h-5 w-5 text-gray-600" />
-            Customer Communications
-          </h3>
-          
-          <div className="space-y-3">
-            {activeWeekData.pushNotifications.map((notification, index) => (
-              <div key={index} className={`rounded-md border bg-white shadow-sm ${notification.sent ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-amber-400'}`}>
-                <div className="flex items-center gap-2 border-b px-4 py-2 bg-gray-50">
-                  {/* Message type */}
-                  {notification.type === 'push' ? (
-                    <Badge variant="outline" className="bg-blue-50 border-blue-100 text-blue-700 font-normal">
-                      <Bell className="h-3.5 w-3.5 mr-1.5" />
-                      Push Notification
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="bg-purple-50 border-purple-100 text-purple-700 font-normal">
-                      <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
-                      In-App Message
-                    </Badge>
-                  )}
-                  
-                  {/* Sent/Scheduled status */}
-                  {notification.sent ? (
-                    <Badge className="bg-green-50 text-green-700 border-none">
-                      <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                      Sent
-                    </Badge>
-                  ) : (
-                    <Badge className="bg-amber-50 text-amber-700 border-none">
-                      <Clock className="h-3.5 w-3.5 mr-1.5" />
-                      Scheduled
-                    </Badge>
-                  )}
-                  
-                  {/* Date information */}
-                  <div className="text-xs text-gray-500 ml-auto">
-                    {notification.sent 
-                      ? `Sent on ${notification.timestamp ? format(new Date(notification.timestamp), 'MMM d, yyyy') : 'N/A'}`
-                      : `Scheduled for ${notification.timestamp ? format(new Date(notification.timestamp), 'MMM d, yyyy') : 'N/A'}`
-                    }
-                  </div>
-                </div>
+        {/* Rewards Section */}
+        {customerData.rewards && customerData.rewards.length > 0 ? (
+          <div className="mb-6">
+            <h3 className="text-xs font-medium mb-3 text-gray-800 flex items-center gap-1.5">
+              <Gift className="h-4 w-4 text-gray-600" />
+              Rewards ({customerData.rewardsCount || customerData.rewards.length})
+            </h3>
+            
+            <div className="space-y-3">
+              {customerData.rewards.map((reward: any, index: number) => {
+                const rewardId = reward.id || `reward-${index}`;
+                const isRedeemed = !!redemptions[rewardId];
+                const redemptionData = redemptions[rewardId];
                 
-                <div className="p-4">
-                  <p className="text-gray-800 text-base">{notification.content}</p>
-                  
-                  {/* Customer interaction status - only show for sent messages */}
-                  {notification.sent && (
-                    <div className="mt-2 pt-2 border-t text-sm">
-                      <div className="flex items-center gap-1">
-                        {notification.clicked ? (
-                          <div className="flex items-center text-green-600">
-                            <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                            <span className="font-medium">Customer clicked</span>
-                          </div>
+                return (
+                  <div 
+                    key={rewardId} 
+                    className={`rounded-md border p-3 bg-white shadow-sm ${isRedeemed ? 'border-green-200' : ''}`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <div className={`p-2 rounded-md ${isRedeemed ? 'bg-green-50 text-green-600' : 'bg-blue-50 text-blue-600'} mt-0.5`}>
+                        {isRedeemed ? (
+                          <CheckCircle className="h-4 w-4" />
                         ) : (
-                          <div className="flex items-center text-gray-500">
-                            <X className="h-4 w-4 mr-1.5" />
-                            <span>No customer interaction</span>
+                          getRewardTypeIcon(reward.rewardType || 'generic')
+                        )}
+                      </div>
+                      
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="text-sm font-medium">{reward.rewardName}</h4>
+                            {isRedeemed && (
+                              <Badge className="bg-green-100 text-green-800 text-[10px] px-1.5 py-0">Redeemed</Badge>
+                            )}
+                          </div>
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-normal text-xs">
+                            {reward.pointsCost} points
+                          </Badge>
+                        </div>
+                        
+                        <p className="text-xs text-gray-600 my-1">{reward.rewardSummary}</p>
+                        
+                        {/* Redemption date if redeemed */}
+                        {isRedeemed && redemptionData?.redemptionDate && (
+                          <div className="mt-1 text-[10px] text-green-600 flex items-center gap-1">
+                            <CheckCircle2 className="h-2.5 w-2.5" />
+                            Redeemed on {format(new Date(redemptionData.redemptionDate.seconds * 1000), 'MMM d, yyyy')}
+                          </div>
+                        )}
+                        
+                        {reward.reasoning && (
+                          <div className="mt-1.5 text-xs">
+                            <button 
+                              onClick={() => toggleReasoning(rewardId)}
+                              className="flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-800 transition-colors"
+                            >
+                              {expandedReasonings[rewardId] ? (
+                                <>
+                                  <ChevronLeft className="h-3 w-3" />
+                                  Hide reasoning
+                                </>
+                              ) : (
+                                <>
+                                  <HelpCircle className="h-3 w-3" />
+                                  Why this reward?
+                                </>
+                              )}
+                            </button>
+                            
+                            {expandedReasonings[rewardId] && (
+                              <div className="mt-1.5 pl-2 border-l-2 border-blue-100 text-gray-500 text-[11px]">
+                                {reward.reasoning}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {reward.expiryDate && (
+                          <div className="mt-1.5 text-[10px] text-gray-500">
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-2.5 w-2.5" />
+                              Expires: {format(new Date(reward.expiryDate.seconds * 1000), 'MMM d, yyyy')}
+                            </div>
                           </div>
                         )}
                       </div>
                     </div>
-                  )}
-                </div>
-              </div>
-            ))}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="mb-6 p-4 border border-dashed rounded-md text-center">
+            <Gift className="h-6 w-6 text-gray-300 mx-auto mb-1.5" />
+            <p className="text-xs text-gray-500">No rewards found</p>
+          </div>
+        )}
+
+        {/* Banners Section */}
+        {customerData.banners && customerData.banners.length > 0 ? (
+          <div className="mb-6">
+            <h3 className="text-xs font-medium mb-3 text-gray-800 flex items-center gap-1.5">
+              <Image className="h-4 w-4 text-gray-600" />
+              App Banners ({customerData.bannersCount || customerData.banners.length})
+            </h3>
+            
+            <div className="space-y-3">
+              {customerData.banners.map((banner: any, index: number) => {
+                const bannerId = banner.id || banner.bannerId || `banner-${index}`;
+                const stats = bannerStats[bannerId] || { impressions: 0, clicks: 0 };
+                const clickRate = stats.impressions > 0 
+                  ? Math.round((stats.clicks / stats.impressions) * 100) 
+                  : 0;
+                
+                return (
+                  <div key={bannerId} className="rounded-md border p-3 bg-white shadow-sm">
+                    <div className="flex justify-between">
+                      <div>
+                        <h4 className="text-sm font-medium">{banner.title}</h4>
+                        <p className="text-xs text-gray-600 mt-0.5">{banner.description}</p>
+                      </div>
+                      
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge variant={banner.isActive ? "default" : "outline"} className="h-fit text-xs">
+                          {banner.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                        
+                        <div className="flex flex-col items-end">
+                          <div className="text-[10px] text-gray-500 flex items-center gap-1">
+                            <Eye className="h-2.5 w-2.5" />
+                            {stats.impressions} {stats.impressions === 1 ? 'impression' : 'impressions'}
+                          </div>
+                          
+                          <div className="text-[10px] text-gray-500 flex items-center gap-1">
+                            <MousePointerClick className="h-2.5 w-2.5" />
+                            {stats.clicks} {stats.clicks === 1 ? 'click' : 'clicks'} 
+                            {stats.impressions > 0 && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="text-blue-600 ml-0.5 cursor-help">({clickRate}%)</span>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-[220px] text-xs">
+                                    <p>Click-through rate (CTR): The percentage of impressions that resulted in clicks.</p>
+                                    <p className="mt-1">A higher CTR indicates a more effective banner at engaging customers.</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {banner.expiresAt && (
+                      <div className="mt-1.5 text-[10px] text-gray-500 pt-1.5 border-t">
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-2.5 w-2.5" />
+                          Expires: {format(new Date(banner.expiresAt.seconds * 1000), 'MMM d, yyyy')}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="mb-6 p-4 border border-dashed rounded-md text-center">
+            <Image className="h-6 w-6 text-gray-300 mx-auto mb-1.5" />
+            <p className="text-xs text-gray-500">No banners found</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // If no data was found
+  return (
+    <div className="py-10 text-center">
+      <Activity className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+      <h3 className="text-sm font-medium text-gray-800 mb-1">No Agent Activity Available</h3>
+      <p className="text-xs text-gray-500 max-w-sm mx-auto">
+        We couldn't retrieve the agent activity data for this customer.
+      </p>
+      
+      <div className="mt-4">
+        <Button 
+          onClick={fetchCustomerData}
+          disabled={isFetchingData}
+          className="text-xs h-8"
+        >
+          {isFetchingData ? (
+            <>
+              <div className="animate-spin mr-1.5 h-3 w-3 border-2 border-b-transparent border-white rounded-full"></div>
+              Loading Data...
+            </>
+          ) : (
+            <>Retry Loading Data</>
+          )}
+        </Button>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client"
 
 import { PageTransition } from "@/components/page-transition"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardFooter, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -543,242 +544,228 @@ export default function TapAgentIntroPage() {
       {/* Conditional rendering based on agent configuration status */}
       {agentConfigured ? (
         // Agent Dashboard for configured users
-        <div className="bg-white pt-6 pb-12 px-6">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex flex-col items-start">
-              <div className="w-full flex justify-between items-center mb-4">
-                <div>
-                  <h1 className="text-2xl font-bold">
-                    <span className="gradient-text" style={gradientTextStyle}>Tap Agent</span> Dashboard
-                  </h1>
-                  <div className="flex items-center text-sm text-gray-500 mt-1">
-                    <Clock className="h-3.5 w-3.5 mr-1.5" />
-                    Last active: {lastActiveDate}
+        <div className="p-6 py-4">
+          <PageHeader
+            title={<><span className="gradient-text" style={gradientTextStyle}>Tap Agent</span> Dashboard</>}
+            subtitle={`Last active: ${lastActiveDate}`}
+          >
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                className="h-9 gap-2 border-0 ring-1 ring-gray-200 bg-white text-gray-700 shadow-sm rounded-md"
+                asChild
+              >
+                <Link href="/tap-agent/setup">
+                  <Settings className="h-4 w-4" />
+                  Agent Settings
+                </Link>
+              </Button>
+              <Button 
+                variant="outline" 
+                className="h-9 gap-2 border-0 ring-1 ring-gray-200 bg-white text-red-500 hover:bg-red-50 shadow-sm rounded-md"
+                onClick={handleDisableAgent}
+                disabled={disabling}
+              >
+                <PowerOff className="h-4 w-4" />
+                {disabling ? "Disabling..." : "Disable Agent"}
+              </Button>
+            </div>
+          </PageHeader>
+              
+          <div className="w-full mb-8">
+            <p className="text-gray-600 mb-6">
+              Your Tap Agent is actively working to engage your customers with personalized rewards and offers.
+              Here's an overview of your current customer engagement metrics.
+            </p>
+                
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <Card className="border-gray-200 reduced-radius shadow-sm">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-medium text-gray-500">Active Customers</CardTitle>
+                    <UserCheck className="h-4 w-4 text-gray-400" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{customerStats.activeCustomers}</div>
+                </CardContent>
+              </Card>
+                  
+              <Card className="border-gray-200 reduced-radius shadow-sm">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-medium text-gray-500">New Customers</CardTitle>
+                    <Users className="h-4 w-4 text-gray-400" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{customerStats.newCustomers}</div>
+                </CardContent>
+              </Card>
+                  
+              <Card className="border-gray-200 reduced-radius shadow-sm">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-medium text-gray-500">Total Redemptions</CardTitle>
+                    <ShoppingBag className="h-4 w-4 text-gray-400" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{customerStats.totalRedemptions}</div>
+                </CardContent>
+              </Card>
+                  
+              <Card className="border-gray-200 reduced-radius shadow-sm">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-medium text-gray-500">Engagement Rate</CardTitle>
+                    <Award className="h-4 w-4 text-gray-400" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{customerStats.engagementRate}%</div>
+                </CardContent>
+              </Card>
+            </div>
+                
+            {/* Recent Activity */}
+            <Card className="border-gray-200 reduced-radius shadow-sm">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg font-medium">Recent Activity</CardTitle>
+                  <Button variant="ghost" size="sm" className="gap-1 text-xs">
+                    View All
+                    <ChevronRight className="h-3 w-3" />
+                  </Button>
+                </div>
+                <CardDescription>Latest actions taken by your Tap Agent</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                      <Gift className="h-4 w-4 text-blue-700" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">New reward campaign created</p>
+                      <p className="text-xs text-gray-500">15% discount for returning customers</p>
+                      <p className="text-xs text-gray-400 mt-1 flex items-center">
+                        <Calendar className="h-3 w-3 mr-1" />
+                        Today, 10:23 AM
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                      <Users className="h-4 w-4 text-green-700" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Customer segment updated</p>
+                      <p className="text-xs text-gray-500">VIP customers refined based on recent purchases</p>
+                      <p className="text-xs text-gray-400 mt-1 flex items-center">
+                        <Calendar className="h-3 w-3 mr-1" />
+                        Yesterday, 2:45 PM
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                      <MessageSquare className="h-4 w-4 text-orange-700" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Re-engagement messages sent</p>
+                      <p className="text-xs text-gray-500">32 dormant customers received personalized offers</p>
+                      <p className="text-xs text-gray-400 mt-1 flex items-center">
+                        <Calendar className="h-3 w-3 mr-1" />
+                        2 days ago, 11:30 AM
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
-                    className="gap-2 border-[#007AFF] text-[#007AFF] hover:bg-[#007AFF]/5 reduced-radius-sm" 
-                    asChild
-                  >
-                    <Link href="/tap-agent/setup">
-                      <Settings className="h-4 w-4" />
-                      Agent Settings
-                    </Link>
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="gap-2 border-red-500 text-red-500 hover:bg-red-50 reduced-radius-sm"
-                    onClick={handleDisableAgent}
-                    disabled={disabling}
-                  >
-                    <PowerOff className="h-4 w-4" />
-                    {disabling ? "Disabling..." : "Disable Agent"}
-                  </Button>
-                </div>
-              </div>
-              
-              <div className="w-full mb-8">
-                <p className="text-gray-600 mb-6">
-                  Your Tap Agent is actively working to engage your customers with personalized rewards and offers.
-                  Here's an overview of your current customer engagement metrics.
-                </p>
-                
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                  <Card className="border-gray-200 reduced-radius shadow-sm">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-sm font-medium text-gray-500">Active Customers</CardTitle>
-                        <UserCheck className="h-4 w-4 text-gray-400" />
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">{customerStats.activeCustomers}</div>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card className="border-gray-200 reduced-radius shadow-sm">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-sm font-medium text-gray-500">New Customers</CardTitle>
-                        <Users className="h-4 w-4 text-gray-400" />
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">{customerStats.newCustomers}</div>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card className="border-gray-200 reduced-radius shadow-sm">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-sm font-medium text-gray-500">Total Redemptions</CardTitle>
-                        <ShoppingBag className="h-4 w-4 text-gray-400" />
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">{customerStats.totalRedemptions}</div>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card className="border-gray-200 reduced-radius shadow-sm">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-sm font-medium text-gray-500">Engagement Rate</CardTitle>
-                        <Award className="h-4 w-4 text-gray-400" />
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">{customerStats.engagementRate}%</div>
-                    </CardContent>
-                  </Card>
-                </div>
-                
-                {/* Recent Activity */}
-                <Card className="border-gray-200 reduced-radius shadow-sm">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg font-medium">Recent Activity</CardTitle>
-                      <Button variant="ghost" size="sm" className="gap-1 text-xs">
-                        View All
-                        <ChevronRight className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    <CardDescription>Latest actions taken by your Tap Agent</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex items-start gap-3">
-                        <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                          <Gift className="h-4 w-4 text-blue-700" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">New reward campaign created</p>
-                          <p className="text-xs text-gray-500">15% discount for returning customers</p>
-                          <p className="text-xs text-gray-400 mt-1 flex items-center">
-                            <Calendar className="h-3 w-3 mr-1" />
-                            Today, 10:23 AM
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-start gap-3">
-                        <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                          <Users className="h-4 w-4 text-green-700" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">Customer segment updated</p>
-                          <p className="text-xs text-gray-500">VIP customers refined based on recent purchases</p>
-                          <p className="text-xs text-gray-400 mt-1 flex items-center">
-                            <Calendar className="h-3 w-3 mr-1" />
-                            Yesterday, 2:45 PM
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-start gap-3">
-                        <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
-                          <MessageSquare className="h-4 w-4 text-orange-700" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">Re-engagement messages sent</p>
-                          <p className="text-xs text-gray-500">32 dormant customers received personalized offers</p>
-                          <p className="text-xs text-gray-400 mt-1 flex items-center">
-                            <Calendar className="h-3 w-3 mr-1" />
-                            2 days ago, 11:30 AM
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       ) : (
         // Original welcome section for users who haven't configured their agent yet
-        <div className="bg-white pt-6 pb-12 px-6">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex flex-col items-start">
-              <div className="w-full flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold">
-                  Welcome to <span className="gradient-text" style={gradientTextStyle}>Tap Agent</span>
-                </h1>
-                <Badge className="px-3 py-1.5 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
-                  AI-POWERED LOYALTY
-                </Badge>
-              </div>
+        <div className="p-6">
+          <PageHeader
+            title={<>Welcome to <span className="gradient-text" style={gradientTextStyle}>Tap Agent</span></>}
+            subtitle="AI-powered loyalty assistant that helps you create personalized rewards for your customers"
+          />
               
-              <div className="flex flex-col md:flex-row gap-8 w-full">
-                <div className="md:w-2/3">
-                  <p className="text-gray-600 mb-6">
-                    Tap Agent is your AI-powered loyalty assistant that helps you create personalized 
-                    rewards for your customers based on your business data and customer behavior. 
-                    Set up once and let the agent continuously optimize your loyalty program.
-                  </p>
+          <div className="flex flex-col md:flex-row gap-8 w-full">
+            <div className="md:w-2/3">
+              <p className="text-gray-600 mb-6">
+                Tap Agent is your AI-powered loyalty assistant that helps you create personalized 
+                rewards for your customers based on your business data and customer behavior. 
+                Set up once and let the agent continuously optimize your loyalty program.
+              </p>
                   
-                  <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-blue-800">Quick Setup Required</p>
-                        <p className="text-sm text-blue-700 mt-1">
-                          Tap Agent needs some information about your business to create effective rewards.
-                          The setup process takes about 10-15 minutes and only needs to be done once.
-                        </p>
-                      </div>
-                    </div>
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-blue-800">Quick Setup Required</p>
+                    <p className="text-sm text-blue-700 mt-1">
+                      Tap Agent needs some information about your business to create effective rewards.
+                      The setup process takes about 10-15 minutes and only needs to be done once.
+                    </p>
                   </div>
-                  
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <Link href="/tap-agent/setup" passHref>
-                      <Button className="gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white pulse-button">
-                        Configure Tap Agent
-                        <ArrowRight className="h-4 w-4" />
-                      </Button>
-                    </Link>
-                    <Button variant="outline" className="gap-2" asChild>
-                      <Link href="#" className="flex items-center">
-                        <Play className="h-4 w-4" />
-                        Watch Tutorial (2 min)
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
-                
-                <div className="md:w-1/3">
-                  <Card className="h-full">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-lg font-medium">Setup Progress</CardTitle>
-                      <CardDescription>Complete these steps to activate your agent</CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <div className="space-y-3">
-                        {setupSteps.map((step, index) => (
-                          <div key={index} className="flex items-start gap-3">
-                            <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-xs mt-0.5">
-                              {index + 1}
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-sm font-medium">{step.title}</p>
-                              <p className="text-xs text-gray-500">{step.time}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                    <CardFooter className="bg-blue-50 py-2 px-4 border-t">
-                      <div className="w-full flex items-center justify-between">
-                        <span className="text-xs text-blue-700">Estimated total: 10-15 minutes</span>
-                        <span className="text-xs text-blue-800 font-medium">0% Complete</span>
-                      </div>
-                    </CardFooter>
-                  </Card>
                 </div>
               </div>
+                  
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Link href="/tap-agent/setup" passHref>
+                  <Button className="gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white pulse-button">
+                    Configure Tap Agent
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </Link>
+                <Button 
+                  variant="outline" 
+                  className="h-9 gap-2 border-0 ring-1 ring-gray-200 bg-white text-gray-700 shadow-sm rounded-md"
+                  asChild
+                >
+                  <Link href="#" className="flex items-center">
+                    <Play className="h-4 w-4" />
+                    Watch Tutorial (2 min)
+                  </Link>
+                </Button>
+              </div>
+            </div>
+                
+            <div className="md:w-1/3">
+              <Card className="h-full">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg font-medium">Setup Progress</CardTitle>
+                  <CardDescription>Complete these steps to activate your agent</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-3">
+                    {setupSteps.map((step, index) => (
+                      <div key={index} className="flex items-start gap-3">
+                        <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-xs mt-0.5">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{step.title}</p>
+                          <p className="text-xs text-gray-500">{step.time}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+                <CardFooter className="bg-blue-50 py-2 px-4 border-t">
+                  <div className="w-full flex items-center justify-between">
+                    <span className="text-xs text-blue-700">Estimated total: 10-15 minutes</span>
+                    <span className="text-xs text-blue-800 font-medium">0% Complete</span>
+                  </div>
+                </CardFooter>
+              </Card>
             </div>
           </div>
         </div>

@@ -340,7 +340,7 @@ export default function IntegrationsPage() {
 
   return (
     <PageTransition>
-      <div className="p-6">
+      <div className="p-6 py-4">
         <PageHeader
           title="Integrations"
           subtitle="Connect your POS system and other services"

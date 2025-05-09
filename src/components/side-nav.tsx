@@ -373,7 +373,7 @@ export function SideNav() {
   }
 
   return (
-    <div className="w-48 h-screen flex-shrink-0 bg-[#F5F5F5] flex flex-col overflow-hidden">
+    <div className="w-48 h-screen flex-shrink-0 bg-[#F5F5F5] flex flex-col">
       {/* Apply custom scrollbar styles */}
       <style jsx global>{scrollbarStyles}</style>
       
@@ -420,14 +420,16 @@ export function SideNav() {
         </div>
       </div>
       
-      <nav className="flex-1 overflow-y-auto custom-scrollbar px-2">
+      <nav className="px-2 py-1.5 flex-1 overflow-y-auto custom-scrollbar">
         <ul className="space-y-1">
           {/* Main pages without sub-items */}
           {navItems
             .filter(item => !item.isAI && !item.subItems)
             .filter(item => item.title !== "Onboarding Wizard")
             .map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+              const isActive = item.title === "Dashboard" 
+                ? (pathname === item.href || pathname.match(/^\/dashboard\/(?!settings).*$/)) 
+                : (pathname === item.href || pathname.startsWith(`${item.href}/`))
               
               return (
                 <li key={item.title}>
@@ -602,7 +604,7 @@ export function SideNav() {
       </nav>
       
       {/* Account section at the bottom */}
-      <div className="flex-shrink-0 border-t border-gray-200 py-2 px-3">
+      <div className="mt-auto border-t border-gray-200 py-2 px-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3 overflow-hidden min-w-0 max-w-[80%]">
             <Avatar className="h-8 w-8 flex-shrink-0">

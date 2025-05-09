@@ -1446,18 +1446,16 @@ export default function DashboardPage() {
         setLoadingStage("generating");
       }, 8000); // 8 seconds
       
-      // Call the API to summarize emails
+      // Call the API to summarize emails with correct parameter format
       const response = await fetch(
-        `https://us-central1-taployalty-staging.cloudfunctions.net/summarizeEmailsHttp`, {
+        `https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/summarizeEmailsHttp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          data: {
-            merchantId: user?.uid,
-            days: days
-          }
+          merchantId: user?.uid,
+          days: days
         }),
       });
       
@@ -1533,7 +1531,7 @@ export default function DashboardPage() {
                 <Button 
                   variant="outline" 
                   size="sm"
-                  className="h-9 gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"
+                  className="h-9 gap-2 border-[#007AFF] text-[#007AFF] hover:bg-[#007AFF]/5 hover:text-[#007AFF]"
                   onClick={handleSummarizeInbox}
                 >
                   <Inbox className="h-4 w-4" />
@@ -2925,7 +2923,7 @@ export default function DashboardPage() {
                 )}
 
                 <div className="flex justify-end">
-                  <Button onClick={handleSummarizeSubmit} className="bg-indigo-600 hover:bg-indigo-700">
+                  <Button onClick={handleSummarizeSubmit} className="bg-[#007AFF] hover:bg-[#0062CC]">
                     Generate Summary
                   </Button>
                 </div>
@@ -2945,13 +2943,13 @@ export default function DashboardPage() {
                     )}
                     
                     {loadingStage === "finding" && (
-                      <p className="text-sm text-blue-600 animate-pulse">
+                      <p className="text-sm text-[#007AFF] animate-pulse">
                         Searching emails...
                       </p>
                     )}
                     
                     {loadingStage === "generating" && (
-                      <p className="text-sm text-purple-600 animate-pulse">
+                      <p className="text-sm text-[#007AFF] animate-pulse">
                         Generating summary...
                       </p>
                     )}
@@ -2964,13 +2962,46 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-6 animate-fadeIn">
-                <div className="bg-gradient-to-r from-indigo-50 to-white border border-indigo-100 rounded-lg p-5">
-                  <h3 className="text-lg font-medium text-indigo-800 mb-3">Email Summary</h3>
+                <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-medium text-gray-900">Email Summary</h3>
+                    <div className="text-xs text-gray-500">
+                      powered by <GradientText>Tap Agent</GradientText>
+                    </div>
+                  </div>
                   <div className="prose prose-sm max-w-none">
                     {inboxSummaryResult && (
-                      <ReactMarkdown className="prose prose-slate prose-headings:font-semibold prose-h3:text-lg prose-h4:text-base prose-p:text-gray-700 prose-a:text-indigo-600 prose-strong:text-indigo-700 prose-ul:list-disc prose-ol:list-decimal">
-                        {inboxSummaryResult}
-                      </ReactMarkdown>
+                      <div>
+                        {/* Process the content to enhance numbered sections */}
+                        {inboxSummaryResult.split('\n').map((line, index) => {
+                          // Match lines that start with a number followed by a period
+                          const headerMatch = line.match(/^(\d+)\.\s+(.+)$/);
+                          
+                          if (headerMatch) {
+                            // This is a numbered section header - style it prominently
+                            return (
+                              <div 
+                                key={index} 
+                                className="mt-8 mb-4 first:mt-2 pb-1 border-b border-gray-100"
+                              >
+                                <h3 className="text-base font-semibold text-[#007AFF]">
+                                  {line}
+                                </h3>
+                              </div>
+                            );
+                          }
+                          
+                          // Regular content - render with ReactMarkdown
+                          return (
+                            <ReactMarkdown 
+                              key={index}
+                              className="prose prose-slate prose-p:text-gray-700 prose-headings:text-gray-900 prose-headings:font-medium prose-a:text-[#007AFF] prose-strong:font-medium prose-strong:text-gray-900 prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
+                            >
+                              {line}
+                            </ReactMarkdown>
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -2997,7 +3028,7 @@ export default function DashboardPage() {
                   </Button>
                   <Button 
                     variant="default"
-                    className="bg-indigo-600 hover:bg-indigo-700"
+                    className="bg-[#007AFF] hover:bg-[#0062CC]"
                     onClick={() => setIsSummarizeInboxSheetOpen(false)}
                   >
                     Close

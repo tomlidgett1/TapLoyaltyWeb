@@ -106,6 +106,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import remarkGfm from 'remark-gfm'
 
 type TimeframeType = "today" | "yesterday" | "7days" | "30days"
 
@@ -204,6 +205,9 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [readStatusMap, setReadStatusMap] = useState<Record<string, boolean>>({})
+  const [gmailQueryResponse, setGmailQueryResponse] = useState<string | null>(null)
+  const [gmailQueryLoading, setGmailQueryLoading] = useState(false)
+  const [showDebugInfo, setShowDebugInfo] = useState(false)
   
   // Define a type for loading stages
   type LoadingStageType = "processing" | "finding" | "generating";
@@ -1377,7 +1381,7 @@ export default function DashboardPage() {
   }
 
   // Handle sending the command
-  const handleSendCommand = () => {
+  const handleSendCommand = async () => {
     if (commandInput.trim() || selectedIntegrations.length > 0) {
       console.log("Sending command:", {
         text: commandInput,
@@ -1391,33 +1395,150 @@ export default function DashboardPage() {
       })
       setProcessingIntegrations(newProcessingState)
       
-      // Simulate processing time for each integration
+      // Check if Gmail is one of the selected integrations
+      const gmailIntegration = selectedIntegrations.find(integration => integration.id === "gmail")
+      
+      if (gmailIntegration && commandInput.trim()) {
+        try {
+          setGmailQueryLoading(true)
+          
+          // Make API call to questionGmailHttp function
+          const response = await fetch(
+            `https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/questionGmailHttp`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              merchantId: user?.uid,
+              prompt: commandInput.trim()
+            }),
+          });
+          
+          // Get the response
+          const rawResponse = await response.text();
+          console.log("Raw Gmail API response:", rawResponse);
+          
+          try {
+            const data = JSON.parse(rawResponse);
+            console.log("Gmail API response parsed:", data);
+            
+            // Set debug response for inspection
+            setDebugResponse(rawResponse);
+            
+            // Check for multiple possible response formats
+            if (data?.success && data?.summary) {
+              // Format: { success: true, summary: "..." }
+              setGmailQueryResponse(data.summary);
+              
+              toast({
+                title: "Gmail Query Completed",
+                description: "Gmail query has been processed successfully",
+                variant: "default"
+              });
+            } else if (data?.success && data?.answer) {
+              // Format: { success: true, answer: "..." }
+              setGmailQueryResponse(data.answer);
+              
+              toast({
+                title: "Gmail Query Completed",
+                description: "Gmail query has been processed successfully",
+                variant: "default"
+              });
+            } else if (data?.result?.summary) {
+              // Format: { result: { summary: "..." } }
+              setGmailQueryResponse(data.result.summary);
+              
+              toast({
+                title: "Gmail Query Completed",
+                description: "Gmail query has been processed successfully",
+                variant: "default"
+              });
+            } else if (data?.summary) {
+              // Format: { summary: "..." }
+              setGmailQueryResponse(data.summary);
+              
+              toast({
+                title: "Gmail Query Completed",
+                description: "Gmail query has been processed successfully",
+                variant: "default"
+              });
+            } else if (data?.error) {
+              // Format: { error: "..." }
+              toast({
+                title: "Gmail Query Error",
+                description: data.error,
+                variant: "destructive"
+              });
+            } else {
+              // No recognizable format - display what we received for debugging
+              console.error("Unrecognized response format:", data);
+              setGmailQueryResponse(`The Gmail API returned data in an unexpected format. Please check with your developer.\n\nReceived: ${JSON.stringify(data, null, 2)}`);
+              
+              toast({
+                title: "Unexpected Response Format",
+                description: "The response format wasn't recognized, but we've displayed what we received",
+                variant: "destructive"
+              });
+            }
+          } catch (e) {
+            console.error("Error parsing Gmail API response:", e);
+            toast({
+              title: "Error Processing Response",
+              description: "Could not process the Gmail query response",
+              variant: "destructive"
+            });
+          }
+        } catch (error) {
+          console.error("Error querying Gmail:", error);
+          toast({
+            title: "Gmail Query Failed",
+            description: error instanceof Error ? error.message : "Unknown error occurred",
+            variant: "destructive"
+          });
+        } finally {
+          setGmailQueryLoading(false);
+        }
+      }
+      
+      // Process other integrations
       selectedIntegrations.forEach(integration => {
-        // Random timeout between 4-7 seconds to simulate varying processing times (2 seconds longer)
-        const timeout = 4000 + Math.random() * 3000
-        
-        setTimeout(() => {
+        if (integration.id !== "gmail") { // Skip Gmail as we already handled it
+          // Random timeout for non-Gmail integrations
+          const timeout = 4000 + Math.random() * 3000
+          
+          setTimeout(() => {
+            setProcessingIntegrations(prev => ({
+              ...prev,
+              [integration.id]: false
+            }))
+            
+            toast({
+              title: `${integration.name} workflow complete`,
+              description: "The integration task has finished successfully",
+            })
+          }, timeout)
+        } else {
+          // Mark Gmail as done when the query completes
           setProcessingIntegrations(prev => ({
             ...prev,
             [integration.id]: false
           }))
-          
-          toast({
-            title: `${integration.name} workflow complete`,
-            description: "The integration task has finished successfully",
-          })
-        }, timeout)
+        }
       })
       
       // Reset input field but keep integrations until they finish processing
       setCommandInput("")
       
       // After all processing is done, reset the integrations
-      const maxProcessingTime = 7500 // Increased by 2 seconds from the original 5500
-      setTimeout(() => {
-        setSelectedIntegrations([])
-        setProcessingIntegrations({})
-      }, maxProcessingTime)
+      // For Gmail we'll keep the selected integration until user dismisses the response
+      if (!gmailIntegration) {
+        const maxProcessingTime = 7500 
+        setTimeout(() => {
+          setSelectedIntegrations([])
+          setProcessingIntegrations({})
+        }, maxProcessingTime)
+      }
     }
   }
 
@@ -1688,6 +1809,82 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+          
+          {/* Gmail Query Response */}
+          {gmailQueryResponse && (
+            <div className="mt-3 bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-fadeIn">
+              <div className="flex justify-between items-center mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
+                    <Image src="/gmail.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain" />
+                  </div>
+                  <h3 className="text-sm font-medium text-gray-900">Gmail Response</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => setShowDebugInfo(!showDebugInfo)}
+                  >
+                    {showDebugInfo ? "Hide Debug" : "Show Debug"}
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 w-7 p-0 rounded-full"
+                    onClick={() => {
+                      setGmailQueryResponse(null);
+                      setDebugResponse(null);
+                      setShowDebugInfo(false);
+                      // Also remove the Gmail integration from selected integrations
+                      setSelectedIntegrations(selectedIntegrations.filter(i => i.id !== "gmail"));
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="prose prose-sm max-w-none font-sf-pro">
+                <ReactMarkdown 
+                  className="prose prose-slate prose-p:text-gray-700 prose-headings:text-gray-900 prose-headings:font-medium prose-a:text-[#007AFF] prose-strong:font-medium prose-strong:text-gray-900 prose-ul:my-2 prose-li:my-1 prose-ol:my-2"
+                  remarkPlugins={[remarkGfm]}
+                >
+                  {gmailQueryResponse}
+                </ReactMarkdown>
+              </div>
+              
+              {/* Show debug response */}
+              {showDebugInfo && debugResponse && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="bg-gray-50 p-3 rounded-md">
+                    <h4 className="text-xs font-medium text-gray-700 mb-1">Raw Response:</h4>
+                    <pre className="text-xs overflow-auto bg-gray-100 p-2 rounded whitespace-pre-wrap">
+                      {debugResponse}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Gmail Query Loading */}
+          {gmailQueryLoading && (
+            <div className="mt-3 bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-fadeIn">
+              <div className="flex items-start gap-3">
+                <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
+                  <Image src="/gmail.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="text-sm font-medium text-gray-900">Processing Gmail Query</h3>
+                    <div className="h-4 w-4 rounded-full border-2 border-gray-200 border-t-gray-600 animate-spin"></div>
+                  </div>
+                  <p className="text-sm text-gray-500">Searching through your emails and generating a response...</p>
+                </div>
+              </div>
+            </div>
+          )}
           
           {/* Metrics section - wrapped in proper Tabs component */}
           <Tabs defaultValue="platform" value={metricsType as string}>
@@ -2993,12 +3190,13 @@ export default function DashboardPage() {
                           
                           // Regular content - render with ReactMarkdown
                           return (
-                            <ReactMarkdown 
-                              key={index}
-                              className="prose prose-slate prose-p:text-gray-700 prose-headings:text-gray-900 prose-headings:font-medium prose-a:text-[#007AFF] prose-strong:font-medium prose-strong:text-gray-900 prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
-                            >
-                              {line}
-                            </ReactMarkdown>
+                            <div key={index} className="mb-4">
+                              <ReactMarkdown 
+                                className="prose prose-slate prose-p:text-gray-700 prose-headings:text-gray-900 prose-headings:font-medium prose-a:text-[#007AFF] prose-strong:font-medium prose-strong:text-gray-900 prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
+                              >
+                                {line}
+                              </ReactMarkdown>
+                            </div>
                           );
                         })}
                       </div>

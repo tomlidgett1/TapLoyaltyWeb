@@ -18,6 +18,7 @@ import { LightspeedIcon } from "@/components/icons/lightspeed-icon"
 import { SquareIcon } from "@/components/icons/square-icon"
 import { CloverIcon } from "@/components/icons/clover-icon"
 import { ShopifyIcon } from "@/components/icons/shopify-icon"
+import { GmailIcon } from "@/components/icons/gmail-icon"
 
 // Define integration state type
 interface IntegrationState {
@@ -30,6 +31,7 @@ interface IntegrationsState {
   clover: IntegrationState;
   shopify: IntegrationState;
   lightspeed_new: IntegrationState;
+  gmail: IntegrationState;
 }
 
 export default function IntegrationsPage() {
@@ -39,7 +41,8 @@ export default function IntegrationsPage() {
     square: { connected: false, data: null },
     clover: { connected: false, data: null },
     shopify: { connected: false, data: null },
-    lightspeed_new: { connected: false, data: null }
+    lightspeed_new: { connected: false, data: null },
+    gmail: { connected: false, data: null }
   })
   
   const [refreshing, setRefreshing] = useState(false)
@@ -70,6 +73,11 @@ export default function IntegrationsPage() {
         const lightspeedNewConnected = lightspeedNewData?.connected === true;
         console.log('Lightspeed New integration status:', lightspeedNewConnected ? 'Connected' : 'Not connected');
         
+        // Check Gmail integration status
+        const gmailDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/gmail`));
+        const gmailConnected = gmailDoc.exists() && gmailDoc.data()?.connected === true;
+        console.log('Gmail integration status:', gmailConnected ? 'Connected' : 'Not connected');
+        
         setIntegrations(prev => ({
           ...prev,
           square: {
@@ -79,10 +87,20 @@ export default function IntegrationsPage() {
           lightspeed_new: {
             connected: lightspeedNewConnected,
             data: lightspeedNewConnected ? lightspeedNewData : null
+          },
+          gmail: {
+            connected: gmailConnected,
+            data: gmailDoc.exists() ? gmailDoc.data() : null
           }
         }));
       } else {
         console.log('Lightspeed New integration not found');
+        
+        // Check Gmail integration status even if Lightspeed is not found
+        const gmailDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/gmail`));
+        const gmailConnected = gmailDoc.exists() && gmailDoc.data()?.connected === true;
+        console.log('Gmail integration status:', gmailConnected ? 'Connected' : 'Not connected');
+        
         setIntegrations(prev => ({
           ...prev,
           square: {
@@ -92,6 +110,10 @@ export default function IntegrationsPage() {
           lightspeed_new: {
             connected: false,
             data: null
+          },
+          gmail: {
+            connected: gmailConnected,
+            data: gmailDoc.exists() ? gmailDoc.data() : null
           }
         }));
       }
@@ -143,6 +165,21 @@ export default function IntegrationsPage() {
           }))
         } else {
           console.log('Lightspeed New integration not connected or not found')
+        }
+        
+        // Check Gmail integration status
+        const gmailDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'gmail'))
+        if (gmailDoc.exists() && gmailDoc.data().connected) {
+          console.log('Gmail integration found:', gmailDoc.data())
+          setIntegrations(prev => ({
+            ...prev,
+            gmail: { 
+              connected: true, 
+              data: gmailDoc.data() 
+            }
+          }))
+        } else {
+          console.log('Gmail integration not connected or not found')
         }
       } catch (error) {
         console.error("Error checking integrations:", error)
@@ -338,6 +375,90 @@ export default function IntegrationsPage() {
     }
   };
 
+  // Gmail integration
+  const connectGmail = async () => {
+    if (!user) return
+    
+    setConnecting("gmail")
+    
+    try {
+      // Gmail OAuth parameters
+      const clientId = "1035054543006-dq2fier1a540dbbfieevph8m6gu74j15.apps.googleusercontent.com"
+      
+      // Store the state in localStorage to verify when the user returns
+      const state = Math.random().toString(36).substring(2, 15)
+      localStorage.setItem('gmail_state', state)
+      
+      // Store the merchant ID in localStorage to associate with the integration
+      localStorage.setItem('gmail_merchant_id', user.uid)
+      
+      // The REDIRECT_URI should match what's configured in Google Cloud Console
+      // This would be handled by your callback API route
+      const redirectUri = `${window.location.origin}/api/auth/gmail/callback`
+      
+      // Define the scopes needed for Gmail integration
+      const scopes = [
+        'https://www.googleapis.com/auth/gmail.send',
+        'https://www.googleapis.com/auth/gmail.readonly'
+      ].join(' ')
+      
+      // Construct the authorization URL
+      const authUrl = [
+        "https://accounts.google.com/o/oauth2/v2/auth",
+        `?client_id=${clientId}`,
+        `&redirect_uri=${encodeURIComponent(redirectUri)}`,
+        `&response_type=code`,
+        `&scope=${encodeURIComponent(scopes)}`,
+        `&access_type=offline`,
+        `&prompt=consent`,
+        `&state=${encodeURIComponent(state)}`
+      ].join("");
+      
+      console.log("Redirecting to Gmail authorization URL:", authUrl)
+      
+      // Redirect to Google authorization page
+      window.location.href = authUrl
+    } catch (error) {
+      console.error("Error connecting to Gmail:", error)
+      toast({
+        title: "Connection Failed",
+        description: "Failed to connect to Gmail. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setConnecting(null)
+    }
+  }
+
+  // Disconnect Gmail
+  const disconnectGmail = async () => {
+    if (!user) return
+    
+    try {
+      // Delete the integration from Firestore
+      const integrationRef = doc(db, `merchants/${user.uid}/integrations/gmail`);
+      await deleteDoc(integrationRef);
+      
+      // Update local state
+      setIntegrations(prev => ({
+        ...prev,
+        gmail: { connected: false, data: null }
+      }))
+      
+      toast({
+        title: "Disconnected",
+        description: "Your Gmail account has been disconnected."
+      })
+    } catch (error) {
+      console.error("Error disconnecting Gmail:", error)
+      toast({
+        title: "Error",
+        description: "Failed to disconnect Gmail. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
+
   return (
     <PageTransition>
       <div className="p-6 py-4">
@@ -371,6 +492,47 @@ export default function IntegrationsPage() {
         </PageHeader>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Gmail Integration Card */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="w-10 h-10 bg-gray-100 rounded-md flex items-center justify-center">
+                    <GmailIcon className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-medium">Gmail</CardTitle>
+                    <CardDescription>Email Integration</CardDescription>
+                  </div>
+                </div>
+                {integrations.gmail.connected ? (
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Connected</Badge>
+                ) : null}
+              </div>
+            </CardHeader>
+            <CardContent className="pb-2">
+              <p className="text-sm text-muted-foreground">
+                Connect your Gmail account to enable automated email sending and communication with your customers.
+              </p>
+              {integrations.gmail.connected && integrations.gmail.data?.connectedAt && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Connected on {new Date(integrations.gmail.data.connectedAt.toDate()).toLocaleDateString()} at {new Date(integrations.gmail.data.connectedAt.toDate()).toLocaleTimeString()}
+                </p>
+              )}
+            </CardContent>
+            <CardFooter>
+              <Button 
+                variant={integrations.gmail.connected ? "outline" : "default"}
+                className="w-full rounded-md"
+                onClick={integrations.gmail.connected ? disconnectGmail : connectGmail}
+                disabled={connecting === "gmail"}
+              >
+                {connecting === "gmail" ? "Connecting..." : 
+                 integrations.gmail.connected ? "Disconnect" : "Connect to Gmail"}
+              </Button>
+            </CardFooter>
+          </Card>
+          
           {/* Lightspeed New Integration Card */}
           <Card>
             <CardHeader className="pb-3">

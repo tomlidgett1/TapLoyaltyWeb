@@ -1698,7 +1698,7 @@ export function CreateRewardDialog({
           background-color: #007AFF !important;
         }
       `}</style>
-      <DialogContent
+      <DialogContent 
         className={`sm:max-w-[${currentStep === 5 ? "700px" : "600px"}] h-[${currentStep === 5 ? "700px" : "600px"}] flex flex-col max-h-[97vh] overflow-hidden`}
         onInteractOutside={(e) => {
           // Prevent closing when clicking outside if on later steps
@@ -1710,13 +1710,13 @@ export function CreateRewardDialog({
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">
             {isEditing ? 'Edit Reward' : 'Create New Reward'}
-          </DialogTitle>
-          <DialogDescription>
-            {isEditing 
+                </DialogTitle>
+                <DialogDescription>
+                  {isEditing 
               ? 'Modify your existing reward details below'
               : 'Set up a new loyalty reward for your customers'
             }
-          </DialogDescription>
+                </DialogDescription>
         </DialogHeader>
 
         <Tabs 

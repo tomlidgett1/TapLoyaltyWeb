@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -71,6 +71,28 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { BasicRewardWizard } from "@/components/basic-reward-wizard"
 import { CreateRewardSheet } from "@/components/create-reward-sheet"
 import { IntroductoryRewardSheet } from "@/components/introductory-reward-sheet"
+import { 
+  Command,
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+  CommandShortcut,
+} from "@/components/ui/command"
+import {
+  AtSign,
+  Instagram as InstagramIcon,
+  Mail,
+  Search,
+  SendHorizontal,
+  X,
+  Globe,
+  Smartphone
+} from "lucide-react"
+import Image from "next/image" // Add this import at the top of the file with other imports
 
 type TimeframeType = "today" | "yesterday" | "7days" | "30days"
 
@@ -146,6 +168,13 @@ export default function DashboardPage() {
     customReward: false,
     introductoryReward: false
   })
+  const [commandInput, setCommandInput] = useState("")
+  const [showIntegrations, setShowIntegrations] = useState(false)
+  const [selectedIntegrations, setSelectedIntegrations] = useState<{id: string, name: string, icon: React.ReactNode}[]>([])
+  const [cursorPosition, setCursorPosition] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+  // Add a new state for processing status
+  const [processingIntegrations, setProcessingIntegrations] = useState<Record<string, boolean>>({})
 
   const getDateRange = (tf: TimeframeType): { start: Date; end: Date } => {
     const now = new Date()
@@ -1245,6 +1274,114 @@ export default function DashboardPage() {
     }
   }, [user?.uid]);
 
+  // Available integrations for the command box
+  const availableIntegrations = [
+    { id: "mailchimp", name: "MailChimp", icon: <Mail className="h-4 w-4 text-red-500" /> },
+    { id: "instagram", name: "Instagram", icon: <Image src="/insta.webp" width={16} height={16} alt="Instagram" className="h-4 w-4 object-contain" /> },
+    { id: "google", name: "Google", icon: <Globe className="h-4 w-4 text-blue-500" /> },
+    { id: "gmail", name: "Gmail", icon: <Image src="/gmail.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain" /> },
+    { id: "tap", name: "Tap Loyalty", icon: <Image src="/taplogo.png" width={16} height={16} alt="Tap Loyalty" className="h-4 w-4 object-contain" /> },
+  ]
+
+  // Handle selecting an integration from the dropdown
+  const handleSelectIntegration = (integration: typeof availableIntegrations[0]) => {
+    setSelectedIntegrations([...selectedIntegrations, integration])
+    
+    // Replace the @ symbol and any text after it up to cursor position with nothing
+    const atIndex = commandInput.lastIndexOf('@', cursorPosition)
+    if (atIndex !== -1) {
+      const newInput = 
+        commandInput.substring(0, atIndex) + 
+        commandInput.substring(cursorPosition)
+      setCommandInput(newInput)
+    }
+    
+    setShowIntegrations(false)
+    
+    // Focus back on input
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus()
+      }
+    }, 0)
+  }
+
+  // Handle input changes for the command box
+  const handleCommandInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setCommandInput(value)
+    setCursorPosition(e.target.selectionStart || 0)
+    
+    // Check if we should show the integrations dropdown
+    const lastAtIndex = value.lastIndexOf('@', e.target.selectionStart || 0)
+    const hasAtBeforeCursor = lastAtIndex !== -1
+    const nextCharAfterAt = lastAtIndex < value.length - 1 ? value[lastAtIndex + 1] : null
+    
+    // Only show dropdown if @ is the last character or followed by text (not space)
+    if (hasAtBeforeCursor && (!nextCharAfterAt || nextCharAfterAt !== ' ')) {
+      const textAfterAt = value.substring(lastAtIndex + 1, e.target.selectionStart || value.length)
+      
+      // If there's no text after @ or the text after @ doesn't contain spaces, show integrations
+      if (!textAfterAt.includes(' ')) {
+        setShowIntegrations(true)
+      } else {
+        setShowIntegrations(false)
+      }
+    } else {
+      setShowIntegrations(false)
+    }
+  }
+
+  // Handle removing a selected integration
+  const removeIntegration = (id: string) => {
+    setSelectedIntegrations(selectedIntegrations.filter(i => i.id !== id))
+  }
+
+  // Handle sending the command
+  const handleSendCommand = () => {
+    if (commandInput.trim() || selectedIntegrations.length > 0) {
+      console.log("Sending command:", {
+        text: commandInput,
+        integrations: selectedIntegrations
+      })
+      
+      // Set processing state for all selected integrations
+      const newProcessingState: Record<string, boolean> = {}
+      selectedIntegrations.forEach(integration => {
+        newProcessingState[integration.id] = true
+      })
+      setProcessingIntegrations(newProcessingState)
+      
+      // Simulate processing time for each integration
+      selectedIntegrations.forEach(integration => {
+        // Random timeout between 4-7 seconds to simulate varying processing times (2 seconds longer)
+        const timeout = 4000 + Math.random() * 3000
+        
+        setTimeout(() => {
+          setProcessingIntegrations(prev => ({
+            ...prev,
+            [integration.id]: false
+          }))
+          
+          toast({
+            title: `${integration.name} workflow complete`,
+            description: "The integration task has finished successfully",
+          })
+        }, timeout)
+      })
+      
+      // Reset input field but keep integrations until they finish processing
+      setCommandInput("")
+      
+      // After all processing is done, reset the integrations
+      const maxProcessingTime = 7500 // Increased by 2 seconds from the original 5500
+      setTimeout(() => {
+        setSelectedIntegrations([])
+        setProcessingIntegrations({})
+      }, maxProcessingTime)
+    }
+  }
+
   if (initialLoading) {
     return (
       <PageTransition>
@@ -1314,6 +1451,107 @@ export default function DashboardPage() {
                   <TabsTrigger value="30days" className="data-[state=active]:text-blue-600">Last 30 Days</TabsTrigger>
                 </TabsList>
               </Tabs>
+            </div>
+          </div>
+
+          {/* AI Agent Command Box - NEW SECTION */}
+          <div className="relative">
+            <div className="flex flex-col space-y-3">
+              <h3 className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                <GradientText>Tap Agent</GradientText>
+              </h3>
+              
+              <div className="w-full">
+                <div className="relative flex-1">
+                  <div className="flex flex-wrap items-start px-3 py-2 min-h-[44px] w-full border rounded-lg shadow-sm bg-gray-50">
+                    {/* Display selected integrations as squared boxes */}
+                    <div className="flex flex-wrap flex-grow gap-2 mr-2">
+                      {selectedIntegrations.map(integration => (
+                        <div 
+                          key={integration.id}
+                          className="relative pt-1"
+                        >
+                          <div className="relative flex flex-col items-center">
+                            <div className="flex items-center justify-center h-7 w-7 rounded-md bg-gray-200 text-gray-700 border border-gray-300">
+                              {integration.icon}
+                              {!processingIntegrations[integration.id] && (
+                                <button 
+                                  onClick={() => removeIntegration(integration.id)}
+                                  className="absolute -top-1.5 -right-1.5 h-3.5 w-3.5 rounded-full flex items-center justify-center bg-gray-400 hover:bg-gray-500 text-white"
+                                >
+                                  <X className="h-2 w-2" />
+                                </button>
+                              )}
+                            </div>
+                            
+                            {/* Thinking indicator below the icon but still within the input box */}
+                            {processingIntegrations[integration.id] && (
+                              <div className="mt-1 flex items-center justify-center text-[11px] text-gray-600">
+                                <span className="mr-0.5">Thinking</span>
+                                <span className="flex space-x-0.5">
+                                  <span className="h-1.5 w-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                                  <span className="h-1.5 w-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                                  <span className="h-1.5 w-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      
+                      {/* Text input */}
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        value={commandInput}
+                        onChange={handleCommandInputChange}
+                        placeholder="Type '@' to use AI integrations..."
+                        className="flex-1 outline-none bg-transparent min-w-[180px] py-1 text-sm font-normal text-gray-700"
+                      />
+                    </div>
+                    
+                    {/* Send button inside the box */}
+                    <div className="flex-shrink-0">
+                      <button
+                        onClick={handleSendCommand}
+                        disabled={!commandInput.trim() && selectedIntegrations.length === 0}
+                        className={cn(
+                          "p-1.5 rounded-md transition-colors",
+                          (!commandInput.trim() && selectedIntegrations.length === 0) 
+                            ? "text-gray-300 cursor-not-allowed" 
+                            : "text-blue-600 hover:bg-blue-100 hover:text-blue-700"
+                        )}
+                      >
+                        <SendHorizontal className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Integrations dropdown */}
+                  {showIntegrations && (
+                    <div className="absolute left-0 right-0 top-full mt-1 border rounded-md bg-white shadow-md z-50">
+                      <Command>
+                        <CommandList>
+                          <CommandGroup heading="Available integrations">
+                            {availableIntegrations.map(integration => (
+                              <CommandItem 
+                                key={integration.id}
+                                onSelect={() => handleSelectIntegration(integration)}
+                                className="flex items-center gap-2 py-2 cursor-pointer text-sm font-normal text-gray-700"
+                              >
+                                <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
+                                  {integration.icon}
+                                </div>
+                                <span>{integration.name}</span>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
           

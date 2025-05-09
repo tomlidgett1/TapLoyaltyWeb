@@ -1425,16 +1425,16 @@ export default function DashboardPage() {
       findingTimeoutRef.current = setTimeout(() => {
         console.log("Changing loading stage to finding");
         setLoadingStage("finding");
-      }, 4000); // Change from 3 to 4 seconds
+      }, 4000);
       
       generatingTimeoutRef.current = setTimeout(() => {
         console.log("Changing loading stage to generating");
         setLoadingStage("generating");
-      }, 8000); // Change from 6 to 8 seconds
+      }, 8000);
       
-      // Call the API to summarize emails
-      const response = await fetch(
-        `https://us-central1-taployalty-staging.cloudfunctions.net/summarizeEmails`, {
+      // Call our proxy API route instead of the Firebase function directly
+      // This avoids CORS issues since the request stays within our domain
+      const response = await fetch('/api/proxy/summarize-emails', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1446,6 +1446,12 @@ export default function DashboardPage() {
           }
         }),
       });
+      
+      // Check for errors
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API error: ${response.status} ${errorText}`);
+      }
       
       // Save the raw response for debugging
       const rawResponse = await response.text();

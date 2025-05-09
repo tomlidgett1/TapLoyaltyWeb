@@ -1254,7 +1254,7 @@ export default function RewardsPage() {
     );
   };
 
-  //// Add export PDF functionality
+  ///// Add export PDF functionality
   const handleExportPDF = async () => {
     try {
       // Dynamically import the necessary modules

@@ -838,24 +838,26 @@ export default function RewardsPage() {
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Badge 
-                                variant="outline" 
-                                className={cn(
-                                  "rounded-md",
-                                  reward.programtype ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-purple-50 text-purple-700 border-purple-200"
-                                )}
-                              >
-                                <div className="flex items-center justify-center gap-1">
-                                  {reward.programtype 
-                                    ? <Award className="h-4 w-4" />
-                                    : <Gift className="h-4 w-4" />}
-                                  <span>
-                                    {reward.programtype 
-                                      ? "Program" 
-                                      : "Individual Reward"}
+                              {reward.programtype === "agent" ? (
+                                <div className="font-medium">
+                                  <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-orange-500">
+                                    Agent
                                   </span>
                                 </div>
-                              </Badge>
+                              ) : (
+                                <div className={cn(
+                                  "font-medium",
+                                  reward.programtype === "voucher" && "text-purple-700",
+                                  reward.programtype === "points" && "text-blue-700",
+                                  reward.programtype === "coffee" && "text-amber-700",
+                                  reward.programtype === "discount" && "text-emerald-700",
+                                  !reward.programtype && "text-gray-700"
+                                )}>
+                                  {reward.programtype 
+                                    ? reward.programtype.charAt(0).toUpperCase() + reward.programtype.slice(1)
+                                    : "Individual Reward"}
+                                </div>
+                              )}
                             </TooltipTrigger>
                             <TooltipContent side="top">
                               <p className="text-xs">
@@ -863,6 +865,7 @@ export default function RewardsPage() {
                                 {reward.programtype === "coffee" && "Part of a buy-X-get-one-free program"}
                                 {reward.programtype === "voucher" && "A monetary voucher customers can redeem"}
                                 {reward.programtype === "discount" && "A percentage discount on purchases"}
+                                {reward.programtype === "agent" && "Created by AI marketing agent"}
                                 {!reward.programtype || reward.programtype === "individual" && "Standard individual reward"}
                                 {reward.programName && <span className="block mt-1 font-medium">{reward.programName}</span>}
                               </p>
@@ -871,22 +874,22 @@ export default function RewardsPage() {
                         </TooltipProvider>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                        <div className="font-medium text-blue-700">
                           {reward.pointsCost}
-                        </Badge>
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                        <div className="font-medium text-green-700">
                           {reward.redemptionCount || 0}
-                        </Badge>
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                              <div className="font-medium text-blue-700">
                                 {reward.redeemableCustomers || 0}
-                              </Badge>
+                              </div>
                             </TooltipTrigger>
                             <TooltipContent side="top">
                               <p className="text-xs">Number of customers who can redeem this reward</p>
@@ -895,9 +898,9 @@ export default function RewardsPage() {
                         </TooltipProvider>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                        <div className="font-medium text-purple-700">
                           {reward.impressions || 0}
-                        </Badge>
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">
                         {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
@@ -908,14 +911,12 @@ export default function RewardsPage() {
                           : "Never"}
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge 
-                          variant="outline"
-                          className={cn(
-                            reward.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"
-                          )}
-                        >
+                        <div className={cn(
+                          "font-medium",
+                          reward.isActive ? "text-green-700" : "text-red-700"
+                        )}>
                           {reward.isActive ? "Live" : "Inactive"}
-                        </Badge>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
@@ -1739,24 +1740,26 @@ export default function RewardsPage() {
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Badge 
-                                    variant="outline" 
-                                    className={cn(
-                                      "rounded-md",
-                                      reward.programtype ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-purple-50 text-purple-700 border-purple-200"
-                                    )}
-                                  >
-                                    <div className="flex items-center justify-center gap-1">
-                                      {reward.programtype 
-                                        ? <Award className="h-4 w-4" />
-                                        : <Gift className="h-4 w-4" />}
-                                      <span>
-                                        {reward.programtype 
-                                          ? "Program" 
-                                          : "Individual Reward"}
+                                  {reward.programtype === "agent" ? (
+                                    <div className="font-medium">
+                                      <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-orange-500">
+                                        Agent
                                       </span>
                                     </div>
-                                  </Badge>
+                                  ) : (
+                                    <div className={cn(
+                                      "font-medium",
+                                      reward.programtype === "voucher" && "text-purple-700",
+                                      reward.programtype === "points" && "text-blue-700",
+                                      reward.programtype === "coffee" && "text-amber-700",
+                                      reward.programtype === "discount" && "text-emerald-700",
+                                      !reward.programtype && "text-gray-700"
+                                    )}>
+                                      {reward.programtype 
+                                        ? reward.programtype.charAt(0).toUpperCase() + reward.programtype.slice(1)
+                                        : "Individual Reward"}
+                                    </div>
+                                  )}
                                 </TooltipTrigger>
                                 <TooltipContent side="top">
                                   <p className="text-xs">
@@ -1764,6 +1767,7 @@ export default function RewardsPage() {
                                     {reward.programtype === "coffee" && "Part of a buy-X-get-one-free program"}
                                     {reward.programtype === "voucher" && "A monetary voucher customers can redeem"}
                                     {reward.programtype === "discount" && "A percentage discount on purchases"}
+                                    {reward.programtype === "agent" && "Created by AI marketing agent"}
                                     {!reward.programtype || reward.programtype === "individual" && "Standard individual reward"}
                                     {reward.programName && <span className="block mt-1 font-medium">{reward.programName}</span>}
                                   </p>
@@ -1772,22 +1776,22 @@ export default function RewardsPage() {
                             </TooltipProvider>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                            <div className="font-medium text-blue-700">
                               {reward.pointsCost}
-                            </Badge>
+                            </div>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                            <div className="font-medium text-green-700">
                               {reward.redemptionCount || 0}
-                            </Badge>
+                            </div>
                           </TableCell>
                           <TableCell className="text-center">
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                  <div className="font-medium text-blue-700">
                                     {reward.redeemableCustomers || 0}
-                                  </Badge>
+                                  </div>
                                 </TooltipTrigger>
                                 <TooltipContent side="top">
                                   <p className="text-xs">Number of customers who can redeem this reward</p>
@@ -1796,9 +1800,9 @@ export default function RewardsPage() {
                             </TooltipProvider>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                            <div className="font-medium text-purple-700">
                               {reward.impressions || 0}
-                            </Badge>
+                            </div>
                           </TableCell>
                           <TableCell className="text-center">
                             {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
@@ -1809,14 +1813,12 @@ export default function RewardsPage() {
                               : "Never"}
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge 
-                              variant="outline"
-                              className={cn(
-                                reward.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"
-                              )}
-                            >
+                            <div className={cn(
+                              "font-medium",
+                              reward.isActive ? "text-green-700" : "text-red-700"
+                            )}>
                               {reward.isActive ? "Live" : "Inactive"}
-                            </Badge>
+                            </div>
                           </TableCell>
                           <TableCell>
                             <DropdownMenu>
@@ -2261,11 +2263,23 @@ export default function RewardsPage() {
                             </div>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline" className="border-gray-200">
-                              <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-orange-500 font-medium">
-                                Agent
-                              </span>
-                            </Badge>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="font-medium">
+                                    <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-orange-500">
+                                      Agent
+                                    </span>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p className="text-xs">
+                                    Created by AI marketing agent
+                                    {reward.programName && <span className="block mt-1 font-medium">{reward.programName}</span>}
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </TableCell>
                           <TableCell className="text-center">
                             <div className="flex items-center justify-center gap-2">
@@ -2276,27 +2290,25 @@ export default function RewardsPage() {
                             </div>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                            <div className="font-medium text-blue-700">
                               {reward.pointsCost}
-                            </Badge>
+                            </div>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                            <div className="font-medium text-green-700">
                               {reward.redemptionCount || 0}
-                            </Badge>
+                            </div>
                           </TableCell>
                           <TableCell className="text-center">
                             {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge 
-                              variant="outline"
-                              className={cn(
-                                reward.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"
-                              )}
-                            >
+                            <div className={cn(
+                              "font-medium",
+                              reward.isActive ? "text-green-700" : "text-red-700"
+                            )}>
                               {reward.isActive ? "Live" : "Inactive"}
-                            </Badge>
+                            </div>
                           </TableCell>
                           <TableCell>
                             <DropdownMenu>

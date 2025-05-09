@@ -46,6 +46,45 @@ export default function IntegrationsPage() {
   })
   
   const [refreshing, setRefreshing] = useState(false)
+  const [errorDetails, setErrorDetails] = useState<string | null>(null)
+  const [configCheckResult, setConfigCheckResult] = useState<any>(null)
+  const [checkingConfig, setCheckingConfig] = useState(false)
+  
+  // Function to check environment configuration
+  const checkEnvironmentConfig = async () => {
+    try {
+      setCheckingConfig(true)
+      const response = await fetch('/api/auth/gmail/check-config')
+      const data = await response.json()
+      setConfigCheckResult(data)
+      console.log('Configuration check result:', data)
+    } catch (error) {
+      console.error('Error checking configuration:', error)
+      setConfigCheckResult({ error: 'Failed to check configuration' })
+    } finally {
+      setCheckingConfig(false)
+    }
+  }
+  
+  // Extract error details from URL on component mount
+  useEffect(() => {
+    // Check for error details in the URL
+    const url = new URL(window.location.href)
+    const errorParam = url.searchParams.get('error')
+    const detailsParam = url.searchParams.get('details')
+    
+    if (errorParam && detailsParam) {
+      console.log(`Integration error detected: ${errorParam}`);
+      console.log(`Error details: ${detailsParam}`);
+      setErrorDetails(decodeURIComponent(detailsParam));
+      
+      // Log additional debug information
+      console.log('Full URL parameters:');
+      url.searchParams.forEach((value, key) => {
+        console.log(`- ${key}: ${value}`);
+      });
+    }
+  }, []);
   
   // Function to manually refresh integration status
   const refreshIntegrationStatus = async () => {
@@ -382,6 +421,11 @@ export default function IntegrationsPage() {
     setConnecting("gmail")
     
     try {
+      // Debug environment variables
+      console.log('Gmail Integration Front-end Debug:');
+      console.log('- NEXT_PUBLIC_GMAIL_CLIENT_ID exists:', !!process.env.NEXT_PUBLIC_GMAIL_CLIENT_ID);
+      console.log('- window.location.origin:', window.location.origin);
+      
       // Gmail OAuth parameters with fallback value
       const clientId = process.env.NEXT_PUBLIC_GMAIL_CLIENT_ID || "1035054543006-dq2fier1a540dbbfieevph8m6gu74j15.apps.googleusercontent.com"
       
@@ -407,6 +451,13 @@ export default function IntegrationsPage() {
       // The REDIRECT_URI should match what's configured in Google Cloud Console
       // Using the production redirect URL
       const redirectUri = "https://app.taployalty.com.au/api/auth/gmail/callback"
+      
+      // Log debug information 
+      console.log('Gmail OAuth Configuration:');
+      console.log('- Client ID:', clientId);
+      console.log('- Redirect URI:', redirectUri);
+      console.log('- State:', state);
+      console.log('- Merchant ID:', user.uid);
       
       // Define the scopes needed for Gmail integration
       const scopes = [
@@ -502,6 +553,90 @@ export default function IntegrationsPage() {
             )}
           </Button>
         </PageHeader>
+        
+        {/* Error Details Display */}
+        {errorDetails && (
+          <div className="mb-6 p-4 border border-red-200 rounded-md bg-red-50">
+            <div className="flex items-center mb-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <h3 className="text-sm font-medium text-red-800">Integration Error</h3>
+            </div>
+            <div className="text-sm text-red-700">
+              <p className="mb-2">There was an error configuring the integration:</p>
+              <pre className="p-2 bg-white border border-red-100 rounded overflow-x-auto text-xs">{errorDetails}</pre>
+              <div className="mt-3 text-xs">
+                <p>Please ensure all required environment variables are set correctly.</p>
+                <p className="mt-1">For Gmail integration, make sure <code className="bg-white px-1 py-0.5 rounded">GMAIL_CLIENT_ID</code> and <code className="bg-white px-1 py-0.5 rounded">GMAIL_CLIENT_SECRET</code> are properly configured on the server.</p>
+              </div>
+              
+              <div className="mt-4 flex items-center space-x-3">
+                <button 
+                  className="text-xs px-2 py-1 bg-red-100 hover:bg-red-200 text-red-800 rounded"
+                  onClick={checkEnvironmentConfig}
+                  disabled={checkingConfig}
+                >
+                  {checkingConfig ? 'Checking...' : 'Check Server Configuration'}
+                </button>
+                <button 
+                  className="text-red-800 text-xs underline"
+                  onClick={() => {
+                    setErrorDetails(null)
+                    setConfigCheckResult(null)
+                  }}
+                >
+                  Dismiss
+                </button>
+              </div>
+              
+              {/* Configuration Check Results */}
+              {configCheckResult && (
+                <div className="mt-4 p-2 bg-white border border-red-100 rounded text-xs">
+                  <h4 className="font-medium mb-1">Environment Check Results:</h4>
+                  {configCheckResult.error ? (
+                    <p className="text-red-600">{configCheckResult.error}</p>
+                  ) : (
+                    <>
+                      <p>Environment: <span className="font-mono">{configCheckResult.environment}</span></p>
+                      <p className="mt-1">
+                        Status: {configCheckResult.configCheck?.allConfigured 
+                          ? <span className="text-green-600">All configured</span> 
+                          : <span className="text-red-600">Missing variables</span>}
+                      </p>
+                      
+                      {configCheckResult.configCheck?.missingVariables?.length > 0 && (
+                        <div className="mt-1">
+                          <p>Missing variables:</p>
+                          <ul className="list-disc list-inside ml-2 mt-1">
+                            {configCheckResult.configCheck.missingVariables.map((v: string) => (
+                              <li key={v} className="font-mono">{v}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {configCheckResult.configCheck?.variables && (
+                        <div className="mt-2">
+                          <p>Variable status:</p>
+                          <div className="mt-1 grid grid-cols-2 gap-1">
+                            {Object.entries(configCheckResult.configCheck.variables)
+                              .filter(([key]) => !key.includes('VALUE') && !key.includes('PREFIX'))
+                              .map(([key, value]: [string, any]) => (
+                                <div key={key} className="font-mono">
+                                  {key}: <span className={value ? "text-green-600" : "text-red-600"}>{value ? "✓" : "✗"}</span>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Gmail Integration Card */}

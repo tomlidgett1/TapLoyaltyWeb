@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, updateDoc, collection, getDocs, query, where, setDoc, writeBatch } from 'firebase/firestore'
+import { doc, getDoc, updateDoc, collection, getDocs, query, where, setDoc, writeBatch, Timestamp } from 'firebase/firestore'
 
 // Set the page size for pagination
 const PAGE_SIZE = 200
@@ -164,8 +164,21 @@ function sanitizeForFirestore(obj: any): any {
       continue;
     }
     
-    // Recursively sanitize the value
-    sanitized[key] = sanitizeForFirestore(value);
+    // Special handling for timeStamp field - convert to Firestore Timestamp
+    if (key === 'timeStamp' && typeof value === 'string') {
+      try {
+        const date = new Date(value);
+        sanitized['date'] = Timestamp.fromDate(date);
+        // Also keep the original timestamp as a string
+        sanitized[key] = value;
+      } catch (error) {
+        console.error('Error converting timeStamp to Firestore Timestamp:', error);
+        sanitized[key] = value; // Keep original value if conversion fails
+      }
+    } else {
+      // Recursively sanitize the value
+      sanitized[key] = sanitizeForFirestore(value);
+    }
   }
   
   return sanitized;
@@ -267,10 +280,20 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const merchantId = searchParams.get('merchantId')
   const accountId = searchParams.get('accountId')
-  const page = parseInt(searchParams.get('page') || '1')
+  const maxPages = parseInt(searchParams.get('pages') || '1')
   
-  // Validate page number
-  const currentPage = isNaN(page) || page < 1 ? 1 : page
+  // Get date range parameters if provided
+  const startDate = searchParams.get('startDate') // Format: YYYY-MM-DD
+  const endDate = searchParams.get('endDate') // Format: YYYY-MM-DD
+  
+  // Create date range object if either parameter is provided
+  const dateRange = (startDate || endDate) ? { 
+    startDate: startDate || undefined, 
+    endDate: endDate || undefined 
+  } : undefined
+  
+  // New parameter to control how many pages to fetch (max 5 to prevent overload)
+  const pagesToFetch = Math.min(Math.max(1, maxPages), 5)
 
   // Add validation for accountId to ensure it's a valid ID format
   if (!merchantId) {
@@ -296,7 +319,11 @@ export async function GET(request: NextRequest) {
     }, { status: 400 });
   }
   
-  console.log(`Processing request for merchantId: ${merchantId}, accountId: ${accountId}, page: ${currentPage}`);
+  // Log the request parameters
+  console.log(`Processing request for merchantId: ${merchantId}, accountId: ${accountId}, pages to fetch: ${pagesToFetch}`);
+  if (dateRange) {
+    console.log(`Date range: ${dateRange.startDate || 'beginning'} to ${dateRange.endDate || 'present'}`);
+  }
 
   try {
     // Get stored Lightspeed integration credentials
@@ -320,167 +347,147 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
-    // Fetch sales data from the Lightspeed API with pagination
-    const response = await fetchSalesData(
-      integrationData.access_token, 
-      accountId,
-      currentPage,
-      PAGE_SIZE
-    )
+    // Initialize data collection arrays
+    let allProcessedSales: ProcessedSale[] = [];
+    let totalRecords = 0;
+    let currentToken = integrationData.access_token;
+    let currentPage = 1;
+    let nextUrl: string | undefined = undefined;
     
-    // If the token is expired, try refreshing it
-    if (response.status === 401 && integrationData.refresh_token) {
-      console.log('Access token expired, attempting to refresh...')
-      const refreshedToken = await refreshLightspeedToken(merchantId, integrationData.refresh_token)
+    // Fetch multiple pages of data
+    while (currentPage <= pagesToFetch) {
+      console.log(`Fetching page ${currentPage} of ${pagesToFetch}...`);
       
-      if (refreshedToken) {
-        // Retry with the new token
-        const retryResponse = await fetchSalesData(
-          refreshedToken, 
-          accountId,
-          currentPage,
-          PAGE_SIZE
-        )
+      // Fetch sales data from the Lightspeed API with pagination
+      const response = await fetchSalesData(
+        currentToken, 
+        accountId,
+        currentPage,
+        PAGE_SIZE,
+        dateRange,
+        nextUrl
+      );
+      
+      // If the token is expired on the first request, try refreshing it
+      if (response.status === 401 && integrationData.refresh_token && currentPage === 1 && !nextUrl) {
+        console.log('Access token expired, attempting to refresh...')
+        const refreshedToken = await refreshLightspeedToken(merchantId, integrationData.refresh_token)
         
-        if (!retryResponse.ok) {
+        if (refreshedToken) {
+          // Update the token for subsequent requests
+          currentToken = refreshedToken;
+          
+          // Retry with the new token
+          const retryResponse = await fetchSalesData(
+            refreshedToken, 
+            accountId,
+            currentPage,
+            PAGE_SIZE,
+            dateRange
+          );
+          
+          if (!retryResponse.ok) {
+            return NextResponse.json({ 
+              success: false, 
+              error: 'Failed to fetch sales data after token refresh',
+              status: retryResponse.status
+            }, { status: retryResponse.status })
+          }
+          
+          // Process the data from this page
+          const pageResult = await processPageData(retryResponse, currentPage, merchantId);
+          if (!pageResult.success) {
+            return NextResponse.json({ 
+              success: false, 
+              error: `Failed to process page ${currentPage}`,
+              details: pageResult.error
+            }, { status: 500 });
+          }
+          
+          allProcessedSales = [...allProcessedSales, ...(pageResult.sales || [])];
+          totalRecords += pageResult.count || 0;
+          
+          // Extract next URL for pagination
+          nextUrl = pageResult.nextUrl;
+          
+          // Break the loop if there's no next page
+          if (!nextUrl || (pageResult.sales && pageResult.sales.length < PAGE_SIZE)) {
+            console.log(`No more pages available or fewer records than page size, ending pagination`);
+            break;
+          }
+          
+          currentPage++;
+          continue;
+        } else {
           return NextResponse.json({ 
             success: false, 
-            error: 'Failed to fetch sales data after token refresh',
-            status: retryResponse.status
-          }, { status: retryResponse.status })
+            error: 'Token refresh failed',
+            details: 'Unable to refresh expired access token'
+          }, { status: 401 })
         }
-        
-        return processAndReturnSalesData(retryResponse, currentPage, PAGE_SIZE, merchantId)
-      } else {
-        return NextResponse.json({ 
-          success: false, 
-          error: 'Token refresh failed',
-          details: 'Unable to refresh expired access token'
-        }, { status: 401 })
       }
+      
+      // If response failed for any other reason
+      if (!response.ok) {
+        // Don't fail completely, just log error and stop fetching more pages
+        console.error(`Failed to fetch page ${currentPage}: ${response.status} ${response.statusText}`);
+        break;
+      }
+      
+      // Process the data from this page
+      const pageResult = await processPageData(response, currentPage, merchantId);
+      if (!pageResult.success) {
+        console.error(`Error processing page ${currentPage}:`, pageResult.error);
+        break;
+      }
+      
+      allProcessedSales = [...allProcessedSales, ...(pageResult.sales || [])];
+      totalRecords += pageResult.count || 0;
+      
+      // Extract next URL for pagination
+      nextUrl = pageResult.nextUrl;
+      
+      // Break the loop if there's no next page
+      if (!nextUrl || (pageResult.sales && pageResult.sales.length < PAGE_SIZE)) {
+        console.log(`No more pages available or fewer records than page size, ending pagination`);
+        break;
+      }
+      
+      currentPage++;
     }
     
-    if (!response.ok) {
-      const errorText = await response.text()
-      let errorDetails = 'No error details available'
-      let errorJson: any = {}
+    // Sort all sales by timestamp to ensure newest first
+    allProcessedSales.sort((a, b) => {
+      return new Date(b.timeStamp).getTime() - new Date(a.timeStamp).getTime();
+    });
+    
+    // Save all the collected sales to Firestore
+    if (merchantId && allProcessedSales.length > 0) {
+      // Save to regular lightspeed_sales collection
+      saveNewSalesToFirestore(merchantId, allProcessedSales).catch(error => {
+        console.error('Error saving sales to Firestore:', error);
+      });
       
-      console.error(`Lightspeed API Error (${response.status} ${response.statusText}):`)
-      console.error(`URL: ${response.url.split('?')[0]}`)
-      console.error(`Headers: ${JSON.stringify(Object.fromEntries([...response.headers.entries()]))}`);
-      
-      try {
-        errorJson = JSON.parse(errorText)
-        errorDetails = JSON.stringify(errorJson)
-        console.error('Error response body:', errorJson)
-      } catch (e) {
-        // Not JSON response
-        errorDetails = errorText.slice(0, 500)
-        console.error('Error response (not JSON):', errorDetails)
-      }
-      
-      // Handle specific error codes
-      if (response.status === 400) {
-        // Try with a simpler request as fallback
-        console.log('400 Bad Request Error. Attempting fallback with simpler query parameters...');
-        console.log('Original request URL:', response.url);
-        
-        try {
-          // Get a reference to the access token
-          const validToken = integrationData.access_token;
-          
-          // Try multiple fallbacks with increasingly simpler parameters
-          
-          // Fallback #1: Use a different format for loading relations - standard comma format
-          console.log('Trying fallback #1: Standard comma-separated relations');
-          const baseUrl = `https://api.lightspeedapp.com/API/V3/Account/${accountId}/SaleLine.json`;
-          const params = new URLSearchParams();
-          params.append('sort', '-timeStamp');
-          params.append('limit', PAGE_SIZE.toString());
-          // Try with a simple comma-separated list without quotes
-          params.append('load_relations', 'Item,Sale,TaxClass');
-          
-          const fallbackUrl = `${baseUrl}?${params.toString()}`;
-          console.log('Fallback URL #1:', fallbackUrl);
-          
-          const simplifiedResponse = await fetch(fallbackUrl, {
-            headers: {
-              'Authorization': `Bearer ${validToken}`,
-              'Accept': 'application/json'
-            }
-          });
-          
-          if (simplifiedResponse.ok) {
-            console.log('Fallback #1 request succeeded, processing response');
-            return processAndReturnSalesData(simplifiedResponse, currentPage, PAGE_SIZE, merchantId);
-          }
-          
-          console.log(`Fallback #1 failed with status ${simplifiedResponse.status}`);
-          
-          // Fallback #2: Try with just Item relation to reduce complexity
-          console.log('Trying fallback #2: Item relation only');
-          const params2 = new URLSearchParams();
-          params2.append('sort', '-timeStamp');
-          params2.append('limit', PAGE_SIZE.toString());
-          params2.append('load_relations', 'Item');
-          
-          const fallbackUrl2 = `${baseUrl}?${params2.toString()}`;
-          console.log('Fallback URL #2:', fallbackUrl2);
-          
-          const simplestResponse = await fetch(fallbackUrl2, {
-            headers: {
-              'Authorization': `Bearer ${validToken}`,
-              'Accept': 'application/json'
-            }
-          });
-          
-          if (simplestResponse.ok) {
-            console.log('Fallback #2 request succeeded, processing response');
-            return processAndReturnSalesData(simplestResponse, currentPage, PAGE_SIZE, merchantId);
-          }
-          
-          console.log(`Fallback #2 failed with status ${simplestResponse.status}`);
-          
-          // Fallback #3: No relations just minimal data
-          console.log('Trying fallback #3: Minimal parameters');
-          const params3 = new URLSearchParams();
-          params3.append('sort', '-timeStamp');
-          params3.append('limit', PAGE_SIZE.toString());
-          
-          const fallbackUrl3 = `${baseUrl}?${params3.toString()}`;
-          console.log('Fallback URL #3:', fallbackUrl3);
-          
-          const bareResponse = await fetch(fallbackUrl3, {
-            headers: {
-              'Authorization': `Bearer ${validToken}`,
-              'Accept': 'application/json'
-            }
-          });
-          
-          if (bareResponse.ok) {
-            console.log('Fallback #3 request succeeded, processing response - note: item details may be limited');
-            return processAndReturnSalesData(bareResponse, currentPage, PAGE_SIZE, merchantId);
-          }
-          
-          console.error('All fallback requests failed');
-        } catch (fallbackError) {
-          console.error('Error in fallback request:', fallbackError);
-        }
-      }
-      
-      return NextResponse.json({ 
-        success: false, 
-        error: `Failed to fetch Lightspeed sales data: ${response.status} ${response.statusText}`,
-        details: {
-          errorDetails,
-          status: response.status,
-          statusText: response.statusText,
-          url: response.url.split('?')[0]
-        }
-      }, { status: response.status })
+      // Also save to daily sales collection
+      saveDailySales(merchantId, allProcessedSales).catch(error => {
+        console.error('Error saving daily sales to Firestore:', error);
+      });
     }
     
-    return processAndReturnSalesData(response, currentPage, PAGE_SIZE, merchantId)
+    console.log(`Successfully retrieved ${allProcessedSales.length} total sales across ${currentPage} pages`);
+    
+    return NextResponse.json({ 
+      success: true, 
+      sales: allProcessedSales,
+      pagination: {
+        pagesFetched: currentPage,
+        maxPages: pagesToFetch,
+        pageSize: PAGE_SIZE,
+        totalSales: allProcessedSales.length,
+        totalRecords: totalRecords,
+        dateRange: dateRange || 'all time'
+      }
+    });
   } catch (error) {
     console.error('Error fetching Lightspeed sales:', error)
     return NextResponse.json({ 
@@ -491,44 +498,128 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Helper function to process a page of data
+async function processPageData(response: Response, page: number, merchantId: string): Promise<{
+  success: boolean;
+  sales?: ProcessedSale[];
+  count?: number;
+  error?: any;
+  nextUrl?: string;
+}> {
+  try {
+    // Clone the response to avoid "body already read" errors
+    const responseClone = response.clone();
+    const data = await response.json();
+    
+    // Extract the next URL from the response for pagination
+    let nextUrl: string | undefined = undefined;
+    if (data['@attributes'] && data['@attributes'].next) {
+      nextUrl = data['@attributes'].next;
+      console.log(`Found next URL for pagination: ${nextUrl}`);
+    }
+    
+    if (!data.SaleLine) {
+      return {
+        success: true,
+        sales: [],
+        count: 0,
+        nextUrl
+      };
+    }
+    
+    // Process the response data into sales
+    const result = await processAndReturnSalesData(responseClone, page, PAGE_SIZE, merchantId);
+    
+    if (!result.ok) {
+      return {
+        success: false,
+        error: `Error processing page ${page}: ${result.status} ${result.statusText}`,
+        nextUrl
+      };
+    }
+    
+    const resultData = await result.json();
+    
+    if (!resultData.success) {
+      return {
+        success: false,
+        error: resultData.error || 'Unknown error processing data',
+        nextUrl
+      };
+    }
+    
+    return {
+      success: true,
+      sales: resultData.sales || [],
+      count: data.SaleLine ? (Array.isArray(data.SaleLine) ? data.SaleLine.length : 1) : 0,
+      nextUrl
+    };
+  } catch (error) {
+    console.error(`Error processing page ${page}:`, error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      nextUrl: undefined
+    };
+  }
+}
+
 // Update the fetchSalesData function to ensure item details are loaded
-async function fetchSalesData(accessToken: string, accountId: string, page: number, pageSize: number) {
-  // Calculate offset for pagination
-  const offset = (page - 1) * pageSize;
-  
-  // Base URL without query parameters
-  const baseUrl = `https://api.lightspeedapp.com/API/V3/Account/${accountId}/SaleLine.json`;
+async function fetchSalesData(accessToken: string, accountId: string, page: number, pageSize: number, dateRange?: { startDate?: string; endDate?: string }, nextUrl?: string) {
+  // If nextUrl is provided, use it directly (for pagination)
+  const url = nextUrl || `https://api.lightspeedapp.com/API/V3/Account/${accountId}/SaleLine.json`;
   
   // Build standard parameters - using a format that will properly load item details
   const params = new URLSearchParams();
   
-  // Add essential parameters
-  params.append('sort', '-timeStamp');
-  params.append('limit', pageSize.toString());
-  params.append('offset', offset.toString());
-  
-  // Add more comprehensive relation loading for items
-  // Make sure to include both Item and its Price details
-  // This format is typically more compatible with Lightspeed API
-  params.append('load_relations', 'Item,Sale,TaxClass');
-  
-  // Add parameter to expand Item details if needed
-  params.append('expand_Item', 'true');
+  // Only add these parameters if we're not using nextUrl
+  if (!nextUrl) {
+    // Add essential parameters
+    params.append('sort', '-timeStamp');
+    params.append('limit', pageSize.toString());
+    // No longer using offset parameter as it's deprecated
+    
+    // Add more comprehensive relation loading for items
+    // Make sure to include both Item and its Price details
+    // V3 requires load_relations to be a JSON encoded array
+    params.append('load_relations', JSON.stringify(["Item", "Sale", "TaxClass"]));
+    
+    // Add parameter to expand Item details if needed
+    params.append('expand_Item', 'true');
+    
+    // Add date range filtering if provided
+    if (dateRange) {
+      let filterParts = [];
+      
+      if (dateRange.startDate) {
+        // Format: timeStamp >= "2023-01-01 00:00:00"
+        filterParts.push(`timeStamp >= "${dateRange.startDate} 00:00:00"`);
+      }
+      
+      if (dateRange.endDate) {
+        // Format: timeStamp <= "2023-12-31 23:59:59"
+        filterParts.push(`timeStamp <= "${dateRange.endDate} 23:59:59"`);
+      }
+      
+      if (filterParts.length > 0) {
+        // Join multiple conditions with AND
+        params.append('filter', filterParts.join(' AND '));
+        console.log(`Applied date filter: ${filterParts.join(' AND ')}`);
+      }
+    }
+  }
   
   // Construct full URL with parameters
-  const url = `${baseUrl}?${params.toString()}`;
+  const finalUrl = nextUrl || `${url}?${params.toString()}`;
   
-  console.log(`Fetching Lightspeed sale lines: page ${page}, offset ${offset}, limit ${pageSize}`);
-  console.log(`API URL: ${url}`);
+  console.log(`Fetching Lightspeed sale lines: page ${page}, limit ${pageSize}`);
+  console.log(`API URL: ${finalUrl}`);
   
   try {
     // Perform the request with detailed logging
-    console.log(`Making request to Lightspeed API with URL: ${url.split('?')[0]}`);
-    console.log(`Query parameters: ${url.split('?')[1]}`);
-    console.log(`Access token length: ${accessToken.length} characters`);
-    console.log(`Account ID: ${accountId}`);
+    console.log(`Making request to Lightspeed API with URL: ${finalUrl}`);
     
-    const response = await fetch(url, {
+    const response = await fetch(finalUrl, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -663,6 +754,13 @@ async function processAndReturnSalesData(response: Response, page: number, pageS
     // Log total count information
     console.log(`Received sale line data with attributes:`, responseData['@attributes']);
     
+    // Extract the next URL from the response attributes if available
+    let nextUrl: string | undefined = undefined;
+    if (responseData['@attributes'] && responseData['@attributes'].next) {
+      nextUrl = responseData['@attributes'].next;
+      console.log(`Found next URL for pagination: ${nextUrl}`);
+    }
+    
     // Check which relations are loaded in the API response
     console.log('=== ANALYZING API RESPONSE STRUCTURE ===');
     console.log('Relations that should have been loaded:', ['Item', 'Sale', 'TaxClass']);
@@ -707,7 +805,8 @@ async function processAndReturnSalesData(response: Response, page: number, pageS
         pagination: {
           page,
           pageSize,
-          hasMore: false
+          hasMore: !!nextUrl,
+          nextUrl
         }
       });
     }
@@ -717,34 +816,36 @@ async function processAndReturnSalesData(response: Response, page: number, pageS
       ? responseData.SaleLine 
       : [responseData.SaleLine]; // Handle case where only one sale line is returned
     
-    console.log(`Processing ${saleLines.length} sale line records`);
+    console.log(`Processing ${saleLines.length} sale line records on page ${page}`);
     
     // Add detailed debugging for the first 3 sale lines to understand data structure
-    console.log('=== DETAILED DEBUG: FIRST 3 SALE LINES ===');
-    for (let i = 0; i < Math.min(3, saleLines.length); i++) {
-      console.log(`\n--- SALE LINE #${i+1} ---`);
-      console.log('saleID:', saleLines[i].saleID);
-      console.log('itemID:', saleLines[i].itemID);
-      console.log('Full sale line object:', JSON.stringify(saleLines[i], null, 2));
-      
-      // Check specifically for Item structure
-      if (saleLines[i].Item) {
-        console.log('Item structure available with keys:', Object.keys(saleLines[i].Item));
-        console.log('Item details:', {
-          itemID: saleLines[i].Item.itemID,
-          description: saleLines[i].Item.description,
-          longDescription: saleLines[i].Item.longDescription
-        });
-      } else {
-        console.log('❌ No Item object found in this sale line!');
+    if (page === 1) {
+      console.log('=== DETAILED DEBUG: FIRST 3 SALE LINES ===');
+      for (let i = 0; i < Math.min(3, saleLines.length); i++) {
+        console.log(`\n--- SALE LINE #${i+1} ---`);
+        console.log('saleID:', saleLines[i].saleID);
+        console.log('itemID:', saleLines[i].itemID);
+        console.log('Full sale line object:', JSON.stringify(saleLines[i], null, 2));
+        
+        // Check specifically for Item structure
+        if (saleLines[i].Item) {
+          console.log('Item structure available with keys:', Object.keys(saleLines[i].Item));
+          console.log('Item details:', {
+            itemID: saleLines[i].Item.itemID,
+            description: saleLines[i].Item.description,
+            longDescription: saleLines[i].Item.longDescription
+          });
+        } else {
+          console.log('❌ No Item object found in this sale line!');
+        }
+        
+        // Check for TaxClass as well since it's a fallback
+        if (saleLines[i].TaxClass) {
+          console.log('TaxClass available:', saleLines[i].TaxClass);
+        }
       }
-      
-      // Check for TaxClass as well since it's a fallback
-      if (saleLines[i].TaxClass) {
-        console.log('TaxClass available:', saleLines[i].TaxClass);
-      }
+      console.log('=== END DETAILED DEBUG ===');
     }
-    console.log('=== END DETAILED DEBUG ===');
     
     // Group sale lines by saleID to reconstruct sales
     const salesMap = new Map<string, LightspeedSaleLine[]>();
@@ -759,30 +860,32 @@ async function processAndReturnSalesData(response: Response, page: number, pageS
       salesMap.get(saleLine.saleID)?.push(saleLine);
     });
     
-    console.log(`Grouped into ${salesMap.size} distinct sales`);
+    console.log(`Grouped into ${salesMap.size} distinct sales on page ${page}`);
     
     // Add debugging for the first 3 complete sales after grouping
-    console.log('=== DETAILED DEBUG: FIRST 3 SALES AFTER GROUPING ===');
-    let saleCounter = 0;
-    for (const [saleID, lines] of salesMap.entries()) {
-      if (saleCounter >= 3) break;
-      console.log(`\n--- SALE #${saleCounter+1} (ID: ${saleID}) ---`);
-      console.log('Contains', lines.length, 'line items');
-      
-      // Print detailed info for first line in this sale
-      const firstLine = lines[0];
-      console.log('First line item attributes:', {
-        saleLineID: firstLine.saleLineID,
-        itemID: firstLine.itemID,
-        hasItem: !!firstLine.Item,
-        hasItemDescription: firstLine.Item?.description ? true : false,
-        description: firstLine.Item?.description || 'N/A',
-        longDescription: firstLine.Item?.longDescription || 'N/A'
-      });
-      
-      saleCounter++;
+    if (page === 1) {
+      console.log('=== DETAILED DEBUG: FIRST 3 SALES AFTER GROUPING ===');
+      let saleCounter = 0;
+      for (const [saleID, lines] of salesMap.entries()) {
+        if (saleCounter >= 3) break;
+        console.log(`\n--- SALE #${saleCounter+1} (ID: ${saleID}) ---`);
+        console.log('Contains', lines.length, 'line items');
+        
+        // Print detailed info for first line in this sale
+        const firstLine = lines[0];
+        console.log('First line item attributes:', {
+          saleLineID: firstLine.saleLineID,
+          itemID: firstLine.itemID,
+          hasItem: !!firstLine.Item,
+          hasItemDescription: firstLine.Item?.description ? true : false,
+          description: firstLine.Item?.description || 'N/A',
+          longDescription: firstLine.Item?.longDescription || 'N/A'
+        });
+        
+        saleCounter++;
+      }
+      console.log('=== END DETAILED DEBUG ===');
     }
-    console.log('=== END DETAILED DEBUG ===');
 
     // Extract accountId from the response URL if possible
     let accountId: string = '';
@@ -1070,34 +1173,19 @@ async function processAndReturnSalesData(response: Response, page: number, pageS
       }
     }
     
-    // Sort by timestamp to ensure newest first
-    processedSales.sort((a, b) => {
-      return new Date(b.timeStamp).getTime() - new Date(a.timeStamp).getTime();
-    });
-    
-    // Save the sales data to Firestore if merchantId is provided
-    if (merchantId && processedSales.length > 0) {
-      // Save to regular lightspeed_sales collection
-      saveNewSalesToFirestore(merchantId, processedSales).catch(error => {
-        console.error('Error saving sales to Firestore:', error);
-      });
-      
-      // Also save to daily sales collection
-      saveDailySales(merchantId, processedSales).catch(error => {
-        console.error('Error saving daily sales to Firestore:', error);
-      });
-    }
-    
-    console.log(`Successfully processed ${processedSales.length} sales from SaleLine endpoint, displaying newest sales first.`);
+    console.log(`Successfully processed ${processedSales.length} sales from page ${page}, from ${saleLines.length} sale lines`);
 
+    // Return the processed sales without saving to Firestore
+    // We'll save them in the main function after collecting all pages
     return NextResponse.json({ 
       success: true, 
       sales: processedSales,
       pagination: {
         page,
         pageSize,
-        total: responseData['@attributes']?.count || saleLines.length,
-        hasMore: saleLines.length >= pageSize
+        totalCount: processedSales.length,
+        hasMore: !!nextUrl,
+        nextUrl
       }
     });
   } catch (error) {
@@ -1159,7 +1247,7 @@ async function saveNewSalesToFirestore(merchantId: string, sales: ProcessedSale[
           // Store the full sale object with all details, but sanitize it for Firestore
           const saleData = sanitizeForFirestore({
             ...check.sale,
-            _savedAt: new Date().toISOString(),
+            _savedAt: Timestamp.now(),
             _merchantId: merchantId,
             _source: 'lightspeed_saleline' // Mark the source of this data
           });
@@ -1270,7 +1358,7 @@ async function refreshLightspeedToken(merchantId: string, refreshToken: string) 
       access_token: tokenData.access_token,
       refresh_token: tokenData.refresh_token || refreshToken, // Use new refresh token if provided
       expires_in: tokenData.expires_in,
-      updated_at: new Date().toISOString()
+      updated_at: Timestamp.now()
     })
 
     return tokenData.access_token
@@ -1351,7 +1439,7 @@ async function saveDailySales(merchantId: string, sales: ProcessedSale[]) {
             sales: updatedSales,
             totalSales: updatedSales.length,
             totalAmount: updatedSales.reduce((sum, sale: any) => sum + parseFloat(sale.total || '0'), 0).toFixed(2),
-            lastUpdated: new Date().toISOString()
+            lastUpdated: Timestamp.now()
           });
           
           console.log(`Updated day ${dayId} with ${newSales.length} new sales, total now ${updatedSales.length}`);
@@ -1370,7 +1458,7 @@ async function saveDailySales(merchantId: string, sales: ProcessedSale[]) {
           sales: daySales.map(sale => sanitizeForFirestore(sale)),
           totalSales: daySales.length,
           totalAmount: daySales.reduce((sum, sale) => sum + parseFloat(sale.total || '0'), 0).toFixed(2),
-          lastUpdated: new Date().toISOString()
+          lastUpdated: Timestamp.now()
         });
         
         console.log(`Created day document ${dayId} with ${daySales.length} sales`);
@@ -1385,7 +1473,7 @@ async function saveDailySales(merchantId: string, sales: ProcessedSale[]) {
         date: dayId,
         totalSales: daySales.length,
         totalAmount: daySales.reduce((sum, sale) => sum + parseFloat(sale.total || '0'), 0).toFixed(2),
-        lastUpdated: new Date().toISOString()
+        lastUpdated: Timestamp.now()
       });
       
       console.log(`Updated summary for day ${dayId}`);

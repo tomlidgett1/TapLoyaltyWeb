@@ -14,6 +14,10 @@ export default {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
         },
+        slowFadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
         gradientX: {
           '0%, 100%': { 
             'background-size': '200% 200%',
@@ -27,6 +31,7 @@ export default {
       },
       animation: {
         fadeIn: 'fadeIn 0.5s ease-in-out',
+        slowFadeIn: 'slowFadeIn 1s ease-in-out',
         'gradient-x': 'gradientX 3s ease infinite',
       },
   		colors: {

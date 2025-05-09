@@ -644,7 +644,7 @@ export default function EmailsPage() {
                         <Skeleton className="h-4 w-[60%]" />
                       </div>
                     ) : (
-                      <div className="prose prose-sm max-w-none dark:prose-invert">
+                      <div className="prose prose-sm max-w-none dark:prose-invert font-sf-pro">
                         {emailContent?.body.html ? (
                           <div dangerouslySetInnerHTML={createMarkup(emailContent.body.html)} />
                         ) : emailContent?.body.plain ? (

@@ -2,11 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, query, collection, where, getDocs } from 'firebase/firestore';
 
-// Google OAuth client credentials
-const CLIENT_ID = "1035054543006-dq2fier1a540dbbfieevph8m6gu74j15.apps.googleusercontent.com";
-const CLIENT_SECRET = "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";
+// Google OAuth client credentials from environment variables with fallbacks
+const CLIENT_ID = process.env.GMAIL_CLIENT_ID || "1035054543006-dq2fier1a540dbbfieevph8m6gu74j15.apps.googleusercontent.com";
+const CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET || "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";
 
 export async function POST(request: NextRequest) {
+  // Check if required environment variables are set
+  if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET) {
+    console.error("Missing required environment variables for Gmail OAuth");
+    return NextResponse.json(
+      { error: 'Server configuration error' },
+      { status: 500 }
+    );
+  }
+  
   try {
     // Check if this is an authorized request (should add proper authentication)
     // This would typically be a scheduled server function or admin-only endpoint
@@ -106,6 +115,15 @@ export async function POST(request: NextRequest) {
 
 // This function would be used by a scheduled job to refresh tokens
 export async function GET() {
+  // Check if required environment variables are set
+  if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET) {
+    console.error("Missing required environment variables for Gmail OAuth");
+    return NextResponse.json(
+      { error: 'Server configuration error' },
+      { status: 500 }
+    );
+  }
+  
   try {
     // This should be secured with proper authentication
     // For example, only allow access from Cloud Functions

@@ -22,11 +22,15 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    // In production, you should encrypt sensitive tokens before storing them
+    // Consider using Firebase KMS or a similar service for encryption
+    // For this example, we're storing them as-is
+    
     // Store the integration data in Firestore
     await setDoc(doc(db, 'merchants', merchantId, 'integrations', 'gmail'), {
       connected: true,
       access_token,
-      refresh_token,
+      refresh_token,  // In production, this should be encrypted
       expires_at,
       connectedAt: serverTimestamp(),
     });

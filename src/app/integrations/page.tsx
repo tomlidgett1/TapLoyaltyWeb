@@ -382,8 +382,20 @@ export default function IntegrationsPage() {
     setConnecting("gmail")
     
     try {
-      // Gmail OAuth parameters
-      const clientId = "1035054543006-dq2fier1a540dbbfieevph8m6gu74j15.apps.googleusercontent.com"
+      // Gmail OAuth parameters with fallback value
+      const clientId = process.env.NEXT_PUBLIC_GMAIL_CLIENT_ID || "1035054543006-dq2fier1a540dbbfieevph8m6gu74j15.apps.googleusercontent.com"
+      
+      // Check if clientId is still undefined despite the fallback
+      if (!clientId) {
+        console.error("Missing Gmail client ID");
+        toast({
+          title: "Configuration Error",
+          description: "Gmail integration is not properly configured. Please contact support.",
+          variant: "destructive"
+        });
+        setConnecting(null);
+        return;
+      }
       
       // Store the state in localStorage to verify when the user returns
       const state = Math.random().toString(36).substring(2, 15)

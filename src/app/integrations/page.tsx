@@ -405,8 +405,8 @@ export default function IntegrationsPage() {
       localStorage.setItem('gmail_merchant_id', user.uid)
       
       // The REDIRECT_URI should match what's configured in Google Cloud Console
-      // This would be handled by your callback API route
-      const redirectUri = `${window.location.origin}/api/auth/gmail/callback`
+      // Using the production redirect URL
+      const redirectUri = "https://app.taployalty.com.au/api/auth/gmail/callback"
       
       // Define the scopes needed for Gmail integration
       const scopes = [

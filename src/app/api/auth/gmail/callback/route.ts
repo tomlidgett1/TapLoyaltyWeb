@@ -5,14 +5,14 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 // Google OAuth client credentials from environment variables with fallbacks
 const CLIENT_ID = process.env.GMAIL_CLIENT_ID || "1035054543006-dq2fier1a540dbbfieevph8m6gu74j15.apps.googleusercontent.com";
 const CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET || "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";
-const REDIRECT_URI = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/auth/gmail/callback`;
+const REDIRECT_URI = process.env.GMAIL_REDIRECT_URI || "https://app.taployalty.com.au/api/auth/gmail/callback";
 
 export async function GET(request: NextRequest) {
   // Check if required environment variables are set
   if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET) {
     console.error("Missing required environment variables for Gmail OAuth");
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/integrations?error=server_configuration`
+      `${process.env.NEXT_PUBLIC_APP_URL || "https://app.taployalty.com.au"}/integrations?error=server_configuration`
     );
   }
 
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   
   if (!code) {
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/integrations?error=missing_code`
+      `${process.env.NEXT_PUBLIC_APP_URL || "https://app.taployalty.com.au"}/integrations?error=missing_code`
     );
   }
   
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
       const errorData = await tokenResponse.json();
       console.error('Token exchange error:', errorData);
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/integrations?error=token_exchange_failed`
+        `${process.env.NEXT_PUBLIC_APP_URL || "https://app.taployalty.com.au"}/integrations?error=token_exchange_failed`
       );
     }
     
@@ -140,7 +140,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error in Gmail callback handler:', error);
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/integrations?error=server_error`
+      `${process.env.NEXT_PUBLIC_APP_URL || "https://app.taployalty.com.au"}/integrations?error=server_error`
     );
   }
 } 

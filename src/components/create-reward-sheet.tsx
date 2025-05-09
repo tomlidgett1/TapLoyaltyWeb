@@ -124,6 +124,19 @@ export function CreateRewardSheet({
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1)
   const { toast } = useToast()
+  const [instantClose, setInstantClose] = useState(false)
+  
+  // Reset instantClose when sheet is closed
+  useEffect(() => {
+    if (!open && instantClose) {
+      const timer = setTimeout(() => {
+        setInstantClose(false);
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [open, instantClose]);
+  
   const [formData, setFormData] = useState<FormData>({
     // Basic Details
     rewardName: "",
@@ -938,6 +951,10 @@ export function CreateRewardSheet({
           router.push(`/store/${newRewardRef.id}`);
         }
       }
+      
+      // After successful save
+      setInstantClose(true);
+      onOpenChange(false);
     } catch (error) {
       console.error("Error saving reward:", error);
       toast({
@@ -950,100 +967,23 @@ export function CreateRewardSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md md:max-w-xl lg:max-w-2xl overflow-hidden p-0 flex flex-col">
-        <div className="flex-none px-6 py-4 border-b">
-          <SheetHeader className="mb-2">
-            <SheetTitle className="text-2xl">
-              <span className="text-[#007AFF]">{isEditing ? 'Edit' : 'Create'}</span> {isEditing ? 'Reward' : 'New Reward'}
+      <SheetContent
+        className="sm:max-w-[600px] p-0 overflow-auto h-screen rounded-md"
+        onInteractOutside={(e) => e.preventDefault()}
+        data-instant-close={instantClose ? "true" : "false"}
+      >
+        <div className="flex-none px-6 py-3 border-b">
+          <SheetHeader className="mb-1">
+            <SheetTitle className="text-lg">
+              <span className="text-blue-500">Create</span> Reward
             </SheetTitle>
-            <SheetDescription>
-              {isEditing 
-                ? 'Update the details of your existing reward.' 
-                : customerName
-                  ? `Design a personalized reward for ${customerName}.`
-                  : 'Design a new reward for your loyal customers. Fill out the details below.'}
+            <SheetDescription className="text-sm">
+              Offer rewards that motivate customers to engage with your loyalty program
             </SheetDescription>
           </SheetHeader>
-
-          {customerId && customerName && (
-            <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-100 rounded-md">
-              <User className="h-4 w-4 text-[#007AFF]" />
-              <span className="text-sm text-blue-700">
-                Creating reward for <span className="font-medium">{customerName}</span>
-              </span>
-            </div>
-          )}
-          
-          <div className="flex items-center gap-2 mt-3">
-            <Popover open={isAiCreatorOpen} onOpenChange={setIsAiCreatorOpen}>
-              <PopoverTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  className="bg-[#E8F2FF] text-[#007AFF] hover:bg-[#D1E5FF]"
-                >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  TapAI
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <h4 className="font-medium">TapAI Reward Creator</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Describe the reward you want to create and our AI will generate it for you.
-                    </p>
-                  </div>
-                  <Textarea
-                    placeholder="E.g., Create a birthday discount reward that gives 20% off to customers during their birthday month"
-                    value={aiPrompt}
-                    onChange={(e) => setAiPrompt(e.target.value)}
-                    className="min-h-[100px]"
-                  />
-                  <Button 
-                    className="w-full bg-[#007AFF] hover:bg-[#0062CC]" 
-                    onClick={() => {
-                      toast({
-                        title: "AI Generation",
-                        description: "This feature is not implemented in this component yet.",
-                      })
-                    }}
-                    disabled={isGenerating}
-                  >
-                    {isGenerating ? (
-                      <>
-                        <span className="mr-2">Generating...</span>
-                        <span className="animate-spin">⏳</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        Generate Reward
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-            
-            <Button 
-              variant="outline" 
-              size="sm"
-              className="bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-700"
-              onClick={() => {
-                toast({
-                  title: "Help Guide",
-                  description: "Need help? Contact our support team for assistance with creating rewards.",
-                })
-              }}
-            >
-              <HelpCircle className="h-4 w-4 mr-2" />
-              Help Guide
-            </Button>
-          </div>
         </div>
 
-        <div className="flex-none px-6 py-2 border-b">
+        <div className="flex-none px-6 py-4 border-b">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <h3 className="text-lg font-semibold">

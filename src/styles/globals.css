@@ -29,4 +29,24 @@
   font-weight: bold;
   font-style: normal;
   font-display: swap;
+}
+
+/* Add custom styles for instant-closing sheets */
+[data-instant-close="true"] {
+  transition: none !important;
+  animation: none !important;
+  opacity: 0 !important;
+  transform: none !important;
+  z-index: 49 !important; /* Ensure the closing sheet is below the new one */
+}
+
+/* Make sure newly opening sheets have a higher z-index */
+[data-state="open"] {
+  z-index: 50 !important;
+}
+
+/* Ensure the overlay doesn't flicker during transitions */
+[data-instant-close="true"] + [role="presentation"] {
+  opacity: 1 !important;
+  transition: none !important;
 } 

@@ -48,6 +48,7 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
   const [showCoffeeForm, setShowCoffeeForm] = useState(false)
   const [showVoucherForm, setShowVoucherForm] = useState(false)
   const [showTransactionForm, setShowTransactionForm] = useState(false)
+  const [instantClose, setInstantClose] = useState(false)
   const [coffeeFormData, setCoffeeFormData] = useState({
     pin: '',
     freeRewardTiming: 'after' as 'before' | 'after',
@@ -83,6 +84,17 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
     setShowVoucherForm(false)
     setShowTransactionForm(false)
   }, [activeTab])
+
+  // Reset instantClose when sheet is closed
+  useEffect(() => {
+    if (!open && instantClose) {
+      const timer = setTimeout(() => {
+        setInstantClose(false);
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [open, instantClose]);
 
   // Custom scrollbar styles
   const scrollbarStyles = `
@@ -133,6 +145,7 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
         title: "Success",
         description: "Coffee program created successfully",
       })
+      setInstantClose(true);
       onOpenChange(false)
     } catch (error: any) {
       // No error handling needed here
@@ -203,6 +216,7 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
         title: "Success",
         description: "Recurring voucher created successfully",
       })
+      setInstantClose(true);
       onOpenChange(false)
       
     } catch (error: any) {
@@ -412,6 +426,7 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
         title: "Success",
         description: "Transaction-based reward created successfully",
       })
+      setInstantClose(true);
       onOpenChange(false)
       
     } catch (error: any) {
@@ -553,7 +568,7 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="w-full sm:max-w-md md:max-w-xl lg:max-w-2xl overflow-hidden p-0 flex flex-col">
+        <SheetContent side="right" className="w-full sm:max-w-md md:max-w-xl lg:max-w-2xl overflow-hidden p-0 flex flex-col" instantClose={instantClose}>
           <style jsx global>{scrollbarStyles}</style>
           
           <div className="flex-none px-6 py-4 border-b">

@@ -2666,6 +2666,9 @@ export function TapAiDialog({
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="sr-only">Loading</DialogTitle>
+          </DialogHeader>
           <div className="flex items-center justify-center p-8">
             <div className="h-8 w-8 border-2 border-[#007AFF] border-t-transparent rounded-full animate-spin" />
           </div>

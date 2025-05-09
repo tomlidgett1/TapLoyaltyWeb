@@ -1698,110 +1698,25 @@ export function CreateRewardDialog({
           background-color: #007AFF !important;
         }
       `}</style>
-      <DialogContent 
-        className="sm:max-w-[800px] h-[97vh] flex flex-col dialog-content rounded-md"
+      <DialogContent
+        className={`sm:max-w-[${currentStep === 5 ? "700px" : "600px"}] h-[${currentStep === 5 ? "700px" : "600px"}] flex flex-col max-h-[97vh] overflow-hidden`}
+        onInteractOutside={(e) => {
+          // Prevent closing when clicking outside if on later steps
+          if (currentStep > 1) {
+            e.preventDefault();
+          }
+        }}
       >
-        <DialogHeader className="space-y-4">
-          <div className="flex items-start justify-between">
-            <div className="flex flex-col gap-4">
-              <div className="space-y-1.5">
-                <DialogTitle className="text-2xl">
-                  <span className="text-[#007AFF]">{isEditing ? 'Edit' : 'Create'}</span> {isEditing ? 'Reward' : 'New Reward'}
-                </DialogTitle>
-                <DialogDescription>
-                  {isEditing 
-                    ? 'Update the details of your existing reward.' 
-                    : customerName
-                      ? `Design a personalized reward for ${customerName}.`
-                      : 'Design a new reward for your loyal customers. Fill out the details below.'}
-                </DialogDescription>
-              </div>
-              
-              {customerId && customerName && (
-                <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-100 rounded-md">
-                  <User className="h-4 w-4 text-[#007AFF]" />
-                  <span className="text-sm text-blue-700">
-                    Creating reward for <span className="font-medium">{customerName}</span>
-                  </span>
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-2 pt-1">
-              {process.env.NODE_ENV === 'development' && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
-                  onClick={fillTestData}
-                >
-                  <BugPlay className="h-4 w-4 mr-2" />
-                  Test Fill
-                </Button>
-              )}
-              
-              {/* TapAI Button - updated from Smart Creator */}
-              <Popover open={isAiCreatorOpen} onOpenChange={setIsAiCreatorOpen}>
-                <PopoverTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="bg-[#E8F2FF] text-[#007AFF] hover:bg-[#D1E5FF]"
-                  >
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    TapAI
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <h4 className="font-medium">TapAI Reward Creator</h4>
-                      <p className="text-sm text-muted-foreground">
-                        Describe the reward you want to create and our AI will generate it for you.
-                      </p>
-                    </div>
-                    <Textarea
-                      placeholder="E.g., Create a birthday discount reward that gives 20% off to customers during their birthday month"
-                      value={aiPrompt}
-                      onChange={(e) => setAiPrompt(e.target.value)}
-                      className="min-h-[100px]"
-                    />
-                    <Button 
-                      className="w-full bg-[#007AFF] hover:bg-[#0062CC]" 
-                      onClick={handleAiGeneration}
-                      disabled={isGenerating}
-                    >
-                      {isGenerating ? (
-                        <>
-                          <span className="mr-2">Generating...</span>
-                          <span className="animate-spin">⏳</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="h-4 w-4 mr-2" />
-                          Generate Reward
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-              
-              <Button 
-                variant="outline" 
-                size="sm"
-                className="bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-700"
-                onClick={() => {
-                  toast({
-                    title: "Help Guide",
-                    description: "Need help? Contact our support team for assistance with creating rewards.",
-                  })
-                }}
-              >
-                <HelpCircle className="h-4 w-4 mr-2" />
-                Help Guide
-              </Button>
-            </div>
-          </div>
+        <DialogHeader>
+          <DialogTitle className="text-lg font-semibold">
+            {isEditing ? 'Edit Reward' : 'Create New Reward'}
+          </DialogTitle>
+          <DialogDescription>
+            {isEditing 
+              ? 'Modify your existing reward details below'
+              : 'Set up a new loyalty reward for your customers'
+            }
+          </DialogDescription>
         </DialogHeader>
 
         <Tabs 

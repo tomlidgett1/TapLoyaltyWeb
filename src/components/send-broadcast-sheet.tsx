@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState } from 'react'
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet"
+import React, { useState, useEffect } from 'react'
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose, SheetDescription } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,6 +18,7 @@ import { AnnouncementDesignerDialog } from "@/components/announcement-designer-d
 import { useRouter } from "next/navigation"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import { httpsCallable } from "firebase/functions"
 
 interface SendBroadcastSheetProps {
   open: boolean
@@ -34,7 +35,20 @@ export function SendBroadcastSheet({ open, onOpenChange }: SendBroadcastSheetPro
   const [notificationAction, setNotificationAction] = useState("showAnnouncement")
   const [showAnnouncementDesigner, setShowAnnouncementDesigner] = useState(false)
   const [announcement, setAnnouncement] = useState<any>(null)
+  const [showConfirmation, setShowConfirmation] = useState(false)
+  const [instantClose, setInstantClose] = useState(false)
   const router = useRouter()
+  
+  // Reset instantClose when sheet is closed
+  useEffect(() => {
+    if (!open && instantClose) {
+      const timer = setTimeout(() => {
+        setInstantClose(false);
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [open, instantClose]);
   
   const toTitleCase = (str: string) => {
     return str
@@ -64,6 +78,7 @@ export function SendBroadcastSheet({ open, onOpenChange }: SendBroadcastSheetPro
     }
     
     setLoading(true)
+    setShowConfirmation(true)
     
     try {
       // Get merchant data to access the merchant name
@@ -184,6 +199,8 @@ export function SendBroadcastSheet({ open, onOpenChange }: SendBroadcastSheetPro
       setAudience("all")
       setNotificationAction("showAnnouncement")
       setAnnouncement(null)
+      setShowConfirmation(false)
+      setInstantClose(true)
       onOpenChange(false)
     } catch (error) {
       console.error(error)
@@ -199,39 +216,19 @@ export function SendBroadcastSheet({ open, onOpenChange }: SendBroadcastSheetPro
   
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md md:max-w-xl overflow-hidden p-0 flex flex-col">
-        <div className="flex-none px-6 py-4 border-b">
-          <SheetHeader className="mb-2">
-            <SheetTitle className="text-xl">
-              <span className="flex items-center gap-2">
-                <Bell className="h-5 w-5 text-[#007AFF]" />
-                <span>
-                  <span className="text-[#007AFF]">Broadcast</span>
-                  <span> Message</span>
-                </span>
-              </span>
+      <SheetContent
+        className="sm:max-w-[600px] p-0 overflow-auto h-screen rounded-md"
+        onInteractOutside={(e) => e.preventDefault()}
+        data-instant-close={instantClose ? "true" : "false"}
+      >
+        <div className="flex-none px-6 py-3 border-b">
+          <SheetHeader className="mb-1">
+            <SheetTitle className="text-lg">
+              <span className="text-blue-500">Broadcast</span> Message
             </SheetTitle>
-            
-            <div className="flex items-center gap-2 mt-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-8 text-xs flex items-center gap-1"
-                onClick={() => router.push('/broadcasts')}
-              >
-                <MessageSquare className="h-3.5 w-3.5" />
-                My Messages
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-8 text-xs flex items-center gap-1"
-              >
-                <HelpCircle className="h-3.5 w-3.5" />
-                Guide
-              </Button>
-            </div>
+            <SheetDescription className="text-sm">
+              Send a notification to your customers to keep them engaged
+            </SheetDescription>
           </SheetHeader>
         </div>
         

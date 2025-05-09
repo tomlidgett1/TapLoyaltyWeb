@@ -52,6 +52,7 @@ import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/use-toast"
 import { collection, getDocs, query, where, limit } from "firebase/firestore"
 import { Input } from "@/components/ui/input"
+import { CreateSheet } from "@/components/create-sheet"
 
 // Get auth instance
 const auth = getAuth();
@@ -102,6 +103,11 @@ const navItems = [
     icon: Store,
     subItems: [
       {
+        title: "Store Overview",
+        href: "/store/overview",
+        icon: BarChart
+      },
+      {
         title: "Activity",
         href: "/store/activity",
         icon: Clock
@@ -145,8 +151,9 @@ const navItems = [
   },
   {
     title: "Create",
-    href: "/create",
-    icon: PlusCircle
+    href: "#",
+    icon: PlusCircle,
+    openSheet: true
   },
   {
     title: "Financials",
@@ -198,6 +205,7 @@ interface ChecklistItem {
   title: string;
   completed: boolean;
   href: string;
+  openSheet?: boolean;
 }
 
 interface MerchantData {
@@ -221,7 +229,7 @@ export function SideNav() {
   const [loading, setLoading] = useState(true)
   const [merchantData, setMerchantData] = useState<MerchantData | null>(null)
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([
-    { id: 'reward', title: 'Create a reward', completed: false, href: '/create' },
+    { id: 'reward', title: 'Create a reward', completed: false, href: '#', openSheet: true },
     { id: 'banner', title: 'Create a banner', completed: false, href: '/store/banners' },
     { id: 'points', title: 'Set up a points rule', completed: false, href: '/store/points-rules' },
     { id: 'customer', title: 'Add a customer', completed: false, href: '/customers' }
@@ -233,6 +241,7 @@ export function SideNav() {
     "Settings": true
   })
   const [searchQuery, setSearchQuery] = useState("")
+  const [createSheetOpen, setCreateSheetOpen] = useState(false)
 
   useEffect(() => {
     async function fetchMerchantData() {
@@ -433,24 +442,45 @@ export function SideNav() {
               
               return (
                 <li key={item.title}>
-                  <Link
-                    href={item.href}
-                    className={cn(
-                      "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-normal transition-colors",
-                      isActive 
-                        ? "bg-[#007AFF]/10 text-[#007AFF]" 
-                        : "text-gray-800 hover:bg-[#007AFF]/5"
-                    )}
-                  >
-                    <item.icon className={cn("h-4 w-4 flex-shrink-0", 
-                      isActive 
-                        ? "text-[#007AFF]" 
-                        : "text-gray-500 group-hover:text-[#007AFF]"
-                    )} />
-                    <span className={isActive ? "text-[#007AFF]" : "group-hover:text-[#007AFF]"}>
-                      {item.title}
-                    </span>
-                  </Link>
+                  {item.openSheet ? (
+                    <button
+                      className={cn(
+                        "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-normal transition-colors w-full text-left",
+                        isActive 
+                          ? "bg-[#007AFF]/10 text-[#007AFF]" 
+                          : "text-gray-800 hover:bg-[#007AFF]/5"
+                      )}
+                      onClick={() => setCreateSheetOpen(true)}
+                    >
+                      <item.icon className={cn("h-4 w-4 flex-shrink-0", 
+                        isActive 
+                          ? "text-[#007AFF]" 
+                          : "text-gray-500 group-hover:text-[#007AFF]"
+                      )} />
+                      <span className={isActive ? "text-[#007AFF]" : "group-hover:text-[#007AFF]"}>
+                        {item.title}
+                      </span>
+                    </button>
+                  ) : (
+                    <Link
+                      href={item.href}
+                      className={cn(
+                        "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-normal transition-colors",
+                        isActive 
+                          ? "bg-[#007AFF]/10 text-[#007AFF]" 
+                          : "text-gray-800 hover:bg-[#007AFF]/5"
+                      )}
+                    >
+                      <item.icon className={cn("h-4 w-4 flex-shrink-0", 
+                        isActive 
+                          ? "text-[#007AFF]" 
+                          : "text-gray-500 group-hover:text-[#007AFF]"
+                      )} />
+                      <span className={isActive ? "text-[#007AFF]" : "group-hover:text-[#007AFF]"}>
+                        {item.title}
+                      </span>
+                    </Link>
+                  )}
                 </li>
               )
           })}
@@ -646,6 +676,9 @@ export function SideNav() {
           </DropdownMenu>
         </div>
       </div>
+
+      {/* CreateSheet component */}
+      <CreateSheet open={createSheetOpen} onOpenChange={setCreateSheetOpen} />
     </div>
   )
 }

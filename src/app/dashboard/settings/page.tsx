@@ -575,7 +575,7 @@ const SettingsPage: React.FC = () => {
   if (dataLoading) {
     return (
       <PageTransition>
-        <div className="p-6 max-w-7xl mx-auto">
+        <div className="p-6">
           {/* Empty state instead of spinner */}
         </div>
       </PageTransition>
@@ -584,7 +584,7 @@ const SettingsPage: React.FC = () => {
 
   return (
     <PageTransition>
-      <div className="p-6 py-4 max-w-7xl mx-auto space-y-6">
+      <div className="p-6 py-4 space-y-6">
         <div>
           <div className="flex justify-between items-start mb-3">
             <div>

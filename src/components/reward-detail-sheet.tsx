@@ -412,11 +412,19 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
             <Switch 
               checked={reward.status === 'active'} 
               onCheckedChange={async (checked) => {
-                if (!user?.uid || !rewardId) return;
+                console.log("Switch toggled, new value:", checked);
+                if (!user?.uid || !rewardId) {
+                  console.error("Missing user ID or reward ID", { userId: user?.uid, rewardId });
+                  return;
+                }
                 try {
                   setIsToggling(true);
+                  console.log("Updating reward status to:", checked ? 'active' : 'inactive');
+                  
                   // Update the reward status in Firestore
                   const rewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
+                  console.log("Updating merchant reward at path:", `merchants/${user.uid}/rewards/${rewardId}`);
+                  
                   await updateDoc(rewardRef, {
                     status: checked ? 'active' : 'inactive',
                     updatedAt: new Date().toISOString()
@@ -424,18 +432,26 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                   
                   // Also update in top-level rewards collection
                   const globalRewardRef = doc(db, 'rewards', rewardId);
+                  console.log("Updating global reward at path:", `rewards/${rewardId}`);
+                  
                   await updateDoc(globalRewardRef, {
                     status: checked ? 'active' : 'inactive',
                     updatedAt: new Date().toISOString()
                   });
                   
                   // Update the local state
-                  setReward(prev => prev ? {...prev, status: checked ? 'active' : 'inactive'} : null);
+                  console.log("Updating local state");
+                  setReward(prev => {
+                    const newState = prev ? {...prev, status: checked ? 'active' : 'inactive'} : null;
+                    console.log("New reward state:", newState);
+                    return newState;
+                  });
                   
                   showToast({
                     title: "Success",
                     description: `Reward ${checked ? 'activated' : 'deactivated'} successfully.`,
                   });
+                  console.log("Toast shown");
                 } catch (error) {
                   console.error("Error updating reward status:", error);
                   showToast({
@@ -445,6 +461,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                   });
                 } finally {
                   setIsToggling(false);
+                  console.log("Toggle state reset");
                 }
               }}
               disabled={isToggling}

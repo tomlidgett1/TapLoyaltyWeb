@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -93,9 +93,10 @@ import {
 import { IntroductoryRewardDialog } from "@/components/introductory-reward-dialog"
 import { PageTransition } from "@/components/page-transition"
 import { PageHeader } from "@/components/page-header"
+import { RewardDetailSheet } from "@/components/reward-detail-sheet"
 
 // Types
-type RewardCategory = "all" | "individual" | "customer-specific" | "programs"
+type RewardCategory = "all" | "individual" | "customer-specific" | "programs" | "agent"
 type SortField = "rewardName" | "type" | "pointsCost" | "redemptionCount" | "redeemableCustomers" | "impressions" | "createdAt" | "lastRedeemed" | "isActive"
 type SortDirection = "asc" | "desc"
 
@@ -105,7 +106,7 @@ interface Reward {
   description: string
   type: string
   programtype?: string
-  category: "individual" | "customer-specific" | "program"
+  category: "individual" | "customer-specific" | "program" | "agent"
   pointsCost: number
   redemptionCount: number
   status: "active" | "inactive" | "draft"
@@ -297,8 +298,12 @@ export default function RewardsPage() {
   const [hasIntroReward, setHasIntroReward] = useState(false)
   const [isConfirmDeleteProgramOpen, setIsConfirmDeleteProgramOpen] = useState(false)
   const [programToDelete, setProgramToDelete] = useState<string | null>(null)
-  // Add a state to track expanded program cards
   const [expandedPrograms, setExpandedPrograms] = useState<Record<string, boolean>>({})
+  const [selectedRewardId, setSelectedRewardId] = useState<string | null>(null)
+  const [isRewardDetailOpen, setIsRewardDetailOpen] = useState(false)
+  const [agentRewardsWithCustomers, setAgentRewardsWithCustomers] = useState<(Reward & { customerName?: string })[]>([])
+  const [loadingAgentRewards, setLoadingAgentRewards] = useState(true)
+  const hasFetchedAgentRewards = useRef(false)
 
   useEffect(() => {
     const fetchRewards = async () => {
@@ -401,6 +406,60 @@ export default function RewardsPage() {
     
     checkIntroReward()
   }, [user?.uid])
+
+  // Replace the agent rewards useEffect with this version
+  useEffect(() => {
+    const fetchAgentRewardsWithCustomers = async () => {
+      if (!user?.uid || !rewards.length) return;
+      if (hasFetchedAgentRewards.current) return;
+      
+      try {
+        setLoadingAgentRewards(true);
+        hasFetchedAgentRewards.current = true;
+        
+        // Filter agent rewards
+        const agentRewards = rewards.filter(reward => reward.programtype === "agent");
+        
+        // Fetch customer data for each agent reward
+        const rewardsWithCustomers = await Promise.all(
+          agentRewards.map(async (reward) => {
+            // If there's a customerId in the reward
+            if (reward.customerIds && reward.customerIds.length > 0) {
+              try {
+                const customerId = reward.customerIds[0]; // Take the first customer ID
+                const customerDoc = await getDoc(doc(db, 'customers', customerId));
+                
+                if (customerDoc.exists()) {
+                  const customerData = customerDoc.data();
+                  return {
+                    ...reward,
+                    customerName: customerData.firstName || customerData.name || 'Unknown'
+                  };
+                }
+              } catch (error) {
+                console.error("Error fetching customer data:", error);
+              }
+            }
+            
+            return {
+              ...reward,
+              customerName: 'No customer found'
+            };
+          })
+        );
+        
+        setAgentRewardsWithCustomers(rewardsWithCustomers);
+      } catch (error) {
+        console.error("Error fetching agent rewards with customers:", error);
+      } finally {
+        setLoadingAgentRewards(false);
+      }
+    };
+    
+    if (rewardCategory === "agent" && !hasFetchedAgentRewards.current) {
+      fetchAgentRewardsWithCustomers();
+    }
+  }, [rewards, user?.uid, rewardCategory]);
 
   // Add handleSort function before getFilteredRewards
   const handleSort = (field: SortField) => {
@@ -734,7 +793,7 @@ export default function RewardsPage() {
                     <TableRow 
                       key={reward.id}
                       className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => router.push(`/store/${reward.id}`)}
+                      onClick={() => handleViewReward(reward.id)}
                     >
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
@@ -873,7 +932,7 @@ export default function RewardsPage() {
                             align="end"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <DropdownMenuItem onClick={() => router.push(`/store/${reward.id}`)}>
+                            <DropdownMenuItem onClick={() => handleViewReward(reward.id)}>
                               <Eye className="h-4 w-4 mr-2" />
                               View
                             </DropdownMenuItem>
@@ -1252,6 +1311,12 @@ export default function RewardsPage() {
     }
   };
 
+  // Modify the handleViewReward function 
+  const handleViewReward = (rewardId: string) => {
+    setSelectedRewardId(rewardId);
+    setIsRewardDetailOpen(true);
+  };
+
   return (
     <PageTransition>
       <div className="p-6 py-4">
@@ -1297,6 +1362,12 @@ export default function RewardsPage() {
               <TabsTrigger value="programs" className="flex items-center gap-2">
                 <Award className="h-4 w-4" />
                 Programs
+              </TabsTrigger>
+              <TabsTrigger value="agent" className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-blue-500" />
+                <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-orange-500 font-medium">
+                  Agent
+                </span>
               </TabsTrigger>
             </TabsList>
             
@@ -1623,7 +1694,7 @@ export default function RewardsPage() {
                         <TableRow 
                           key={reward.id}
                           className="cursor-pointer hover:bg-gray-50"
-                          onClick={() => router.push(`/store/${reward.id}`)}
+                          onClick={() => handleViewReward(reward.id)}
                         >
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2">
@@ -1762,7 +1833,7 @@ export default function RewardsPage() {
                                 align="end"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <DropdownMenuItem onClick={() => router.push(`/store/${reward.id}`)}>
+                                <DropdownMenuItem onClick={() => handleViewReward(reward.id)}>
                                   <Eye className="h-4 w-4 mr-2" />
                                   View
                                 </DropdownMenuItem>
@@ -1943,7 +2014,7 @@ export default function RewardsPage() {
                                     <div 
                                       key={reward.id} 
                                       className="p-3 border-b last:border-b-0 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
-                                      onClick={() => router.push(`/store/${reward.id}`)}
+                                      onClick={() => handleViewReward(reward.id)}
                                     >
                                       <div className="flex items-center gap-3">
                                         <div className="h-8 w-8 min-w-[32px] rounded-md bg-muted flex items-center justify-center">
@@ -2057,6 +2128,231 @@ export default function RewardsPage() {
               </>
             )}
           </TabsContent>
+          
+          {/* Add the new Agent tab content */}
+          <TabsContent value="agent" className="mt-0">
+            <Card className="rounded-lg overflow-hidden">
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[300px]">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("rewardName")}
+                          className="flex items-center gap-1 px-0 font-medium"
+                        >
+                          Reward Name
+                          {sortField === "rewardName" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Type
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Customer
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("pointsCost")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Points
+                          {sortField === "pointsCost" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("redemptionCount")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Redemptions
+                          {sortField === "redemptionCount" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("createdAt")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Created
+                          {sortField === "createdAt" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleSort("isActive")}
+                          className="flex items-center gap-1 px-0 font-medium mx-auto"
+                        >
+                          Status
+                          {sortField === "isActive" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="w-[50px]"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loading || loadingAgentRewards ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="h-24 text-center">
+                          <div className="flex justify-center">
+                            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : agentRewardsWithCustomers.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="h-24 text-center">
+                          <div className="flex flex-col items-center justify-center">
+                            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                              <Sparkles className="h-6 w-6 text-muted-foreground" />
+                            </div>
+                            <h3 className="mt-4 text-lg font-medium">No agent rewards found</h3>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Agent rewards are created by our AI marketing agent
+                            </p>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      agentRewardsWithCustomers.map((reward) => (
+                        <TableRow 
+                          key={reward.id}
+                          className="cursor-pointer hover:bg-gray-50"
+                          onClick={() => handleViewReward(reward.id)}
+                        >
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <div className="h-9 w-9 min-w-[36px] rounded-md bg-muted flex items-center justify-center">
+                                <Sparkles className="h-5 w-5 text-blue-600" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="truncate flex items-center gap-1">
+                                  {reward.rewardName}
+                                </div>
+                                <div className="text-xs text-muted-foreground line-clamp-1">
+                                  {reward.description}
+                                </div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="border-gray-200">
+                              <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-orange-500 font-medium">
+                                Agent
+                              </span>
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center">
+                                <User className="h-3 w-3 text-gray-500" />
+                              </div>
+                              <span>{reward.customerName}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                              {reward.pointsCost}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              {reward.redemptionCount || 0}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge 
+                              variant="outline"
+                              className={cn(
+                                reward.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"
+                              )}
+                            >
+                              {reward.isActive ? "Live" : "Inactive"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  className="h-8 w-8 p-0"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent 
+                                align="end"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <DropdownMenuItem onClick={() => handleViewReward(reward.id)}>
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => router.push(`/store/${reward.id}/edit`)}>
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => toggleRewardStatus(reward.id, reward.isActive)}>
+                                  {reward.isActive ? (
+                                    <>
+                                      <Clock className="h-4 w-4 mr-2" />
+                                      Deactivate
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Zap className="h-4 w-4 mr-2" />
+                                      Activate
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  className="text-red-600"
+                                  onClick={() => deleteReward(reward.id)}
+                                >
+                                  <Trash className="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </div>
       
@@ -2100,6 +2396,15 @@ export default function RewardsPage() {
         open={isIntroRewardDialogOpen} 
         onOpenChange={setIsIntroRewardDialogOpen} 
       />
+      
+      {/* Reward Detail Sheet */}
+      {selectedRewardId && (
+        <RewardDetailSheet
+          open={isRewardDetailOpen}
+          onOpenChange={setIsRewardDetailOpen}
+          rewardId={selectedRewardId}
+        />
+      )}
     </PageTransition>
   )
 } 

@@ -46,6 +46,7 @@ import Link from "next/link"
 import { toast } from "@/components/ui/use-toast"
 import { PageTransition } from "@/components/page-transition"
 import { PageHeader } from "@/components/page-header"
+import { RewardDetailSheet } from "@/components/reward-detail-sheet"
 
 interface StoreItem {
   id: string
@@ -69,6 +70,8 @@ export default function StorePage() {
   const [itemType, setItemType] = useState<'all' | 'reward' | 'rule'>('all')
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'name'>('newest')
   const [transactions, setTransactions] = useState([])
+  const [selectedRewardId, setSelectedRewardId] = useState<string | null>(null)
+  const [isRewardDetailOpen, setIsRewardDetailOpen] = useState(false)
 
   useEffect(() => {
     async function fetchItems() {
@@ -162,9 +165,10 @@ export default function StorePage() {
 
   const handleViewItem = (item: StoreItem) => {
     if (item.type === 'reward') {
-      router.push(`/rewards/${item.id}`)
+      setSelectedRewardId(item.id)
+      setIsRewardDetailOpen(true)
     } else {
-      router.push(`/rules/${item.id}`)
+      router.push(`/store/points-rules/${item.id}`)
     }
   }
 
@@ -437,6 +441,14 @@ export default function StorePage() {
           </div>
         </div>
       </div>
+      
+      {selectedRewardId && (
+        <RewardDetailSheet
+          open={isRewardDetailOpen}
+          onOpenChange={setIsRewardDetailOpen}
+          rewardId={selectedRewardId}
+        />
+      )}
     </PageTransition>
   );
 } 

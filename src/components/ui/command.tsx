@@ -23,12 +23,9 @@ const Command = React.forwardRef<
 ))
 Command.displayName = CommandPrimitive.displayName
 
-const CommandDialog = React.forwardRef<
-  React.ElementRef<typeof Dialog>,
-  React.ComponentPropsWithoutRef<typeof Dialog>
->(({ children, ...props }, ref) => {
+const CommandDialog = ({ children, ...props }: DialogProps) => {
   return (
-    <Dialog {...props} ref={ref}>
+    <Dialog {...props}>
       <DialogContent className="overflow-hidden p-0 max-w-[680px] mx-auto">
         <DialogHeader className="sr-only">
           <DialogTitle>Command Menu</DialogTitle>
@@ -39,7 +36,7 @@ const CommandDialog = React.forwardRef<
       </DialogContent>
     </Dialog>
   )
-})
+}
 CommandDialog.displayName = "CommandDialog"
 
 const CommandInput = React.forwardRef<

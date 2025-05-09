@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -64,7 +64,8 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetClose
+  SheetClose,
+  SheetTrigger
 } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
@@ -96,6 +97,15 @@ import {
 } from "lucide-react"
 import Image from "next/image" // Add this import at the top of the file with other imports
 import { getGmailMessages, getGmailMessage, GmailMessage, GmailFullMessage } from '@/lib/gmail-api'
+import ReactMarkdown from 'react-markdown'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 type TimeframeType = "today" | "yesterday" | "7days" | "30days"
 
@@ -179,7 +189,7 @@ export default function DashboardPage() {
   // Add a new state for processing status
   const [processingIntegrations, setProcessingIntegrations] = useState<Record<string, boolean>>({})
   const [isSummarizeInboxSheetOpen, setIsSummarizeInboxSheetOpen] = useState(false)
-  const [inboxSummaryTimeframe, setInboxSummaryTimeframe] = useState<"1day" | "3day" | "7day">("1day")
+  const [inboxSummaryTimeframe, setInboxSummaryTimeframe] = useState<"1day" | "2day" | "3day" | "7day">("1day")
   const [inboxSummaryLoading, setInboxSummaryLoading] = useState(false)
   const [inboxSummaryResult, setInboxSummaryResult] = useState<string | null>(null)
   const [inboxSummaryError, setInboxSummaryError] = useState<string | null>(null)
@@ -194,13 +204,17 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [readStatusMap, setReadStatusMap] = useState<Record<string, boolean>>({})
-  const [loadingStage, setLoadingStage] = useState<"processing" | "finding" | "generating">("processing")
+  
+  // Define a type for loading stages
+  type LoadingStageType = "processing" | "finding" | "generating";
+  
+  const [loadingStage, setLoadingStage] = useState<LoadingStageType>("processing")
   const [debugResponse, setDebugResponse] = useState<string | null>(null)
   
   // Use refs for the timeouts to be able to clear them when needed
   const findingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const generatingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-
+  
   const getDateRange = (tf: TimeframeType): { start: Date; end: Date } => {
     const now = new Date()
     const end = new Date(now) // Create a copy of now for end date
@@ -1425,16 +1439,16 @@ export default function DashboardPage() {
       findingTimeoutRef.current = setTimeout(() => {
         console.log("Changing loading stage to finding");
         setLoadingStage("finding");
-      }, 4000);
+      }, 4000); // 4 seconds
       
       generatingTimeoutRef.current = setTimeout(() => {
         console.log("Changing loading stage to generating");
         setLoadingStage("generating");
-      }, 8000);
+      }, 8000); // 8 seconds
       
-      // Call our proxy API route instead of the Firebase function directly
-      // This avoids CORS issues since the request stays within our domain
-      const response = await fetch('/api/proxy/summarize-emails', {
+      // Call the API to summarize emails
+      const response = await fetch(
+        `https://us-central1-taployalty-staging.cloudfunctions.net/summarizeEmailsHttp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1446,12 +1460,6 @@ export default function DashboardPage() {
           }
         }),
       });
-      
-      // Check for errors
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API error: ${response.status} ${errorText}`);
-      }
       
       // Save the raw response for debugging
       const rawResponse = await response.text();
@@ -2931,7 +2939,7 @@ export default function DashboardPage() {
                   
                   <div className="h-5 flex items-center">
                     {loadingStage === "processing" && (
-                      <p className="text-sm text-indigo-600 animate-pulse">
+                      <p className="text-sm text-gray-500 animate-pulse">
                         Processing...
                       </p>
                     )}
@@ -2958,10 +2966,12 @@ export default function DashboardPage() {
               <div className="space-y-6 animate-fadeIn">
                 <div className="bg-gradient-to-r from-indigo-50 to-white border border-indigo-100 rounded-lg p-5">
                   <h3 className="text-lg font-medium text-indigo-800 mb-3">Email Summary</h3>
-                  <div className="text-sm text-gray-700 leading-relaxed">
-                    {inboxSummaryResult?.split('\n').map((paragraph, i) => (
-                      <p key={i} className="mb-3 last:mb-0">{paragraph}</p>
-                    ))}
+                  <div className="prose prose-sm max-w-none">
+                    {inboxSummaryResult && (
+                      <ReactMarkdown className="prose prose-slate prose-headings:font-semibold prose-h3:text-lg prose-h4:text-base prose-p:text-gray-700 prose-a:text-indigo-600 prose-strong:text-indigo-700 prose-ul:list-disc prose-ol:list-decimal">
+                        {inboxSummaryResult}
+                      </ReactMarkdown>
+                    )}
                   </div>
                 </div>
                 

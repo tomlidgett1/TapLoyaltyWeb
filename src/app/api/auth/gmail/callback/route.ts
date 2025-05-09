@@ -23,10 +23,11 @@ export async function GET(request: NextRequest) {
     console.log('- REDIRECT_URI value:', REDIRECT_URI);
   }
 
-  // Check if required environment variables are set
-  const missingVars = [];
-  if (!process.env.GMAIL_CLIENT_ID) missingVars.push('GMAIL_CLIENT_ID');
-  if (!process.env.GMAIL_CLIENT_SECRET) missingVars.push('GMAIL_CLIENT_SECRET');
+  // Check if required environment variables (or their fallbacks) are set
+  // We rely on the resolved constants here so that a hard-coded fallback counts as "present".
+  const missingVars: string[] = [];
+  if (!CLIENT_ID) missingVars.push('GMAIL_CLIENT_ID');
+  if (!CLIENT_SECRET) missingVars.push('GMAIL_CLIENT_SECRET');
   
   if (missingVars.length > 0) {
     const errorMessage = `Missing required environment variables for Gmail OAuth: ${missingVars.join(', ')}`;

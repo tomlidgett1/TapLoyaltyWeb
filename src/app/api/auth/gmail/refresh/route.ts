@@ -7,8 +7,8 @@ const CLIENT_ID = process.env.GMAIL_CLIENT_ID || "1035054543006-dq2fier1a540dbbf
 const CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET || "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";
 
 export async function POST(request: NextRequest) {
-  // Check if required environment variables are set
-  if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET) {
+  // Check if required environment variables (or their fallbacks) are set
+  if (!CLIENT_ID || !CLIENT_SECRET) {
     console.error("Missing required environment variables for Gmail OAuth");
     return NextResponse.json(
       { error: 'Server configuration error' },
@@ -115,8 +115,8 @@ export async function POST(request: NextRequest) {
 
 // This function would be used by a scheduled job to refresh tokens
 export async function GET() {
-  // Check if required environment variables are set
-  if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET) {
+  // Check if required environment variables (or their fallbacks) are set
+  if (!CLIENT_ID || !CLIENT_SECRET) {
     console.error("Missing required environment variables for Gmail OAuth");
     return NextResponse.json(
       { error: 'Server configuration error' },

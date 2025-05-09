@@ -450,7 +450,9 @@ export default function IntegrationsPage() {
       
       // The REDIRECT_URI should match what's configured in Google Cloud Console
       // Using the production redirect URL
-      const redirectUri = "https://app.taployalty.com.au/api/auth/gmail/callback"
+      const redirectUri = process.env.NEXT_PUBLIC_APP_URL
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/gmail/callback`
+        : `${window.location.origin}/api/auth/gmail/callback`
       
       // Log debug information 
       console.log('Gmail OAuth Configuration:');

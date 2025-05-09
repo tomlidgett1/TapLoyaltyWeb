@@ -8,7 +8,7 @@ runConfig:
   # memoryMiB: 512
 
 # Environment variables and secrets.
-# env:
+env:
   # Configure environment variables.
   # See https://firebase.google.com/docs/app-hosting/configure#user-defined-environment
   # - variable: MESSAGE
@@ -21,3 +21,25 @@ runConfig:
   # See https://firebase.google.com/docs/app-hosting/configure#secret-parameters
   # - variable: MY_SECRET
   #   secret: mySecretRef
+
+  # Gmail OAuth configuration
+  - variable: GMAIL_CLIENT_ID
+    value: 1035054543006-dq2fier1a540dbbfieevph8m6gu74j15.apps.googleusercontent.com
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_GMAIL_CLIENT_ID
+    value: 1035054543006-dq2fier1a540dbbfieevph8m6gu74j15.apps.googleusercontent.com
+    availability:
+      - BUILD
+  - variable: GMAIL_REDIRECT_URI
+    value: https://app.taployalty.com.au/api/auth/gmail/callback
+    availability:
+      - BUILD
+      - RUNTIME
+  # Reference secret for Gmail client secret
+  - variable: GMAIL_CLIENT_SECRET
+    secret: gmailClientSecret
+    availability:
+      - BUILD
+      - RUNTIME

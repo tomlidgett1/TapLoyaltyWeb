@@ -218,7 +218,11 @@ async function refreshTokenIfNeeded(merchantId: string) {
 }
 
 // Get Gmail messages
-export async function getGmailMessages(merchantId: string, maxResults: number = 20): Promise<GmailMessage[]> {
+export async function getGmailMessages(
+  merchantId: string, 
+  labelIds?: string | string[], 
+  maxResults: number = 20
+): Promise<GmailMessage[]> {
   try {
     console.log('Getting Gmail messages for merchant:', merchantId);
     // Get access token
@@ -230,8 +234,18 @@ export async function getGmailMessages(merchantId: string, maxResults: number = 
     
     console.log('Using access token (first 10 chars):', accessToken.substring(0, 10) + '...');
     
-    // Get list of messages
-    const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}`;
+    // Build URL with query parameters
+    let listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}`;
+    
+    // Add labelIds if provided
+    if (labelIds) {
+      const labels = Array.isArray(labelIds) ? labelIds : [labelIds];
+      labels.forEach(label => {
+        listUrl += `&labelIds=${encodeURIComponent(label)}`;
+      });
+      console.log(`Fetching messages with labels: ${labels.join(', ')}`);
+    }
+    
     console.log('Fetching messages list from:', listUrl);
     
     const listResponse = await fetch(listUrl, {

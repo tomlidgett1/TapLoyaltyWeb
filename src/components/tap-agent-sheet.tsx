@@ -375,6 +375,11 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
         chosenIntegration = availableIntegrations.find(i => i.id === "gmail")!;
         setSelectedIntegrations([chosenIntegration]);
         break;
+      case "gmail-customer-inquiries":
+        prompt = `Summarize customer inquiries and support requests from my emails in the past ${timeframe || "day"}. Identify common themes, urgent issues, and suggest response priorities.`;
+        chosenIntegration = availableIntegrations.find(i => i.id === "gmail")!;
+        setSelectedIntegrations([chosenIntegration]);
+        break;
       case "lightspeed-sales":
         prompt = `Analyze sales data from the past ${timeframe || "day"}`;
         chosenIntegration = availableIntegrations.find(i => i.id === "lightspeed")!;
@@ -1286,6 +1291,13 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                       onClick={(e) => { e.preventDefault(); void handleQuickAction("gmail-important", "day") }}
                     >
                       Find Important Emails
+                    </button>
+                    <div className="px-2 py-1 text-gray-500 border-t border-b text-[10px]">Customer Insights</div>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("gmail-customer-inquiries", "day") }}
+                    >
+                      Summarize Customer Inquiries
                     </button>
                   </div>
                 )}

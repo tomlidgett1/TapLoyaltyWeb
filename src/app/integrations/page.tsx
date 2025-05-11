@@ -414,81 +414,25 @@ export default function IntegrationsPage() {
     }
   };
 
-  // Gmail integration
-  const connectGmail = async () => {
-    if (!user) return
-    
+  // Gmail integration – always go through the backend connect route so that the
+  // `state` parameter is consistently the merchantId expected by the callback.
+  const connectGmail = () => {
+    if (!user?.uid) return
+
     setConnecting("gmail")
-    
+
     try {
-      // Debug environment variables
-      console.log('Gmail Integration Front-end Debug:');
-      console.log('- NEXT_PUBLIC_GMAIL_CLIENT_ID exists:', !!process.env.NEXT_PUBLIC_GMAIL_CLIENT_ID);
-      console.log('- window.location.origin:', window.location.origin);
-      
-      // Gmail OAuth parameters with fallback value
-      const clientId = process.env.NEXT_PUBLIC_GMAIL_CLIENT_ID || "1035054543006-dq2fier1a540dbbfieevph8m6gu74j15.apps.googleusercontent.com"
-      
-      // Check if clientId is still undefined despite the fallback
-      if (!clientId) {
-        console.error("Missing Gmail client ID");
-        toast({
-          title: "Configuration Error",
-          description: "Gmail integration is not properly configured. Please contact support.",
-          variant: "destructive"
-        });
-        setConnecting(null);
-        return;
-      }
-      
-      // Store the state in localStorage to verify when the user returns
-      const state = Math.random().toString(36).substring(2, 15)
-      localStorage.setItem('gmail_state', state)
-      
-      // Store the merchant ID in localStorage to associate with the integration
-      localStorage.setItem('gmail_merchant_id', user.uid)
-      
-      // The REDIRECT_URI should match what's configured in Google Cloud Console
-      // Using the production redirect URL from apphosting.yaml
-      const redirectUri = "https://app.taployalty.com.au/api/auth/gmail/callback"
-      
-      // Log debug information 
-      console.log('Gmail OAuth Configuration:');
-      console.log('- Client ID:', clientId);
-      console.log('- Redirect URI:', redirectUri);
-      console.log('- State:', state);
-      console.log('- Merchant ID:', user.uid);
-      
-      // Define the scopes needed for Gmail integration
-      const scopes = [
-        'https://www.googleapis.com/auth/gmail.send',
-        'https://www.googleapis.com/auth/gmail.readonly'
-      ].join(' ')
-      
-      // Construct the authorization URL
-      const authUrl = [
-        "https://accounts.google.com/o/oauth2/v2/auth",
-        `?client_id=${clientId}`,
-        `&redirect_uri=${encodeURIComponent(redirectUri)}`,
-        `&response_type=code`,
-        `&scope=${encodeURIComponent(scopes)}`,
-        `&access_type=offline`,
-        `&prompt=consent`,
-        `&state=${encodeURIComponent(state)}`
-      ].join("");
-      
-      console.log("Redirecting to Gmail authorization URL:", authUrl)
-      
-      // Redirect to Google authorization page
-      window.location.href = authUrl
+      // Simply hit our server-side connect endpoint – it does all the heavy lifting
+      // (building the Google OAuth URL, enforcing scopes, etc.) and guarantees the
+      // `state` value matches the merchantId.
+      window.location.href = `/api/auth/gmail/connect?merchantId=${user.uid}`
     } catch (error) {
-      console.error("Error connecting to Gmail:", error)
+      console.error("Error redirecting to Gmail connect route:", error)
       toast({
         title: "Connection Failed",
-        description: "Failed to connect to Gmail. Please try again.",
-        variant: "destructive"
+        description: "Failed to initiate Gmail connection. Please try again.",
+        variant: "destructive",
       })
-    } finally {
       setConnecting(null)
     }
   }

@@ -1088,7 +1088,6 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
         return "Processing Tap Loyalty data...";
     }
   };
-  
   // Assistant processing messages based on stage
   const getAssistantProcessingMessage = () => {
     switch (assistantProcessingStage) {
@@ -1445,7 +1444,7 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                     <div className="w-4 h-4 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
                   </div>
                 </div>
-                <div className="mt-1 flex flex-col items-start text-left py-2 pl-9">
+                <div className="mt-1 flex flex-col items-start text-left py-2 pl-8">
                   <p className="text-xs animate-fade-in-out bg-gradient-to-r from-gray-400 to-gray-700 bg-clip-text text-transparent font-medium w-full text-left">
                     {getAssistantProcessingMessage()}
                   </p>
@@ -1529,7 +1528,7 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                     <div className="w-4 h-4 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
                   </div>
                 </div>
-                <div className="mt-1 flex flex-col items-start text-left py-2 pl-9">
+                <div className="mt-1 flex flex-col items-start text-left py-2 pl-8">
                   <p className="text-xs animate-fade-in-out bg-gradient-to-r from-gray-400 to-gray-700 bg-clip-text text-transparent font-medium w-full text-left">
                     {getGmailProcessingMessage()}
                   </p>
@@ -1614,7 +1613,7 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                     <div className="w-4 h-4 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
                   </div>
                 </div>
-                <div className="mt-1 flex flex-col items-start text-left py-2 pl-9">
+                <div className="mt-1 flex flex-col items-start text-left py-2 pl-8">
                   <p className="text-xs animate-fade-in-out bg-gradient-to-r from-gray-400 to-gray-700 bg-clip-text text-transparent font-medium w-full text-left">
                     {getLightspeedProcessingMessage()}
                   </p>
@@ -1699,7 +1698,7 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                     <div className="w-4 h-4 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
                   </div>
                 </div>
-                <div className="mt-1 flex flex-col items-start text-left py-2 pl-9">
+                <div className="mt-1 flex flex-col items-start text-left py-2 pl-8">
                   <p className="text-xs animate-fade-in-out bg-gradient-to-r from-gray-400 to-gray-700 bg-clip-text text-transparent font-medium w-full text-left">
                     {getTapProcessingMessage()}
                   </p>

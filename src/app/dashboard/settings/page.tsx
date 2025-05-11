@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,6 +18,7 @@ import {
   Store, 
   Layers, 
   ShieldCheck,
+  ShieldAlert,
   Mail,
   Smartphone,
   Palette,
@@ -27,11 +28,12 @@ import {
   Key,
   Gift,
   BarChart,
-  ShieldAlert,
   FileText,
   Image,
   Download,
-  Brain
+  Brain,
+  Badge as BadgeIcon,
+  ShoppingBag
 } from "lucide-react"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
@@ -42,6 +44,7 @@ import { storage } from "@/lib/firebase"
 import { firebase } from "@/lib/firebase"
 import { PageTransition } from "@/components/page-transition"
 import { PageHeader } from "@/components/page-header"
+import { Badge } from "@/components/ui/badge"
 
 const SettingsPage: React.FC = () => {
   const router = useRouter()
@@ -655,6 +658,10 @@ const SettingsPage: React.FC = () => {
             <TabsTrigger value="files" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               <span>Files</span>
+            </TabsTrigger>
+            <TabsTrigger value="admin" className="flex items-center gap-2">
+              <ShieldAlert className="h-4 w-4" />
+              <span>Admin</span>
             </TabsTrigger>
           </TabsList>
           
@@ -1430,7 +1437,196 @@ const SettingsPage: React.FC = () => {
           </TabsContent>
           
           <TabsContent value="integrations">
-            {/* Integrations content remains the same */}
+            <div className="space-y-4">
+              <Card className="rounded-md">
+                <CardHeader>
+                  <CardTitle>Integrations</CardTitle>
+                  <CardDescription>
+                    Connect your business tools with your loyalty program
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Gmail Integration Card */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-10 h-10 bg-gray-100 rounded-md flex items-center justify-center">
+                              <Mail className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <CardTitle className="text-base font-medium">Gmail</CardTitle>
+                              <CardDescription>Email Integration</CardDescription>
+                            </div>
+                          </div>
+                          <Badge variant="outline" className={`${!pointOfSale || pointOfSale === 'none' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-green-50 text-green-700 border-green-200'}`}>
+                            {!pointOfSale || pointOfSale === 'none' ? 'Not Configured' : 'Connected'}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pb-2">
+                        <p className="text-sm text-muted-foreground">
+                          Connect your Gmail account to enable automated email sending and communication with your customers.
+                        </p>
+                      </CardContent>
+                      <CardFooter>
+                        {(!pointOfSale || pointOfSale === 'none') ? (
+                          <Button 
+                            variant="default"
+                            className="w-full rounded-md"
+                            onClick={() => window.open('https://accounts.google.com/o/oauth2/auth?scope=email&redirect_uri=https://tap-loyalty.com/auth/callback&response_type=code&client_id=YOUR_CLIENT_ID&access_type=offline', '_blank')}
+                          >
+                            Connect with Gmail
+                          </Button>
+                        ) : (
+                          <div className="w-full flex gap-2">
+                            <Button 
+                              variant="outline"
+                              className="flex-1"
+                              onClick={() => window.open('https://tap-loyalty.com/integrations/gmail/settings', '_blank')}
+                            >
+                              Configure
+                            </Button>
+                            <Button 
+                              variant="destructive"
+                              className="flex-1"
+                              onClick={() => {
+                                setPointOfSale('none');
+                                toast({
+                                  title: "Disconnected",
+                                  description: "Gmail integration has been disconnected",
+                                });
+                              }}
+                            >
+                              Disconnect
+                            </Button>
+                          </div>
+                        )}
+                      </CardFooter>
+                    </Card>
+                    
+                    {/* Lightspeed Integration Card */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-10 h-10 bg-gray-100 rounded-md flex items-center justify-center">
+                              <Layers className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <CardTitle className="text-base font-medium">Lightspeed Retail</CardTitle>
+                              <CardDescription>Point of Sale Integration</CardDescription>
+                            </div>
+                          </div>
+                          <Badge variant="outline" className={`${pointOfSale !== 'lightspeed' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-green-50 text-green-700 border-green-200'}`}>
+                            {pointOfSale !== 'lightspeed' ? 'Not Configured' : 'Connected'}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pb-2">
+                        <p className="text-sm text-muted-foreground">
+                          Connect to Lightspeed Retail POS (R-Series) for advanced inventory and customer management.
+                        </p>
+                      </CardContent>
+                      <CardFooter>
+                        {pointOfSale !== 'lightspeed' ? (
+                          <Button 
+                            variant="default"
+                            className="w-full rounded-md"
+                            onClick={() => window.open('https://cloud.lightspeedapp.com/oauth/authorize?response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=https://tap-loyalty.com/auth/callback', '_blank')}
+                          >
+                            Connect with Lightspeed
+                          </Button>
+                        ) : (
+                          <div className="w-full flex gap-2">
+                            <Button 
+                              variant="outline"
+                              className="flex-1"
+                              onClick={() => window.open('https://tap-loyalty.com/integrations/lightspeed/settings', '_blank')}
+                            >
+                              Configure
+                            </Button>
+                            <Button 
+                              variant="destructive"
+                              className="flex-1"
+                              onClick={() => {
+                                setPointOfSale('none');
+                                toast({
+                                  title: "Disconnected",
+                                  description: "Lightspeed integration has been disconnected",
+                                });
+                              }}
+                            >
+                              Disconnect
+                            </Button>
+                          </div>
+                        )}
+                      </CardFooter>
+                    </Card>
+                    
+                    {/* Square Integration Card */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-10 h-10 bg-gray-100 rounded-md flex items-center justify-center">
+                              <CreditCard className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <CardTitle className="text-base font-medium">Square</CardTitle>
+                              <CardDescription>Payment Provider Integration</CardDescription>
+                            </div>
+                          </div>
+                          <Badge variant="outline" className={`${paymentProvider !== 'square' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-green-50 text-green-700 border-green-200'}`}>
+                            {paymentProvider !== 'square' ? 'Not Configured' : 'Connected'}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pb-2">
+                        <p className="text-sm text-muted-foreground">
+                          Sync customer data, transactions, and payments with your Square account for a seamless integration.
+                        </p>
+                      </CardContent>
+                      <CardFooter>
+                        {paymentProvider !== 'square' ? (
+                          <Button 
+                            variant="default"
+                            className="w-full rounded-md"
+                            onClick={() => window.open('https://connect.squareup.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=PAYMENTS_WRITE+PAYMENTS_READ+ORDERS_WRITE+ORDERS_READ&response_type=code', '_blank')}
+                          >
+                            Connect with Square
+                          </Button>
+                        ) : (
+                          <div className="w-full flex gap-2">
+                            <Button 
+                              variant="outline"
+                              className="flex-1"
+                              onClick={() => window.open('https://tap-loyalty.com/integrations/square/settings', '_blank')}
+                            >
+                              Configure
+                            </Button>
+                            <Button 
+                              variant="destructive"
+                              className="flex-1"
+                              onClick={() => {
+                                setPaymentProvider('none');
+                                toast({
+                                  title: "Disconnected",
+                                  description: "Square integration has been disconnected",
+                                });
+                              }}
+                            >
+                              Disconnect
+                            </Button>
+                          </div>
+                        )}
+                      </CardFooter>
+                    </Card>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
           
           <TabsContent value="security">
@@ -2087,6 +2283,193 @@ const SettingsPage: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+          
+          <TabsContent value="admin">
+            <div className="space-y-4">
+              <Card className="rounded-md">
+                <CardHeader>
+                  <CardTitle>Admin Panel</CardTitle>
+                  <CardDescription>
+                    Manage your account and system configurations
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Merchant Management Card */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-10 h-10 bg-gray-100 rounded-md flex items-center justify-center">
+                              <Store className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <CardTitle className="text-base font-medium">Merchant Management</CardTitle>
+                              <CardDescription>Configure business settings</CardDescription>
+                            </div>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pb-2">
+                        <p className="text-sm text-muted-foreground">
+                          Access advanced merchant settings, business configurations, and manage multiple locations.
+                        </p>
+                      </CardContent>
+                      <CardFooter>
+                        <Button 
+                          variant="default"
+                          className="w-full rounded-md"
+                          onClick={() => router.push('/admin')}
+                        >
+                          Manage
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                    
+                    {/* Customer Data Card */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-10 h-10 bg-gray-100 rounded-md flex items-center justify-center">
+                              <Users className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <CardTitle className="text-base font-medium">Customer Data</CardTitle>
+                              <CardDescription>View and manage customer data</CardDescription>
+                            </div>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pb-2">
+                        <p className="text-sm text-muted-foreground">
+                          View detailed customer information, export data, and manage customer profiles at an advanced level.
+                        </p>
+                      </CardContent>
+                      <CardFooter>
+                        <Button 
+                          variant="default"
+                          className="w-full rounded-md"
+                          onClick={() => router.push('/admin')}
+                        >
+                          Access
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                    
+                    {/* System Configuration Card */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-10 h-10 bg-gray-100 rounded-md flex items-center justify-center">
+                              <ShieldCheck className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <CardTitle className="text-base font-medium">System Configuration</CardTitle>
+                              <CardDescription>Advanced system settings</CardDescription>
+                            </div>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pb-2">
+                        <p className="text-sm text-muted-foreground">
+                          Configure system behavior, scheduled tasks, and advanced security settings.
+                        </p>
+                      </CardContent>
+                      <CardFooter>
+                        <Button 
+                          variant="default"
+                          className="w-full rounded-md"
+                          onClick={() => router.push('/admin')}
+                        >
+                          Configure
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                  </div>
+                  
+                  {/* Admin Tools Section */}
+                  <div className="pt-6 border-t">
+                    <h3 className="text-lg font-medium mb-4">Admin Tools</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-start space-x-3 p-4 border rounded-md hover:bg-gray-50 transition-colors">
+                        <div className="p-2 bg-blue-50 rounded-md">
+                          <BarChart className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-sm">Analytics Dashboard</h4>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Access detailed analytics and reporting tools
+                          </p>
+                          <Button variant="link" size="sm" className="p-0 h-auto mt-2" onClick={() => router.push('/admin')}>
+                            View Analytics
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start space-x-3 p-4 border rounded-md hover:bg-gray-50 transition-colors">
+                        <div className="p-2 bg-blue-50 rounded-md">
+                          <FileText className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-sm">Logs & Audit Trail</h4>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Review system logs and user activities
+                          </p>
+                          <Button variant="link" size="sm" className="p-0 h-auto mt-2" onClick={() => router.push('/admin')}>
+                            View Logs
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start space-x-3 p-4 border rounded-md hover:bg-gray-50 transition-colors">
+                        <div className="p-2 bg-blue-50 rounded-md">
+                          <User className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-sm">User Management</h4>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Manage user accounts and access permissions
+                          </p>
+                          <Button variant="link" size="sm" className="p-0 h-auto mt-2" onClick={() => router.push('/admin')}>
+                            Manage Users
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start space-x-3 p-4 border rounded-md hover:bg-gray-50 transition-colors">
+                        <div className="p-2 bg-blue-50 rounded-md">
+                          <Gift className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-sm">Rewards Management</h4>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Configure global reward settings and templates
+                          </p>
+                          <Button variant="link" size="sm" className="p-0 h-auto mt-2" onClick={() => router.push('/admin')}>
+                            Manage Rewards
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-center mt-6">
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className="gap-2"
+                      onClick={() => router.push('/admin')}
+                    >
+                      <ShieldAlert className="h-4 w-4" />
+                      Go to Admin Panel
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

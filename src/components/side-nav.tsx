@@ -75,7 +75,31 @@ const scrollbarStyles = `
   }
 `;
 
-const navItems = [
+// Define types for nav items structure before the navItems array
+interface NavSubTab {
+  title: string;
+  href: string;
+  icon: any;
+}
+
+interface NavSubItem {
+  title: string;
+  href: string;
+  icon: any;
+  subTabs?: NavSubTab[];
+  isTab?: boolean;
+}
+
+interface NavItem {
+  title: string;
+  href: string;
+  icon: any;
+  subItems?: NavSubItem[];
+  isAI?: boolean;
+  openSheet?: boolean;
+}
+
+const navItems: NavItem[] = [
   {
     title: "Dashboard",
     href: "/dashboard",
@@ -85,18 +109,6 @@ const navItems = [
     title: "Tap Agent",
     href: "/tap-agent/intro",
     icon: Sparkles,
-    subItems: [
-      {
-        title: "Introduction",
-        href: "/tap-agent/intro",
-        icon: Home
-      },
-      {
-        title: "Agent Setup",
-        href: "/tap-agent/setup",
-        icon: Settings
-      }
-    ]
   },
   {
     title: "My Store",
@@ -106,7 +118,14 @@ const navItems = [
       {
         title: "Store Overview",
         href: "/store/overview",
-        icon: BarChart
+        icon: BarChart,
+        subTabs: [
+          {
+            title: "Inventory",
+            href: "/store/inventory",
+            icon: Package
+          }
+        ]
       },
       {
         title: "Activity",
@@ -119,24 +138,22 @@ const navItems = [
         icon: Gift
       },
       {
-        title: "Inventory",
-        href: "/store/inventory",
-        icon: Package
-      },
-      {
-        title: "Memberships",
-        href: "/store/memberships",
-        icon: CreditCard
-      },
-      {
         title: "Points Rules",
         href: "/store/points-rules",
-        icon: Zap
+        icon: Zap,
+        isTab: true
       },
       {
         title: "Banners",
         href: "/store/banners",
-        icon: Image
+        icon: Image,
+        isTab: true
+      },
+      {
+        title: "Memberships",
+        href: "/store/memberships",
+        icon: CreditCard,
+        isTab: true
       },
       {
         title: "Messages",
@@ -156,54 +173,18 @@ const navItems = [
     ]
   },
   {
-    title: "Create",
-    href: "#",
-    icon: PlusCircle,
-    openSheet: true
-  },
-  {
-    title: "Financials",
-    href: "/merchant/financials",
-    icon: DollarSign
-  },
-  {
-    title: "TapAI",
-    href: "#",
-    icon: Sparkles,
-    isAI: true
-  },
-  {
-    title: "Rewards Library",
-    href: "/rewardlibrary",
-    icon: Gift
-  },
-  {
     title: "Settings",
     href: "/dashboard/settings",
     icon: Settings,
     subItems: [
       {
-        title: "Integrations",
-        href: "/integrations",
-        icon: Layers
-      },
-      {
-        title: "Admin",
-        href: "/admin",
-        icon: ShieldCheck
-      },
-      {
         title: "Settings",
         href: "/dashboard/settings",
-        icon: Settings
+        icon: Settings,
+        subTabs: []
       }
     ]
   },
-  {
-    title: "Onboarding Wizard",
-    href: "/onboarding",
-    icon: Sparkles,
-  }
 ]
 
 interface ChecklistItem {
@@ -212,6 +193,7 @@ interface ChecklistItem {
   completed: boolean;
   href: string;
   openSheet?: boolean;
+  isTab?: boolean;
 }
 
 interface MerchantData {
@@ -440,7 +422,7 @@ export function SideNav() {
           {/* Main pages without sub-items */}
           {navItems
             .filter(item => !item.isAI && !item.subItems)
-            .filter(item => item.title !== "Onboarding Wizard")
+            .filter(item => item.title !== "Tap Agent" && item.title !== "Onboarding Wizard" && item.title !== "Create" && item.title !== "Financials" && item.title !== "Rewards Library")
             .map((item) => {
               const isActive = item.title === "Dashboard" 
                 ? (pathname === item.href || pathname.match(/^\/dashboard\/(?!settings).*$/)) 
@@ -496,48 +478,24 @@ export function SideNav() {
             .filter(item => item.title === "Tap Agent")
             .map((item) => (
               <li key={item.title} className="mt-3">
-                <div className="px-3 mb-1">
-                  <button 
-                    onClick={() => toggleSection("Tap Agent")}
-                    className="text-[10px] font-medium uppercase tracking-wider"
-                  >
-                    <span className="bg-gradient-to-r from-[#007AFF] to-orange-500 bg-clip-text text-transparent font-semibold">
-                      {item.title}
-                    </span>
-                  </button>
-                </div>
-                <Collapsible open={openSections["Tap Agent"]}>
-                  <CollapsibleContent>
-                    <ul className="space-y-1">
-                      {item.subItems?.map((subItem) => {
-                        const isSubActive = pathname === subItem.href || 
-                          pathname.startsWith(`${subItem.href}/`)
-                        return (
-                          <li key={subItem.title}>
-                            <Link
-                              href={subItem.href}
-                              className={cn(
-                                "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-normal transition-colors",
-                                isSubActive 
-                                  ? "bg-[#007AFF]/10 text-[#007AFF]" 
-                                  : "text-gray-800 hover:bg-[#007AFF]/5"
-                              )}
-                            >
-                              <subItem.icon className={cn("h-4 w-4 flex-shrink-0", 
-                                isSubActive 
-                                  ? "text-[#007AFF]" 
-                                  : "text-gray-500 group-hover:text-[#007AFF]"
-                              )} />
-                              <span className={isSubActive ? "text-[#007AFF]" : "group-hover:text-[#007AFF]"}>
-                                {subItem.title}
-                              </span>
-                            </Link>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  </CollapsibleContent>
-                </Collapsible>
+                <Link
+                  href={item.href}
+                  className={cn(
+                    "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-normal transition-colors",
+                    pathname === item.href || pathname.startsWith(`${item.href}/`)
+                      ? "bg-[#007AFF]/10 text-[#007AFF]" 
+                      : "text-gray-800 hover:bg-[#007AFF]/5"
+                  )}
+                >
+                  <item.icon className={cn("h-4 w-4 flex-shrink-0", 
+                    pathname === item.href || pathname.startsWith(`${item.href}/`)
+                      ? "text-[#007AFF]" 
+                      : "text-gray-500 group-hover:text-[#007AFF]"
+                  )} />
+                  <span className={pathname === item.href || pathname.startsWith(`${item.href}/`) ? "text-[#007AFF]" : "group-hover:text-[#007AFF]"}>
+                    {item.title}
+                  </span>
+                </Link>
               </li>
             ))}
           
@@ -560,6 +518,15 @@ export function SideNav() {
                       {item.subItems?.map((subItem) => {
                         const isSubActive = pathname === subItem.href || 
                           pathname.startsWith(`${subItem.href}/`)
+                        
+                        // Check if this item should be shown as a tab or has subtabs
+                        const hasSubTabsOrIsTab = subItem.subTabs || subItem.isTab;
+                        
+                        // If it's marked as a tab, don't show it in the sidebar directly
+                        if (subItem.isTab) {
+                          return null;
+                        }
+                        
                         return (
                           <li key={subItem.title}>
                             <Link
@@ -580,8 +547,39 @@ export function SideNav() {
                                 {subItem.title}
                               </span>
                             </Link>
+                            {/* Render subtabs if present */}
+                            {subItem.subTabs && isSubActive && (
+                              <ul className="pl-4 mt-1 space-y-1">
+                                {subItem.subTabs.map((tab) => {
+                                  const isTabActive = pathname === tab.href || 
+                                    pathname.startsWith(`${tab.href}/`);
+                                  return (
+                                    <li key={tab.title}>
+                                      <Link
+                                        href={tab.href}
+                                        className={cn(
+                                          "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-normal transition-colors",
+                                          isTabActive 
+                                            ? "bg-[#007AFF]/10 text-[#007AFF]" 
+                                            : "text-gray-800 hover:bg-[#007AFF]/5"
+                                        )}
+                                      >
+                                        <tab.icon className={cn("h-4 w-4 flex-shrink-0", 
+                                          isTabActive 
+                                            ? "text-[#007AFF]" 
+                                            : "text-gray-500 group-hover:text-[#007AFF]"
+                                        )} />
+                                        <span className={isTabActive ? "text-[#007AFF]" : "group-hover:text-[#007AFF]"}>
+                                          {tab.title}
+                                        </span>
+                                      </Link>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
                           </li>
-                        )
+                        );
                       })}
                     </ul>
                   </CollapsibleContent>

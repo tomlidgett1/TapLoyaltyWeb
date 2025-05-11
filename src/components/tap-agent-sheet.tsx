@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger, SheetClose } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { SendHorizontal, X, Globe, Check as CheckIcon } from "lucide-react"
+import { SendHorizontal, X, Globe, Check as CheckIcon, Maximize2, Minimize2 } from "lucide-react"
 import Image from "next/image"
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
@@ -14,10 +14,127 @@ import rehypeRaw from 'rehype-raw'
 import { useAuth } from "@/contexts/auth-context"
 import { toast } from "@/components/ui/use-toast"
 
+// Define custom animation
+const customAnimationStyles = `
+  @keyframes pulseLeftToRight {
+    0% {
+      background-position: 0% 0;
+    }
+    100% {
+      background-position: 100% 0;
+    }
+  }
+  
+  .animate-pulse-left-to-right {
+    animation: pulseLeftToRight 2s ease-in-out infinite;
+  }
+
+  @keyframes fadeInOut {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+  
+  .animate-fade-in-out {
+    animation: fadeInOut 2s ease-in-out infinite;
+  }
+`;
+
+// Add custom animated styles at the top of the file for fade effects and better animations
+const customStyles = `
+  @keyframes fadeInSlide {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .tap-agent-response {
+    animation: fadeInSlide 0.3s ease-out forwards;
+  }
+  
+  .tap-agent-response p {
+    margin-bottom: 1rem;
+  }
+  
+  .tap-agent-response ul, .tap-agent-response ol {
+    margin-bottom: 1rem;
+  }
+  
+  .tap-agent-response blockquote {
+    border-left: 3px solid #e5e7eb;
+    padding-left: 1rem;
+    color: #4b5563;
+    font-style: italic;
+    margin: 1rem 0;
+  }
+  
+  .tap-agent-response code {
+    background-color: #f3f4f6;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    color: #1f2937;
+  }
+  
+  .tap-agent-response pre {
+    background-color: #f3f4f6;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    margin: 1rem 0;
+  }
+  
+  .tap-agent-response pre code {
+    background-color: transparent;
+    padding: 0;
+    color: #1f2937;
+    font-size: 0.875rem;
+  }
+  
+  .tap-agent-response a {
+    color: #2563eb;
+    text-decoration: underline;
+    text-decoration-color: #93c5fd;
+    text-underline-offset: 2px;
+    font-weight: 500;
+  }
+  
+  .tap-agent-response a:hover {
+    text-decoration-color: #2563eb;
+  }
+  
+  .tap-agent-response img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    margin: 1rem 0;
+  }
+  
+  .tap-agent-response table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+    font-size: 0.875rem;
+  }
+  
+  .tap-agent-response th {
+    background-color: #f9fafb;
+    font-weight: 600;
+  }
+  
+  .tap-agent-response th, .tap-agent-response td {
+    border: 1px solid #e5e7eb;
+    padding: 0.75rem;
+    text-align: left;
+  }
+  
+  .tap-agent-response tr:nth-child(even) {
+    background-color: #f9fafb;
+  }
+`;
+
 // Add a gradient text component for Tap Agent branding
-const GradientText = ({ children }: { children: React.ReactNode }) => {
+const GradientText = ({ children, className }: { children: React.ReactNode, className?: string }) => {
   return (
-    <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-semibold">
+    <span className={cn("bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-semibold", className)}>
       {children}
     </span>
   );
@@ -41,22 +158,26 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
   const [gmailQueryLoading, setGmailQueryLoading] = useState(false);
   const [lightspeedQueryResponse, setLightspeedQueryResponse] = useState<string | null>(null);
   const [lightspeedQueryLoading, setLightspeedQueryLoading] = useState(false);
+  const [lightspeedProcessingStage, setLightspeedProcessingStage] = useState(0);
   const [tapQueryResponse, setTapQueryResponse] = useState<string | null>(null);
   const [tapQueryLoading, setTapQueryLoading] = useState(false);
+  const [showQuickActionMenu, setShowQuickActionMenu] = useState<string | null>(null);
   const [debugResponse, setDebugResponse] = useState<string | null>(null);
   const [showDebugInfo, setShowDebugInfo] = useState(false);
   
+  // State for expanded view
+  const [expandedResponseId, setExpandedResponseId] = useState<"assistant" | "gmail" | "lightspeed" | "tap" | null>(null);
+  
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const quickActionRef = useRef<HTMLDivElement>(null);
 
   // Available integrations for the command box
   const availableIntegrations = [
-    { id: "mailchimp", name: "MailChimp", icon: <Image src="/mailchimp.png" width={16} height={16} alt="MailChimp" className="h-4 w-4 object-contain" /> },
-    { id: "instagram", name: "Instagram", icon: <Image src="/insta.webp" width={16} height={16} alt="Instagram" className="h-4 w-4 object-contain" /> },
-    { id: "google", name: "Google", icon: <Globe className="h-4 w-4 text-blue-500" /> },
-    { id: "gmail", name: "Gmail", icon: <Image src="/gmail.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain" /> },
-    { id: "lightspeed", name: "Lightspeed", icon: <Image src="/lslogo.png" width={16} height={16} alt="Lightspeed" className="h-4 w-4 object-contain" /> },
-    { id: "tap", name: "Tap Loyalty", icon: <Image src="/taplogo.png" width={16} height={16} alt="Tap Loyalty" className="h-4 w-4 object-contain" /> },
+    { id: "tap", name: "Tap Loyalty", icon: <Image src="/taplogo.png" width={16} height={16} alt="Tap Loyalty" className="h-4 w-4 object-contain rounded-sm" /> },
+    { id: "lightspeed", name: "Lightspeed", icon: <Image src="/lslogo.png" width={16} height={16} alt="Lightspeed" className="h-4 w-4 object-contain rounded-sm" /> },
+    { id: "gmail", name: "Gmail", icon: <Image src="/gmail.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain rounded-sm" /> },
+    { id: "instagram", name: "Instagram", icon: <Image src="/insta.webp" width={16} height={16} alt="Instagram" className="h-4 w-4 object-contain rounded-sm" /> },
   ];
 
   // Close dropdown when clicking outside
@@ -70,13 +191,21 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
       ) {
         setShowIntegrations(false);
       }
+      
+      // Also close quick action menu when clicking outside
+      if (
+        quickActionRef.current &&
+        !quickActionRef.current.contains(event.target as Node)
+      ) {
+        setShowQuickActionMenu(null);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [setShowIntegrations]);
+  }, [setShowIntegrations, setShowQuickActionMenu]);
 
   // Handle selecting an integration from the dropdown
   const handleSelectIntegration = (integration: typeof availableIntegrations[0]) => {
@@ -192,7 +321,23 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
       
       return (
         <div 
-          className="prose prose-slate max-w-none prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-h3:font-bold prose-p:my-2 prose-p:leading-relaxed prose-li:my-0 prose-li:leading-relaxed prose-table:border-collapse prose-th:bg-gray-50 prose-th:p-2 prose-th:font-semibold prose-td:p-2 prose-td:border prose-td:border-gray-200"
+          className="tap-agent-response prose prose-slate max-w-none text-gray-800 leading-relaxed space-y-4
+            prose-headings:font-semibold 
+            prose-h1:text-xl prose-h1:font-bold prose-h1:my-4 prose-h1:text-gray-900
+            prose-h2:text-lg prose-h2:font-bold prose-h2:my-3 prose-h2:text-gray-900
+            prose-h3:text-base prose-h3:font-semibold prose-h3:my-2 prose-h3:text-gray-900
+            prose-p:my-3 prose-p:text-gray-700
+            prose-ul:list-disc prose-ul:pl-6 prose-ul:my-3 prose-ul:space-y-2
+            prose-ol:list-decimal prose-ol:pl-6 prose-ol:my-3 prose-ol:space-y-2
+            prose-li:my-1.5 prose-li:pl-1
+            prose-a:text-blue-600 prose-a:hover:text-blue-800 prose-a:hover:underline
+            prose-blockquote:pl-4 prose-blockquote:border-l-2 prose-blockquote:border-gray-300 prose-blockquote:text-gray-600 prose-blockquote:italic prose-blockquote:my-4
+            prose-code:bg-gray-100 prose-code:text-gray-800 prose-code:rounded prose-code:px-1.5 prose-code:py-0.5 prose-code:text-sm prose-code:font-mono
+            prose-pre:rounded prose-pre:bg-gray-50 prose-pre:p-4 prose-pre:overflow-x-auto prose-pre:text-sm prose-pre:my-4 prose-pre:border prose-pre:border-gray-200
+            prose-img:max-w-full prose-img:h-auto prose-img:rounded-md prose-img:my-4
+            prose-table:border-collapse prose-table:min-w-full prose-table:my-4 prose-table:rounded-md prose-table:overflow-hidden
+            prose-th:px-4 prose-th:py-3 prose-th:text-left prose-th:text-sm prose-th:font-medium prose-th:text-gray-900 prose-th:bg-gray-50 prose-th:border-b prose-th:border-gray-200
+            prose-td:px-4 prose-td:py-3 prose-td:text-sm prose-td:text-gray-700 prose-td:border-t prose-td:border-gray-200"
           dangerouslySetInnerHTML={{ __html: htmlContent }} 
         />
       );
@@ -207,137 +352,129 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
     }
   };
   
-  // Handle sending the command
-  const handleSendCommand = async () => {
-    if (commandInput.trim() || selectedIntegrations.length > 0) {
+  // Quick action handlers
+  const handleQuickAction = async (forcedPrompt?: string | React.MouseEvent, timeframe?: string) => {
+    // If forcedPrompt is an event, ignore it (this handles button clicks directly)
+    if (typeof forcedPrompt !== 'string' && forcedPrompt !== undefined) {
+      return;
+    }
+    
+    if (!forcedPrompt) return;
+
+    // Close the dropdown menu
+    setShowQuickActionMenu(null);
+    
+    let prompt = "";
+    let chosenIntegration: { id: string; name: string; icon: React.ReactNode } | undefined;
+
+    switch (forcedPrompt) {
+      case "gmail-summarize":
+        prompt = `Summarize my emails from the past ${timeframe || "day"}`;
+        chosenIntegration = availableIntegrations.find(i => i.id === "gmail")!;
+        setSelectedIntegrations([chosenIntegration]);
+        break;
+      case "gmail-important":
+        prompt = `Find important unread emails from the past ${timeframe || "day"}`;
+        chosenIntegration = availableIntegrations.find(i => i.id === "gmail")!;
+        setSelectedIntegrations([chosenIntegration]);
+        break;
+      case "lightspeed-sales":
+        prompt = `Analyze sales data from the past ${timeframe || "day"}`;
+        chosenIntegration = availableIntegrations.find(i => i.id === "lightspeed")!;
+        setSelectedIntegrations([chosenIntegration]);
+        break;
+      case "lightspeed-inventory":
+        prompt = `Show inventory status with any items that need restocking`;
+        chosenIntegration = availableIntegrations.find(i => i.id === "lightspeed")!;
+        setSelectedIntegrations([chosenIntegration]);
+        break;
+      case "lightspeed-trending":
+        prompt = `Show trending products from the past ${timeframe || "week"}`;
+        chosenIntegration = availableIntegrations.find(i => i.id === "lightspeed")!;
+        setSelectedIntegrations([chosenIntegration]);
+        break;
+      case "tap-performance":
+        prompt = `Show loyalty program performance metrics for the past ${timeframe || "month"}`;
+        chosenIntegration = availableIntegrations.find(i => i.id === "tap")!;
+        setSelectedIntegrations([chosenIntegration]);
+        break;
+      case "tap-customers":
+        prompt = `Show top loyalty customers and their recent activity`;
+        chosenIntegration = availableIntegrations.find(i => i.id === "tap")!;
+        setSelectedIntegrations([chosenIntegration]);
+        break;
+      case "tap-rewards":
+        prompt = `Show which rewards are most popular in the loyalty program`;
+        chosenIntegration = availableIntegrations.find(i => i.id === "tap")!;
+        setSelectedIntegrations([chosenIntegration]);
+        break;
+      case "tap-loyalty-overview":
+        prompt = `Show loyalty program overview`;
+        chosenIntegration = availableIntegrations.find(i => i.id === "tap")!;
+        setSelectedIntegrations([chosenIntegration]);
+        break;
+      case "tap-loyalty-members":
+        prompt = `Show member analysis`;
+        chosenIntegration = availableIntegrations.find(i => i.id === "tap")!;
+        setSelectedIntegrations([chosenIntegration]);
+        break;
+      case "tap-loyalty-engagement":
+        prompt = `Show engagement metrics for the past ${timeframe || "week"}`;
+        chosenIntegration = availableIntegrations.find(i => i.id === "tap")!;
+        setSelectedIntegrations([chosenIntegration]);
+        break;
+      default:
+        return;
+    }
+    
+    // Set the command input
+    setCommandInput(prompt);
+
+    // Immediately send the command with the chosen integration
+    if (chosenIntegration) {
+      void handleSendCommand(prompt as string, [chosenIntegration]);
+    }
+  };
+
+  // Modified handleSendCommand to accept both string or MouseEvent
+  const handleSendCommand = async (
+    forcedPrompt?: string | React.MouseEvent,
+    explicitIntegrations?: { id: string; name: string; icon: React.ReactNode }[]
+  ) => {
+    // Handle case when the function is called from a button click
+    let promptToSend = "";
+    if (typeof forcedPrompt === 'string') {
+      promptToSend = forcedPrompt;
+    } else {
+      promptToSend = commandInput.trim();
+    }
+    
+    const integrationsToUse = explicitIntegrations ?? selectedIntegrations;
+
+    if (promptToSend || integrationsToUse.length > 0) {
       console.log("Sending command:", {
-        text: commandInput,
-        integrations: selectedIntegrations
+        text: promptToSend,
+        integrations: integrationsToUse
       })
       
       // Set processing state for all selected integrations
       const newProcessingState: Record<string, boolean> = {}
-      selectedIntegrations.forEach(integration => {
+      integrationsToUse.forEach(integration => {
         newProcessingState[integration.id] = true
       })
       setProcessingIntegrations(newProcessingState)
       
       // Check if Gmail is one of the selected integrations
-      const gmailIntegration = selectedIntegrations.find(integration => integration.id === "gmail")
+      const gmailIntegration = integrationsToUse.find(integration => integration.id === "gmail")
       // Check if Lightspeed is one of the selected integrations
-      const lightspeedIntegration = selectedIntegrations.find(integration => integration.id === "lightspeed")
+      const lightspeedIntegration = integrationsToUse.find(integration => integration.id === "lightspeed")
       // Check if Tap Loyalty is one of the selected integrations
-      const tapIntegration = selectedIntegrations.find(integration => integration.id === "tap")
+      const tapIntegration = integrationsToUse.find(integration => integration.id === "tap")
       
-      // If there are no selected integrations but we have command input, use the default AI assistant
-      if (selectedIntegrations.length === 0 && commandInput.trim()) {
-        try {
-          setAssistantLoading(true)
-          
-          // Make API call to chatMerchant function
-          const response = await fetch(
-            `https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/chatMerchant`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              merchantId: user?.uid,
-              prompt: commandInput.trim()
-            }),
-          });
-          
-          // Get the response
-          const rawResponse = await response.text();
-          console.log("Raw AI Assistant response:", rawResponse);
-          
-          try {
-            const data = JSON.parse(rawResponse);
-            console.log("AI Assistant response parsed:", data);
-            
-            // Set debug response for inspection
-            setDebugResponse(rawResponse);
-            
-            // Check for multiple possible response formats
-            if (data?.answer) {
-              // This is the expected format from chatMerchant: {"answer":"response text"}
-              setAssistantResponse(data.answer);
-              
-              toast({
-                title: "AI Assistant Response",
-                description: "Your question has been answered",
-                variant: "default"
-              });
-            } else if (data?.success && data?.summary) {
-              setAssistantResponse(data.summary);
-              
-              toast({
-                title: "AI Assistant Response",
-                description: "Your question has been answered",
-                variant: "default"
-              });
-            } else if (data?.success && data?.answer) {
-              setAssistantResponse(data.answer);
-              
-              toast({
-                title: "AI Assistant Response",
-                description: "Your question has been answered",
-                variant: "default"
-              });
-            } else if (data?.result?.summary) {
-              setAssistantResponse(data.result.summary);
-              
-              toast({
-                title: "AI Assistant Response",
-                description: "Your question has been answered",
-                variant: "default"
-              });
-            } else if (data?.summary) {
-              setAssistantResponse(data.summary);
-              
-              toast({
-                title: "AI Assistant Response",
-                description: "Your question has been answered",
-                variant: "default"
-              });
-            } else if (data?.error) {
-              toast({
-                title: "AI Assistant Error",
-                description: data.error,
-                variant: "destructive"
-              });
-            } else {
-              // No recognizable format - display what we received for debugging
-              console.error("Unrecognized response format:", data);
-              setAssistantResponse(`The AI Assistant returned data in an unexpected format. Please check with your developer.\n\nReceived: ${JSON.stringify(data, null, 2)}`);
-              
-              toast({
-                title: "Unexpected Response Format",
-                description: "The response format wasn't recognized, but we've displayed what we received",
-                variant: "destructive"
-              });
-            }
-          } catch (e) {
-            console.error("Error parsing AI Assistant response:", e);
-            toast({
-              title: "Error Processing Response",
-              description: "Could not process the AI Assistant response",
-              variant: "destructive"
-            });
-          }
-        } catch (error) {
-          console.error("Error querying AI Assistant:", error);
-          toast({
-            title: "AI Assistant Query Failed",
-            description: error instanceof Error ? error.message : "Unknown error occurred",
-            variant: "destructive"
-          });
-        } finally {
-          setAssistantLoading(false);
-        }
-      }
+      // Process each integration if selected
       
-      if (gmailIntegration && commandInput.trim()) {
+      // Process Gmail integration
+      if (gmailIntegration && promptToSend.trim()) {
         try {
           setGmailQueryLoading(true)
           
@@ -356,7 +493,7 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
             },
             body: JSON.stringify({
               merchantId: user?.uid,
-              prompt: commandInput.trim()
+              prompt: promptToSend
             }),
           });
           
@@ -454,7 +591,7 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
       }
       
       // Handle Lightspeed integration
-      if (lightspeedIntegration && commandInput.trim()) {
+      if (lightspeedIntegration && promptToSend.trim()) {
         try {
           setLightspeedQueryLoading(true);
           
@@ -473,7 +610,7 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
             },
             body: JSON.stringify({
               merchantId: user?.uid,
-              prompt: commandInput.trim(),
+              prompt: promptToSend,
               days: 30 // Default to 30 days of data
             }),
           });
@@ -572,7 +709,7 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
       }
       
       // Handle Tap Loyalty integration
-      if (tapIntegration && commandInput.trim()) {
+      if (tapIntegration && promptToSend.trim()) {
         try {
           setTapQueryLoading(true);
           
@@ -591,7 +728,7 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
             },
             body: JSON.stringify({
               merchantId: user?.uid,
-              prompt: commandInput.trim()
+              prompt: promptToSend
             }),
           });
           
@@ -689,7 +826,7 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
       }
       
       // Process other integrations
-      selectedIntegrations.forEach(integration => {
+      integrationsToUse.forEach(integration => {
         if (integration.id !== "gmail" && integration.id !== "lightspeed" && integration.id !== "tap") { // Skip integrations we already handled
           // Random timeout for other integrations
           const timeout = 4000 + Math.random() * 3000
@@ -713,7 +850,7 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
       
       // After all processing is done, reset the integrations
       // Keep the integrations that need to show responses
-      if (!gmailIntegration && !lightspeedIntegration && !tapIntegration) {
+      if (integrationsToUse.length === 0) {
         const maxProcessingTime = 7500 
         setTimeout(() => {
           setSelectedIntegrations([])
@@ -721,17 +858,270 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
         }, maxProcessingTime)
       }
     }
+
+    // If no integrations are selected but we have command input, use the default AI assistant
+    if ((explicitIntegrations ? explicitIntegrations.length === 0 : selectedIntegrations.length === 0) && promptToSend.trim()) {
+      try {
+        setAssistantLoading(true)
+        
+        // Make API call to chatMerchant function
+        const response = await fetch(
+          `https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/chatMerchant`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            merchantId: user?.uid,
+            prompt: promptToSend
+          }),
+        });
+        
+        // Get the response
+        const rawResponse = await response.text();
+        console.log("Raw AI Assistant response:", rawResponse);
+        
+        try {
+          const data = JSON.parse(rawResponse);
+          console.log("AI Assistant response parsed:", data);
+          
+          // Set debug response for inspection
+          setDebugResponse(rawResponse);
+          
+          // Check for multiple possible response formats
+          if (data?.answer) {
+            // This is the expected format from chatMerchant: {"answer":"response text"}
+            setAssistantResponse(data.answer);
+            
+            toast({
+              title: "AI Assistant Response",
+              description: "Your question has been answered",
+              variant: "default"
+            });
+          } else if (data?.success && data?.summary) {
+            setAssistantResponse(data.summary);
+            
+            toast({
+              title: "AI Assistant Response",
+              description: "Your question has been answered",
+              variant: "default"
+            });
+          } else if (data?.success && data?.answer) {
+            setAssistantResponse(data.answer);
+            
+            toast({
+              title: "AI Assistant Response",
+              description: "Your question has been answered",
+              variant: "default"
+            });
+          } else if (data?.result?.summary) {
+            setAssistantResponse(data.result.summary);
+            
+            toast({
+              title: "AI Assistant Response",
+              description: "Your question has been answered",
+              variant: "default"
+            });
+          } else if (data?.summary) {
+            setAssistantResponse(data.summary);
+            
+            toast({
+              title: "AI Assistant Response",
+              description: "Your question has been answered",
+              variant: "default"
+            });
+          } else if (data?.error) {
+            toast({
+              title: "AI Assistant Error",
+              description: data.error,
+              variant: "destructive"
+            });
+          } else {
+            // No recognizable format - display what we received for debugging
+            console.error("Unrecognized response format:", data);
+            setAssistantResponse(`The AI Assistant returned data in an unexpected format. Please check with your developer.\n\nReceived: ${JSON.stringify(data, null, 2)}`);
+            
+            toast({
+              title: "Unexpected Response Format",
+              description: "The response format wasn't recognized, but we've displayed what we received",
+              variant: "destructive"
+            });
+          }
+        } catch (e) {
+          console.error("Error parsing AI Assistant response:", e);
+          toast({
+            title: "Error Processing Response",
+            description: "Could not process the AI Assistant response",
+            variant: "destructive"
+          });
+        }
+      } catch (error) {
+        console.error("Error querying AI Assistant:", error);
+        toast({
+          title: "AI Assistant Query Failed",
+          description: error instanceof Error ? error.message : "Unknown error occurred",
+          variant: "destructive"
+        });
+      } finally {
+        setAssistantLoading(false);
+      }
+    }
   }
+
+  // Add effect for cycling Lightspeed processing messages
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (lightspeedQueryLoading) {
+      // Reset to first message when loading starts
+      setLightspeedProcessingStage(0);
+      
+      // Set up interval to cycle through messages every 2 seconds
+      interval = setInterval(() => {
+        setLightspeedProcessingStage(prev => (prev + 1) % 3);
+      }, 2000);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [lightspeedQueryLoading]);
+  
+  // Add effect for cycling Gmail processing messages
+  const [gmailProcessingStage, setGmailProcessingStage] = useState(0);
+  
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (gmailQueryLoading) {
+      // Reset to first message when loading starts
+      setGmailProcessingStage(0);
+      
+      // Set up interval to cycle through messages every 2 seconds
+      interval = setInterval(() => {
+        setGmailProcessingStage(prev => (prev + 1) % 3);
+      }, 2000);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [gmailQueryLoading]);
+  
+  // Add effect for cycling Tap Loyalty processing messages
+  const [tapProcessingStage, setTapProcessingStage] = useState(0);
+  
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (tapQueryLoading) {
+      // Reset to first message when loading starts
+      setTapProcessingStage(0);
+      
+      // Set up interval to cycle through messages every 2 seconds
+      interval = setInterval(() => {
+        setTapProcessingStage(prev => (prev + 1) % 3);
+      }, 2000);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [tapQueryLoading]);
+  
+  // Add effect for cycling Assistant processing messages
+  const [assistantProcessingStage, setAssistantProcessingStage] = useState(0);
+  
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (assistantLoading) {
+      // Reset to first message when loading starts
+      setAssistantProcessingStage(0);
+      
+      // Set up interval to cycle through messages every 2 seconds
+      interval = setInterval(() => {
+        setAssistantProcessingStage(prev => (prev + 1) % 3);
+      }, 2000);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [assistantLoading]);
+  
+  // Lightspeed processing messages based on stage
+  const getLightspeedProcessingMessage = () => {
+    switch (lightspeedProcessingStage) {
+      case 0:
+        return "Processing Lightspeed data...";
+      case 1:
+        return "Analysing sales data...";
+      case 2:
+        return "Generating insights...";
+      default:
+        return "Processing Lightspeed data...";
+    }
+  };
+  
+  // Gmail processing messages based on stage
+  const getGmailProcessingMessage = () => {
+    switch (gmailProcessingStage) {
+      case 0:
+        return "Processing Gmail emails...";
+      case 1:
+        return "Scanning recent conversations...";
+      case 2:
+        return "Generating summary...";
+      default:
+        return "Processing Gmail emails...";
+    }
+  };
+  
+  // Tap Loyalty processing messages based on stage
+  const getTapProcessingMessage = () => {
+    switch (tapProcessingStage) {
+      case 0:
+        return "Processing Tap Loyalty data...";
+      case 1:
+        return "Analyzing customer metrics...";
+      case 2:
+        return "Generating loyalty insights...";
+      default:
+        return "Processing Tap Loyalty data...";
+    }
+  };
+  
+  // Assistant processing messages based on stage
+  const getAssistantProcessingMessage = () => {
+    switch (assistantProcessingStage) {
+      case 0:
+        return "Processing your request...";
+      case 1:
+        return "Analyzing data...";
+      case 2:
+        return "Preparing response...";
+      default:
+        return "Processing your request...";
+    }
+  };
+
+  // Function to handle expanding a response
+  const handleExpandResponse = (type: "assistant" | "gmail" | "lightspeed" | "tap") => {
+    // Toggle expanded state
+    setExpandedResponseId(expandedResponseId === type ? null : type);
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
+      <style dangerouslySetInnerHTML={{ __html: customAnimationStyles + customStyles }} />
       <SheetContent side="right" className="w-[600px] max-w-none sm:w-[550px] sm:max-w-none lg:w-[500px] lg:max-w-none p-0 overflow-hidden">
         <SheetHeader className="p-6 pb-2">
           <SheetTitle className="flex items-center">
             <GradientText>Tap Agent</GradientText>
           </SheetTitle>
           <SheetDescription>
-            AI-powered assistant for your business
+            Ask me anything about your business. I can look into your data and provide insights, recommendations, and more.
           </SheetDescription>
         </SheetHeader>
         
@@ -743,30 +1133,22 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                   {selectedIntegrations.map(integration => (
                     <div 
                       key={integration.id}
-                      className="relative pt-1"
+                      className="relative flex items-center"
                     >
-                      <div className="relative flex flex-col items-center">
-                        <div className="flex items-center justify-center h-7 w-7 rounded-md bg-gray-200 text-gray-700 border border-gray-300">
-                          {integration.icon}
-                          {!processingIntegrations[integration.id] && (
-                            <button 
-                              onClick={() => removeIntegration(integration.id)}
-                              className="absolute -top-1.5 -right-1.5 h-3.5 w-3.5 rounded-full flex items-center justify-center bg-gray-400 hover:bg-gray-500 text-white"
-                            >
-                              <X className="h-2 w-2" />
-                            </button>
-                          )}
-                        </div>
+                      {/* Show the integration icon */}
+                      <div 
+                        className="flex items-center h-7 px-2 rounded-md bg-gray-100 border border-gray-200 hover:bg-gray-200 cursor-pointer"
+                        onClick={(e) => { e.preventDefault(); !processingIntegrations[integration.id] && removeIntegration(integration.id) }}
+                      >
+                        <span className="mr-1.5">{integration.icon}</span>
+                        <span className="text-xs text-gray-700">{integration.name}</span>
                         
                         {processingIntegrations[integration.id] && (
-                          <div className="mt-1 flex items-center justify-center text-[11px] text-gray-600">
-                            <span className="mr-0.5">Processing</span>
-                            <span className="flex space-x-0.5">
-                              <span className="h-1.5 w-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                              <span className="h-1.5 w-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                              <span className="h-1.5 w-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                            </span>
-                          </div>
+                          <span className="ml-1.5 flex space-x-0.5">
+                            <span className="h-1.5 w-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                            <span className="h-1.5 w-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                            <span className="h-1.5 w-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                          </span>
                         )}
                       </div>
                     </div>
@@ -777,12 +1159,12 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                     type="text"
                     value={commandInput}
                     onChange={handleCommandInputChange}
-                    placeholder="Type '@' to use AI integrations..."
+                    placeholder="Type '@' to use AI integrations or ask a question..."
                     className="flex-1 outline-none bg-transparent min-w-[180px] py-1 text-sm font-normal text-gray-700"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !showIntegrations && (commandInput.trim() || selectedIntegrations.length > 0)) {
                         e.preventDefault();
-                        handleSendCommand();
+                        void handleSendCommand();
                       }
                       
                       if (showIntegrations) {
@@ -806,7 +1188,7 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                 
                 <div className="flex-shrink-0">
                   <button
-                    onClick={handleSendCommand}
+                    onClick={(e) => { e.preventDefault(); void handleSendCommand(); }}
                     disabled={!commandInput.trim() && selectedIntegrations.length === 0}
                     className={cn(
                       "p-1.5 rounded-md transition-colors",
@@ -839,9 +1221,7 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                               value={integration.name}
                               disabled={isAlreadySelected}
                             >
-                              <div className="flex items-center justify-center h-5 w-5 rounded-md bg-gray-100">
-                                {integration.icon}
-                              </div>
+                              {integration.icon}
                               <span>{integration.name}</span>
                               {isAlreadySelected && (
                                 <CheckIcon className="ml-auto h-3 w-3 text-gray-400" />
@@ -863,90 +1243,328 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
         
         <ScrollArea className="h-[calc(100vh-240px)] px-6 py-4">
           <div className="space-y-4">
-            {/* Gmail loading indicator */}
-            {gmailQueryLoading && (
-              <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
-                    <Image src="/gmail.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain" />
+            {/* Quick Actions Section */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <h3 className="text-sm font-medium text-gray-500 w-full mb-2">Quick Actions:</h3>
+              
+              {/* Gmail Quick Actions */}
+              <div className="relative">
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  className="h-8 text-xs font-normal px-3 flex items-center gap-1.5"
+                  onClick={(e) => { e.preventDefault(); setShowQuickActionMenu(showQuickActionMenu === "gmail" ? null : "gmail") }}
+                >
+                  <Image src="/gmail.png" width={14} height={14} alt="Gmail" className="h-3.5 w-3.5 object-contain rounded-sm" />
+                  Summarize Emails
+                </Button>
+                
+                {showQuickActionMenu === "gmail" && (
+                  <div 
+                    ref={quickActionRef}
+                    className="absolute left-0 top-full mt-1 z-50 bg-white rounded-md border border-gray-200 shadow-md w-48 py-1 text-xs"
+                  >
+                    <div className="px-2 py-1 text-gray-500 font-medium border-b">Gmail Actions</div>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50 font-medium text-blue-600"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("gmail-summarize") }}
+                    >
+                      Summarize Recent Emails
+                    </button>
+                    <div className="px-2 py-1 text-gray-500 border-t border-b text-[10px]">Time Range</div>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("gmail-summarize", "day") }}
+                    >
+                      Last 24 Hours
+                    </button>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("gmail-summarize", "3 days") }}
+                    >
+                      Last 3 Days
+                    </button>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("gmail-summarize", "week") }}
+                    >
+                      Last Week
+                    </button>
+                    <div className="px-2 py-1 text-gray-500 border-t border-b text-[10px]">Other Actions</div>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("gmail-important", "day") }}
+                    >
+                      Find Important Emails
+                    </button>
                   </div>
-                  <h3 className="text-sm font-medium text-gray-900">Gmail is processing...</h3>
-                </div>
-                <div className="mt-2 flex flex-col items-center justify-center space-y-2 py-4">
-                  <div className="w-8 h-8 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
-                  <p className="text-sm mt-2 animate-pulse bg-gradient-to-r from-gray-300 to-gray-600 bg-clip-text text-transparent">
-                    Processing Gmail data...
-                  </p>
-                </div>
+                )}
               </div>
-            )}
-            
-            {/* Lightspeed loading indicator */}
-            {lightspeedQueryLoading && (
-              <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
-                <div className="flex items-center gap-3 mb-1">
-                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
-                    <Image src="/lslogo.png" width={16} height={16} alt="Lightspeed" className="h-4 w-4 object-contain" />
+              
+              {/* Lightspeed Quick Actions */}
+              <div className="relative">
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  className="h-8 text-xs font-normal px-3 flex items-center gap-1.5"
+                  onClick={(e) => { e.preventDefault(); setShowQuickActionMenu(showQuickActionMenu === "lightspeed" ? null : "lightspeed") }}
+                >
+                  <Image src="/lslogo.png" width={14} height={14} alt="Lightspeed" className="h-3.5 w-3.5 object-contain rounded-sm" />
+                  Sales Analytics
+                </Button>
+                
+                {showQuickActionMenu === "lightspeed" && (
+                  <div 
+                    ref={quickActionRef}
+                    className="absolute left-0 top-full mt-1 z-50 bg-white rounded-md border border-gray-200 shadow-md w-48 py-1 text-xs"
+                  >
+                    <div className="px-2 py-1 text-gray-500 font-medium border-b">Lightspeed Actions</div>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50 font-medium text-blue-600"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("lightspeed-sales") }}
+                    >
+                      Analyze Sales Data
+                    </button>
+                    <div className="px-2 py-1 text-gray-500 border-t border-b text-[10px]">Time Range</div>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("lightspeed-sales", "day") }}
+                    >
+                      Today
+                    </button>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("lightspeed-sales", "week") }}
+                    >
+                      This Week
+                    </button>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("lightspeed-sales", "month") }}
+                    >
+                      This Month
+                    </button>
+                    <div className="px-2 py-1 text-gray-500 border-t border-b text-[10px]">Other Actions</div>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("lightspeed-inventory") }}
+                    >
+                      Inventory Status
+                    </button>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("lightspeed-trending", "week") }}
+                    >
+                      Trending Products
+                    </button>
                   </div>
+                )}
+              </div>
+              
+              {/* Tap Loyalty Quick Actions */}
+              <div className="relative">
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  className="h-8 text-xs font-normal px-3 flex items-center gap-1.5"
+                  onClick={(e) => { e.preventDefault(); setShowQuickActionMenu(showQuickActionMenu === "tap" ? null : "tap") }}
+                >
+                  <Image src="/taplogo.png" width={14} height={14} alt="Tap Loyalty" className="h-3.5 w-3.5 object-contain rounded-sm" />
+                  Loyalty Insights
+                </Button>
+                
+                {showQuickActionMenu === "tap" && (
+                  <div 
+                    ref={quickActionRef}
+                    className="absolute left-0 top-full mt-1 z-50 bg-white rounded-md border border-gray-200 shadow-md w-48 py-1 text-xs"
+                  >
+                    <div className="px-2 py-1 text-gray-500 font-medium border-b">Tap Loyalty Actions</div>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50 font-medium text-blue-600"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("tap-performance") }}
+                    >
+                      Program Performance
+                    </button>
+                    <div className="px-2 py-1 text-gray-500 border-t border-b text-[10px]">Time Range</div>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("tap-performance", "week") }}
+                    >
+                      Last Week
+                    </button>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("tap-performance", "month") }}
+                    >
+                      Last Month
+                    </button>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("tap-performance", "3 months") }}
+                    >
+                      Last Quarter
+                    </button>
+                    <div className="px-2 py-1 text-gray-500 border-t border-b text-[10px]">Other Actions</div>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("tap-customers") }}
+                    >
+                      Top Loyalty Customers
+                    </button>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("tap-rewards") }}
+                    >
+                      Popular Rewards Analysis
+                    </button>
+                    <div className="px-2 py-1 text-gray-500 border-t border-b text-[10px]">Loyalty Specific</div>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("tap-loyalty-overview") }}
+                    >
+                      Loyalty Program Overview
+                    </button>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("tap-loyalty-members") }}
+                    >
+                      Member Analysis
+                    </button>
+                    <button 
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                      onClick={(e) => { e.preventDefault(); void handleQuickAction("tap-loyalty-engagement", "month") }}
+                    >
+                      Engagement Metrics
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Divider line to separate quick actions from responses */}
+            <div className="border-t border-gray-200 mb-6"></div>
+
+            {/* Assistant loading indicator */}
+            {assistantLoading && (
+              <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-6 mb-4 animate-slowFadeIn">
+                <div className="flex items-center gap-3 mb-1">
+                  <GradientText className="text-base">AI</GradientText>
                   <div className="flex items-center gap-1">
-                    <h3 className="text-sm font-medium text-gray-900">Lightspeed is processing...</h3>
+                    <h3 className="text-sm font-medium text-gray-900">AI Assistant is processing...</h3>
                     <div className="w-4 h-4 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
                   </div>
                 </div>
-                <div className="mt-0 flex items-start text-left py-1 pl-9">
-                  <p className="text-xs animate-pulse bg-gradient-to-r from-gray-300 to-gray-600 bg-clip-text text-transparent">
-                    Processing Lightspeed data...
+                <div className="mt-1 flex flex-col items-start text-left py-2 pl-9">
+                  <p className="text-xs animate-fade-in-out bg-gradient-to-r from-gray-400 to-gray-700 bg-clip-text text-transparent font-medium w-full text-left">
+                    {getAssistantProcessingMessage()}
                   </p>
                 </div>
               </div>
             )}
             
-            {/* Tap Loyalty loading indicator */}
-            {tapQueryLoading && (
-              <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
-                    <Image src="/taplogo.png" width={16} height={16} alt="Tap Loyalty" className="h-4 w-4 object-contain" />
-                  </div>
-                  <h3 className="text-sm font-medium text-gray-900">Tap Loyalty is processing...</h3>
-                </div>
-                <div className="mt-2 flex flex-col items-center justify-center space-y-2 py-4">
-                  <div className="w-8 h-8 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
-                  <p className="text-sm mt-2 animate-pulse bg-gradient-to-r from-gray-300 to-gray-600 bg-clip-text text-transparent">
-                    Processing Tap Loyalty data...
-                  </p>
-                </div>
-              </div>
-            )}
-            
+            {/* Assistant Response */}
             {assistantResponse && (
-              <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
-                <div className="prose prose-sm max-w-none overflow-auto max-h-[600px] font-sf-pro">
-                  {(() => {
-                    const processedResponse = processApiResponse(assistantResponse);
-                    if (typeof processedResponse === 'string' && 
-                        processedResponse.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i)) {
-                      return renderHtml(processedResponse);
-                    } else {
-                      return (
-                        <ReactMarkdown 
-                          remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[rehypeRaw]}
-                        >
-                          {processedResponse || ""}
-                        </ReactMarkdown>
-                      );
-                    }
-                  })()}
+              <div className="mb-6 relative">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center h-6 w-6 rounded-md bg-blue-50">
+                      <GradientText className="text-base">AI</GradientText>
+                    </div>
+                    <h3 className="text-sm font-medium text-gray-900">AI Assistant Response</h3>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-7 w-7 p-0 rounded-full"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleExpandResponse("assistant");
+                      }}
+                    >
+                      <Maximize2 className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-7 w-7 p-0 rounded-full"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setAssistantResponse(null);
+                        setDebugResponse(null);
+                        setShowDebugInfo(false);
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                {processApiResponse(assistantResponse)?.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i) ? 
+                  renderHtml(processApiResponse(assistantResponse)) :
+                  <ReactMarkdown 
+                    className="tap-agent-response text-gray-800 leading-relaxed space-y-4"
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
+                    components={{
+                      h1: ({node, ...props}) => <h1 className="text-xl font-bold my-4 text-gray-900" {...props} />,
+                      h2: ({node, ...props}) => <h2 className="text-lg font-bold my-3 text-gray-900" {...props} />,
+                      h3: ({node, ...props}) => <h3 className="text-base font-semibold my-2 text-gray-900" {...props} />,
+                      p: ({node, ...props}) => <p className="my-3 text-gray-700" {...props} />,
+                      ul: ({node, ...props}) => <ul className="list-disc pl-6 my-3 space-y-2" {...props} />,
+                      ol: ({node, ...props}) => <ol className="list-decimal pl-6 my-3 space-y-2" {...props} />,
+                      li: ({node, ...props}) => <li className="my-1.5 pl-1" {...props} />,
+                      blockquote: ({node, ...props}) => <blockquote className="pl-4 border-l-2 border-gray-300 text-gray-600 italic my-4" {...props} />,
+                      a: ({node, ...props}) => <a className="text-blue-600 hover:text-blue-800 hover:underline" {...props} />,
+                      code: ({node, inline, className, children, ...props}: any) => {
+                        const match = /language-(\w+)/.exec(className || '')
+                        return !inline && match ? (
+                          <pre className="rounded bg-gray-50 p-4 overflow-x-auto text-sm my-4 border border-gray-200">
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          </pre>
+                        ) : (
+                          <code className="bg-gray-100 text-gray-800 rounded px-1.5 py-0.5 text-sm font-mono" {...props}>
+                            {children}
+                          </code>
+                        )
+                      },
+                      table: ({node, ...props}) => <div className="overflow-x-auto my-4 border border-gray-200 rounded-md"><table className="min-w-full" {...props} /></div>,
+                      thead: ({node, ...props}) => <thead className="bg-gray-50 border-b border-gray-200" {...props} />,
+                      th: ({node, ...props}) => <th className="px-4 py-3 text-left text-sm font-medium text-gray-900" {...props} />,
+                      td: ({node, ...props}) => <td className="px-4 py-3 text-sm text-gray-700 border-t border-gray-200" {...props} />
+                    }}
+                  >
+                    {processApiResponse(assistantResponse) || ""}
+                  </ReactMarkdown>
+                }
+              </div>
+            )}
+            
+            {/* Gmail loading indicator */}
+            {gmailQueryLoading && (
+              <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-6 mb-4 animate-slowFadeIn">
+                <div className="flex items-center gap-3 mb-1">
+                  <Image src="/gmail.png" width={18} height={18} alt="Gmail" className="h-5 w-5 object-contain rounded-sm" />
+                  <div className="flex items-center gap-1">
+                    <h3 className="text-sm font-medium text-gray-900">Gmail is processing...</h3>
+                    <div className="w-4 h-4 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+                  </div>
+                </div>
+                <div className="mt-1 flex flex-col items-start text-left py-2 pl-9">
+                  <p className="text-xs animate-fade-in-out bg-gradient-to-r from-gray-400 to-gray-700 bg-clip-text text-transparent font-medium w-full text-left">
+                    {getGmailProcessingMessage()}
+                  </p>
                 </div>
               </div>
             )}
             
+            {/* Gmail Response */}
             {gmailQueryResponse && (
-              <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
-                <div className="flex justify-between items-center mb-3">
+              <div className="mb-6 relative">
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
+                    <div className="flex items-center justify-center h-6 w-6 rounded-md bg-blue-50">
                       <Image src="/gmail.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain" />
                     </div>
                     <h3 className="text-sm font-medium text-gray-900">Gmail Response</h3>
@@ -955,7 +1573,8 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                     variant="ghost" 
                     size="sm" 
                     className="h-7 w-7 p-0 rounded-full"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
                       setGmailQueryResponse(null);
                       setDebugResponse(null);
                       setShowDebugInfo(false);
@@ -965,32 +1584,72 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="prose prose-sm max-w-none overflow-auto max-h-[600px] font-sf-pro">
-                  {(() => {
-                    const processedResponse = processApiResponse(gmailQueryResponse);
-                    if (typeof processedResponse === 'string' && 
-                        processedResponse.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i)) {
-                      return renderHtml(processedResponse);
-                    } else {
-                      return (
-                        <ReactMarkdown 
-                          remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[rehypeRaw]}
-                        >
-                          {processedResponse || ""}
-                        </ReactMarkdown>
-                      );
-                    }
-                  })()}
+                {processApiResponse(gmailQueryResponse)?.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i) ? 
+                  renderHtml(processApiResponse(gmailQueryResponse)) :
+                  <ReactMarkdown 
+                    className="tap-agent-response text-gray-800 leading-relaxed space-y-4"
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
+                    components={{
+                      h1: ({node, ...props}) => <h1 className="text-xl font-bold my-4 text-gray-900" {...props} />,
+                      h2: ({node, ...props}) => <h2 className="text-lg font-bold my-3 text-gray-900" {...props} />,
+                      h3: ({node, ...props}) => <h3 className="text-base font-semibold my-2 text-gray-900" {...props} />,
+                      p: ({node, ...props}) => <p className="my-3 text-gray-700" {...props} />,
+                      ul: ({node, ...props}) => <ul className="list-disc pl-6 my-3 space-y-2" {...props} />,
+                      ol: ({node, ...props}) => <ol className="list-decimal pl-6 my-3 space-y-2" {...props} />,
+                      li: ({node, ...props}) => <li className="my-1.5 pl-1" {...props} />,
+                      blockquote: ({node, ...props}) => <blockquote className="pl-4 border-l-2 border-gray-300 text-gray-600 italic my-4" {...props} />,
+                      a: ({node, ...props}) => <a className="text-blue-600 hover:text-blue-800 hover:underline" {...props} />,
+                      code: ({node, inline, className, children, ...props}: any) => {
+                        const match = /language-(\w+)/.exec(className || '')
+                        return !inline && match ? (
+                          <pre className="rounded bg-gray-50 p-4 overflow-x-auto text-sm my-4 border border-gray-200">
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          </pre>
+                        ) : (
+                          <code className="bg-gray-100 text-gray-800 rounded px-1.5 py-0.5 text-sm font-mono" {...props}>
+                            {children}
+                          </code>
+                        )
+                      },
+                      table: ({node, ...props}) => <div className="overflow-x-auto my-4 border border-gray-200 rounded-md"><table className="min-w-full" {...props} /></div>,
+                      thead: ({node, ...props}) => <thead className="bg-gray-50 border-b border-gray-200" {...props} />,
+                      th: ({node, ...props}) => <th className="px-4 py-3 text-left text-sm font-medium text-gray-900" {...props} />,
+                      td: ({node, ...props}) => <td className="px-4 py-3 text-sm text-gray-700 border-t border-gray-200" {...props} />
+                    }}
+                  >
+                    {processApiResponse(gmailQueryResponse) || ""}
+                  </ReactMarkdown>
+                }
+              </div>
+            )}
+            
+            {/* Lightspeed loading indicator */}
+            {lightspeedQueryLoading && (
+              <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-6 mb-4 animate-slowFadeIn">
+                <div className="flex items-center gap-3 mb-1">
+                  <Image src="/lslogo.png" width={18} height={18} alt="Lightspeed" className="h-5 w-5 object-contain rounded-sm" />
+                  <div className="flex items-center gap-1">
+                    <h3 className="text-sm font-medium text-gray-900">Lightspeed is processing...</h3>
+                    <div className="w-4 h-4 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+                  </div>
+                </div>
+                <div className="mt-1 flex flex-col items-start text-left py-2 pl-9">
+                  <p className="text-xs animate-fade-in-out bg-gradient-to-r from-gray-400 to-gray-700 bg-clip-text text-transparent font-medium w-full text-left">
+                    {getLightspeedProcessingMessage()}
+                  </p>
                 </div>
               </div>
             )}
             
+            {/* Lightspeed Response */}
             {lightspeedQueryResponse && (
-              <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
-                <div className="flex justify-between items-center mb-3">
+              <div className="mb-6 relative">
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
+                    <div className="flex items-center justify-center h-6 w-6 rounded-md bg-blue-50">
                       <Image src="/lslogo.png" width={16} height={16} alt="Lightspeed" className="h-4 w-4 object-contain" />
                     </div>
                     <h3 className="text-sm font-medium text-gray-900">Lightspeed Response</h3>
@@ -999,7 +1658,8 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                     variant="ghost" 
                     size="sm" 
                     className="h-7 w-7 p-0 rounded-full"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
                       setLightspeedQueryResponse(null);
                       setDebugResponse(null);
                       setShowDebugInfo(false);
@@ -1009,32 +1669,72 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="prose prose-sm max-w-none overflow-auto max-h-[600px] font-sf-pro">
-                  {(() => {
-                    const processedResponse = processApiResponse(lightspeedQueryResponse);
-                    if (typeof processedResponse === 'string' && 
-                        processedResponse.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i)) {
-                      return renderHtml(processedResponse);
-                    } else {
-                      return (
-                        <ReactMarkdown 
-                          remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[rehypeRaw]}
-                        >
-                          {processedResponse || ""}
-                        </ReactMarkdown>
-                      );
-                    }
-                  })()}
+                {processApiResponse(lightspeedQueryResponse)?.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i) ? 
+                  renderHtml(processApiResponse(lightspeedQueryResponse)) :
+                  <ReactMarkdown 
+                    className="tap-agent-response text-gray-800 leading-relaxed space-y-4"
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
+                    components={{
+                      h1: ({node, ...props}) => <h1 className="text-xl font-bold my-4 text-gray-900" {...props} />,
+                      h2: ({node, ...props}) => <h2 className="text-lg font-bold my-3 text-gray-900" {...props} />,
+                      h3: ({node, ...props}) => <h3 className="text-base font-semibold my-2 text-gray-900" {...props} />,
+                      p: ({node, ...props}) => <p className="my-3 text-gray-700" {...props} />,
+                      ul: ({node, ...props}) => <ul className="list-disc pl-6 my-3 space-y-2" {...props} />,
+                      ol: ({node, ...props}) => <ol className="list-decimal pl-6 my-3 space-y-2" {...props} />,
+                      li: ({node, ...props}) => <li className="my-1.5 pl-1" {...props} />,
+                      blockquote: ({node, ...props}) => <blockquote className="pl-4 border-l-2 border-gray-300 text-gray-600 italic my-4" {...props} />,
+                      a: ({node, ...props}) => <a className="text-blue-600 hover:text-blue-800 hover:underline" {...props} />,
+                      code: ({node, inline, className, children, ...props}: any) => {
+                        const match = /language-(\w+)/.exec(className || '')
+                        return !inline && match ? (
+                          <pre className="rounded bg-gray-50 p-4 overflow-x-auto text-sm my-4 border border-gray-200">
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          </pre>
+                        ) : (
+                          <code className="bg-gray-100 text-gray-800 rounded px-1.5 py-0.5 text-sm font-mono" {...props}>
+                            {children}
+                          </code>
+                        )
+                      },
+                      table: ({node, ...props}) => <div className="overflow-x-auto my-4 border border-gray-200 rounded-md"><table className="min-w-full" {...props} /></div>,
+                      thead: ({node, ...props}) => <thead className="bg-gray-50 border-b border-gray-200" {...props} />,
+                      th: ({node, ...props}) => <th className="px-4 py-3 text-left text-sm font-medium text-gray-900" {...props} />,
+                      td: ({node, ...props}) => <td className="px-4 py-3 text-sm text-gray-700 border-t border-gray-200" {...props} />
+                    }}
+                  >
+                    {processApiResponse(lightspeedQueryResponse) || ""}
+                  </ReactMarkdown>
+                }
+              </div>
+            )}
+            
+            {/* Tap Loyalty loading indicator */}
+            {tapQueryLoading && (
+              <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-6 mb-4 animate-slowFadeIn">
+                <div className="flex items-center gap-3 mb-1">
+                  <Image src="/taplogo.png" width={18} height={18} alt="Tap Loyalty" className="h-5 w-5 object-contain rounded-sm" />
+                  <div className="flex items-center gap-1">
+                    <h3 className="text-sm font-medium text-gray-900">Tap Loyalty is processing...</h3>
+                    <div className="w-4 h-4 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+                  </div>
+                </div>
+                <div className="mt-1 flex flex-col items-start text-left py-2 pl-9">
+                  <p className="text-xs animate-fade-in-out bg-gradient-to-r from-gray-400 to-gray-700 bg-clip-text text-transparent font-medium w-full text-left">
+                    {getTapProcessingMessage()}
+                  </p>
                 </div>
               </div>
             )}
             
+            {/* Tap Loyalty Response */}
             {tapQueryResponse && (
-              <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
-                <div className="flex justify-between items-center mb-3">
+              <div className="mb-6 relative">
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
+                    <div className="flex items-center justify-center h-6 w-6 rounded-md bg-blue-50">
                       <Image src="/taplogo.png" width={16} height={16} alt="Tap Loyalty" className="h-4 w-4 object-contain" />
                     </div>
                     <h3 className="text-sm font-medium text-gray-900">Tap Loyalty Response</h3>
@@ -1043,7 +1743,8 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                     variant="ghost" 
                     size="sm" 
                     className="h-7 w-7 p-0 rounded-full"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
                       setTapQueryResponse(null);
                       setDebugResponse(null);
                       setShowDebugInfo(false);
@@ -1053,24 +1754,45 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="prose prose-sm max-w-none overflow-auto max-h-[600px] font-sf-pro">
-                  {(() => {
-                    const processedResponse = processApiResponse(tapQueryResponse);
-                    if (typeof processedResponse === 'string' && 
-                        processedResponse.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i)) {
-                      return renderHtml(processedResponse);
-                    } else {
-                      return (
-                        <ReactMarkdown 
-                          remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[rehypeRaw]}
-                        >
-                          {processedResponse || ""}
-                        </ReactMarkdown>
-                      );
-                    }
-                  })()}
-                </div>
+                {processApiResponse(tapQueryResponse)?.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i) ? 
+                  renderHtml(processApiResponse(tapQueryResponse)) :
+                  <ReactMarkdown 
+                    className="tap-agent-response text-gray-800 leading-relaxed space-y-4"
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
+                    components={{
+                      h1: ({node, ...props}) => <h1 className="text-xl font-bold my-4 text-gray-900" {...props} />,
+                      h2: ({node, ...props}) => <h2 className="text-lg font-bold my-3 text-gray-900" {...props} />,
+                      h3: ({node, ...props}) => <h3 className="text-base font-semibold my-2 text-gray-900" {...props} />,
+                      p: ({node, ...props}) => <p className="my-3 text-gray-700" {...props} />,
+                      ul: ({node, ...props}) => <ul className="list-disc pl-6 my-3 space-y-2" {...props} />,
+                      ol: ({node, ...props}) => <ol className="list-decimal pl-6 my-3 space-y-2" {...props} />,
+                      li: ({node, ...props}) => <li className="my-1.5 pl-1" {...props} />,
+                      blockquote: ({node, ...props}) => <blockquote className="pl-4 border-l-2 border-gray-300 text-gray-600 italic my-4" {...props} />,
+                      a: ({node, ...props}) => <a className="text-blue-600 hover:text-blue-800 hover:underline" {...props} />,
+                      code: ({node, inline, className, children, ...props}: any) => {
+                        const match = /language-(\w+)/.exec(className || '')
+                        return !inline && match ? (
+                          <pre className="rounded bg-gray-50 p-4 overflow-x-auto text-sm my-4 border border-gray-200">
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          </pre>
+                        ) : (
+                          <code className="bg-gray-100 text-gray-800 rounded px-1.5 py-0.5 text-sm font-mono" {...props}>
+                            {children}
+                          </code>
+                        )
+                      },
+                      table: ({node, ...props}) => <div className="overflow-x-auto my-4 border border-gray-200 rounded-md"><table className="min-w-full" {...props} /></div>,
+                      thead: ({node, ...props}) => <thead className="bg-gray-50 border-b border-gray-200" {...props} />,
+                      th: ({node, ...props}) => <th className="px-4 py-3 text-left text-sm font-medium text-gray-900" {...props} />,
+                      td: ({node, ...props}) => <td className="px-4 py-3 text-sm text-gray-700 border-t border-gray-200" {...props} />
+                    }}
+                  >
+                    {processApiResponse(tapQueryResponse) || ""}
+                  </ReactMarkdown>
+                }
               </div>
             )}
           </div>

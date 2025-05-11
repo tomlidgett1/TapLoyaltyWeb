@@ -35,7 +35,10 @@ import {
   Layers,
   LineChart,
   Percent,
-  Inbox
+  Inbox,
+  Check as CheckIcon,
+  Bell,
+  AlertCircle
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -43,7 +46,7 @@ import { format, formatDistanceToNow } from "date-fns"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, where, Timestamp } from "firebase/firestore"
+import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, where, Timestamp, onSnapshot } from "firebase/firestore"
 import { toast } from "@/components/ui/use-toast"
 import { TapAiButton } from "@/components/tap-ai-button"
 import { PageTransition } from "@/components/page-transition"
@@ -107,6 +110,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
+import { TapAgentSheet } from "@/components/tap-agent-sheet"
 
 type TimeframeType = "today" | "yesterday" | "7days" | "30days"
 
@@ -187,6 +192,28 @@ export default function DashboardPage() {
   const [selectedIntegrations, setSelectedIntegrations] = useState<{id: string, name: string, icon: React.ReactNode}[]>([])
   const [cursorPosition, setCursorPosition] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const [isTapAgentSheetOpen, setIsTapAgentSheetOpen] = useState(false)
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current && 
+        !dropdownRef.current.contains(event.target as Node) &&
+        inputRef.current && 
+        !inputRef.current.contains(event.target as Node)
+      ) {
+        setShowIntegrations(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [setShowIntegrations]);
+  
   // Add a new state for processing status
   const [processingIntegrations, setProcessingIntegrations] = useState<Record<string, boolean>>({})
   const [isSummarizeInboxSheetOpen, setIsSummarizeInboxSheetOpen] = useState(false)
@@ -222,7 +249,15 @@ export default function DashboardPage() {
   // Use refs for the timeouts to be able to clear them when needed
   const findingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const generatingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  
+
+  // Add Tap Loyalty state variables
+  const [tapQueryResponse, setTapQueryResponse] = useState<string | null>(null)
+  const [tapQueryLoading, setTapQueryLoading] = useState(false)
+
+  // Add state variable for the AI assistant response
+  const [assistantResponse, setAssistantResponse] = useState<string | null>(null)
+  const [assistantLoading, setAssistantLoading] = useState(false)
+
   const getDateRange = (tf: TimeframeType): { start: Date; end: Date } => {
     const now = new Date()
     const end = new Date(now) // Create a copy of now for end date
@@ -958,6 +993,81 @@ export default function DashboardPage() {
     return formatDistanceToNow(date, { addSuffix: true })
   }
 
+  // Safely render HTML content
+  const renderHtml = (htmlContent: string | null) => {
+    if (!htmlContent) return null;
+    
+    try {
+      // Sanitize the HTML content to prevent XSS attacks
+      // Note: In a production environment, you should use a proper HTML sanitizer library
+      
+      return (
+        <div 
+          className="prose prose-slate max-w-none prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-h3:font-bold prose-p:my-2 prose-p:leading-relaxed prose-li:my-0 prose-li:leading-relaxed prose-table:border-collapse prose-th:bg-gray-50 prose-th:p-2 prose-th:font-semibold prose-td:p-2 prose-td:border prose-td:border-gray-200"
+          dangerouslySetInnerHTML={{ __html: htmlContent }} 
+        />
+      );
+    } catch (error) {
+      console.error('Error rendering HTML:', error);
+      return (
+        <div className="p-4 border border-red-200 rounded bg-red-50 text-red-800">
+          <p className="font-medium">Error rendering content</p>
+          <p className="text-sm mt-1">There was a problem displaying this content.</p>
+        </div>
+      );
+    }
+  };
+  
+  // Process API responses to handle both Markdown and HTML content
+  const processApiResponse = (response: string | null) => {
+    if (!response) return null;
+    
+    try {
+      // Check if the response is a JSON string containing HTML in an "answer" field
+      if (response.includes('"answer":')) {
+        try {
+          const jsonResponse = JSON.parse(response);
+          if (jsonResponse.answer && typeof jsonResponse.answer === 'string') {
+            // If the answer field contains HTML, return it directly
+            return jsonResponse.answer;
+          }
+        } catch (jsonError) {
+          console.error('Error parsing JSON response:', jsonError);
+          // Continue with other checks if JSON parsing fails
+        }
+      }
+      
+      // Check if the response is wrapped in code blocks and remove them
+      if (response.includes('```')) {
+        // Handle code blocks with language specifiers
+        if (response.includes('```html')) {
+          // This is explicitly marked as HTML
+          return response.replace(/```html\n/g, '').replace(/```$/g, '');
+        } else if (response.includes('```markdown')) {
+          // This is explicitly marked as Markdown
+          return response.replace(/```markdown\n/g, '').replace(/```$/g, '');
+        } else {
+          // Generic code block
+          return response.replace(/```\w*\n/g, '').replace(/```$/g, '');
+        }
+      }
+      
+      // Check if the response is HTML by looking for common HTML tags
+      const htmlPattern = /<(html|body|div|h[1-6]|p|ul|ol|li|table|tr|th|td|a|img|span|strong|em|b)[\s>]/i;
+      if (htmlPattern.test(response.trim().substring(0, 100))) {
+        // It's likely HTML content
+        return response;
+      }
+      
+      // Default - just return the response as is
+      return response;
+    } catch (error) {
+      console.error('Error processing API response:', error);
+      // Return the original response if there's an error
+      return response;
+    }
+  }
+
   // Custom tooltip component for the chart
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -1404,10 +1514,126 @@ export default function DashboardPage() {
       const gmailIntegration = selectedIntegrations.find(integration => integration.id === "gmail")
       // Check if Lightspeed is one of the selected integrations
       const lightspeedIntegration = selectedIntegrations.find(integration => integration.id === "lightspeed")
+      // Check if Tap Loyalty is one of the selected integrations
+      const tapIntegration = selectedIntegrations.find(integration => integration.id === "tap")
+      
+      // If there are no selected integrations but we have command input, use the default AI assistant
+      if (selectedIntegrations.length === 0 && commandInput.trim()) {
+        try {
+          setAssistantLoading(true)
+          
+          // Make API call to chatMerchant function
+          const response = await fetch(
+            `https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/chatMerchant`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              merchantId: user?.uid,
+              prompt: commandInput.trim()
+            }),
+          });
+          
+          // Get the response
+          const rawResponse = await response.text();
+          console.log("Raw AI Assistant response:", rawResponse);
+          
+          try {
+            const data = JSON.parse(rawResponse);
+            console.log("AI Assistant response parsed:", data);
+            
+            // Set debug response for inspection
+            setDebugResponse(rawResponse);
+            
+            // Check for multiple possible response formats
+            if (data?.answer) {
+              // This is the expected format from chatMerchant: {"answer":"response text"}
+              setAssistantResponse(data.answer);
+              
+              toast({
+                title: "AI Assistant Response",
+                description: "Your question has been answered",
+                variant: "default"
+              });
+            } else if (data?.success && data?.summary) {
+              setAssistantResponse(data.summary);
+              
+              toast({
+                title: "AI Assistant Response",
+                description: "Your question has been answered",
+                variant: "default"
+              });
+            } else if (data?.success && data?.answer) {
+              setAssistantResponse(data.answer);
+              
+              toast({
+                title: "AI Assistant Response",
+                description: "Your question has been answered",
+                variant: "default"
+              });
+            } else if (data?.result?.summary) {
+              setAssistantResponse(data.result.summary);
+              
+              toast({
+                title: "AI Assistant Response",
+                description: "Your question has been answered",
+                variant: "default"
+              });
+            } else if (data?.summary) {
+              setAssistantResponse(data.summary);
+              
+              toast({
+                title: "AI Assistant Response",
+                description: "Your question has been answered",
+                variant: "default"
+              });
+            } else if (data?.error) {
+              toast({
+                title: "AI Assistant Error",
+                description: data.error,
+                variant: "destructive"
+              });
+            } else {
+              // No recognizable format - display what we received for debugging
+              console.error("Unrecognized response format:", data);
+              setAssistantResponse(`The AI Assistant returned data in an unexpected format. Please check with your developer.\n\nReceived: ${JSON.stringify(data, null, 2)}`);
+              
+              toast({
+                title: "Unexpected Response Format",
+                description: "The response format wasn't recognized, but we've displayed what we received",
+                variant: "destructive"
+              });
+            }
+          } catch (e) {
+            console.error("Error parsing AI Assistant response:", e);
+            toast({
+              title: "Error Processing Response",
+              description: "Could not process the AI Assistant response",
+              variant: "destructive"
+            });
+          }
+        } catch (error) {
+          console.error("Error querying AI Assistant:", error);
+          toast({
+            title: "AI Assistant Query Failed",
+            description: error instanceof Error ? error.message : "Unknown error occurred",
+            variant: "destructive"
+          });
+        } finally {
+          setAssistantLoading(false);
+        }
+      }
       
       if (gmailIntegration && commandInput.trim()) {
         try {
           setGmailQueryLoading(true)
+          
+          // Clear the "processing..." indicator immediately when loading starts
+          setProcessingIntegrations(prev => ({
+            ...prev,
+            [gmailIntegration.id]: false
+          }))
           
           // Make API call to questionGmailHttp function
           const response = await fetch(
@@ -1505,7 +1731,7 @@ export default function DashboardPage() {
           });
         } finally {
           setGmailQueryLoading(false);
-          // Immediately remove the "thinking..." indicator for Gmail
+          // Immediately remove the "processing..." indicator for Gmail
           if (gmailIntegration) {
             setProcessingIntegrations(prev => ({
               ...prev,
@@ -1519,6 +1745,12 @@ export default function DashboardPage() {
       if (lightspeedIntegration && commandInput.trim()) {
         try {
           setLightspeedQueryLoading(true);
+          
+          // Clear the "processing..." indicator immediately when loading starts
+          setProcessingIntegrations(prev => ({
+            ...prev,
+            [lightspeedIntegration.id]: false
+          }))
           
           // Make API call to questionLsHttp function
           const response = await fetch(
@@ -1617,7 +1849,7 @@ export default function DashboardPage() {
           });
         } finally {
           setLightspeedQueryLoading(false);
-          // Immediately remove the "thinking..." indicator for Lightspeed
+          // Immediately remove the "processing..." indicator for Lightspeed
           if (lightspeedIntegration) {
             setProcessingIntegrations(prev => ({
               ...prev,
@@ -1627,12 +1859,129 @@ export default function DashboardPage() {
         }
       }
       
+      // Handle Tap Loyalty integration
+      if (tapIntegration && commandInput.trim()) {
+        try {
+          setTapQueryLoading(true);
+          
+          // Clear the "processing..." indicator immediately when loading starts
+          setProcessingIntegrations(prev => ({
+            ...prev,
+            [tapIntegration.id]: false
+          }))
+          
+          // Make API call to questionTapHttp function
+          const response = await fetch(
+            `https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/questionTap`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              merchantId: user?.uid,
+              prompt: commandInput.trim()
+            }),
+          });
+          
+          // Get the response
+          const rawResponse = await response.text();
+          console.log("Raw Tap Loyalty API response:", rawResponse);
+          
+          try {
+            const data = JSON.parse(rawResponse);
+            console.log("Tap Loyalty API response parsed:", data);
+            
+            // Set debug response for inspection
+            setDebugResponse(rawResponse);
+            
+            // Check for multiple possible response formats
+            if (data?.success && data?.summary) {
+              // Format: { success: true, summary: "..." }
+              setTapQueryResponse(data.summary);
+              
+              toast({
+                title: "Tap Loyalty Query Completed",
+                description: "Tap Loyalty query has been processed successfully",
+                variant: "default"
+              });
+            } else if (data?.success && data?.answer) {
+              // Format: { success: true, answer: "..." }
+              setTapQueryResponse(data.answer);
+              
+              toast({
+                title: "Tap Loyalty Query Completed",
+                description: "Tap Loyalty query has been processed successfully",
+                variant: "default"
+              });
+            } else if (data?.result?.summary) {
+              // Format: { result: { summary: "..." } }
+              setTapQueryResponse(data.result.summary);
+              
+              toast({
+                title: "Tap Loyalty Query Completed",
+                description: "Tap Loyalty query has been processed successfully",
+                variant: "default"
+              });
+            } else if (data?.summary) {
+              // Format: { summary: "..." }
+              setTapQueryResponse(data.summary);
+              
+              toast({
+                title: "Tap Loyalty Query Completed",
+                description: "Tap Loyalty query has been processed successfully",
+                variant: "default"
+              });
+            } else if (data?.error) {
+              // Format: { error: "..." }
+              toast({
+                title: "Tap Loyalty Query Error",
+                description: data.error,
+                variant: "destructive"
+              });
+            } else {
+              // No recognizable format - display what we received for debugging
+              console.error("Unrecognized response format:", data);
+              setTapQueryResponse(`The Tap Loyalty API returned data in an unexpected format. Please check with your developer.\n\nReceived: ${JSON.stringify(data, null, 2)}`);
+              
+              toast({
+                title: "Unexpected Response Format",
+                description: "The response format wasn't recognized, but we've displayed what we received",
+                variant: "destructive"
+              });
+            }
+          } catch (e) {
+            console.error("Error parsing Tap Loyalty API response:", e);
+            toast({
+              title: "Error Processing Response",
+              description: "Could not process the Tap Loyalty query response",
+              variant: "destructive"
+            });
+          }
+        } catch (error) {
+          console.error("Error querying Tap Loyalty:", error);
+          toast({
+            title: "Tap Loyalty Query Failed",
+            description: error instanceof Error ? error.message : "Unknown error occurred",
+            variant: "destructive"
+          });
+        } finally {
+          setTapQueryLoading(false);
+          // Immediately remove the "processing..." indicator for Tap Loyalty
+          if (tapIntegration) {
+            setProcessingIntegrations(prev => ({
+              ...prev,
+              [tapIntegration.id]: false
+            }));
+          }
+        }
+      }
+      
       // Process other integrations
       selectedIntegrations.forEach(integration => {
-        if (integration.id !== "gmail" && integration.id !== "lightspeed") { // Skip Gmail and Lightspeed as we already handled them
-          // Random timeout for non-Gmail integrations
+        if (integration.id !== "gmail" && integration.id !== "lightspeed" && integration.id !== "tap") { // Skip integrations we already handled
+          // Random timeout for other integrations
           const timeout = 4000 + Math.random() * 3000
-          
+        
           setTimeout(() => {
             setProcessingIntegrations(prev => ({
               ...prev,
@@ -1647,17 +1996,17 @@ export default function DashboardPage() {
         }
       })
       
-      // Reset input field but keep integrations until they finish processing
+      // Reset input field immediately after sending
       setCommandInput("")
       
       // After all processing is done, reset the integrations
-      // For Gmail and Lightspeed we'll keep the selected integration until user dismisses the response
-      if (!gmailIntegration && !lightspeedIntegration) {
+      // Keep the integrations that need to show responses
+      if (!gmailIntegration && !lightspeedIntegration && !tapIntegration) {
         const maxProcessingTime = 7500 
-        setTimeout(() => {
-          setSelectedIntegrations([])
-          setProcessingIntegrations({})
-        }, maxProcessingTime)
+      setTimeout(() => {
+        setSelectedIntegrations([])
+        setProcessingIntegrations({})
+      }, maxProcessingTime)
       }
     }
   }
@@ -1746,6 +2095,87 @@ export default function DashboardPage() {
     summarizeEmails(days)
   }
 
+  // Add notification listener
+  useEffect(() => {
+    if (!user?.uid) return;
+    
+    // Create a reference to the merchant's notifications collection
+    const notifsRef = collection(db, 'merchants', user.uid, 'notifs');
+    
+    // Create a query to get the latest notifications
+    const notifsQuery = query(notifsRef, orderBy('createdAt', 'desc'));
+    
+    // Set up the real-time listener
+    const unsubscribe = onSnapshot(notifsQuery, (snapshot) => {
+      // Check for added documents
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          // Get the notification data
+          const notifData = change.doc.data();
+          
+          // Check if this is a new notification (created in the last 10 seconds)
+          const notifTime = notifData.createdAt?.toDate() || new Date();
+          const isRecent = (new Date().getTime() - notifTime.getTime()) < 10000; // 10 seconds
+          
+          // Only show toast for new notifications
+          if (isRecent) {
+            // Get notification type prefix
+            let prefix = "📣 ";
+            switch(notifData.type) {
+              case 'success':
+                prefix = "✅ ";
+                break;
+              case 'error':
+                prefix = "⚠️ ";
+                break;
+              case 'reward':
+                prefix = "🎁 ";
+                break;
+              case 'transaction':
+                prefix = "🛒 ";
+                break;
+              case 'insight':
+                prefix = "💡 ";
+                break;
+            }
+            
+            // Display the notification using toast
+            toast({
+              title: `${prefix}${notifData.title || "New Notification"}`,
+              description: notifData.description || "",
+              variant: notifData.type === "error" ? "destructive" : 
+                      notifData.type === "success" ? "default" : 
+                      "default",
+              duration: 5000, // 5 seconds
+              action: notifData.link ? (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => {
+                    router.push(notifData.link);
+                  }}
+                >
+                  View
+                </Button>
+              ) : undefined
+            });
+            
+            // Play a sound if notification has high priority
+            if (notifData.priority === 'high') {
+              const audio = new Audio('/notification-sound.mp3');
+              audio.play().catch(err => console.error('Error playing notification sound:', err));
+            }
+          }
+        }
+      });
+    }, (error) => {
+      console.error("Error listening to notifications:", error);
+    });
+    
+    // Clean up the listener when the component unmounts
+    return () => unsubscribe();
+  }, [user?.uid, router]);
+
   if (initialLoading) {
     return (
       <PageTransition>
@@ -1778,15 +2208,15 @@ export default function DashboardPage() {
                   <Inbox className="h-4 w-4" />
                   Summarize Inbox
                 </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  className="h-9 gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
-                  onClick={() => setIsSetupWizardOpen(true)}
-                >
-                  <PlusCircle className="h-4 w-4" />
-                  Setup Wizard
-                </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                className="h-9 gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                onClick={() => setIsSetupWizardOpen(true)}
+              >
+                <PlusCircle className="h-4 w-4" />
+                Setup Wizard
+              </Button>
               </div>
             </PageHeader>
 
@@ -1829,113 +2259,20 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* AI Agent Command Box - NEW SECTION */}
-          <div className="relative">
-            <div className="flex flex-col space-y-3">
-              <h3 className="text-sm font-medium text-gray-500 flex items-center gap-2">
-                <GradientText>Tap Agent</GradientText>
-              </h3>
-              
-              <div className="w-full">
-                <div className="relative flex-1">
-                  <div className="flex flex-wrap items-start px-3 py-2 min-h-[44px] w-full border rounded-lg shadow-sm bg-gray-50">
-                    {/* Display selected integrations as squared boxes */}
-                    <div className="flex flex-wrap flex-grow gap-2 mr-2">
-                      {selectedIntegrations.map(integration => (
-                        <div 
-                          key={integration.id}
-                          className="relative pt-1"
-                        >
-                          <div className="relative flex flex-col items-center">
-                            <div className="flex items-center justify-center h-7 w-7 rounded-md bg-gray-200 text-gray-700 border border-gray-300">
-                              {integration.icon}
-                              {!processingIntegrations[integration.id] && (
-                                <button 
-                                  onClick={() => removeIntegration(integration.id)}
-                                  className="absolute -top-1.5 -right-1.5 h-3.5 w-3.5 rounded-full flex items-center justify-center bg-gray-400 hover:bg-gray-500 text-white"
-                                >
-                                  <X className="h-2 w-2" />
-                                </button>
-                              )}
-                            </div>
-                            
-                            {/* Thinking indicator below the icon but still within the input box */}
-                            {processingIntegrations[integration.id] && (
-                              <div className="mt-1 flex items-center justify-center text-[11px] text-gray-600">
-                                <span className="mr-0.5">Thinking</span>
-                                <span className="flex space-x-0.5">
-                                  <span className="h-1.5 w-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                                  <span className="h-1.5 w-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                                  <span className="h-1.5 w-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                      
-                      {/* Text input */}
-                      <input
-                        ref={inputRef}
-                        type="text"
-                        value={commandInput}
-                        onChange={handleCommandInputChange}
-                        placeholder="Type '@' to use AI integrations..."
-                        className="flex-1 outline-none bg-transparent min-w-[180px] py-1 text-sm font-normal text-gray-700"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && (commandInput.trim() || selectedIntegrations.length > 0)) {
-                            e.preventDefault();
-                            handleSendCommand();
-                          }
-                        }}
-                      />
-                    </div>
-                    
-                    {/* Send button inside the box */}
-                    <div className="flex-shrink-0">
-                      <button
-                        onClick={handleSendCommand}
-                        disabled={!commandInput.trim() && selectedIntegrations.length === 0}
-                        className={cn(
-                          "p-1.5 rounded-md transition-colors",
-                          (!commandInput.trim() && selectedIntegrations.length === 0) 
-                            ? "text-gray-300 cursor-not-allowed" 
-                            : "text-blue-600 hover:bg-blue-100 hover:text-blue-700"
-                        )}
-                      >
-                        <SendHorizontal className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {/* Integrations dropdown */}
-                  {showIntegrations && (
-                    <div className="absolute left-0 right-0 top-full mt-1 border rounded-md bg-white shadow-md z-50">
-                      <Command>
-                        <CommandList>
-                          <CommandGroup heading="Available integrations">
-                            {availableIntegrations.map(integration => (
-                              <CommandItem 
-                                key={integration.id}
-                                onSelect={() => handleSelectIntegration(integration)}
-                                className="flex items-center gap-2 py-2 cursor-pointer text-sm font-normal text-gray-700"
-                              >
-                                <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
-                                  {integration.icon}
-                                </div>
-                                <span>{integration.name}</span>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </div>
-                  )}
-                </div>
+          {/* Tap Agent Button */}
+          <div className="relative mb-4">
+            <Button
+              onClick={() => setIsTapAgentSheetOpen(true)}
+              variant="outline"
+              className="w-full bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 border-blue-200 text-blue-700"
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-blue-500" />
+                <span className="font-medium">Open Tap Agent</span>
               </div>
-            </div>
+            </Button>
           </div>
-          
+
           {/* Gmail Query Response */}
           {gmailQueryResponse && (
             <div className="mt-3 bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
@@ -1971,13 +2308,54 @@ export default function DashboardPage() {
                   </Button>
                 </div>
               </div>
-              <div className="prose prose-sm max-w-none font-sf-pro">
-                <ReactMarkdown 
-                  className="prose prose-slate prose-p:text-gray-700 prose-headings:text-gray-900 prose-headings:font-medium prose-a:text-[#007AFF] prose-strong:font-medium prose-strong:text-gray-900 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 font-sf-pro"
-                  remarkPlugins={[remarkGfm]}
-                >
-                  {gmailQueryResponse}
-                </ReactMarkdown>
+              <div className="prose prose-sm max-w-none overflow-auto max-h-[600px] font-sf-pro">
+                {(() => {
+                  // Process the response first
+                  const processedResponse = processApiResponse(gmailQueryResponse);
+                  
+                  // Check if the processed response is HTML
+                  if (typeof processedResponse === 'string' && 
+                      processedResponse.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i)) {
+                    return renderHtml(processedResponse);
+                  } 
+                  
+                  // Otherwise render as Markdown
+                  return (
+                    <ReactMarkdown 
+                      className="prose prose-slate 
+                        prose-p:text-gray-700 prose-p:mb-4
+                        prose-h1:text-transparent prose-h1:bg-clip-text prose-h1:bg-gradient-to-r prose-h1:from-[#007AFF] prose-h1:to-[#00C6FF] prose-h1:text-2xl prose-h1:font-bold prose-h1:mt-6 prose-h1:mb-4
+                        prose-h2:text-transparent prose-h2:bg-clip-text prose-h2:bg-gradient-to-r prose-h2:from-[#007AFF] prose-h2:to-[#00C6FF] prose-h2:text-xl prose-h2:font-bold prose-h2:mt-5 prose-h2:mb-3
+                        prose-h3:text-transparent prose-h3:bg-clip-text prose-h3:bg-gradient-to-r prose-h3:from-[#007AFF] prose-h3:to-[#00C6FF] prose-h3:text-lg prose-h3:font-semibold prose-h3:mt-4 prose-h3:mb-2
+                        prose-a:text-[#007AFF] 
+                        prose-strong:font-semibold prose-strong:text-gray-900 
+                        prose-ul:my-4 prose-ul:pl-5 prose-ul:space-y-2 
+                        prose-ol:my-4 prose-ol:pl-5 prose-ol:space-y-2
+                        prose-li:my-0.5 prose-li:pl-1.5
+                        prose-hr:border-gray-200 prose-hr:my-4 prose-hr:border-dashed
+                        font-sf-pro [&_.html-content_h1]:text-transparent [&_.html-content_h1]:bg-clip-text [&_.html-content_h1]:bg-gradient-to-r [&_.html-content_h1]:from-[#007AFF] [&_.html-content_h1]:to-[#00C6FF] [&_.html-content_h1]:text-2xl [&_.html-content_h1]:font-bold [&_.html-content_h1]:mt-6 [&_.html-content_h1]:mb-4
+                        [&_.html-content_h2]:text-transparent [&_.html-content_h2]:bg-clip-text [&_.html-content_h2]:bg-gradient-to-r [&_.html-content_h2]:from-[#007AFF] [&_.html-content_h2]:to-[#00C6FF] [&_.html-content_h2]:text-xl [&_.html-content_h2]:font-bold [&_.html-content_h2]:mt-5 [&_.html-content_h2]:mb-3
+                        [&_.html-content_h3]:text-transparent [&_.html-content_h3]:bg-clip-text [&_.html-content_h3]:bg-gradient-to-r [&_.html-content_h3]:from-[#007AFF] [&_.html-content_h3]:to-[#00C6FF] [&_.html-content_h3]:text-lg [&_.html-content_h3]:font-semibold [&_.html-content_h3]:mt-4 [&_.html-content_h3]:mb-2
+                        [&_.html-content_p]:text-gray-700 [&_.html-content_p]:mb-4
+                        [&_.html-content_a]:text-[#007AFF]
+                        [&_.html-content_ul]:my-4 [&_.html-content_ul]:pl-5 [&_.html-content_ul]:space-y-2
+                        [&_.html-content_ol]:my-4 [&_.html-content_ol]:pl-5 [&_.html-content_ol]:space-y-2
+                        [&_.html-content_li]:my-0.5 [&_.html-content_li]:pl-1.5"
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeRaw]}
+                      components={{
+                        hr: () => <div className="my-5 border-t border-gray-100" />,
+                        table: ({ children }) => <table className="border-collapse w-full my-4">{children}</table>,
+                        th: ({ children }) => <th className="border border-gray-200 bg-gray-50 px-3 py-2 text-left font-medium text-gray-700">{children}</th>,
+                        td: ({ children }) => <td className="border border-gray-200 px-3 py-2">{children}</td>,
+                        pre: ({ children }) => <pre className="bg-gray-50 p-3 rounded-md overflow-auto text-sm my-4">{children}</pre>,
+                        code: ({ children }) => <code className="bg-gray-50 p-1 rounded text-sm font-mono text-purple-600">{children}</code>
+                      }}
+                    >
+                      {processedResponse}
+                    </ReactMarkdown>
+                  );
+                })()}
               </div>
               
               {/* Show debug response */}
@@ -1994,6 +2372,18 @@ export default function DashboardPage() {
             </div>
           )}
           
+          {/* Show debug response */}
+          {showDebugInfo && debugResponse && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="bg-gray-50 p-3 rounded-md">
+                <h4 className="text-xs font-medium text-gray-700 mb-1">Raw Response:</h4>
+                <pre className="text-xs overflow-auto bg-gray-100 p-2 rounded whitespace-pre-wrap">
+                  {debugResponse}
+                </pre>
+              </div>
+            </div>
+          )}
+          
           {/* Gmail Query Loading */}
           {gmailQueryLoading && (
             <div className="mt-3 bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
@@ -2006,7 +2396,7 @@ export default function DashboardPage() {
                     <h3 className="text-sm font-medium text-gray-900">Processing Gmail Query</h3>
                     <div className="h-4 w-4 rounded-full border-2 border-gray-200 border-t-gray-600 animate-spin"></div>
                   </div>
-                  <p className="text-sm text-gray-500">Searching through your emails and generating a response...</p>
+                  <p className="text-sm text-gray-500">Analyzing your emails...</p>
                 </div>
               </div>
             </div>
@@ -2047,13 +2437,54 @@ export default function DashboardPage() {
                   </Button>
                 </div>
               </div>
-              <div className="prose prose-sm max-w-none font-sf-pro">
-                <ReactMarkdown 
-                  className="prose prose-slate prose-p:text-gray-700 prose-headings:text-gray-900 prose-headings:font-medium prose-a:text-[#007AFF] prose-strong:font-medium prose-strong:text-gray-900 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 font-sf-pro"
-                  remarkPlugins={[remarkGfm]}
-                >
-                  {lightspeedQueryResponse}
-                </ReactMarkdown>
+              <div className="prose prose-sm max-w-none overflow-auto max-h-[600px] font-sf-pro">
+                {(() => {
+                  // Process the response first
+                  const processedResponse = processApiResponse(lightspeedQueryResponse);
+                  
+                  // Check if the processed response is HTML
+                  if (typeof processedResponse === 'string' && 
+                      processedResponse.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i)) {
+                    return renderHtml(processedResponse);
+                  } 
+                  
+                  // Otherwise render as Markdown
+                  return (
+                    <ReactMarkdown 
+                      className="prose prose-slate 
+                        prose-p:text-gray-700 prose-p:mb-4
+                        prose-h1:text-transparent prose-h1:bg-clip-text prose-h1:bg-gradient-to-r prose-h1:from-[#007AFF] prose-h1:to-[#00C6FF] prose-h1:text-2xl prose-h1:font-bold prose-h1:mt-6 prose-h1:mb-4
+                        prose-h2:text-transparent prose-h2:bg-clip-text prose-h2:bg-gradient-to-r prose-h2:from-[#007AFF] prose-h2:to-[#00C6FF] prose-h2:text-xl prose-h2:font-bold prose-h2:mt-5 prose-h2:mb-3
+                        prose-h3:text-transparent prose-h3:bg-clip-text prose-h3:bg-gradient-to-r prose-h3:from-[#007AFF] prose-h3:to-[#00C6FF] prose-h3:text-lg prose-h3:font-semibold prose-h3:mt-4 prose-h3:mb-2
+                        prose-a:text-[#007AFF] 
+                        prose-strong:font-semibold prose-strong:text-gray-900 
+                        prose-ul:my-4 prose-ul:pl-5 prose-ul:space-y-2 
+                        prose-ol:my-4 prose-ol:pl-5 prose-ol:space-y-2
+                        prose-li:my-0.5 prose-li:pl-1.5
+                        prose-hr:border-gray-200 prose-hr:my-4 prose-hr:border-dashed
+                        font-sf-pro [&_.html-content_h1]:text-transparent [&_.html-content_h1]:bg-clip-text [&_.html-content_h1]:bg-gradient-to-r [&_.html-content_h1]:from-[#007AFF] [&_.html-content_h1]:to-[#00C6FF] [&_.html-content_h1]:text-2xl [&_.html-content_h1]:font-bold [&_.html-content_h1]:mt-6 [&_.html-content_h1]:mb-4
+                        [&_.html-content_h2]:text-transparent [&_.html-content_h2]:bg-clip-text [&_.html-content_h2]:bg-gradient-to-r [&_.html-content_h2]:from-[#007AFF] [&_.html-content_h2]:to-[#00C6FF] [&_.html-content_h2]:text-xl [&_.html-content_h2]:font-bold [&_.html-content_h2]:mt-5 [&_.html-content_h2]:mb-3
+                        [&_.html-content_h3]:text-transparent [&_.html-content_h3]:bg-clip-text [&_.html-content_h3]:bg-gradient-to-r [&_.html-content_h3]:from-[#007AFF] [&_.html-content_h3]:to-[#00C6FF] [&_.html-content_h3]:text-lg [&_.html-content_h3]:font-semibold [&_.html-content_h3]:mt-4 [&_.html-content_h3]:mb-2
+                        [&_.html-content_p]:text-gray-700 [&_.html-content_p]:mb-4
+                        [&_.html-content_a]:text-[#007AFF]
+                        [&_.html-content_ul]:my-4 [&_.html-content_ul]:pl-5 [&_.html-content_ul]:space-y-2
+                        [&_.html-content_ol]:my-4 [&_.html-content_ol]:pl-5 [&_.html-content_ol]:space-y-2
+                        [&_.html-content_li]:my-0.5 [&_.html-content_li]:pl-1.5"
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeRaw]}
+                      components={{
+                        hr: () => <div className="my-5 border-t border-gray-100" />,
+                        table: ({ children }) => <table className="border-collapse w-full my-4">{children}</table>,
+                        th: ({ children }) => <th className="border border-gray-200 bg-gray-50 px-3 py-2 text-left font-medium text-gray-700">{children}</th>,
+                        td: ({ children }) => <td className="border border-gray-200 px-3 py-2">{children}</td>,
+                        pre: ({ children }) => <pre className="bg-gray-50 p-3 rounded-md overflow-auto text-sm my-4">{children}</pre>,
+                        code: ({ children }) => <code className="bg-gray-50 p-1 rounded text-sm font-mono text-purple-600">{children}</code>
+                      }}
+                    >
+                      {processedResponse}
+                    </ReactMarkdown>
+                  );
+                })()}
               </div>
               
               {/* Show debug response */}
@@ -2082,7 +2513,239 @@ export default function DashboardPage() {
                     <h3 className="text-sm font-medium text-gray-900">Processing Lightspeed Query</h3>
                     <div className="h-4 w-4 rounded-full border-2 border-gray-200 border-t-gray-600 animate-spin"></div>
                   </div>
-                  <p className="text-sm text-gray-500">Analyzing your Lightspeed data and generating insights...</p>
+                  <p className="text-sm text-gray-500">Analyzing your data...</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Tap Loyalty Query Response */}
+          {tapQueryResponse && (
+            <div className="mt-3 bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
+              <div className="flex justify-between items-center mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
+                    <Image src="/taplogo.png" width={16} height={16} alt="Tap Loyalty" className="h-4 w-4 object-contain" />
+                  </div>
+                  <h3 className="text-sm font-medium text-gray-900">Tap Loyalty Response</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => setShowDebugInfo(!showDebugInfo)}
+                  >
+                    {showDebugInfo ? "Hide Debug" : "Show Debug"}
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 w-7 p-0 rounded-full"
+                    onClick={() => {
+                      setTapQueryResponse(null);
+                      setDebugResponse(null);
+                      setShowDebugInfo(false);
+                      // Also remove the Tap Loyalty integration from selected integrations
+                      setSelectedIntegrations(selectedIntegrations.filter(i => i.id !== "tap"));
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="prose prose-sm max-w-none overflow-auto max-h-[600px] font-sf-pro">
+                {(() => {
+                  // Process the response first
+                  const processedResponse = processApiResponse(tapQueryResponse);
+                  
+                  // Check if the processed response is HTML
+                  if (typeof processedResponse === 'string' && 
+                      processedResponse.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i)) {
+                    return renderHtml(processedResponse);
+                  } 
+                  
+                  // Otherwise render as Markdown
+                  return (
+                    <ReactMarkdown 
+                      className="prose prose-slate 
+                        prose-p:text-gray-700 prose-p:mb-4
+                        prose-h1:text-transparent prose-h1:bg-clip-text prose-h1:bg-gradient-to-r prose-h1:from-[#007AFF] prose-h1:to-[#00C6FF] prose-h1:text-2xl prose-h1:font-bold prose-h1:mt-6 prose-h1:mb-4
+                        prose-h2:text-transparent prose-h2:bg-clip-text prose-h2:bg-gradient-to-r prose-h2:from-[#007AFF] prose-h2:to-[#00C6FF] prose-h2:text-xl prose-h2:font-bold prose-h2:mt-5 prose-h2:mb-3
+                        prose-h3:text-transparent prose-h3:bg-clip-text prose-h3:bg-gradient-to-r prose-h3:from-[#007AFF] prose-h3:to-[#00C6FF] prose-h3:text-lg prose-h3:font-semibold prose-h3:mt-4 prose-h3:mb-2
+                        prose-a:text-[#007AFF] 
+                        prose-strong:font-semibold prose-strong:text-gray-900 
+                        prose-ul:my-4 prose-ul:pl-5 prose-ul:space-y-2 
+                        prose-ol:my-4 prose-ol:pl-5 prose-ol:space-y-2
+                        prose-li:my-0.5 prose-li:pl-1.5
+                        prose-hr:border-gray-200 prose-hr:my-4 prose-hr:border-dashed
+                        font-sf-pro [&_.html-content_h1]:text-transparent [&_.html-content_h1]:bg-clip-text [&_.html-content_h1]:bg-gradient-to-r [&_.html-content_h1]:from-[#007AFF] [&_.html-content_h1]:to-[#00C6FF] [&_.html-content_h1]:text-2xl [&_.html-content_h1]:font-bold [&_.html-content_h1]:mt-6 [&_.html-content_h1]:mb-4
+                        [&_.html-content_h2]:text-transparent [&_.html-content_h2]:bg-clip-text [&_.html-content_h2]:bg-gradient-to-r [&_.html-content_h2]:from-[#007AFF] [&_.html-content_h2]:to-[#00C6FF] [&_.html-content_h2]:text-xl [&_.html-content_h2]:font-bold [&_.html-content_h2]:mt-5 [&_.html-content_h2]:mb-3
+                        [&_.html-content_h3]:text-transparent [&_.html-content_h3]:bg-clip-text [&_.html-content_h3]:bg-gradient-to-r [&_.html-content_h3]:from-[#007AFF] [&_.html-content_h3]:to-[#00C6FF] [&_.html-content_h3]:text-lg [&_.html-content_h3]:font-semibold [&_.html-content_h3]:mt-4 [&_.html-content_h3]:mb-2
+                        [&_.html-content_p]:text-gray-700 [&_.html-content_p]:mb-4
+                        [&_.html-content_a]:text-[#007AFF]
+                        [&_.html-content_ul]:my-4 [&_.html-content_ul]:pl-5 [&_.html-content_ul]:space-y-2
+                        [&_.html-content_ol]:my-4 [&_.html-content_ol]:pl-5 [&_.html-content_ol]:space-y-2
+                        [&_.html-content_li]:my-0.5 [&_.html-content_li]:pl-1.5"
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeRaw]}
+                      components={{
+                        hr: () => <div className="my-5 border-t border-gray-100" />,
+                        table: ({ children }) => <table className="border-collapse w-full my-4">{children}</table>,
+                        th: ({ children }) => <th className="border border-gray-200 bg-gray-50 px-3 py-2 text-left font-medium text-gray-700">{children}</th>,
+                        td: ({ children }) => <td className="border border-gray-200 px-3 py-2">{children}</td>,
+                        pre: ({ children }) => <pre className="bg-gray-50 p-3 rounded-md overflow-auto text-sm my-4">{children}</pre>,
+                        code: ({ children }) => <code className="bg-gray-50 p-1 rounded text-sm font-mono text-purple-600">{children}</code>
+                      }}
+                    >
+                      {processedResponse}
+                    </ReactMarkdown>
+                  );
+                })()}
+              </div>
+              
+              {/* Show debug response */}
+              {showDebugInfo && debugResponse && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="bg-gray-50 p-3 rounded-md">
+                    <h4 className="text-xs font-medium text-gray-700 mb-1">Raw Response:</h4>
+                    <pre className="text-xs overflow-auto bg-gray-100 p-2 rounded whitespace-pre-wrap">
+                      {debugResponse}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Tap Loyalty Query Loading */}
+          {tapQueryLoading && (
+            <div className="mt-3 bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
+              <div className="flex items-start gap-3">
+                <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
+                  <Image src="/taplogo.png" width={16} height={16} alt="Tap Loyalty" className="h-4 w-4 object-contain" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="text-sm font-medium text-gray-900">Processing Tap Loyalty Query</h3>
+                    <div className="h-4 w-4 rounded-full border-2 border-gray-200 border-t-gray-600 animate-spin"></div>
+                  </div>
+                  <p className="text-sm text-gray-500">Analyzing your query...</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* AI Assistant Response */}
+          {assistantResponse && (
+            <div className="mt-3 bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
+              <div className="flex justify-between items-center mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-blue-100">
+                    <Sparkles className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <h3 className="text-sm font-medium text-gray-900">AI Assistant</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => setShowDebugInfo(!showDebugInfo)}
+                  >
+                    {showDebugInfo ? "Hide Debug" : "Show Debug"}
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 w-7 p-0 rounded-full"
+                    onClick={() => {
+                      setAssistantResponse(null);
+                      setDebugResponse(null);
+                      setShowDebugInfo(false);
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="prose prose-sm max-w-none overflow-auto max-h-[600px] font-sf-pro">
+                {(() => {
+                  // Process the response first
+                  const processedResponse = processApiResponse(assistantResponse);
+                  
+                  // Check if the processed response is HTML
+                  if (typeof processedResponse === 'string' && 
+                      processedResponse.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i)) {
+                    return renderHtml(processedResponse);
+                  } 
+                  
+                  // Otherwise render as Markdown
+                  return (
+                    <ReactMarkdown 
+                      className="prose prose-slate 
+                        prose-p:text-gray-700 prose-p:mb-4
+                        prose-h1:text-transparent prose-h1:bg-clip-text prose-h1:bg-gradient-to-r prose-h1:from-[#007AFF] prose-h1:to-[#00C6FF] prose-h1:text-2xl prose-h1:font-bold prose-h1:mt-6 prose-h1:mb-4
+                        prose-h2:text-transparent prose-h2:bg-clip-text prose-h2:bg-gradient-to-r prose-h2:from-[#007AFF] prose-h2:to-[#00C6FF] prose-h2:text-xl prose-h2:font-bold prose-h2:mt-5 prose-h2:mb-3
+                        prose-h3:text-transparent prose-h3:bg-clip-text prose-h3:bg-gradient-to-r prose-h3:from-[#007AFF] prose-h3:to-[#00C6FF] prose-h3:text-lg prose-h3:font-semibold prose-h3:mt-4 prose-h3:mb-2
+                        prose-a:text-[#007AFF] 
+                        prose-strong:font-semibold prose-strong:text-gray-900 
+                        prose-ul:my-4 prose-ul:pl-5 prose-ul:space-y-2 
+                        prose-ol:my-4 prose-ol:pl-5 prose-ol:space-y-2
+                        prose-li:my-0.5 prose-li:pl-1.5
+                        prose-hr:border-gray-200 prose-hr:my-4 prose-hr:border-dashed
+                        font-sf-pro [&_.html-content_h1]:text-transparent [&_.html-content_h1]:bg-clip-text [&_.html-content_h1]:bg-gradient-to-r [&_.html-content_h1]:from-[#007AFF] [&_.html-content_h1]:to-[#00C6FF] [&_.html-content_h1]:text-2xl [&_.html-content_h1]:font-bold [&_.html-content_h1]:mt-6 [&_.html-content_h1]:mb-4
+                        [&_.html-content_h2]:text-transparent [&_.html-content_h2]:bg-clip-text [&_.html-content_h2]:bg-gradient-to-r [&_.html-content_h2]:from-[#007AFF] [&_.html-content_h2]:to-[#00C6FF] [&_.html-content_h2]:text-xl [&_.html-content_h2]:font-bold [&_.html-content_h2]:mt-5 [&_.html-content_h2]:mb-3
+                        [&_.html-content_h3]:text-transparent [&_.html-content_h3]:bg-clip-text [&_.html-content_h3]:bg-gradient-to-r [&_.html-content_h3]:from-[#007AFF] [&_.html-content_h3]:to-[#00C6FF] [&_.html-content_h3]:text-lg [&_.html-content_h3]:font-semibold [&_.html-content_h3]:mt-4 [&_.html-content_h3]:mb-2
+                        [&_.html-content_p]:text-gray-700 [&_.html-content_p]:mb-4
+                        [&_.html-content_a]:text-[#007AFF]
+                        [&_.html-content_ul]:my-4 [&_.html-content_ul]:pl-5 [&_.html-content_ul]:space-y-2
+                        [&_.html-content_ol]:my-4 [&_.html-content_ol]:pl-5 [&_.html-content_ol]:space-y-2
+                        [&_.html-content_li]:my-0.5 [&_.html-content_li]:pl-1.5"
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeRaw]}
+                      components={{
+                        hr: () => <div className="my-5 border-t border-gray-100" />,
+                        table: ({ children }) => <table className="border-collapse w-full my-4">{children}</table>,
+                        th: ({ children }) => <th className="border border-gray-200 bg-gray-50 px-3 py-2 text-left font-medium text-gray-700">{children}</th>,
+                        td: ({ children }) => <td className="border border-gray-200 px-3 py-2">{children}</td>,
+                        pre: ({ children }) => <pre className="bg-gray-50 p-3 rounded-md overflow-auto text-sm my-4">{children}</pre>,
+                        code: ({ children }) => <code className="bg-gray-50 p-1 rounded text-sm font-mono text-purple-600">{children}</code>
+                      }}
+                    >
+                      {processedResponse}
+                    </ReactMarkdown>
+                  );
+                })()}
+              </div>
+              
+              {/* Show debug response */}
+              {showDebugInfo && debugResponse && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="bg-gray-50 p-3 rounded-md">
+                    <h4 className="text-xs font-medium text-gray-700 mb-1">Raw Response:</h4>
+                    <pre className="text-xs overflow-auto bg-gray-100 p-2 rounded whitespace-pre-wrap">
+                      {debugResponse}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* AI Assistant Loading */}
+          {assistantLoading && (
+            <div className="mt-3 bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
+              <div className="flex items-start gap-3">
+                <div className="flex items-center justify-center h-6 w-6 rounded-md bg-blue-100">
+                  <Sparkles className="h-4 w-4 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="text-sm font-medium text-gray-900">AI Assistant Processing</h3>
+                    <div className="h-4 w-4 rounded-full border-2 border-gray-200 border-t-gray-600 animate-spin"></div>
+                  </div>
+                  <p className="text-sm text-gray-500">Thinking about your question...</p>
                 </div>
               </div>
             </div>
@@ -3372,7 +4035,7 @@ export default function DashboardPage() {
                     {inboxSummaryResult && (
                       <div>
                         {/* Process the content to enhance numbered sections */}
-                        {inboxSummaryResult.split('\n').map((line, index) => {
+                        {inboxSummaryResult?.split('\n').map((line, index) => {
                           // Match lines that start with a number followed by a period
                           const headerMatch = line.match(/^(\d+)\.\s+(.+)$/);
                           
@@ -3383,7 +4046,7 @@ export default function DashboardPage() {
                                 key={index} 
                                 className="mt-8 mb-4 first:mt-2 pb-1 border-b border-gray-100"
                               >
-                                <h3 className="text-base font-semibold text-[#007AFF]">
+                                <h3 className="text-xl font-bold bg-gradient-to-r from-[#007AFF] to-[#00C6FF] bg-clip-text text-transparent">
                                   {line}
                                 </h3>
                               </div>
@@ -3394,10 +4057,37 @@ export default function DashboardPage() {
                           return (
                             <div key={index} className="mb-4">
                               <ReactMarkdown 
-                                className="prose prose-slate prose-p:text-gray-700 prose-headings:text-gray-900 prose-headings:font-medium prose-a:text-[#007AFF] prose-strong:font-medium prose-strong:text-gray-900 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 font-sf-pro"
+                                className="prose prose-slate 
+                                prose-p:text-gray-700 prose-p:mb-4
+                                prose-h1:text-transparent prose-h1:bg-clip-text prose-h1:bg-gradient-to-r prose-h1:from-[#007AFF] prose-h1:to-[#00C6FF] prose-h1:text-2xl prose-h1:font-bold prose-h1:mt-6 prose-h1:mb-4
+                                prose-h2:text-transparent prose-h2:bg-clip-text prose-h2:bg-gradient-to-r prose-h2:from-[#007AFF] prose-h2:to-[#00C6FF] prose-h2:text-xl prose-h2:font-bold prose-h2:mt-5 prose-h2:mb-3
+                                prose-h3:text-transparent prose-h3:bg-clip-text prose-h3:bg-gradient-to-r prose-h3:from-[#007AFF] prose-h3:to-[#00C6FF] prose-h3:text-lg prose-h3:font-semibold prose-h3:mt-4 prose-h3:mb-2
+                                prose-a:text-[#007AFF] 
+                                prose-strong:font-semibold prose-strong:text-gray-900 
+                                prose-ul:my-4 prose-ul:pl-5 prose-ul:space-y-2 
+                                prose-ol:my-4 prose-ol:pl-5 prose-ol:space-y-2
+                                prose-li:my-0.5 prose-li:pl-1.5
+                                prose-hr:border-gray-200 prose-hr:my-4 prose-hr:border-dashed
+                                font-sf-pro [&_.html-content_h1]:text-transparent [&_.html-content_h1]:bg-clip-text [&_.html-content_h1]:bg-gradient-to-r [&_.html-content_h1]:from-[#007AFF] [&_.html-content_h1]:to-[#00C6FF] [&_.html-content_h1]:text-2xl [&_.html-content_h1]:font-bold [&_.html-content_h1]:mt-6 [&_.html-content_h1]:mb-4
+                                [&_.html-content_h2]:text-transparent [&_.html-content_h2]:bg-clip-text [&_.html-content_h2]:bg-gradient-to-r [&_.html-content_h2]:from-[#007AFF] [&_.html-content_h2]:to-[#00C6FF] [&_.html-content_h2]:text-xl [&_.html-content_h2]:font-bold [&_.html-content_h2]:mt-5 [&_.html-content_h2]:mb-3
+                                [&_.html-content_h3]:text-transparent [&_.html-content_h3]:bg-clip-text [&_.html-content_h3]:bg-gradient-to-r [&_.html-content_h3]:from-[#007AFF] [&_.html-content_h3]:to-[#00C6FF] [&_.html-content_h3]:text-lg [&_.html-content_h3]:font-semibold [&_.html-content_h3]:mt-4 [&_.html-content_h3]:mb-2
+                                [&_.html-content_p]:text-gray-700 [&_.html-content_p]:mb-4
+                                [&_.html-content_a]:text-[#007AFF]
+                                [&_.html-content_ul]:my-4 [&_.html-content_ul]:pl-5 [&_.html-content_ul]:space-y-2
+                                [&_.html-content_ol]:my-4 [&_.html-content_ol]:pl-5 [&_.html-content_ol]:space-y-2
+                                [&_.html-content_li]:my-0.5 [&_.html-content_li]:pl-1.5"
                                 remarkPlugins={[remarkGfm]}
+                                rehypePlugins={[rehypeRaw]}
+                                components={{
+                                  pre: ({ children }) => (
+                                    <pre className="bg-gray-50 p-3 rounded-md overflow-auto text-sm my-4">{children}</pre>
+                                  ),
+                                  code: ({ children }) => (
+                                    <code className="bg-gray-50 p-1 rounded text-sm font-mono text-purple-600">{children}</code>
+                                  )
+                                }}
                               >
-                                {line}
+                                {processApiResponse(line)}
                               </ReactMarkdown>
                             </div>
                           );
@@ -3440,6 +4130,23 @@ export default function DashboardPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Tap Agent Sheet */}
+      <TapAgentSheet 
+        open={isTapAgentSheetOpen}
+        onOpenChange={setIsTapAgentSheetOpen}
+      />
+
+      {/* Floating Tap Agent Button */}
+      <div className="fixed bottom-6 right-6 z-50">
+        <button
+          onClick={() => setIsTapAgentSheetOpen(true)}
+          className="flex items-center justify-center w-12 h-12 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-full shadow-lg hover:from-blue-600 hover:to-blue-700 transition-all hover:shadow-xl"
+          aria-label="Open Tap Agent"
+        >
+          <Sparkles className="h-5 w-5" />
+        </button>
+      </div>
     </PageTransition>
   )
 }

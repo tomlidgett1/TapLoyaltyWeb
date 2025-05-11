@@ -9,9 +9,14 @@ const REDIRECT_URI = "https://app.taployalty.com.au/api/auth/gmail/callback";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.GMAIL_CLIENT_ID;
 
 // This is the scope required for Gmail API access
+// Include the send scope so the app can compose / reply as well
+// modify already implies the ability to change message state (e.g. mark as read),
+// but it does NOT let us actually send mail – that requires gmail.send.
+// Having both modify and send is fine as they are non-overlapping.
 const GMAIL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/gmail.send',
 ];
 
 export async function GET(request: NextRequest) {

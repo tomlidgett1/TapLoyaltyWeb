@@ -19,6 +19,7 @@ import { CustomerSegmentsForm } from "./components/customer-segments-form"
 import { CustomerCohortsForm } from "./components/customer-cohorts-form"
 import { RewardConstraintsForm } from "./components/reward-constraints-form"
 import { MessagingConstraintsForm } from "./components/messaging-constraints-form"
+import { EmailSetupForm } from "./components/email-setup-form"
 import { CustomersList } from "./components/customers-view"
 import { PageHeader } from "@/components/page-header"
 import { 
@@ -33,7 +34,8 @@ import {
   Gift, 
   MessageSquare,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Mail
 } from "lucide-react"
 import Link from "next/link"
 
@@ -136,12 +138,28 @@ const defaultAgentConfig: AgentConfig = {
   },
   messagingConstraints: {
     restrictedKeywords: []
+  },
+  emailSettings: {
+    isConnected: false,
+    connectedEmail: "",
+    automaticResponses: false,
+    analyzeEmailTone: false,
+    emailTone: "professional",
+    customTone: [],
+    excludedEmails: [],
+    notifyBeforeSend: true
   }
 }
 
 export default function AgentSetup() {
   const { user } = useAuth()
-  const [agentConfig, setAgentConfig] = useState<AgentConfig>(defaultAgentConfig)
+  const [agentConfig, setAgentConfig] = useState<AgentConfig>({
+    ...defaultAgentConfig,
+    // Ensure emailSettings is properly initialized
+    emailSettings: {
+      ...defaultAgentConfig.emailSettings
+    }
+  })
   const [activeTab, setActiveTab] = useState("brand")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -160,8 +178,60 @@ export default function AgentSetup() {
         const agentDoc = await getDoc(agentDocRef)
         
         if (agentDoc.exists()) {
-          const data = agentDoc.data() as AgentConfig
-          setAgentConfig(data)
+          const data = agentDoc.data() as Partial<AgentConfig>
+          
+          // Create a merged config ensuring all properties exist
+          const mergedConfig: AgentConfig = {
+            ...defaultAgentConfig,
+            ...data,
+            // Explicitly handle nested objects that might be missing
+            emailSettings: {
+              ...defaultAgentConfig.emailSettings,
+              ...(data.emailSettings || {})
+            },
+            businessBrand: {
+              ...defaultAgentConfig.businessBrand,
+              ...(data.businessBrand || {})
+            },
+            agentTasks: {
+              ...defaultAgentConfig.agentTasks,
+              ...(data.agentTasks || {})
+            },
+            businessHours: {
+              ...defaultAgentConfig.businessHours,
+              ...(data.businessHours || {})
+            },
+            objectives: {
+              ...defaultAgentConfig.objectives,
+              ...(data.objectives || {})
+            },
+            productPricing: {
+              ...defaultAgentConfig.productPricing,
+              ...(data.productPricing || {})
+            },
+            financialGuardrails: {
+              ...defaultAgentConfig.financialGuardrails,
+              ...(data.financialGuardrails || {})
+            },
+            customerSegments: {
+              ...defaultAgentConfig.customerSegments,
+              ...(data.customerSegments || {})
+            },
+            customerCohorts: {
+              ...defaultAgentConfig.customerCohorts,
+              ...(data.customerCohorts || {})
+            },
+            rewardConstraints: {
+              ...defaultAgentConfig.rewardConstraints,
+              ...(data.rewardConstraints || {})
+            },
+            messagingConstraints: {
+              ...defaultAgentConfig.messagingConstraints,
+              ...(data.messagingConstraints || {})
+            }
+          }
+          
+          setAgentConfig(mergedConfig)
         } else {
           console.log("No agent configuration found, using defaults")
         }
@@ -382,6 +452,13 @@ export default function AgentSetup() {
                         <MessageSquare className="mr-1.5 h-4 w-4" />
                         Messages
                       </TabsTrigger>
+                      <TabsTrigger 
+                        value="email" 
+                        className="justify-start h-9 px-3 rounded-md text-sm transition-all border-0 ring-1 ring-gray-200 hover:bg-gray-50 data-[state=active]:ring-blue-200 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:shadow-sm"
+                      >
+                        <Mail className="mr-1.5 h-4 w-4" />
+                        Email
+                      </TabsTrigger>
                     </TabsList>
                   </div>
                 </div>
@@ -451,6 +528,13 @@ export default function AgentSetup() {
                           onChange={(data) => updateSection("messagingConstraints", data)} 
                         />
                       </TabsContent>
+                      
+                      <TabsContent value="email" className="pt-0 mt-0">
+                        <EmailSetupForm 
+                          data={agentConfig.emailSettings} 
+                          onChange={(data) => updateSection("emailSettings", data)} 
+                        />
+                      </TabsContent>
                     </div>
                   </ScrollArea>
                   
@@ -468,6 +552,7 @@ export default function AgentSetup() {
                                         activeTab === "financials" ? "financialGuardrails" :
                                         activeTab === "cohorts" ? "customerCohorts" :
                                         activeTab === "rewards" ? "rewardConstraints" :
+                                        activeTab === "email" ? "emailSettings" :
                                         "messagingConstraints";
                       
                         setAgentConfig(prev => ({

@@ -115,4 +115,14 @@ export interface AgentConfig {
   messagingConstraints: {
     restrictedKeywords: Array<string>;
   };
+  emailSettings: {
+    isConnected: boolean;
+    connectedEmail: string;
+    automaticResponses: boolean;
+    analyzeEmailTone: boolean;
+    emailTone: string;
+    customTone: string[];
+    excludedEmails: string[];
+    notifyBeforeSend: boolean;
+  };
 } 

@@ -75,28 +75,39 @@ export async function GET(request: NextRequest) {
     
     const { access_token, refresh_token, expires_in } = tokenData;
     
-    if (!access_token || !refresh_token) {
-      console.error('Missing tokens in response:', Object.keys(tokenData));
+    if (!access_token) {
+      console.error('Missing access_token in response:', Object.keys(tokenData));
       return NextResponse.redirect('/store/emails?error=invalid_tokens');
     }
     
     // Calculate expiration time
     const expires_at = Math.floor(Date.now() / 1000) + expires_in;
     
-    // Store the tokens in Firestore
+    // Prepare data to store – only include refresh_token if we actually received one.
     const merchantId = state; // Retrieve merchant ID from state
     console.log('Storing tokens in Firestore for merchant:', merchantId);
     
+    const dataToStore: Record<string, any> = {
+      connected: true,
+      access_token,
+      expires_at,
+      lastUpdated: serverTimestamp(),
+    };
+    
+    if (refresh_token) {
+      dataToStore.refresh_token = refresh_token;
+      dataToStore.connectedAt = serverTimestamp();
+    } else {
+      console.warn('No refresh_token returned – keeping existing refresh_token if present');
+    }
+    
     try {
-      await setDoc(doc(db, 'merchants', merchantId, 'integrations', 'gmail'), {
-        connected: true,
-        access_token,
-        refresh_token,
-        expires_at,
-        connectedAt: serverTimestamp(),
-        lastUpdated: serverTimestamp()
-      });
-      console.log('Gmail integration saved successfully');
+      await setDoc(
+        doc(db, 'merchants', merchantId, 'integrations', 'gmail'),
+        dataToStore,
+        { merge: true }
+      );
+      console.log('Gmail integration saved/updated successfully');
     } catch (dbError) {
       console.error('Error saving to Firestore:', dbError);
       return NextResponse.redirect('/store/emails?error=database_error');

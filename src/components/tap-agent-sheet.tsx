@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger, SheetClose } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { SendHorizontal, X, Globe, Check as CheckIcon, Maximize2, Minimize2 } from "lucide-react"
+import { SendHorizontal, X, Globe, Check as CheckIcon } from "lucide-react"
 import Image from "next/image"
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
@@ -164,9 +164,6 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
   const [showQuickActionMenu, setShowQuickActionMenu] = useState<string | null>(null);
   const [debugResponse, setDebugResponse] = useState<string | null>(null);
   const [showDebugInfo, setShowDebugInfo] = useState(false);
-  
-  // State for expanded view
-  const [expandedResponseId, setExpandedResponseId] = useState<"assistant" | "gmail" | "lightspeed" | "tap" | null>(null);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -1106,12 +1103,6 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
     }
   };
 
-  // Function to handle expanding a response
-  const handleExpandResponse = (type: "assistant" | "gmail" | "lightspeed" | "tap") => {
-    // Toggle expanded state
-    setExpandedResponseId(expandedResponseId === type ? null : type);
-  };
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <style dangerouslySetInnerHTML={{ __html: customAnimationStyles + customStyles }} />
@@ -1470,34 +1461,21 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                     <div className="flex items-center justify-center h-6 w-6 rounded-md bg-blue-50">
                       <GradientText className="text-base">AI</GradientText>
                     </div>
-                    <h3 className="text-sm font-medium text-gray-900">AI Assistant Response</h3>
+                    <h3 className="text-sm font-medium text-gray-900">Tap Loyalty Response</h3>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-7 w-7 p-0 rounded-full"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleExpandResponse("assistant");
-                      }}
-                    >
-                      <Maximize2 className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-7 w-7 p-0 rounded-full"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setAssistantResponse(null);
-                        setDebugResponse(null);
-                        setShowDebugInfo(false);
-                      }}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 w-7 p-0 rounded-full"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setAssistantResponse(null);
+                      setDebugResponse(null);
+                      setShowDebugInfo(false);
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
                 {processApiResponse(assistantResponse)?.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i) ? 
                   renderHtml(processApiResponse(assistantResponse)) :

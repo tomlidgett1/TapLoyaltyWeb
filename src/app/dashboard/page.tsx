@@ -38,7 +38,10 @@ import {
   Inbox,
   Check as CheckIcon,
   Bell,
-  AlertCircle
+  AlertCircle,
+  Minimize2,
+  Maximize2,
+  X
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -93,7 +96,6 @@ import {
   Mail,
   Search,
   SendHorizontal,
-  X,
   Globe,
   Smartphone,
   XCircle
@@ -112,6 +114,24 @@ import {
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 import { TapAgentSheet } from "@/components/tap-agent-sheet"
+
+// Add custom animation for the popup
+const customAnimationStyles = `
+  @keyframes slideInUp {
+    from {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  
+  .animate-slideInUp {
+    animation: slideInUp 0.3s ease-out forwards;
+  }
+`;
 
 type TimeframeType = "today" | "yesterday" | "7days" | "30days"
 
@@ -194,6 +214,14 @@ export default function DashboardPage() {
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [isTapAgentSheetOpen, setIsTapAgentSheetOpen] = useState(false)
+  const [runDailySummary, setRunDailySummary] = useState(false)
+  
+  // New states for Daily Summary functionality
+  const [isDailySummaryLoading, setIsDailySummaryLoading] = useState(false)
+  const [dailySummaryGmailResponse, setDailySummaryGmailResponse] = useState<string | null>(null)
+  const [dailySummaryLightspeedResponse, setDailySummaryLightspeedResponse] = useState<string | null>(null)
+  const [showDailySummaryPopup, setShowDailySummaryPopup] = useState(false)
+  const [isPopupExpanded, setIsPopupExpanded] = useState(false)
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -1001,10 +1029,19 @@ export default function DashboardPage() {
       // Sanitize the HTML content to prevent XSS attacks
       // Note: In a production environment, you should use a proper HTML sanitizer library
       
+      // Add additional spacing to HTML elements to improve readability
+      const enhancedHtmlContent = htmlContent
+        .replace(/<p>/g, '<p class="my-3">')
+        .replace(/<ul>/g, '<ul class="my-3 list-disc pl-5">')
+        .replace(/<ol>/g, '<ol class="my-3 list-decimal pl-5">')
+        .replace(/<li>/g, '<li class="my-1">')
+        .replace(/<h3>/g, '<h3 class="text-base font-semibold my-3">')
+        .replace(/<h4>/g, '<h4 class="text-sm font-semibold my-2">');
+      
       return (
         <div 
-          className="prose prose-slate max-w-none prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-h3:font-bold prose-p:my-2 prose-p:leading-relaxed prose-li:my-0 prose-li:leading-relaxed prose-table:border-collapse prose-th:bg-gray-50 prose-th:p-2 prose-th:font-semibold prose-td:p-2 prose-td:border prose-td:border-gray-200"
-          dangerouslySetInnerHTML={{ __html: htmlContent }} 
+          className="prose prose-slate max-w-none prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-h3:font-bold prose-p:my-3 prose-p:leading-relaxed prose-li:my-1 prose-li:leading-relaxed prose-table:border-collapse prose-th:bg-gray-50 prose-th:p-2 prose-th:font-semibold prose-td:p-2 prose-td:border prose-td:border-gray-200 space-y-4"
+          dangerouslySetInnerHTML={{ __html: enhancedHtmlContent }} 
         />
       );
     } catch (error) {
@@ -2176,6 +2213,94 @@ export default function DashboardPage() {
     return () => unsubscribe();
   }, [user?.uid, router]);
 
+  // Function to fetch daily summaries
+  const fetchDailySummaries = async () => {
+    setIsDailySummaryLoading(true);
+    setDailySummaryGmailResponse(null);
+    setDailySummaryLightspeedResponse(null);
+    
+    try {
+      // Fetch Gmail summary
+      const gmailPrompt = "Summarize my emails from the past day";
+      const gmailResponse = await fetch(
+        `https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/questionGmailHttp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          merchantId: user?.uid,
+          prompt: gmailPrompt
+        }),
+      });
+      
+      // Process Gmail response
+      const gmailRawResponse = await gmailResponse.text();
+      let gmailSummary = null;
+      try {
+        const gmailData = JSON.parse(gmailRawResponse);
+        if (gmailData?.success && gmailData?.summary) {
+          gmailSummary = gmailData.summary;
+        } else if (gmailData?.success && gmailData?.answer) {
+          gmailSummary = gmailData.answer;
+        } else if (gmailData?.result?.summary) {
+          gmailSummary = gmailData.result.summary;
+        } else if (gmailData?.summary) {
+          gmailSummary = gmailData.summary;
+        }
+      } catch (error) {
+        console.error("Error parsing Gmail API response:", error);
+      }
+      
+      // Fetch Lightspeed summary
+      const lightspeedPrompt = "Analyze yesterday's sales data and provide a summary";
+      const lightspeedResponse = await fetch(
+        `https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/questionLsHttp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          merchantId: user?.uid,
+          prompt: lightspeedPrompt,
+          days: 30
+        }),
+      });
+      
+      // Process Lightspeed response
+      const lightspeedRawResponse = await lightspeedResponse.text();
+      let lightspeedSummary = null;
+      try {
+        const lightspeedData = JSON.parse(lightspeedRawResponse);
+        if (lightspeedData?.success && lightspeedData?.summary) {
+          lightspeedSummary = lightspeedData.summary;
+        } else if (lightspeedData?.success && lightspeedData?.answer) {
+          lightspeedSummary = lightspeedData.answer;
+        } else if (lightspeedData?.result?.summary) {
+          lightspeedSummary = lightspeedData.result.summary;
+        } else if (lightspeedData?.summary) {
+          lightspeedSummary = lightspeedData.summary;
+        }
+      } catch (error) {
+        console.error("Error parsing Lightspeed API response:", error);
+      }
+      
+      // Update state with responses
+      setDailySummaryGmailResponse(gmailSummary);
+      setDailySummaryLightspeedResponse(lightspeedSummary);
+      
+      // Show popup with results
+      setShowDailySummaryPopup(true);
+      
+      // Remove success toast notification
+    } catch (error) {
+      console.error("Error fetching daily summaries:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch daily summaries. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDailySummaryLoading(false);
+    }
+  };
+
   if (initialLoading) {
     return (
       <PageTransition>
@@ -2190,6 +2315,7 @@ export default function DashboardPage() {
 
   return (
     <PageTransition>
+      <style dangerouslySetInnerHTML={{ __html: customAnimationStyles }} />
       <div className="p-6 py-4">
         <div className="space-y-6">
           {/* Welcome Section with Timeframe Tabs */}
@@ -2202,11 +2328,21 @@ export default function DashboardPage() {
                 <Button 
                   variant="outline" 
                   size="sm"
-                  className="h-9 gap-2 border-[#007AFF] text-[#007AFF] hover:bg-[#007AFF]/5 hover:text-[#007AFF]"
-                  onClick={handleSummarizeInbox}
+                  className="h-9 gap-2 border-[#007AFF] hover:bg-[#007AFF]/5"
+                  onClick={fetchDailySummaries}
+                  disabled={isDailySummaryLoading}
                 >
-                  <Inbox className="h-4 w-4" />
-                  Summarize Inbox
+                  {isDailySummaryLoading ? (
+                    <>
+                      <div className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+                      <GradientText>Processing...</GradientText>
+                    </>
+                  ) : (
+                    <>
+                      <Calendar className="h-4 w-4 text-blue-500" />
+                      <GradientText>Daily Summary</GradientText>
+                    </>
+                  )}
                 </Button>
               <Button 
                 variant="outline" 
@@ -2259,19 +2395,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Tap Agent Button */}
-          <div className="relative mb-4">
-            <Button
-              onClick={() => setIsTapAgentSheetOpen(true)}
-              variant="outline"
-              className="w-full bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 border-blue-200 text-blue-700"
-            >
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-blue-500" />
-                <span className="font-medium">Open Tap Agent</span>
-              </div>
-            </Button>
-          </div>
+          {/* Tap Agent Button - Removed */}
 
           {/* Gmail Query Response */}
           {gmailQueryResponse && (
@@ -3960,7 +4084,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100">
+                <div className={`p-4 border-b border-gray-100 ${isPopupExpanded ? 'px-6' : ''}`}>
                   <div className="flex items-start gap-3">
                     <Lightbulb className="h-5 w-5 text-indigo-500 flex-shrink-0 mt-0.5" />
                     <div className="text-sm text-indigo-800">
@@ -4131,22 +4255,121 @@ export default function DashboardPage() {
         </SheetContent>
       </Sheet>
 
-      {/* Tap Agent Sheet */}
+      {/* Tap Agent Sheet - Without daily summary functionality */}
       <TapAgentSheet 
         open={isTapAgentSheetOpen}
         onOpenChange={setIsTapAgentSheetOpen}
       />
 
-      {/* Floating Tap Agent Button */}
-      <div className="fixed bottom-6 right-6 z-50">
-        <button
-          onClick={() => setIsTapAgentSheetOpen(true)}
-          className="flex items-center justify-center w-12 h-12 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-full shadow-lg hover:from-blue-600 hover:to-blue-700 transition-all hover:shadow-xl"
-          aria-label="Open Tap Agent"
-        >
-          <Sparkles className="h-5 w-5" />
-        </button>
-      </div>
+      {/* Daily Summary Popup */}
+      {showDailySummaryPopup && (dailySummaryGmailResponse || dailySummaryLightspeedResponse) && (
+        <div className={`fixed ${isPopupExpanded ? 'top-20 bottom-6 right-0 w-[450px] rounded-l-lg rounded-r-none border-r-0' : 'bottom-6 right-6 w-96 rounded-lg'} z-50 bg-white shadow-xl border border-gray-200 overflow-hidden animate-slideInUp transition-all duration-300 ease-in-out flex flex-col`}>
+          <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-blue-50 to-orange-50 flex-shrink-0">
+            <div className="flex flex-col">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-blue-500" />
+                <GradientText>Daily Summary</GradientText>
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5 ml-6">Powered by Tap Agent</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-7 w-7 p-0 rounded-full hover:bg-white/50"
+                onClick={() => setIsPopupExpanded(!isPopupExpanded)}
+                title={isPopupExpanded ? "Collapse" : "Expand"}
+              >
+                {isPopupExpanded ? (
+                  <Minimize2 className="h-4 w-4 text-gray-500" />
+                ) : (
+                  <Maximize2 className="h-4 w-4 text-gray-500" />
+                )}
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-7 w-7 p-0 rounded-full hover:bg-white/50"
+                onClick={() => setShowDailySummaryPopup(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <div className={`overflow-y-auto ${isPopupExpanded ? 'max-h-[calc(100vh-160px)]' : 'max-h-[70vh]'} flex-grow`}>
+            {dailySummaryGmailResponse && (
+              <div className={`p-4 border-b border-gray-100 ${isPopupExpanded ? 'px-6' : ''}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
+                    <Image src="/gmail.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain" />
+                  </div>
+                  <h4 className="text-sm font-medium text-gray-900">Email Summary</h4>
+                </div>
+                <div className="prose prose-sm max-w-none text-gray-700 text-sm space-y-4 mt-2">
+                  {processApiResponse(dailySummaryGmailResponse)?.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i) ? 
+                    renderHtml(processApiResponse(dailySummaryGmailResponse)) :
+                    <ReactMarkdown 
+                      className="text-gray-700 text-sm leading-relaxed space-y-4"
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeRaw]}
+                      components={{
+                        p: ({children}) => <p className="my-3">{children}</p>,
+                        ul: ({children}) => <ul className="my-3 list-disc pl-5">{children}</ul>,
+                        ol: ({children}) => <ol className="my-3 list-decimal pl-5">{children}</ol>,
+                        li: ({children}) => <li className="my-1">{children}</li>,
+                        h3: ({children}) => <h3 className="text-base font-semibold my-3">{children}</h3>,
+                        h4: ({children}) => <h4 className="text-sm font-semibold my-2">{children}</h4>
+                      }}
+                    >
+                      {processApiResponse(dailySummaryGmailResponse) || ""}
+                    </ReactMarkdown>
+                  }
+                </div>
+              </div>
+            )}
+            
+            {dailySummaryLightspeedResponse && (
+              <div className={`p-4 ${isPopupExpanded ? 'px-6' : ''}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
+                    <Image src="/lslogo.png" width={16} height={16} alt="Lightspeed" className="h-4 w-4 object-contain" />
+                  </div>
+                  <h4 className="text-sm font-medium text-gray-900">Sales Summary</h4>
+                </div>
+                <div className="prose prose-sm max-w-none text-gray-700 text-sm space-y-4 mt-2">
+                  {processApiResponse(dailySummaryLightspeedResponse)?.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i) ? 
+                    renderHtml(processApiResponse(dailySummaryLightspeedResponse)) :
+                    <ReactMarkdown 
+                      className="text-gray-700 text-sm leading-relaxed space-y-4"
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeRaw]}
+                      components={{
+                        p: ({children}) => <p className="my-3">{children}</p>,
+                        ul: ({children}) => <ul className="my-3 list-disc pl-5">{children}</ul>,
+                        ol: ({children}) => <ol className="my-3 list-decimal pl-5">{children}</ol>,
+                        li: ({children}) => <li className="my-1">{children}</li>,
+                        h3: ({children}) => <h3 className="text-base font-semibold my-3">{children}</h3>,
+                        h4: ({children}) => <h4 className="text-sm font-semibold my-2">{children}</h4>
+                      }}
+                    >
+                      {processApiResponse(dailySummaryLightspeedResponse) || ""}
+                    </ReactMarkdown>
+                  }
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="p-3 bg-gray-50 border-t border-gray-200 flex justify-end flex-shrink-0">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowDailySummaryPopup(false)}
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
     </PageTransition>
   )
 }

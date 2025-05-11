@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/sheet"
 import { SendBroadcastSheet } from "@/components/send-broadcast-sheet"
 import { IntroductoryRewardSheet } from "@/components/introductory-reward-sheet"
+import { TapAgentSheet } from "@/components/tap-agent-sheet"
 
 // Custom scrollbar styles
 const scrollbarStyles = `
@@ -141,6 +142,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [generatedReward, setGeneratedReward] = useState<any>(null)
   
   const [showIntroRewardSheet, setShowIntroRewardSheet] = useState(false)
+  
+  // Add state for TapAgentSheet
+  const [showTapAgentSheet, setShowTapAgentSheet] = useState(false)
   
   useEffect(() => {
     // Check if current path is onboarding
@@ -605,44 +609,21 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 gap-2 bg-white hover:bg-gray-50 border-transparent"
-                  >
-                    <Bot className="h-4 w-4 text-blue-500 mr-1.5" />
-                    <div className="flex items-center">
-                      <span className="font-bold text-blue-500">Tap</span>
-                      <span className="ml-0.5 bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent font-bold animate-gradient-x">
-                        Agent
-                      </span>
-                    </div>
-                    <ChevronDown className="h-3.5 w-3.5 ml-1 text-gray-500" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-64">
-                  <DropdownMenuItem asChild>
-                    <Link href="/tap-agent" className="flex items-center cursor-pointer">
-                      <Brain className="h-4 w-4 mr-2 text-blue-500" />
-                      <span className="font-medium">Tap Agent Setup</span>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setShowCompetitorAnalysis(true)}>
-                    <Target className="h-4 w-4 mr-2 text-purple-500" />
-                    <span className="font-medium">Competitor Intelligence</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setShowSalesAnalysis(true)}>
-                    <BarChart className="h-4 w-4 mr-2 text-green-500" />
-                    <span className="font-medium">Sales Activity Analysis</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setShowRewardGenerator(true)}>
-                    <Lightbulb className="h-4 w-4 mr-2 text-amber-500" />
-                    <span className="font-medium">Random Reward Generation</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {/* Replace the DropdownMenu with a direct button that opens TapAgentSheet */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-2 bg-white hover:bg-gray-50 border-transparent"
+                onClick={() => setShowTapAgentSheet(true)}
+              >
+                <Bot className="h-4 w-4 text-blue-500 mr-1.5" />
+                <div className="flex items-center">
+                  <span className="font-bold text-blue-500">Tap</span>
+                  <span className="ml-0.5 bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent font-bold animate-gradient-x">
+                    Agent
+                  </span>
+                </div>
+              </Button>
               <TapAiButton
                 variant="default"
                 size="sm"
@@ -1735,6 +1716,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <IntroductoryRewardSheet
         open={showIntroRewardSheet}
         onOpenChange={setShowIntroRewardSheet}
+      />
+      
+      {/* Add TapAgentSheet */}
+      <TapAgentSheet 
+        open={showTapAgentSheet} 
+        onOpenChange={setShowTapAgentSheet}
       />
     </div>
   )

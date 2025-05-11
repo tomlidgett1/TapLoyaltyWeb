@@ -3,10 +3,8 @@ import { db } from '@/lib/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 // Google OAuth configuration
-const REDIRECT_URI = process.env.GMAIL_REDIRECT_URI || 
-  (process.env.NEXT_PUBLIC_BASE_URL 
-    ? `${process.env.NEXT_PUBLIC_BASE_URL}/api/auth/gmail/callback` 
-    : 'http://localhost:3000/api/auth/gmail/callback');
+// Hardcode the redirect URI to ensure it exactly matches what's configured in Google Cloud Console
+const REDIRECT_URI = "https://app.taployalty.com.au/api/auth/gmail/callback";
 
 // Use environment variables with fallbacks for credentials
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.GMAIL_CLIENT_ID;

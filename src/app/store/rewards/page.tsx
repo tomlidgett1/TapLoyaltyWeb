@@ -1327,6 +1327,7 @@ export default function RewardsPage() {
         >
           <div className="flex items-center gap-2">
             <Button 
+              size="sm"
               variant="default" 
               className="h-9 gap-2 rounded-md"
               onClick={() => router.push('/create')}
@@ -1335,6 +1336,7 @@ export default function RewardsPage() {
               Create Reward
             </Button>
             <Button 
+              size="sm"
               variant="outline" 
               className="h-9 gap-2 rounded-md"
               onClick={handleExportPDF}

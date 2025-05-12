@@ -707,16 +707,18 @@ export function CreateBannerDialog({
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "create" | "library")}>
-          <TabsList className="grid w-full grid-cols-2 mb-4">
-            <TabsTrigger value="create" className="flex items-center gap-2">
-              <PenLine className="h-4 w-4" />
-              <span>Create Custom</span>
-            </TabsTrigger>
-            <TabsTrigger value="library" className="flex items-center gap-2">
-              <Library className="h-4 w-4" />
-              <span>Banner Library</span>
-            </TabsTrigger>
-          </TabsList>
+          <div className="flex justify-start mb-4">
+            <TabsList>
+              <TabsTrigger value="create" className="flex items-center gap-2">
+                <PenLine className="h-4 w-4" />
+                <span>Create Custom</span>
+              </TabsTrigger>
+              <TabsTrigger value="library" className="flex items-center gap-2">
+                <Library className="h-4 w-4" />
+                <span>Banner Library</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
           
           <TabsContent value="create">
             {/* Preview Section */}

@@ -17,6 +17,7 @@ export async function GET(request: Request) {
     const squareIntegrationDoc = await getDoc(squareIntegrationRef)
     
     if (!squareIntegrationDoc.exists() || !squareIntegrationDoc.data().connected) {
+      console.error('Square integration not found or not connected for merchantId:', merchantId)
       return NextResponse.json({ error: 'Square integration not found or not connected' }, { status: 404 })
     }
     
@@ -24,8 +25,11 @@ export async function GET(request: Request) {
     const accessToken = squareData.accessToken
     
     if (!accessToken) {
+      console.error('Square access token not found for merchantId:', merchantId)
       return NextResponse.json({ error: 'Square access token not found' }, { status: 404 })
     }
+    
+    console.log('Fetching Square catalog data for merchantId:', merchantId)
     
     // Call Square API to get catalog data
     const squareResponse = await fetch('https://connect.squareup.com/v2/catalog/list', {
@@ -45,10 +49,17 @@ export async function GET(request: Request) {
     
     const catalogData = await squareResponse.json()
     
+    // Log a success message with some info about the data
+    console.log('Successfully fetched Square catalog data:', {
+      objectsCount: catalogData.objects?.length || 0,
+      firstObjectType: catalogData.objects?.[0]?.type || 'none',
+      cursor: catalogData.cursor || 'none'
+    })
+    
     // Return the catalog data
     return NextResponse.json(catalogData)
   } catch (error) {
     console.error('Error fetching Square catalog data:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal server error', details: error instanceof Error ? error.message : String(error) }, { status: 500 })
   }
 } 

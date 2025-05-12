@@ -4263,8 +4263,8 @@ export default function DashboardPage() {
 
       {/* Daily Summary Popup */}
       {showDailySummaryPopup && (dailySummaryGmailResponse || dailySummaryLightspeedResponse) && (
-        <div className={`fixed ${isPopupExpanded ? 'top-20 bottom-6 right-0 w-[450px] rounded-l-lg rounded-r-none border-r-0' : 'bottom-6 right-6 w-96 rounded-lg'} z-50 bg-white shadow-xl border border-gray-200 overflow-hidden animate-slideInUp transition-all duration-300 ease-in-out flex flex-col`}>
-          <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-blue-50 to-orange-50 flex-shrink-0">
+        <div className={`fixed ${isPopupExpanded ? 'top-0 bottom-0 right-0 w-[35%] rounded-l-lg rounded-r-none border-r-0 h-full' : 'bottom-6 right-6 w-96 rounded-lg h-auto'} z-50 bg-white shadow-xl border border-gray-200 overflow-hidden animate-slideInUp transition-all duration-300 ease-in-out flex flex-col`}>
+          <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-white flex-shrink-0">
             <div className="flex flex-col">
               <h3 className="text-sm font-semibold flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-blue-500" />
@@ -4296,7 +4296,7 @@ export default function DashboardPage() {
               </Button>
             </div>
           </div>
-          <div className={`overflow-y-auto ${isPopupExpanded ? 'max-h-[calc(100vh-160px)]' : 'max-h-[70vh]'} flex-grow`}>
+          <div className={`overflow-y-auto ${isPopupExpanded ? 'max-h-[calc(100vh-120px)]' : 'max-h-[70vh]'} flex-grow`}>
             {dailySummaryGmailResponse && (
               <div className={`p-4 border-b border-gray-100 ${isPopupExpanded ? 'px-6' : ''}`}>
                 <div className="flex items-center gap-2 mb-3">

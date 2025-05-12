@@ -552,6 +552,7 @@ export default function TapAgentIntroPage() {
             <div className="flex items-center gap-2">
               <Button 
                 variant="outline" 
+                size="sm"
                 className="h-9 gap-2 border-0 ring-1 ring-gray-200 bg-white text-gray-700 shadow-sm rounded-md"
                 asChild
               >
@@ -562,6 +563,7 @@ export default function TapAgentIntroPage() {
               </Button>
               <Button 
                 variant="outline" 
+                size="sm"
                 className="h-9 gap-2 border-0 ring-1 ring-gray-200 bg-white text-red-500 hover:bg-red-50 shadow-sm rounded-md"
                 onClick={handleDisableAgent}
                 disabled={disabling}
@@ -720,13 +722,17 @@ export default function TapAgentIntroPage() {
                   
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link href="/tap-agent/setup" passHref>
-                  <Button className="gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white pulse-button">
+                  <Button 
+                    size="sm"
+                    className="h-9 gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white pulse-button"
+                  >
                     Configure Tap Agent
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
                 <Button 
                   variant="outline" 
+                  size="sm"
                   className="h-9 gap-2 border-0 ring-1 ring-gray-200 bg-white text-gray-700 shadow-sm rounded-md"
                   asChild
                 >
@@ -1006,7 +1012,10 @@ export default function TapAgentIntroPage() {
           
           <div className="text-center mt-10">
             <Link href="/tap-agent/setup" passHref>
-              <Button className="gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white">
+              <Button 
+                size="sm"
+                className="h-9 gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white"
+              >
                 Start Setup Process
                 <ArrowRight className="h-4 w-4" />
               </Button>
@@ -1076,7 +1085,10 @@ export default function TapAgentIntroPage() {
           <div className="mt-8 text-center">
             <p className="text-sm text-gray-600 mb-4">Ready to get started with Tap Agent?</p>
             <Link href="/tap-agent/setup" passHref>
-              <Button className="gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white">
+              <Button 
+                size="sm"
+                className="h-9 gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white"
+              >
                 Configure Tap Agent
                 <ArrowRight className="h-4 w-4" />
               </Button>

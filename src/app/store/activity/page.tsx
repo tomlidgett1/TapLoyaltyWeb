@@ -809,7 +809,7 @@ export default function ActivityPage() {
       const page = isLoadingMore ? lightspeedPage + 1 : 1
       
       // Fetch sales data with pagination
-      const response = await fetch(`/api/lightspeed/sales?merchantId=${user.uid}&accountId=${accountId}&page=${page}`)
+      const response = await fetch(`/api/lightspeed/sales?merchantId=${user.uid}&accountId=${accountId}&pages=${page}`)
       const data = await response.json()
       
       if (!response.ok) {
@@ -817,19 +817,22 @@ export default function ActivityPage() {
       }
       
       if (data.success && Array.isArray(data.sales)) {
-        // If loading more, append to existing data, otherwise replace
+        // Always trim to the 10 most-recent sales returned by the API
+        const limitedSales = data.sales.slice(0, 10)
+
         if (isLoadingMore) {
-          if (data.sales.length === 0) {
-            setHasMoreLightspeedSales(false)
-          } else {
-            setLightspeedSales(prev => [...prev, ...data.sales])
-            setLightspeedPage(page)
-          }
+          // When we are already loading more, merge but still respect the 10-item cap
+          const combined = [...lightspeedSales, ...limitedSales].slice(0, 10)
+          setLightspeedSales(combined)
+          setLightspeedPage(page)
         } else {
-          setLightspeedSales(data.sales)
+          // Initial load – just keep the 10 most recent
+          setLightspeedSales(limitedSales)
           setLightspeedPage(1)
-          setHasMoreLightspeedSales(data.sales.length >= 50) // Assuming 50 is the page size
         }
+
+        // We've deliberately capped to 10 items, so don't request further pages
+        setHasMoreLightspeedSales(false)
       } else {
         if (!isLoadingMore) {
           setLightspeedSales([])

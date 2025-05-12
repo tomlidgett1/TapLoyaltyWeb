@@ -10,35 +10,18 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Textarea } from "@/components/ui/textarea"
-import { httpsCallable } from 'firebase/functions'
-import { functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/auth-context'
 import { toast } from "@/components/ui/use-toast"
-import { collection, query, where, getDocs } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, arrayUnion, setDoc, writeBatch } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { playSuccessSound } from '@/lib/audio'
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { setDoc, writeBatch } from 'firebase/firestore'
 import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface CreateRecurringRewardDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-}
-
-// Add interface to fix type errors for transaction reward
-interface FunctionData {
-  merchantId: string;
-  pin: string;
-  name: string;
-  description: string;
-  active: boolean;
-  transactionThreshold: number;
-  rewardType: 'dollar_voucher' | 'free_item';
-  iterations: number;
-  voucherAmount?: number;
-  freeItemName?: string;
 }
 
 export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurringRewardDialogProps) {
@@ -51,9 +34,9 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
   const [instantClose, setInstantClose] = useState(false)
   const [coffeeFormData, setCoffeeFormData] = useState({
     pin: '',
-    freeRewardTiming: 'after' as 'before' | 'after',
     frequency: '5',
-    levels: '5',
+    minimumSpend: '0',
+    minimumTimeBetween: '0',
   })
   const [voucherFormData, setVoucherFormData] = useState({
     rewardName: '',
@@ -127,19 +110,26 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
         return
       }
 
-      const coffeeprogram = httpsCallable(functions, 'coffeeprogram')
+      // Instead of calling the Firebase function, save directly to Firestore
+      const merchantRef = doc(db, 'merchants', user.uid)
       
-      const data = {
-        merchantId: user.uid,
+      // Create the coffee program data object
+      const coffeeProgram = {
         pin: coffeeFormData.pin,
-        firstCoffeeBeforeTransaction: coffeeFormData.freeRewardTiming === 'before',
         frequency: parseInt(coffeeFormData.frequency),
-        levels: parseInt(coffeeFormData.levels)
+        minspend: parseInt(coffeeFormData.minimumSpend) || 0,
+        mintime: parseInt(coffeeFormData.minimumTimeBetween) || 0,
+        createdAt: new Date(),
+        active: true
       }
-
-      console.log("Sending data:", JSON.stringify(data, null, 2))
       
-      const result = await coffeeprogram(data)
+      // Update the merchant document to add the coffee program to an array
+      await setDoc(merchantRef, {
+        coffeePrograms: arrayUnion(coffeeProgram)
+      }, { merge: true })
+      
+      console.log("Coffee program saved:", coffeeProgram)
+      
       playSuccessSound()
       toast({
         title: "Success",
@@ -148,7 +138,12 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
       setInstantClose(true);
       onOpenChange(false)
     } catch (error: any) {
-      // No error handling needed here
+      console.error("Error creating coffee program:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create coffee program",
+        variant: "destructive"
+      })
     } finally {
       setLoading(false)
     }
@@ -183,33 +178,27 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
     setShowVoucherConfirmation(false) // Close the confirmation dialog
 
     try {
-      // Call the voucher function
-      const voucher = httpsCallable(functions, 'voucher')
+      // Instead of calling the Firebase function, save directly to Firestore
+      const merchantRef = doc(db, 'merchants', user.uid)
       
-      // Make sure merchantId is explicitly set and logged
-      const merchantId = user.uid
-      console.log("Using merchantId:", merchantId)
-      
-      // Structure the data as a plain JavaScript object
-      const functionData = {
-        data: {
-          merchantId: merchantId,
-          pin: voucherFormData.pin,
-          name: voucherFormData.rewardName,
-          description: voucherFormData.description || "",
-          active: voucherFormData.isActive,
-          rewardAmount: parseInt(voucherFormData.discountAmount),
-          totalSpendRequired: parseInt(voucherFormData.spendRequired),
-          iterations: parseInt(voucherFormData.iterations)
-        }
+      // Create the voucher program data object
+      const voucherProgram = {
+        pin: voucherFormData.pin,
+        name: voucherFormData.rewardName,
+        description: voucherFormData.description || "",
+        active: voucherFormData.isActive,
+        rewardAmount: parseInt(voucherFormData.discountAmount),
+        totalSpendRequired: parseInt(voucherFormData.spendRequired),
+        iterations: parseInt(voucherFormData.iterations),
+        createdAt: new Date()
       }
-
-      // Log the complete data object to verify all fields
-      console.log("Sending data to voucher function:", JSON.stringify(functionData, null, 2))
       
-      // Call the function with the data
-      const result = await voucher(functionData)
-      console.log("Voucher function result:", result)
+      // Update the merchant document to add the voucher program to an array
+      await setDoc(merchantRef, {
+        voucherPrograms: arrayUnion(voucherProgram)
+      }, { merge: true })
+      
+      console.log("Voucher program saved:", voucherProgram)
       
       playSuccessSound()
       toast({
@@ -222,20 +211,11 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
     } catch (error: any) {
       console.error("Error creating voucher:", error)
       
-      // Check for specific error message about existing voucher program
-      if (error.message && error.message.includes("Voucher Program Already Exists")) {
-        toast({
-          title: "Program Already Exists",
-          description: "A voucher program already exists for this merchant. You cannot create multiple voucher programs.",
-          variant: "destructive"
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to create recurring voucher",
-          variant: "destructive"
-        })
-      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create recurring voucher",
+        variant: "destructive"
+      })
     } finally {
       setLoading(false)
     }
@@ -387,39 +367,47 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
     setShowTransactionConfirmation(false) // Close the confirmation dialog
 
     try {
-      // Call the recurring reward function
-      const recurringReward = httpsCallable(functions, 'recurringRewardCallable')
+      // Instead of calling the Firebase function, save directly to Firestore
+      const merchantRef = doc(db, 'merchants', user.uid)
       
-      // Make sure merchantId is explicitly set and logged
-      const merchantId = user.uid
-      console.log("Using merchantId:", merchantId)
-      
-      // Structure the data with proper typing
-      const data: FunctionData = {
-        merchantId: merchantId,
+      // Create the transaction reward data object with proper typing
+      interface TransactionReward {
+        pin: string;
+        name: string;
+        description: string;
+        active: boolean;
+        transactionThreshold: number;
+        rewardType: 'dollar_voucher' | 'free_item';
+        iterations: number;
+        createdAt: Date;
+        voucherAmount?: number;
+        freeItemName?: string;
+      }
+
+      const transactionReward: TransactionReward = {
         pin: transactionFormData.pin,
         name: transactionFormData.rewardName,
         description: transactionFormData.description || "",
         active: transactionFormData.isActive,
         transactionThreshold: parseInt(transactionFormData.transactionThreshold),
         rewardType: transactionFormData.rewardType,
-        iterations: parseInt(transactionFormData.iterations)
+        iterations: parseInt(transactionFormData.iterations),
+        createdAt: new Date()
       }
 
       // Add reward type specific fields
       if (transactionFormData.rewardType === 'dollar_voucher') {
-        data.voucherAmount = parseInt(transactionFormData.voucherAmount)
+        transactionReward.voucherAmount = parseInt(transactionFormData.voucherAmount)
       } else if (transactionFormData.rewardType === 'free_item') {
-        data.freeItemName = transactionFormData.freeItemName
+        transactionReward.freeItemName = transactionFormData.freeItemName
       }
-
-      // Log the complete data object to verify all fields
-      console.log("Sending data to recurring reward function:", JSON.stringify(data, null, 2))
       
-      // Call the function with the data
-      const functionData = { data }
-      const result = await recurringReward(functionData)
-      console.log("Recurring reward function result:", result)
+      // Update the merchant document to add the transaction reward to an array
+      await setDoc(merchantRef, {
+        transactionRewards: arrayUnion(transactionReward)
+      }, { merge: true })
+      
+      console.log("Transaction reward saved:", transactionReward)
       
       playSuccessSound()
       toast({
@@ -430,22 +418,12 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
       onOpenChange(false)
       
     } catch (error: any) {
-      console.error("Error creating recurring reward:", error)
-      
-      // Check for specific error message about existing program
-      if (error.message && error.message.includes("Recurring Reward Program Already Exists")) {
-        toast({
-          title: "Program Already Exists",
-          description: "A transaction-based reward program already exists for this merchant. You cannot create multiple transaction-based reward programs.",
-          variant: "destructive"
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to create transaction-based reward",
-          variant: "destructive"
-        })
-      }
+      console.error("Error creating transaction reward:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create transaction-based reward",
+        variant: "destructive"
+      })
     } finally {
       setLoading(false)
     }
@@ -480,34 +458,34 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                   <span className="font-medium">
                     {transactionFormData.rewardType === 'dollar_voucher' ? 'Dollar Voucher' : 'Free Item'}
                   </span>
-                          </div>
+                </div>
                 {transactionFormData.rewardType === 'dollar_voucher' && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Voucher Amount:</span>
                     <span className="font-medium">${transactionFormData.voucherAmount}</span>
-                          </div>
+                  </div>
                 )}
                 {transactionFormData.rewardType === 'free_item' && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Free Item:</span>
                     <span className="font-medium">{transactionFormData.freeItemName}</span>
-                          </div>
+                  </div>
                 )}
                 <div className="flex justify-between">
                   <span className="text-gray-600">Transaction Threshold:</span>
                   <span className="font-medium">{transactionThreshold} transactions</span>
-                          </div>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Number of Levels:</span>
                   <span className="font-medium">{iterations}</span>
-                        </div>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">PIN Code:</span>
                   <span className="font-medium">{transactionFormData.pin}</span>
-                      </div>
                 </div>
-                  </div>
-                  
+              </div>
+            </div>
+            
             <div className="bg-gray-50 rounded-md p-4 mb-4">
               <h4 className="font-medium mb-2">How This Will Work</h4>
               <p className="text-sm mb-3">
@@ -519,23 +497,23 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                   <div key={i} className="flex items-start gap-2">
                     <div className="h-5 w-5 rounded-full bg-[#007AFF] text-white flex items-center justify-center flex-shrink-0 text-xs">
                       {i + 1}
-                          </div>
+                    </div>
                     <div>
                       <span className="font-medium">{rewardDescription}</span> unlocks after {transactionThreshold * (i + 1)} transactions
-                          </div>
-                          </div>
+                    </div>
+                  </div>
                 ))}
                 
                 {iterations > 5 && (
-                          <div className="flex items-start gap-2">
+                  <div className="flex items-start gap-2">
                     <div className="h-5 w-5 rounded-full bg-[#007AFF] text-white flex items-center justify-center flex-shrink-0 text-xs">
                       ...
-                          </div>
+                    </div>
                     <div>And so on, up to {iterations} reward levels</div>
-                        </div>
+                  </div>
                 )}
-                      </div>
-                </div>
+              </div>
+            </div>
             
             <div className="flex justify-end gap-2">
               <Button 
@@ -577,8 +555,8 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                 <span className="text-[#007AFF]">Create</span> Recurring Reward
               </SheetTitle>
             </SheetHeader>
-                </div>
-                
+          </div>
+          
           <Tabs 
             defaultValue="coffee" 
             value={activeTab}
@@ -612,8 +590,8 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                         alt="Coffee Program preview" 
                         className="w-[220px] h-auto object-contain"
                       />
-                      </div>
-                      
+                    </div>
+                    
                     <div className="text-center max-w-lg mb-10">
                       <h2 className="text-2xl font-bold text-gray-900 mb-4">
                         Coffee Program
@@ -621,21 +599,13 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                       <p className="text-lg text-gray-700 mb-5">
                         Create a buy-X-get-1-free coffee loyalty program
                       </p>
-                      <div className="bg-gray-50 p-5 rounded-md border border-gray-100 mb-6">
+                      <div className="bg-gray-50 p-5 rounded-md border border-gray-100">
                         <p className="text-md text-gray-600">
                           Perfect for cafes, bakeries, or any business with repeat purchases. Customers earn stamps toward free items.
                         </p>
                       </div>
-                        </div>
-                        
-                    <Button 
-                      onClick={() => setShowCoffeeForm(true)}
-                      className="w-[250px] h-12 bg-[#007AFF] hover:bg-[#0071E3] text-white text-lg"
-                    >
-                            Configure
-                      <ChevronRight className="h-5 w-5 ml-2" />
-                    </Button>
-                        </div>
+                    </div>
+                  </div>
                 ) : (
                   <div className="py-1 min-h-[300px] overflow-x-hidden">
                     <div className="flex items-center mb-4">
@@ -654,104 +624,101 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                       </div>
                     </div>
                   
-                <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
-                  <h3 className="text-sm font-medium text-blue-800 mb-1">Coffee Program Settings</h3>
-                  <p className="text-xs text-blue-700">
-                    Create a digital "buy X get 1 free" stamp card program for coffee or other beverages. Configure how many purchases customers need to make before earning a free item.
-                  </p>
-                </div>
-                
-                    <div className="grid grid-cols-1 gap-6 overflow-hidden">
-                      {/* Form inputs take full width now */}
-                      <div className="space-y-4">
-                    <div className="grid gap-2">
-                      <Label>PIN Code <span className="text-red-500">*</span></Label>
-                      <Input
-                        type="text"
-                        maxLength={4}
-                            value={coffeeFormData.pin}
-                            onChange={(e) => setCoffeeFormData({ ...coffeeFormData, pin: e.target.value })}
-                        placeholder="Enter 4-digit PIN (e.g., 1234)"
-                      />
-                      <p className="text-sm text-muted-foreground">
-                        Staff will enter this PIN when redeeming free coffees
+                    <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
+                      <h3 className="text-sm font-medium text-blue-800 mb-1">Coffee Program Settings</h3>
+                      <p className="text-xs text-blue-700">
+                        Create a digital "buy X get 1 free" stamp card program for coffee or other beverages. This program runs in perpetuity with no limit on free items earned. Only transactions after program creation will count, and you can set minimum spend and time requirements to prevent abuse.
                       </p>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label>First Free Coffee Timing</Label>
-                      <RadioGroup
-                            value={coffeeFormData.freeRewardTiming}
-                        onValueChange={(value: 'before' | 'after') => 
-                              setCoffeeFormData({ ...coffeeFormData, freeRewardTiming: value })
-                        }
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="after" id="after" />
-                          <Label htmlFor="after">After first transaction</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="before" id="before" />
-                          <Label htmlFor="before">Before first transaction (welcome gift)</Label>
-                        </div>
-                      </RadioGroup>
-                      <p className="text-sm text-muted-foreground">
-                        Choose when customers receive their first free coffee
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
-                        <Label>Frequency <span className="text-red-500">*</span></Label>
-                        <Input
-                          type="number"
-                          min="1"
-                              value={coffeeFormData.frequency}
-                              onChange={(e) => setCoffeeFormData({ ...coffeeFormData, frequency: e.target.value })}
-                          placeholder="e.g., 5"
-                        />
-                        <p className="text-sm text-muted-foreground">
-                          Number of purchases required between free coffees
-                        </p>
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label>Number of Rewards <span className="text-red-500">*</span></Label>
-                        <Input
-                          type="number"
-                          min="1"
-                              value={coffeeFormData.levels}
-                              onChange={(e) => setCoffeeFormData({ ...coffeeFormData, levels: e.target.value })}
-                          placeholder="e.g., 5"
-                        />
-                        <p className="text-sm text-muted-foreground">
-                          Total number of free coffees in the program
-                        </p>
-                      </div>
                     </div>
                     
-                    <div className="mt-2">
-                      <h4 className="text-sm font-medium mb-2">Program Summary</h4>
-                      <div className="bg-gray-50 p-3 rounded-md">
-                        <p className="text-sm mb-2">
-                          Based on your settings, customers will:
-                        </p>
-                        <ul className="text-sm space-y-1 pl-5 list-disc">
-                          <li>
-                                {coffeeFormData.freeRewardTiming === 'before' ? 
-                              "Get a free coffee immediately upon joining" : 
-                                  `Get a free coffee after ${coffeeFormData.frequency} purchases`}
-                          </li>
-                          <li>
-                                Earn another free coffee every {coffeeFormData.frequency} purchases
-                          </li>
-                          <li>
-                                Earn up to {coffeeFormData.levels} free coffees in total
-                          </li>
-                        </ul>
+                    <div className="grid grid-cols-1 gap-6 overflow-hidden">
+                      <div className="space-y-4">
+                        <div className="grid gap-2">
+                          <Label>PIN Code <span className="text-red-500">*</span></Label>
+                          <Input
+                            type="text"
+                            maxLength={4}
+                            value={coffeeFormData.pin}
+                            onChange={(e) => setCoffeeFormData({ ...coffeeFormData, pin: e.target.value })}
+                            placeholder="Enter 4-digit PIN (e.g., 1234)"
+                          />
+                          <p className="text-sm text-muted-foreground">
+                            Staff will enter this PIN when redeeming free coffees
+                          </p>
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>Frequency <span className="text-red-500">*</span></Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={coffeeFormData.frequency}
+                            onChange={(e) => setCoffeeFormData({ ...coffeeFormData, frequency: e.target.value })}
+                            placeholder="e.g., 5"
+                          />
+                          <p className="text-sm text-muted-foreground">
+                            Number of purchases required between free coffees
+                          </p>
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>Minimum Spend Required ($)</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={coffeeFormData.minimumSpend}
+                            onChange={(e) => setCoffeeFormData({ ...coffeeFormData, minimumSpend: e.target.value })}
+                            placeholder="e.g., 5"
+                          />
+                          <p className="text-sm text-muted-foreground">
+                            Minimum transaction amount to qualify for a stamp (0 for no minimum)
+                          </p>
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>Minimum Time Between Purchases (minutes)</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={coffeeFormData.minimumTimeBetween}
+                            onChange={(e) => setCoffeeFormData({ ...coffeeFormData, minimumTimeBetween: e.target.value })}
+                            placeholder="e.g., 30"
+                          />
+                          <p className="text-sm text-muted-foreground">
+                            Minimum time required between purchases to earn stamps (0 for no limit)
+                          </p>
+                        </div>
+                        
+                        <div className="mt-2">
+                          <h4 className="text-sm font-medium mb-2">Program Summary</h4>
+                          <div className="bg-gray-50 p-3 rounded-md">
+                            <p className="text-sm mb-2">
+                              Based on your settings, customers will:
+                            </p>
+                            <ul className="text-sm space-y-1 pl-5 list-disc">
+                              <li>
+                                Get a free coffee after every {coffeeFormData.frequency} qualifying purchases
+                              </li>
+                              {parseInt(coffeeFormData.minimumSpend) > 0 && (
+                                <li>
+                                  Need to spend at least ${coffeeFormData.minimumSpend} per transaction to earn a stamp
+                                </li>
+                              )}
+                              {parseInt(coffeeFormData.minimumTimeBetween) > 0 && (
+                                <li>
+                                  Need to wait at least {coffeeFormData.minimumTimeBetween} minutes between purchases to earn stamps
+                                </li>
+                              )}
+                              <li>
+                                <strong>This program runs in perpetuity</strong> with no limit to how many free coffees can be earned
+                              </li>
+                              <li>
+                                Only transactions made <strong>after program creation</strong> will count toward stamps
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
                     </div>
                   </div>
                 )}
@@ -768,30 +735,22 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                       />
                     </div>
                     
-                    <div className="text-center max-w-lg mb-10">
+                    <div className="text-center max-w-lg">
                       <h2 className="text-2xl font-bold text-gray-900 mb-4">
                         Recurring Voucher
                       </h2>
                       <p className="text-lg text-gray-700 mb-5">
                         Set up an automatically recurring voucher reward
                       </p>
-                      <div className="bg-gray-50 p-5 rounded-md border border-gray-100 mb-6">
+                      <div className="bg-gray-50 p-5 rounded-md border border-gray-100">
                         <p className="text-md text-gray-600">
                           Great for retail and services. Customers earn dollar value vouchers at spending milestones.
                         </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                    
-                    <Button 
-                      onClick={() => setShowVoucherForm(true)}
-                      className="w-[250px] h-12 bg-[#007AFF] hover:bg-[#0071E3] text-white text-lg"
-                    >
-                      Configure
-                      <ChevronRight className="h-5 w-5 ml-2" />
-                    </Button>
-              </div>
-            ) : (
-              <div className="py-1 min-h-[300px] overflow-x-hidden">
+                ) : (
+                  <div className="py-1 min-h-[300px] overflow-x-hidden">
                     <div className="flex items-center mb-4">
                       <Button
                         variant="ghost"
@@ -808,123 +767,122 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                       </div>
                     </div>
                   
-                <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
-                  <h3 className="text-sm font-medium text-blue-800 mb-1">Recurring Voucher Settings</h3>
-                  <p className="text-xs text-blue-700">
-                    Create vouchers that customers earn automatically as they spend at your business. Each voucher requires the same spend amount, creating a regular reward cycle.
-                  </p>
-                </div>
-                
-                    <div className="grid grid-cols-1 gap-6 overflow-hidden">
-                      {/* Form inputs take full width now */}
-                      <div className="space-y-3">
-                    <div className="grid gap-2">
-                      <Label>Reward Name <span className="text-red-500">*</span></Label>
-                      <Input
-                        type="text"
-                            value={voucherFormData.rewardName}
-                            onChange={(e) => setVoucherFormData({ ...voucherFormData, rewardName: e.target.value })}
-                        placeholder="e.g., Loyalty Spending Voucher"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Choose a clear name that explains the value to customers
-                      </p>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label>Description</Label>
-                      <Textarea
-                            value={voucherFormData.description}
-                            onChange={(e) => setVoucherFormData({ ...voucherFormData, description: e.target.value })}
-                        placeholder="e.g., Earn $10 vouchers for every $100 you spend"
-                        rows={3}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        This helps customers understand how to earn the vouchers
-                      </p>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label>PIN Code <span className="text-red-500">*</span></Label>
-                      <Input
-                        type="text"
-                        maxLength={4}
-                            value={voucherFormData.pin}
-                            onChange={(e) => setVoucherFormData({ ...voucherFormData, pin: e.target.value })}
-                        placeholder="Enter 4-digit PIN (e.g., 1234)"
-                      />
-                      <p className="text-sm text-muted-foreground">
-                        Staff will enter this PIN when redeeming vouchers
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
-                        <Label>Total Spend Required ($) <span className="text-red-500">*</span></Label>
-                        <Input
-                          type="number"
-                          min="1"
-                              value={voucherFormData.spendRequired}
-                              onChange={(e) => setVoucherFormData({ ...voucherFormData, spendRequired: e.target.value })}
-                          placeholder="e.g., 100"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Amount needed for each voucher
-                        </p>
-                      </div>
-                      
-                      <div className="grid gap-2">
-                        <Label>Voucher Amount ($) <span className="text-red-500">*</span></Label>
-                        <Input
-                          type="number"
-                          min="1"
-                              value={voucherFormData.discountAmount}
-                              onChange={(e) => setVoucherFormData({ ...voucherFormData, discountAmount: e.target.value })}
-                          placeholder="e.g., 10"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Value of each voucher
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label>Number of Vouchers <span className="text-red-500">*</span></Label>
-                      <Input
-                        type="number"
-                        min="1"
-                            value={voucherFormData.iterations}
-                            onChange={(e) => setVoucherFormData({ ...voucherFormData, iterations: e.target.value })}
-                        placeholder="e.g., 5"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Total number of vouchers a customer can earn
+                    <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
+                      <h3 className="text-sm font-medium text-blue-800 mb-1">Recurring Voucher Settings</h3>
+                      <p className="text-xs text-blue-700">
+                        Create vouchers that customers earn automatically as they spend at your business. Each voucher requires the same spend amount, creating a regular reward cycle.
                       </p>
                     </div>
                     
-                    <div className="mt-2">
-                      <h4 className="text-sm font-medium mb-2">Program Summary</h4>
-                      <div className="bg-gray-50 p-3 rounded-md">
-                        <p className="text-sm mb-2">
-                          Based on your settings, customers will earn:
-                        </p>
-                        <ul className="text-sm space-y-1 pl-5 list-disc">
-                          <li>
+                    <div className="grid grid-cols-1 gap-6 overflow-hidden">
+                      <div className="space-y-3">
+                        <div className="grid gap-2">
+                          <Label>Reward Name <span className="text-red-500">*</span></Label>
+                          <Input
+                            type="text"
+                            value={voucherFormData.rewardName}
+                            onChange={(e) => setVoucherFormData({ ...voucherFormData, rewardName: e.target.value })}
+                            placeholder="e.g., Loyalty Spending Voucher"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Choose a clear name that explains the value to customers
+                          </p>
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>Description</Label>
+                          <Textarea
+                            value={voucherFormData.description}
+                            onChange={(e) => setVoucherFormData({ ...voucherFormData, description: e.target.value })}
+                            placeholder="e.g., Earn $10 vouchers for every $100 you spend"
+                            rows={3}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            This helps customers understand how to earn the vouchers
+                          </p>
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>PIN Code <span className="text-red-500">*</span></Label>
+                          <Input
+                            type="text"
+                            maxLength={4}
+                            value={voucherFormData.pin}
+                            onChange={(e) => setVoucherFormData({ ...voucherFormData, pin: e.target.value })}
+                            placeholder="Enter 4-digit PIN (e.g., 1234)"
+                          />
+                          <p className="text-sm text-muted-foreground">
+                            Staff will enter this PIN when redeeming vouchers
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="grid gap-2">
+                            <Label>Total Spend Required ($) <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={voucherFormData.spendRequired}
+                              onChange={(e) => setVoucherFormData({ ...voucherFormData, spendRequired: e.target.value })}
+                              placeholder="e.g., 100"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Amount needed for each voucher
+                            </p>
+                          </div>
+                          
+                          <div className="grid gap-2">
+                            <Label>Voucher Amount ($) <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={voucherFormData.discountAmount}
+                              onChange={(e) => setVoucherFormData({ ...voucherFormData, discountAmount: e.target.value })}
+                              placeholder="e.g., 10"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Value of each voucher
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>Number of Vouchers <span className="text-red-500">*</span></Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={voucherFormData.iterations}
+                            onChange={(e) => setVoucherFormData({ ...voucherFormData, iterations: e.target.value })}
+                            placeholder="e.g., 5"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Total number of vouchers a customer can earn
+                          </p>
+                        </div>
+                        
+                        <div className="mt-2">
+                          <h4 className="text-sm font-medium mb-2">Program Summary</h4>
+                          <div className="bg-gray-50 p-3 rounded-md">
+                            <p className="text-sm mb-2">
+                              Based on your settings, customers will earn:
+                            </p>
+                            <ul className="text-sm space-y-1 pl-5 list-disc">
+                              <li>
                                 ${voucherFormData.discountAmount} voucher after spending ${voucherFormData.spendRequired}
-                          </li>
-                          <li>
+                              </li>
+                              <li>
                                 Another ${voucherFormData.discountAmount} voucher after spending ${parseInt(voucherFormData.spendRequired) * 2}
-                          </li>
-                          <li>
+                              </li>
+                              <li>
                                 And so on, up to ${voucherFormData.iterations} vouchers in total
-                          </li>
-                          <li>
+                              </li>
+                              <li>
                                 Total potential reward value: ${parseInt(voucherFormData.discountAmount) * parseInt(voucherFormData.iterations)}
-                          </li>
-                        </ul>
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
                     </div>
                   </div>
                 )}
@@ -941,27 +899,19 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                       />
                     </div>
                     
-                    <div className="text-center max-w-lg mb-10">
+                    <div className="text-center max-w-lg">
                       <h2 className="text-2xl font-bold text-gray-900 mb-4">
                         Transaction-Based Reward
                       </h2>
                       <p className="text-lg text-gray-700 mb-5">
                         Reward customers based on number of transactions
                       </p>
-                      <div className="bg-gray-50 p-5 rounded-md border border-gray-100 mb-6">
+                      <div className="bg-gray-50 p-5 rounded-md border border-gray-100">
                         <p className="text-md text-gray-600">
                           Ideal for businesses where visit frequency matters more than spend amount. Rewards based on visit count.
                         </p>
-                  </div>
-                </div>
-                    
-                    <Button 
-                      onClick={() => setShowTransactionForm(true)}
-                      className="w-[250px] h-12 bg-[#007AFF] hover:bg-[#0071E3] text-white text-lg"
-                    >
-                      Configure
-                      <ChevronRight className="h-5 w-5 ml-2" />
-                    </Button>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="py-1 min-h-[300px] overflow-x-hidden">
@@ -981,7 +931,6 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                       </div>
                     </div>
                   
-                    {/* Add instruction panel */}
                     <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
                       <h3 className="text-sm font-medium text-blue-800 mb-1">Transaction Reward Setup</h3>
                       <p className="text-xs text-blue-700">
@@ -991,7 +940,6 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                     </div>
                     
                     <div className="grid grid-cols-1 gap-6 overflow-hidden">
-                      {/* Form inputs take full width now */}
                       <div className="space-y-3">
                         <div className="grid gap-2">
                           <Label>Reward Name <span className="text-red-500">*</span></Label>
@@ -1072,8 +1020,8 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                             <p className="text-xs text-muted-foreground">
                               Dollar value of each reward voucher
                             </p>
-              </div>
-            )}
+                          </div>
+                        )}
 
                         {transactionFormData.rewardType === 'free_item' && (
                           <div className="grid gap-2 mt-4 border-l-2 border-blue-100 pl-4">
@@ -1087,7 +1035,7 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                             <p className="text-xs text-muted-foreground">
                               Name of the free item customers will receive
                             </p>
-          </div>
+                          </div>
                         )}
 
                         <div className="grid grid-cols-2 gap-4 mt-4">
@@ -1120,7 +1068,6 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                           </div>
                         </div>
                         
-                        {/* Add summary section */}
                         <div className="border-t pt-4 mt-3">
                           <h4 className="text-sm font-medium mb-2">Program Summary</h4>
                           <div className="bg-gray-50 p-3 rounded-md">
@@ -1153,47 +1100,77 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
           
           <div className="flex-none px-6 py-4 border-t">
             <div className="flex justify-between">
-            <Button 
-              variant="outline" 
-              onClick={() => {
+              <Button 
+                variant="outline" 
+                onClick={() => {
                   if (showCoffeeForm || showVoucherForm || showTransactionForm) {
                     setShowCoffeeForm(false)
                     setShowVoucherForm(false)
                     setShowTransactionForm(false)
-                } else {
+                  } else {
                     onOpenChange(false)
-                }
-              }}
-            >
+                  }
+                }}
+              >
                 {(showCoffeeForm || showVoucherForm || showTransactionForm) ? 'Back' : 'Cancel'}
-            </Button>
+              </Button>
+              
+              {activeTab === 'coffee' && !showCoffeeForm && (
+                <Button 
+                  onClick={() => setShowCoffeeForm(true)}
+                  className="bg-[#007AFF] hover:bg-[#0071E3] text-white"
+                >
+                  Configure
+                  <ChevronRight className="h-4 w-4 ml-2" />
+                </Button>
+              )}
+              
+              {activeTab === 'discount' && !showVoucherForm && (
+                <Button 
+                  onClick={() => setShowVoucherForm(true)}
+                  className="bg-[#007AFF] hover:bg-[#0071E3] text-white"
+                >
+                  Configure
+                  <ChevronRight className="h-4 w-4 ml-2" />
+                </Button>
+              )}
+              
+              {activeTab === 'transaction' && !showTransactionForm && (
+                <Button 
+                  onClick={() => setShowTransactionForm(true)}
+                  className="bg-[#007AFF] hover:bg-[#0071E3] text-white"
+                >
+                  Configure
+                  <ChevronRight className="h-4 w-4 ml-2" />
+                </Button>
+              )}
               
               {activeTab === 'coffee' && showCoffeeForm && (
-              <Button 
-                onClick={saveCoffeeProgram}
-                  disabled={loading || !coffeeFormData.pin || !coffeeFormData.frequency || !coffeeFormData.levels}
-                className="bg-[#007AFF] hover:bg-[#0071E3] text-white"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  'Create Program'
-                )}
-              </Button>
-            )}
+                <Button 
+                  onClick={saveCoffeeProgram}
+                  disabled={loading || !coffeeFormData.pin || !coffeeFormData.frequency}
+                  className="bg-[#007AFF] hover:bg-[#0071E3] text-white"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    'Create Program'
+                  )}
+                </Button>
+              )}
               
               {activeTab === 'discount' && showVoucherForm && (
-              <Button 
-                onClick={handleCreateClick}
+                <Button 
+                  onClick={handleCreateClick}
                   disabled={loading || !voucherFormData.rewardName || !voucherFormData.pin || !voucherFormData.spendRequired || !voucherFormData.discountAmount}
-                className="bg-[#007AFF] hover:bg-[#0071E3] text-white"
-              >
-                Create Recurring Voucher
-              </Button>
-            )}
+                  className="bg-[#007AFF] hover:bg-[#0071E3] text-white"
+                >
+                  Create Recurring Voucher
+                </Button>
+              )}
               
               {activeTab === 'transaction' && showTransactionForm && (
                 <Button 
@@ -1208,9 +1185,9 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                   className="bg-[#007AFF] hover:bg-[#0071E3] text-white"
                 >
                   Create Transaction Reward
-              </Button>
-            )}
-          </div>
+                </Button>
+              )}
+            </div>
           </div>
         </SheetContent>
       </Sheet>

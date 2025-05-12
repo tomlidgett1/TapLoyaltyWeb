@@ -73,6 +73,36 @@ const scrollbarStyles = `
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background-color: rgba(0, 0, 0, 0.2);
   }
+  
+  /* Avatar image styles */
+  .merchant-avatar-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    border-radius: 50%;
+    overflow: hidden;
+  }
+  
+  .merchant-avatar-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: relative;
+    z-index: 2;
+  }
+  
+  .avatar-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    font-weight: 500;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+  }
 `;
 
 // Define types for nav items structure before the navItems array
@@ -198,8 +228,21 @@ interface ChecklistItem {
 
 interface MerchantData {
   logoUrl?: string;
+  logo?: string;
+  logoURL?: string;
+  businessLogo?: string;
+  storeLogoUrl?: string;
+  imageUrl?: string;
+  image?: string;
   tradingName?: string;
   businessEmail?: string;
+  name?: string;
+  businessName?: string;
+  merchantName?: string;
+  storeName?: string;
+  companyName?: string;
+  displayName?: string;
+  email?: string;
   [key: string]: any;
 }
 
@@ -216,6 +259,8 @@ export function SideNav() {
   const [initials, setInitials] = useState("MB")
   const [loading, setLoading] = useState(true)
   const [merchantData, setMerchantData] = useState<MerchantData | null>(null)
+  const [logoError, setLogoError] = useState(false)
+  const [logoLoading, setLogoLoading] = useState(true)
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([
     { id: 'reward', title: 'Create a reward', completed: false, href: '#', openSheet: true },
     { id: 'banner', title: 'Create a banner', completed: false, href: '/store/banners' },
@@ -230,6 +275,12 @@ export function SideNav() {
   })
   const [searchQuery, setSearchQuery] = useState("")
   const [createSheetOpen, setCreateSheetOpen] = useState(false)
+
+  // Reset logo states when merchantData changes
+  useEffect(() => {
+    setLogoError(false)
+    setLogoLoading(true)
+  }, [merchantData?.logoUrl])
 
   useEffect(() => {
     async function fetchMerchantData() {
@@ -248,6 +299,30 @@ export function SideNav() {
           
           // Log all fields to see what's available
           console.log("Available fields:", Object.keys(data))
+          
+          // Check for logo URL with various possible field names
+          const possibleLogoFields = ['logoUrl', 'logo', 'logoURL', 'businessLogo', 'storeLogoUrl', 'imageUrl', 'image']
+          let logoUrl = null
+          
+          for (const field of possibleLogoFields) {
+            if (data[field] && typeof data[field] === 'string') {
+              const url = data[field] as string;
+              // Basic URL validation
+              if (url.startsWith('http') && (url.includes('.jpg') || url.includes('.jpeg') || url.includes('.png') || url.includes('.svg') || url.includes('.webp') || url.includes('firebasestorage.googleapis.com'))) {
+                console.log(`Found valid logo URL in field: ${field} = ${url}`)
+                logoUrl = url
+                // Add the found logo URL to the merchantData object
+                data.logoUrl = logoUrl
+                break
+              } else {
+                console.log(`Found logo field but URL seems invalid: ${field} = ${url}`)
+              }
+            }
+          }
+          
+          if (!logoUrl) {
+            console.log("No valid logo URL found in any expected fields")
+          }
           
           // Try different possible field names for the merchant name
           const possibleNameFields = ['name', 'businessName', 'merchantName', 'storeName', 'companyName', 'displayName']
@@ -642,9 +717,27 @@ export function SideNav() {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3 overflow-hidden min-w-0 max-w-[80%]">
             <Avatar className="h-8 w-8 flex-shrink-0">
-              <AvatarFallback className="bg-primary text-white text-xs">
-                {initials}
-              </AvatarFallback>
+              {merchantData?.logoUrl && !logoError ? (
+                <div className="merchant-avatar-container">
+                  <img 
+                    src={merchantData.logoUrl} 
+                    alt={merchantName} 
+                    className="merchant-avatar-image"
+                    onError={() => setLogoError(true)}
+                    onLoad={() => setLogoLoading(false)}
+                    style={{ opacity: logoLoading ? 0 : 1, transition: 'opacity 0.2s ease-in-out' }}
+                  />
+                  {logoLoading && (
+                    <AvatarFallback className="bg-primary text-white text-xs avatar-fallback">
+                      {initials}
+                    </AvatarFallback>
+                  )}
+                </div>
+              ) : (
+                <AvatarFallback className="bg-primary text-white text-xs avatar-fallback">
+                  {initials}
+                </AvatarFallback>
+              )}
             </Avatar>
             <div className="overflow-hidden">
               <p className="text-sm font-medium truncate">{merchantName}</p>

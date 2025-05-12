@@ -2,10 +2,10 @@
 
 import { SideNav } from "@/components/side-nav"
 import { usePathname } from "next/navigation"
-import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu } from "lucide-react"
+import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Badge } from "@/components/ui/badge"
 import { formatDistanceToNow } from "date-fns"
 import { 
@@ -44,6 +44,8 @@ import {
 import { SendBroadcastSheet } from "@/components/send-broadcast-sheet"
 import { IntroductoryRewardSheet } from "@/components/introductory-reward-sheet"
 import { TapAgentSheet } from "@/components/tap-agent-sheet"
+import { getFunctions, httpsCallable } from "firebase/functions"
+import { useToast } from "@/components/ui/use-toast"
 
 // Custom scrollbar styles
 const scrollbarStyles = `
@@ -96,6 +98,18 @@ interface RewardConfig {
   }
 }
 
+// Add this interface near the top of the file with the other interfaces
+interface ProcessThoughtResult {
+  title?: string;
+  summary?: string;
+  tags?: string[];
+  status?: string;
+  reason?: string;
+  areaTitle?: string;
+  categoryTitle?: string;
+  [key: string]: any; // Allow for other properties
+}
+
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -145,6 +159,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   
   // Add state for TapAgentSheet
   const [showTapAgentSheet, setShowTapAgentSheet] = useState(false)
+  
+  const [recording, setRecording] = useState(false)
+  const [audioProcessing, setAudioProcessing] = useState(false)
+  const [recordingDuration, setRecordingDuration] = useState(0)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null)
+  
+  const { toast } = useToast()
   
   useEffect(() => {
     // Check if current path is onboarding
@@ -467,6 +490,187 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     return path.charAt(0).toUpperCase() + path.slice(1)
   }
 
+  const handleVoiceNoteClick = () => {
+    if (recording) {
+      // Stop recording
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop()
+        setRecording(false)
+        setAudioProcessing(true)
+        
+        // Clear the recording timer
+        if (recordingTimerRef.current) {
+          clearInterval(recordingTimerRef.current)
+          recordingTimerRef.current = null
+        }
+      }
+    } else {
+      // Start recording
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ audio: true })
+          .then(stream => {
+            const mediaRecorder = new MediaRecorder(stream)
+            mediaRecorderRef.current = mediaRecorder
+            audioChunksRef.current = []
+            
+            // Reset recording duration
+            setRecordingDuration(0)
+            
+            // Start a timer to update recording duration
+            recordingTimerRef.current = setInterval(() => {
+              setRecordingDuration(prev => prev + 1)
+            }, 1000)
+            
+            mediaRecorder.ondataavailable = (event) => {
+              if (event.data.size > 0) {
+                audioChunksRef.current.push(event.data)
+              }
+            }
+            
+            mediaRecorder.onstop = async () => {
+              try {
+                // Convert audio chunks to base64
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' })
+                console.log('Audio blob size:', audioBlob.size, 'bytes')
+                
+                const reader = new FileReader()
+                
+                reader.onloadend = async () => {
+                  try {
+                    const base64Audio = (reader.result as string).split(',')[1]
+                    console.log('Base64 audio length:', base64Audio.length, 'characters')
+                    console.log('Base64 audio preview (first 100 chars):', base64Audio.substring(0, 100))
+                    
+                    // Get the user ID (assuming it's available from the auth context)
+                    if (user?.uid) {
+                      console.log('Sending data to processThought function:')
+                      console.log('- customerId:', user.uid)
+                      console.log('- audioBase64 length:', base64Audio.length)
+                      
+                      // Call the Firebase function
+                      const functions = getFunctions()
+                      const processThoughtFn = httpsCallable(functions, 'processThought')
+                      
+                      const result = await processThoughtFn({
+                        customerId: user.uid,
+                        audioBase64: base64Audio
+                      })
+                      
+                      console.log('Voice note processed result:', result.data)
+                      
+                      // Display more detailed information about the result
+                      const thoughtResult = result.data as ProcessThoughtResult;
+                      if (thoughtResult) {
+                        console.log('Result structure:', Object.keys(thoughtResult))
+                        
+                        // If there's a title field, log it
+                        if (thoughtResult.title) {
+                          console.log('Thought title:', thoughtResult.title)
+                        }
+                        
+                        // If there's a summary field, log it
+                        if (thoughtResult.summary) {
+                          console.log('Thought summary:', thoughtResult.summary)
+                        }
+                        
+                        // If there are tags, log them
+                        if (thoughtResult.tags) {
+                          console.log('Thought tags:', thoughtResult.tags)
+                        }
+                      }
+                      
+                      // Show success notification with more details if available
+                      toast({
+                        title: "Voice Note Processed",
+                        description: thoughtResult?.title 
+                          ? `"${thoughtResult.title}" has been saved.` 
+                          : thoughtResult?.status === 'ignored'
+                            ? `Note was too short to process: ${thoughtResult.reason}`
+                            : "Your voice note has been processed successfully.",
+                        duration: 5000,
+                      })
+                    } else {
+                      console.error('User ID not available')
+                      toast({
+                        title: "Error",
+                        description: "User ID not available. Please sign in again.",
+                        variant: "destructive",
+                      })
+                    }
+                  } catch (error) {
+                    console.error('Error processing voice note:', error)
+                    toast({
+                      title: "Error",
+                      description: "Failed to process voice note: " + (error instanceof Error ? error.message : String(error)),
+                      variant: "destructive",
+                    })
+                  } finally {
+                    setAudioProcessing(false)
+                  }
+                }
+                
+                reader.readAsDataURL(audioBlob)
+              } catch (error) {
+                console.error('Error handling audio data:', error)
+                setAudioProcessing(false)
+                toast({
+                  title: "Error",
+                  description: "Failed to process audio data: " + (error instanceof Error ? error.message : String(error)),
+                  variant: "destructive",
+                })
+              }
+              
+              // Stop all tracks in the stream
+              if (mediaRecorderRef.current) {
+                mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop())
+              }
+            }
+            
+            // Start recording
+            mediaRecorder.start()
+            setRecording(true)
+          })
+          .catch(error => {
+            console.error('Error accessing microphone:', error)
+            toast({
+              title: "Microphone Error",
+              description: "Could not access your microphone: " + (error instanceof Error ? error.message : String(error)),
+              variant: "destructive",
+            })
+          })
+      } else {
+        console.error('Media devices not supported')
+        toast({
+          title: "Not Supported",
+          description: "Voice recording is not supported in your browser.",
+          variant: "destructive",
+        })
+      }
+    }
+  }
+  
+  // Format the recording duration as MM:SS
+  const formatDuration = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
+  
+  // Add cleanup effect for recording
+  useEffect(() => {
+    // Cleanup function to stop the timer and recording if component unmounts
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current)
+      }
+      
+      // Also stop any ongoing recording
+      if (mediaRecorderRef.current && recording) {
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop())
+      }
+    }
+  }, [recording]);
+
   if (!pathname) {
     return null; // or a loading state
   }
@@ -609,7 +813,32 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              {/* Replace the DropdownMenu with a direct button that opens TapAgentSheet */}
+              {/* Voice Note button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-2 bg-white hover:bg-gray-50 border-transparent"
+                onClick={handleVoiceNoteClick}
+                disabled={audioProcessing}
+              >
+                {audioProcessing ? (
+                  <>
+                    <span className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mr-1.5"></span>
+                    Processing...
+                  </>
+                ) : recording ? (
+                  <>
+                    <Mic className="h-4 w-4 text-red-500 mr-1.5 animate-pulse" />
+                    {formatDuration(recordingDuration)}
+                  </>
+                ) : (
+                  <>
+                    <Mic className="h-4 w-4 text-blue-500 mr-1.5" />
+                    Voice Note
+                  </>
+                )}
+              </Button>
+              {/* Tap Agent button */}
               <Button
                 variant="outline"
                 size="sm"
@@ -1726,3 +1955,5 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     </div>
   )
 } 
+
+// Add this useEffect to clean up the timer when the component unmounts

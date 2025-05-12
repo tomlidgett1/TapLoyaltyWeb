@@ -3,7 +3,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, collection, getDocs, query, where, setDoc, writeBatch, Timestamp } from 'firebase/firestore'
 
 // Set the page size for pagination
-const PAGE_SIZE = 200
+const PAGE_SIZE = 250
 
 // Add interfaces for Lightspeed API response types
 interface LightspeedItem {
@@ -581,11 +581,10 @@ async function fetchSalesData(accessToken: string, accountId: string, page: numb
     
     // Add more comprehensive relation loading for items
     // Make sure to include both Item and its Price details
-    // V3 requires load_relations to be a JSON encoded array
-    params.append('load_relations', JSON.stringify(["Item", "Sale", "TaxClass"]));
-    
-    // Add parameter to expand Item details if needed
-    params.append('expand_Item', 'true');
+    // V3 requires load_relations to be a JSON encoded array. The "Sale" relation
+    // is not permitted on the SaleLine endpoint and triggers a 400 Bad Request,
+    // so we only request the supported relations.
+    params.append('load_relations', JSON.stringify(["Item", "TaxClass"]));
     
     // Add date range filtering if provided
     if (dateRange) {
@@ -701,7 +700,7 @@ async function fetchCustomersForSales(accessToken: string, accountId: string, cu
     try {
       // Create filter string for customerIDs: "customerID IN (123,456,789)"
       const filterParam = `customerID IN (${batch.join(',')})`;
-      const url = `https://api.lightspeedapp.com/API/V3/Account/${accountId}/Customer.json?filter=${filterParam}&limit=100`;
+      const url = `https://api.lightspeedapp.com/API/V3/Account/${accountId}/Customer.json?filter=${filterParam}&limit=10`;
       
       const response = await fetch(url, {
         headers: {
@@ -776,7 +775,6 @@ async function processAndReturnSalesData(response: Response, page: number, pageS
       if (sampleLine) {
         console.log('Sample sale line keys:', Object.keys(sampleLine));
         if (sampleLine.Item) loadedRelations.push('Item');
-        if (sampleLine.Sale) loadedRelations.push('Sale');
         if (sampleLine.TaxClass) loadedRelations.push('TaxClass');
         
         console.log('Detected loaded relations:', loadedRelations);

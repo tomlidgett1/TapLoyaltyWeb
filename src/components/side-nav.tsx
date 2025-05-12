@@ -32,7 +32,8 @@ import {
   Command,
   DollarSign,
   Package,
-  Mail
+  Mail,
+  FileText
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -161,6 +162,11 @@ const navItems: NavItem[] = [
         title: "Activity",
         href: "/store/activity",
         icon: Clock
+      },
+      {
+        title: "Notes",
+        href: "/notes",
+        icon: FileText
       },
       {
         title: "Rewards",

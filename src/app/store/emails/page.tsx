@@ -28,6 +28,7 @@ import {
   ExternalLink,
   MessageSquare,
   User,
+  Bell,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -867,6 +868,50 @@ export default function EmailsPage() {
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50"
+              onClick={() => {
+                if (!user?.uid) return;
+                // Call the watchGmail Cloud Function
+                const projectId = 'tap-loyalty-fb6d0';
+                const region = 'us-central1';
+                const url = `https://${region}-${projectId}.cloudfunctions.net/watchGmail?merchantId=${user.uid}`;
+                
+                toast({
+                  title: "Setting up email notifications...",
+                  description: "Please wait while we set up Gmail notifications.",
+                });
+                
+                fetch(url)
+                  .then(response => {
+                    if (!response.ok) {
+                      throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                  })
+                  .then(data => {
+                    toast({
+                      title: "Success",
+                      description: "Email notifications have been set up successfully.",
+                      variant: "default",
+                    });
+                    console.log('watchGmail response:', data);
+                  })
+                  .catch(error => {
+                    console.error('Error setting up email notifications:', error);
+                    toast({
+                      title: "Error",
+                      description: `Failed to set up email notifications: ${error.message}`,
+                      variant: "destructive",
+                    });
+                  });
+              }}
+            >
+              <Bell className="h-4 w-4" />
+              Setup Email Notifications
             </Button>
           </div>
         )}

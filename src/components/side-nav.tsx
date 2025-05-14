@@ -217,7 +217,13 @@ const navItems: NavItem[] = [
         title: "Settings",
         href: "/dashboard/settings",
         icon: Settings,
-        subTabs: []
+        subTabs: [
+        ]
+      },
+      {
+        title: "Integrations",
+        href: "/dashboard/integrations",
+        icon: Layers
       }
     ]
   },

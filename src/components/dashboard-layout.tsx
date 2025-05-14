@@ -541,62 +541,66 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     console.log('Base64 audio length:', base64Audio.length, 'characters')
                     console.log('Base64 audio preview (first 100 chars):', base64Audio.substring(0, 100))
                     
-                    // Get the user ID (assuming it's available from the auth context)
-                    if (user?.uid) {
-                      console.log('Sending data to processThought function:')
-                      console.log('- customerId:', user.uid)
-                      console.log('- audioBase64 length:', base64Audio.length)
-                      
-                      // Call the Firebase function
-                      const functions = getFunctions()
-                      const processThoughtFn = httpsCallable(functions, 'processThought')
-                      
-                      const result = await processThoughtFn({
-                        customerId: user.uid,
+                    // Use the specific customerId instead of the user's ID
+                    const customerId = 'ZU6nlhrznNgyR3E3OvBOiMXgXur2'
+                    console.log('Sending data to processThought1 function:')
+                    console.log('- customerId:', customerId)
+                    console.log('- audioBase64 length:', base64Audio.length)
+                    
+                    // Call the Firebase function as an HTTP endpoint
+                    const region = 'us-central1'; // Make sure this matches the region in your function definition
+                    const projectId = 'tap-loyalty-fb6d0';
+                    const url = `https://${region}-${projectId}.cloudfunctions.net/processThought1`;
+                    
+                    const response = await fetch(url, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        customerId: customerId,
                         audioBase64: base64Audio
                       })
+                    });
+                    
+                    if (!response.ok) {
+                      throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const responseData = await response.json();
+                    console.log('Voice note processed result:', responseData);
+                    
+                    // Display more detailed information about the result
+                    const thoughtResult = responseData as ProcessThoughtResult;
+                    if (thoughtResult) {
+                      console.log('Result structure:', Object.keys(thoughtResult))
                       
-                      console.log('Voice note processed result:', result.data)
-                      
-                      // Display more detailed information about the result
-                      const thoughtResult = result.data as ProcessThoughtResult;
-                      if (thoughtResult) {
-                        console.log('Result structure:', Object.keys(thoughtResult))
-                        
-                        // If there's a title field, log it
-                        if (thoughtResult.title) {
-                          console.log('Thought title:', thoughtResult.title)
-                        }
-                        
-                        // If there's a summary field, log it
-                        if (thoughtResult.summary) {
-                          console.log('Thought summary:', thoughtResult.summary)
-                        }
-                        
-                        // If there are tags, log them
-                        if (thoughtResult.tags) {
-                          console.log('Thought tags:', thoughtResult.tags)
-                        }
+                      // If there's a title field, log it
+                      if (thoughtResult.title) {
+                        console.log('Thought title:', thoughtResult.title)
                       }
                       
-                      // Show success notification with more details if available
-                      toast({
-                        title: "Voice Note Processed",
-                        description: thoughtResult?.title 
-                          ? `"${thoughtResult.title}" has been saved.` 
-                          : thoughtResult?.status === 'ignored'
-                            ? `Note was too short to process: ${thoughtResult.reason}`
-                            : "Your voice note has been processed successfully.",
-                        duration: 5000,
-                      })
-                    } else {
-                      console.error('User ID not available')
-                      toast({
-                        title: "Error",
-                        description: "User ID not available. Please sign in again.",
-                        variant: "destructive",
-                      })
+                      // If there's a summary field, log it
+                      if (thoughtResult.summary) {
+                        console.log('Thought summary:', thoughtResult.summary)
+                      }
+                      
+                      // If there are tags, log them
+                      if (thoughtResult.tags) {
+                        console.log('Thought tags:', thoughtResult.tags)
+                      }
                     }
+                    
+                    // Show success notification with more details if available
+                    toast({
+                      title: "Voice Note Processed",
+                      description: thoughtResult?.title 
+                        ? `"${thoughtResult.title}" has been saved.` 
+                        : thoughtResult?.status === 'ignored'
+                          ? `Note was too short to process: ${thoughtResult.reason}`
+                          : "Your voice note has been processed successfully.",
+                      duration: 5000,
+                    })
                   } catch (error) {
                     console.error('Error processing voice note:', error)
                     toast({

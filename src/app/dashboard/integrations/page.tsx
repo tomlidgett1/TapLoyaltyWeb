@@ -583,7 +583,7 @@ export default function IntegrationsPage() {
           </div>
         )}
         
-        <div className="grid grid-cols-1 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           {/* Gmail Integration Card */}
           <Card className="rounded-md">
             <CardHeader className="pb-3">

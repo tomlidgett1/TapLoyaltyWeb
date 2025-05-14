@@ -33,7 +33,9 @@ import {
   DollarSign,
   Package,
   Mail,
-  FileText
+  FileText,
+  LayoutDashboard,
+  Bot
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -135,6 +137,11 @@ const navItems: NavItem[] = [
     title: "Dashboard",
     href: "/dashboard",
     icon: Home
+  },
+  {
+    title: "Agent Inbox",
+    href: "/dashboard/agent-inbox",
+    icon: Bot,
   },
   {
     title: "Tap Agent",

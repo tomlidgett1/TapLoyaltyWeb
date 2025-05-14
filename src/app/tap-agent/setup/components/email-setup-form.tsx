@@ -14,11 +14,19 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
-import { X, Plus, Loader2, Mail, Check, AlertTriangle } from "lucide-react"
+import { X, Plus, Loader2, Mail, Check, AlertTriangle, Bot, BarChart } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "@/components/ui/use-toast"
 import { GmailIcon } from "@/components/icons/gmail-icon"
+import { useAuth } from "@/contexts/auth-context"
+import { 
+  Sheet, 
+  SheetContent, 
+  SheetHeader, 
+  SheetTitle, 
+  SheetDescription 
+} from "@/components/ui/sheet"
 
 interface EmailSettings {
   isConnected: boolean;
@@ -37,70 +45,73 @@ interface EmailSetupFormProps {
 }
 
 export function EmailSetupForm({ data, onChange }: EmailSetupFormProps) {
-  const [connectingGmail, setConnectingGmail] = useState(false);
-  const [analyzingEmails, setAnalyzingEmails] = useState(false);
-  const [newExcludedEmail, setNewExcludedEmail] = useState("");
-  const [newCustomTone, setNewCustomTone] = useState("");
+  const { user } = useAuth()
+  const [connectingGmail, setConnectingGmail] = useState(false)
+  const [analyzingEmails, setAnalyzingEmails] = useState(false)
+  const [newExcludedEmail, setNewExcludedEmail] = useState("")
+  const [newCustomTone, setNewCustomTone] = useState("")
+  const [customerServiceSheetOpen, setCustomerServiceSheetOpen] = useState(false)
+  const [analyzingInquiries, setAnalyzingInquiries] = useState(false)
   
   // Mock function to simulate connecting to Gmail
   const handleConnectGmail = async () => {
-    setConnectingGmail(true);
+    setConnectingGmail(true)
     
     // Simulate API call
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 2000))
       
       // Simulate successful connection
       onChange({
         ...data,
         isConnected: true,
         connectedEmail: "user@gmail.com" // This would come from the OAuth flow
-      });
+      })
       
       toast({
         title: "Connected to Gmail",
         description: "Your Gmail account has been successfully connected.",
-      });
+      })
     } catch (error) {
       toast({
         title: "Connection failed",
         description: "Failed to connect to Gmail. Please try again.",
         variant: "destructive"
-      });
+      })
     } finally {
-      setConnectingGmail(false);
+      setConnectingGmail(false)
     }
-  };
+  }
   
   // Mock function to simulate analyzing emails
   const handleAnalyzeEmails = async () => {
-    setAnalyzingEmails(true);
+    setAnalyzingEmails(true)
     
     // Simulate API call
     try {
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 3000))
       
       // Simulate successful analysis
       onChange({
         ...data,
         analyzeEmailTone: true,
         customTone: ["Professional", "Friendly", "Concise"]
-      });
+      })
       
       toast({
         title: "Email Analysis Complete",
         description: "We've analyzed your sent emails and updated your tone settings.",
-      });
+      })
     } catch (error) {
       toast({
         title: "Analysis failed",
         description: "Failed to analyze your emails. Please try again.",
         variant: "destructive"
-      });
+      })
     } finally {
-      setAnalyzingEmails(false);
+      setAnalyzingEmails(false)
     }
-  };
+  }
   
   const handleDisconnectGmail = () => {
     onChange({
@@ -108,47 +119,85 @@ export function EmailSetupForm({ data, onChange }: EmailSetupFormProps) {
       isConnected: false,
       connectedEmail: "",
       automaticResponses: false
-    });
+    })
     
     toast({
       title: "Disconnected from Gmail",
       description: "Your Gmail account has been disconnected.",
-    });
-  };
+    })
+  }
   
   const handleAddExcludedEmail = () => {
     if (newExcludedEmail && !data.excludedEmails.includes(newExcludedEmail)) {
       onChange({
         ...data,
         excludedEmails: [...data.excludedEmails, newExcludedEmail]
-      });
-      setNewExcludedEmail("");
+      })
+      setNewExcludedEmail("")
     }
-  };
+  }
   
   const handleRemoveExcludedEmail = (email: string) => {
     onChange({
       ...data,
       excludedEmails: data.excludedEmails.filter(e => e !== email)
-    });
-  };
+    })
+  }
   
   const handleAddCustomTone = () => {
     if (newCustomTone && !data.customTone.includes(newCustomTone)) {
       onChange({
         ...data,
         customTone: [...data.customTone, newCustomTone]
-      });
-      setNewCustomTone("");
+      })
+      setNewCustomTone("")
     }
-  };
+  }
   
   const handleRemoveCustomTone = (tone: string) => {
     onChange({
       ...data,
       customTone: data.customTone.filter(t => t !== tone)
-    });
-  };
+    })
+  }
+
+  const handleAnalyzeInquiries = async () => {
+    if (!user?.uid) {
+      toast({
+        title: "Error",
+        description: "User ID not found. Please try again later.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setAnalyzingInquiries(true)
+    
+    try {
+      // This would be an actual API call to the analyzeInquiryPatterns function
+      const response = await fetch(`/api/analyzeInquiryPatterns?merchantId=${user.uid}`, {
+        method: 'GET',
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to analyze inquiry patterns')
+      }
+      
+      toast({
+        title: "Analysis Complete",
+        description: "Customer inquiry patterns have been analyzed successfully.",
+      })
+    } catch (error) {
+      console.error("Error analyzing inquiry patterns:", error)
+      toast({
+        title: "Analysis Failed",
+        description: "Failed to analyze customer inquiry patterns. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setAnalyzingInquiries(false)
+    }
+  }
   
   return (
     <Card className="border-none shadow-none">
@@ -168,7 +217,7 @@ export function EmailSetupForm({ data, onChange }: EmailSetupFormProps) {
             </p>
           </div>
           
-          <div className="p-4 border rounded-lg">
+          <div className="p-4 border rounded-md">
             {data.isConnected ? (
               <div className="flex flex-col space-y-4">
                 <div className="flex items-center justify-between">
@@ -239,111 +288,6 @@ export function EmailSetupForm({ data, onChange }: EmailSetupFormProps) {
             )}
           </div>
         </div>
-        
-        {/* Email Tone Analysis */}
-        {data.isConnected && (
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-lg font-medium">Email Tone Analysis</h3>
-              <p className="text-sm text-muted-foreground">
-                Analyze your sent emails to determine your communication style.
-              </p>
-            </div>
-            
-            <div className="p-4 border rounded-lg">
-              {data.analyzeEmailTone ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Email Analysis Complete</p>
-                      <p className="text-xs text-green-600 flex items-center">
-                        <Check className="h-3 w-3 mr-1" /> Your email tone has been analyzed
-                      </p>
-                    </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={handleAnalyzeEmails}
-                      disabled={analyzingEmails}
-                    >
-                      {analyzingEmails ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                          Analyzing...
-                        </>
-                      ) : "Re-analyze"}
-                    </Button>
-                  </div>
-                  
-                  <div>
-                    <Label className="mb-2 block">Detected Communication Style</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {data.customTone.map(tone => (
-                        <Badge 
-                          key={tone} 
-                          variant="secondary"
-                          className="flex items-center gap-1"
-                        >
-                          {tone}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-4 w-4 p-0 ml-1"
-                            onClick={() => handleRemoveCustomTone(tone)}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2 mt-2">
-                    <Input
-                      placeholder="Add custom tone trait..."
-                      value={newCustomTone}
-                      onChange={(e) => setNewCustomTone(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          handleAddCustomTone();
-                        }
-                      }}
-                    />
-                    <Button 
-                      type="button" 
-                      onClick={handleAddCustomTone}
-                      disabled={!newCustomTone}
-                      size="sm"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center py-6 space-y-4">
-                  <div className="h-16 w-16 bg-amber-100 rounded-full flex items-center justify-center">
-                    <AlertTriangle className="h-8 w-8 text-amber-600" />
-                  </div>
-                  <div className="text-center">
-                    <h4 className="font-medium">No Email Analysis</h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Analyze your sent emails to determine your communication style
-                    </p>
-                  </div>
-                  <Button 
-                    onClick={handleAnalyzeEmails} 
-                    disabled={analyzingEmails}
-                    className="gap-2"
-                  >
-                    {analyzingEmails && <Loader2 className="h-4 w-4 animate-spin" />}
-                    Analyze Sent Emails
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
         
         {/* Response Settings */}
         {data.isConnected && data.automaticResponses && (
@@ -438,7 +382,117 @@ export function EmailSetupForm({ data, onChange }: EmailSetupFormProps) {
             </div>
           </div>
         )}
+
+        {/* Customer Service Agent Setup */}
+        <div className="space-y-4 pt-4 border-t">
+          <div>
+            <h3 className="text-lg font-medium">Customer Service Agent</h3>
+            <p className="text-sm text-muted-foreground">
+              Set up an AI-powered customer service agent to handle common inquiries.
+            </p>
+          </div>
+          
+          <div className="p-4 border rounded-md">
+            <div className="flex flex-col items-center py-6 space-y-4">
+              <div className="h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
+                <Bot className="h-8 w-8 text-blue-600" />
+              </div>
+              <div className="text-center">
+                <h4 className="font-medium">Customer Service Agent</h4>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Set up an AI agent to handle common customer inquiries
+                </p>
+              </div>
+              <Button 
+                onClick={() => setCustomerServiceSheetOpen(true)}
+                className="gap-2"
+              >
+                <Bot className="h-4 w-4" />
+                Set up customer service agent
+              </Button>
+            </div>
+          </div>
+        </div>
       </CardContent>
+
+      {/* Customer Service Agent Sheet */}
+      <Sheet open={customerServiceSheetOpen} onOpenChange={setCustomerServiceSheetOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md md:max-w-lg p-6 overflow-y-auto">
+          <SheetHeader className="mb-6">
+            <SheetTitle className="text-xl">Customer Service Agent Setup</SheetTitle>
+            <SheetDescription>
+              Configure your AI-powered customer service agent to handle common inquiries.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="space-y-6">
+            <div className="bg-blue-50 p-4 rounded-md">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <BarChart className="h-5 w-5 text-blue-600" />
+                </div>
+                <h3 className="font-medium">Inquiry Analysis</h3>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Analyze customer inquiries to identify common patterns and improve automated responses.
+              </p>
+              <Button 
+                onClick={handleAnalyzeInquiries}
+                disabled={analyzingInquiries}
+                className="w-full gap-2"
+              >
+                {analyzingInquiries ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <BarChart className="h-4 w-4" />
+                    Analyze customer inquiries
+                  </>
+                )}
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="font-medium">Agent Configuration</h3>
+              <p className="text-sm text-muted-foreground">
+                Configure how your customer service agent responds to inquiries.
+              </p>
+              
+              <div className="space-y-4 border p-4 rounded-md">
+                <div className="flex items-center space-x-2">
+                  <Switch id="enableAgent" />
+                  <Label htmlFor="enableAgent">Enable customer service agent</Label>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <Switch id="humanReview" />
+                  <Label htmlFor="humanReview">Require human review for complex inquiries</Label>
+                </div>
+                
+                <div>
+                  <Label htmlFor="agentTone" className="mb-2 block">Agent Communication Style</Label>
+                  <Select defaultValue="professional">
+                    <SelectTrigger id="agentTone">
+                      <SelectValue placeholder="Select a tone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="professional">Professional</SelectItem>
+                      <SelectItem value="friendly">Friendly</SelectItem>
+                      <SelectItem value="casual">Casual</SelectItem>
+                      <SelectItem value="formal">Formal</SelectItem>
+                      <SelectItem value="enthusiastic">Enthusiastic</SelectItem>
+                      <SelectItem value="empathetic">Empathetic</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
     </Card>
   );
 } 

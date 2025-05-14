@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase';
-import { doc, getDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, Timestamp, updateDoc } from 'firebase/firestore';
 
 // Interface for Gmail message
 export interface GmailMessage {
@@ -214,6 +214,175 @@ async function refreshTokenIfNeeded(merchantId: string) {
   } catch (error) {
     console.error('Error in refreshTokenIfNeeded:', error);
     throw error;
+  }
+}
+
+// Get the Gmail account email address
+export async function getGmailAccountEmail(merchantId: string): Promise<string | null> {
+  try {
+    console.log('Getting Gmail account email for merchant:', merchantId);
+    
+    // First check if we already have it stored
+    const integrationRef = doc(db, 'merchants', merchantId, 'integrations', 'gmail');
+    const integrationDoc = await getDoc(integrationRef);
+    
+    if (!integrationDoc.exists()) {
+      console.error('Gmail integration not found for merchant:', merchantId);
+      return null;
+    }
+    
+    const integration = integrationDoc.data();
+    console.log('Integration data keys:', Object.keys(integration));
+    
+    if (integration.emailAddress) {
+      console.log('Found stored email address:', integration.emailAddress);
+      return integration.emailAddress;
+    }
+    
+    // If not stored, fetch it from Google API
+    console.log('No stored email address, fetching from Google API...');
+    const accessToken = await refreshTokenIfNeeded(merchantId);
+    
+    if (!accessToken) {
+      console.error('No access token available');
+      return null;
+    }
+    
+    console.log('Using access token to fetch email address');
+    
+    // Try multiple methods to get the email address
+    
+    // Method 1: OpenID Connect UserInfo endpoint
+    try {
+      console.log('Trying OpenID Connect UserInfo endpoint');
+      const userInfoResponse = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      
+      console.log('OpenID Connect response status:', userInfoResponse.status);
+      
+      if (userInfoResponse.ok) {
+        const userInfo = await userInfoResponse.json();
+        console.log('OpenID Connect response:', JSON.stringify(userInfo));
+        
+        if (userInfo.email) {
+          console.log('Email found in OpenID Connect response:', userInfo.email);
+          
+          // Store it for future use
+          await updateDoc(integrationRef, {
+            emailAddress: userInfo.email
+          });
+          
+          console.log('Stored email address in Firestore');
+          return userInfo.email;
+        }
+      }
+    } catch (openIdError) {
+      console.error('Error fetching from OpenID Connect:', openIdError);
+    }
+    
+    // Method 2: Gmail API users.getProfile
+    try {
+      console.log('Trying Gmail API users.getProfile');
+      const profileResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      
+      console.log('Gmail API profile response status:', profileResponse.status);
+      
+      if (profileResponse.ok) {
+        const profileData = await profileResponse.json();
+        console.log('Gmail API profile response:', JSON.stringify(profileData));
+        
+        if (profileData.emailAddress) {
+          console.log('Email found in Gmail API profile:', profileData.emailAddress);
+          
+          // Store it for future use
+          await updateDoc(integrationRef, {
+            emailAddress: profileData.emailAddress
+          });
+          
+          console.log('Stored email address in Firestore');
+          return profileData.emailAddress;
+        }
+      }
+    } catch (gmailApiError) {
+      console.error('Error fetching from Gmail API:', gmailApiError);
+    }
+    
+    // Method 2b: People API fallback (covers delegated/alias inboxes)
+    try {
+      console.log('Trying People API as fallback');
+      const peopleRes = await fetch('https://people.googleapis.com/v1/people/me?personFields=emailAddresses', {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+
+      console.log('People API response status:', peopleRes.status);
+
+      if (peopleRes.ok) {
+        const peopleData = await peopleRes.json();
+        console.log('People API response:', JSON.stringify(peopleData));
+
+        const primaryEmailObj = peopleData.emailAddresses?.find((e: any) => e.metadata?.primary) || peopleData.emailAddresses?.[0];
+        if (primaryEmailObj?.value) {
+          console.log('Email found in People API:', primaryEmailObj.value);
+
+          await updateDoc(integrationRef, { emailAddress: primaryEmailObj.value });
+          console.log('Stored email address in Firestore');
+          return primaryEmailObj.value;
+        }
+      } else {
+        const errText = await peopleRes.text();
+        console.warn('People API call failed, response:', errText);
+      }
+    } catch (peopleErr) {
+      console.error('Error fetching from People API:', peopleErr);
+    }
+    
+    // Method 3: Try the JWT token payload if the access token is a JWT
+    try {
+      console.log('Attempting to extract email from access token if it is a JWT');
+      const parts = accessToken.split('.');
+      if (parts.length === 3) {
+        // It might be a JWT
+        const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        // Add padding if needed
+        const padding = '='.repeat((4 - base64.length % 4) % 4);
+        const paddedBase64 = base64 + padding;
+        
+        try {
+          const jsonStr = typeof atob === 'function' ? atob(paddedBase64) : Buffer.from(paddedBase64, 'base64').toString('utf8');
+          const payload = JSON.parse(jsonStr);
+          console.log('JWT payload:', JSON.stringify(payload));
+          
+          if (payload.email) {
+            console.log('Found email in JWT payload:', payload.email);
+            
+            // Store it for future use
+            await updateDoc(integrationRef, {
+              emailAddress: payload.email
+            });
+            
+            console.log('Stored email from JWT in Firestore');
+            return payload.email;
+          }
+        } catch (decodeError) {
+          console.error('Error decoding JWT payload:', decodeError);
+        }
+      }
+    } catch (jwtError) {
+      console.error('Error extracting email from JWT:', jwtError);
+    }
+    
+    console.warn('Could not retrieve email address from any source');
+    return null;
+  } catch (error) {
+    console.error('Error getting Gmail account email:', error);
+    return null;
   }
 }
 

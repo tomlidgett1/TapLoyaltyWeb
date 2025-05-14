@@ -489,7 +489,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     // Convert path to title case (e.g., "store" -> "Store")
     return path.charAt(0).toUpperCase() + path.slice(1)
   }
-
   const handleVoiceNoteClick = () => {
     if (recording) {
       // Stop recording
@@ -550,7 +549,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     // Call the Firebase function as an HTTP endpoint
                     const region = 'us-central1'; // Make sure this matches the region in your function definition
                     const projectId = 'tap-loyalty-fb6d0';
-                    const url = `https://${region}-${projectId}.cloudfunctions.net/processThought1`;
+                    const url = `https://${region}-${projectId}.cloudfunctions.net/processThought`;
                     
                     const response = await fetch(url, {
                       method: 'POST',
@@ -558,8 +557,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                         'Content-Type': 'application/json',
                       },
                       body: JSON.stringify({
-                        customerId: customerId,
-                        audioBase64: base64Audio
+                        data: {
+                          customerId: customerId,
+                          audioBase64: base64Audio
+                        }
                       })
                     });
                     

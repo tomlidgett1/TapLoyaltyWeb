@@ -7,13 +7,14 @@ interface RequestBody {
   access_token: string;
   refresh_token: string;
   expires_at: number;
+  emailAddress?: string;
 }
 
 export async function POST(request: NextRequest) {
   try {
     // Parse the request body
     const body: RequestBody = await request.json();
-    const { merchantId, access_token, refresh_token, expires_at } = body;
+    const { merchantId, access_token, refresh_token, expires_at, emailAddress } = body;
     
     if (!merchantId || !access_token || !refresh_token || !expires_at) {
       return NextResponse.json(
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
       refresh_token,  // In production, this should be encrypted
       expires_at,
       connectedAt: serverTimestamp(),
+      ...(emailAddress ? { emailAddress } : {}),
     });
     
     // Return success response

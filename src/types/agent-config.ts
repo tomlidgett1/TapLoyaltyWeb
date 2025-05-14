@@ -125,4 +125,14 @@ export interface AgentConfig {
     excludedEmails: string[];
     notifyBeforeSend: boolean;
   };
+  businessKnowledge: {
+    generalInfo: string;
+    manualEntries: Array<{
+      id: string;
+      content: string;
+      timestamp: number;
+      source: 'manual' | 'voice';
+    }>;
+    lastUpdated: number;
+  };
 } 

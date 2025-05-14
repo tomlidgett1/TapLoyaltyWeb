@@ -1062,225 +1062,287 @@ export default function AgentSetup() {
               </p>
             )}
             
-            {/* Agent Type Selection */}
-            <Tabs 
-              defaultValue="reward" 
-              value={agentType} 
-              onValueChange={handleAgentTypeChange}
-              className="w-full mb-2"
-            >
-              {agentType !== "customer-service-setup" && (
-                <TabsList className="h-12 bg-gray-100 border border-gray-200 rounded-md p-1 w-full max-w-md mx-auto mb-3">
-                  <TabsTrigger 
-                    value="reward" 
-                    className="flex-1 h-full px-3 text-sm data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm text-gray-600 transition-all duration-150 ease-in-out rounded-md flex items-center justify-center gap-2"
+            {/* Agent Type Selection - Redesigned */}
+            <div className="w-full mb-6">
+              <div className="border-b border-gray-200 mb-6">
+                <div className="flex space-x-8">
+                  <button
+                    onClick={() => handleAgentTypeChange("reward")}
+                    className={`flex items-center pb-4 px-1 relative ${
+                      agentType === "reward"
+                        ? "text-blue-600 font-medium"
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
                   >
-                    <Award className="h-4 w-4" />
+                    <Award className={`h-5 w-5 mr-2 ${agentType === "reward" ? "text-blue-600" : "text-gray-400"}`} />
                     <span>Reward Agent</span>
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="customer-service" 
-                    className="flex-1 h-full px-3 text-sm data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm text-gray-600 transition-all duration-150 ease-in-out rounded-md flex items-center justify-center gap-2"
+                    {agentType === "reward" && (
+                      <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-full"></span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleAgentTypeChange("customer-service")}
+                    className={`flex items-center pb-4 px-1 relative ${
+                      agentType === "customer-service"
+                        ? "text-blue-600 font-medium"
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
                   >
-                    <Bot className="h-4 w-4" />
+                    <Bot className={`h-5 w-5 mr-2 ${agentType === "customer-service" ? "text-blue-600" : "text-gray-400"}`} />
                     <span>Customer Service Agent</span>
-                  </TabsTrigger>
-                </TabsList>
-              )}
+                    {agentType === "customer-service" && (
+                      <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-full"></span>
+                    )}
+                  </button>
+                </div>
+              </div>
               
-              <TabsContent value="reward">
-                <Tabs 
-                  defaultValue="brand" 
-                  value={rewardActiveTab} 
-                  onValueChange={handleRewardTabChange}
-                  className="w-full"
-                >
-                  <div className="flex flex-col gap-3">
-                    <div className={`w-full bg-white py-2 mb-2 ${isExpanded ? 'sticky top-16 z-10 shadow-sm' : ''}`}>
-                      <div className="flex flex-wrap gap-1.5 justify-start items-center">
-                        <TabsList className="flex flex-wrap h-auto gap-1.5 bg-transparent p-0">
-                          <TabsTrigger 
-                            value="brand" 
-                            className="justify-start h-9 px-3 rounded-md text-sm transition-all border-0 ring-1 ring-gray-200 hover:bg-gray-50 data-[state=active]:ring-blue-200 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:shadow-sm"
-                          >
-                            <Building2 className="mr-1.5 h-4 w-4" />
-                            Business Brand
-                          </TabsTrigger>
-                          <TabsTrigger 
-                            value="tasks" 
-                            className="justify-start h-9 px-3 rounded-md text-sm transition-all border-0 ring-1 ring-gray-200 hover:bg-gray-50 data-[state=active]:ring-blue-200 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:shadow-sm"
-                          >
-                            <CheckCircle className="mr-1.5 h-4 w-4" />
-                            Agent Tasks
-                          </TabsTrigger>
-                          <TabsTrigger 
-                            value="hours" 
-                            className="justify-start h-9 px-3 rounded-md text-sm transition-all border-0 ring-1 ring-gray-200 hover:bg-gray-50 data-[state=active]:ring-blue-200 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:shadow-sm"
-                          >
-                            <Clock className="mr-1.5 h-4 w-4" />
-                            Hours
-                          </TabsTrigger>
-                          <TabsTrigger 
-                            value="objectives" 
-                            className="justify-start h-9 px-3 rounded-md text-sm transition-all border-0 ring-1 ring-gray-200 hover:bg-gray-50 data-[state=active]:ring-blue-200 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:shadow-sm"
-                          >
-                            <Target className="mr-1.5 h-4 w-4" />
-                            Objectives
-                          </TabsTrigger>
-                          <TabsTrigger 
-                            value="pricing" 
-                            className="justify-start h-9 px-3 rounded-md text-sm transition-all border-0 ring-1 ring-gray-200 hover:bg-gray-50 data-[state=active]:ring-blue-200 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:shadow-sm"
-                          >
-                            <TagsIcon className="mr-1.5 h-4 w-4" />
-                            Pricing
-                          </TabsTrigger>
-                          <TabsTrigger 
-                            value="financials" 
-                            className="justify-start h-9 px-3 rounded-md text-sm transition-all border-0 ring-1 ring-gray-200 hover:bg-gray-50 data-[state=active]:ring-blue-200 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:shadow-sm"
-                          >
-                            <LineChart className="mr-1.5 h-4 w-4" />
-                            Financials
-                          </TabsTrigger>
-                          <TabsTrigger 
-                            value="cohorts" 
-                            className="justify-start h-9 px-3 rounded-md text-sm transition-all border-0 ring-1 ring-gray-200 hover:bg-gray-50 data-[state=active]:ring-blue-200 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:shadow-sm"
-                          >
-                            <UsersRound className="mr-1.5 h-4 w-4" />
-                            Cohorts
-                          </TabsTrigger>
-                          <TabsTrigger 
-                            value="rewards" 
-                            className="justify-start h-9 px-3 rounded-md text-sm transition-all border-0 ring-1 ring-gray-200 hover:bg-gray-50 data-[state=active]:ring-blue-200 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:shadow-sm"
-                          >
-                            <Gift className="mr-1.5 h-4 w-4" />
-                            Rewards
-                          </TabsTrigger>
-                          <TabsTrigger 
-                            value="messaging" 
-                            className="justify-start h-9 px-3 rounded-md text-sm transition-all border-0 ring-1 ring-gray-200 hover:bg-gray-50 data-[state=active]:ring-blue-200 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:shadow-sm"
-                          >
-                            <MessageSquare className="mr-1.5 h-4 w-4" />
-                            Messages
-                          </TabsTrigger>
-                        </TabsList>
+              {agentType === "reward" && (
+                <div className="w-full bg-white rounded-md border border-[#E2E4E8] p-5">
+                  {/* Reward Agent Sub-Tabs - Redesigned */}
+                  <div className={`mb-6 ${isExpanded ? 'sticky top-16 z-10' : ''}`}>
+                    <div className="flex items-center mb-4">
+                      <h2 className="text-lg font-medium">Reward Agent Configuration</h2>
+                      <div className="ml-auto">
+                        <Select
+                          value={rewardActiveTab}
+                          onValueChange={handleRewardTabChange}
+                        >
+                          <SelectTrigger className="w-[180px] bg-white border border-gray-200 rounded-md">
+                            <SelectValue placeholder="Select section" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="brand">Business Brand</SelectItem>
+                            <SelectItem value="tasks">Agent Tasks</SelectItem>
+                            <SelectItem value="hours">Business Hours</SelectItem>
+                            <SelectItem value="objectives">Objectives</SelectItem>
+                            <SelectItem value="pricing">Pricing</SelectItem>
+                            <SelectItem value="financials">Financials</SelectItem>
+                            <SelectItem value="cohorts">Cohorts</SelectItem>
+                            <SelectItem value="rewards">Rewards</SelectItem>
+                            <SelectItem value="messaging">Messages</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                     
-                    <div className="w-full bg-white rounded-md border border-[#E2E4E8] p-5">
-                      <ScrollArea className={`${isExpanded ? 'max-h-[calc(100vh-250px)]' : 'max-h-[600px]'} scrollable`}>
-                        <div className={`${isExpanded ? 'px-0' : 'pr-2'}`}>
-                          <TabsContent value="brand" className="pt-0 mt-0">
-                            <BusinessBrandForm 
-                              data={agentConfig.businessBrand} 
-                              onChange={(data) => updateSection("businessBrand", data)} 
-                            />
-                          </TabsContent>
-                          
-                          <TabsContent value="tasks" className="pt-0 mt-0">
-                            <AgentTasksForm 
-                              data={agentConfig.agentTasks} 
-                              onChange={(data) => updateSection("agentTasks", data)} 
-                            />
-                          </TabsContent>
-                          
-                          <TabsContent value="hours" className="pt-0 mt-0">
-                            <BusinessHoursForm 
-                              data={agentConfig.businessHours} 
-                              onChange={(data) => updateSection("businessHours", data)} 
-                            />
-                          </TabsContent>
-                          
-                          <TabsContent value="objectives" className="pt-0 mt-0">
-                            <ObjectivesForm 
-                              data={agentConfig.objectives} 
-                              onChange={(data) => updateSection("objectives", data)} 
-                            />
-                          </TabsContent>
-                          
-                          <TabsContent value="pricing" className="pt-0 mt-0">
-                            <ProductPricingForm 
-                              data={agentConfig.productPricing} 
-                              onChange={(data) => updateSection("productPricing", data)} 
-                            />
-                          </TabsContent>
-                          
-                          <TabsContent value="financials" className="pt-0 mt-0">
-                            <FinancialGuardrailsForm 
-                              data={agentConfig.financialGuardrails} 
-                              onChange={(data) => updateSection("financialGuardrails", data)} 
-                            />
-                          </TabsContent>
-                          
-                          <TabsContent value="cohorts" className="pt-0 mt-0">
-                            <CustomerCohortsForm 
-                              data={agentConfig.customerCohorts} 
-                              onChange={(data) => updateSection("customerCohorts", data)} 
-                            />
-                          </TabsContent>
-                          
-                          <TabsContent value="rewards" className="pt-0 mt-0">
-                            <RewardConstraintsForm 
-                              data={agentConfig.rewardConstraints} 
-                              onChange={(data) => updateSection("rewardConstraints", data)} 
-                            />
-                          </TabsContent>
-                          
-                          <TabsContent value="messaging" className="pt-0 mt-0">
-                            <MessagingConstraintsForm 
-                              data={agentConfig.messagingConstraints} 
-                              onChange={(data) => updateSection("messagingConstraints", data)} 
-                            />
-                          </TabsContent>
-                        </div>
-                      </ScrollArea>
-                      
-                      <div className="flex justify-between mt-6 pt-4 border-t border-[#E2E4E8]">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => {
-                            // Reset section to default
-                            const sectionKey = rewardActiveTab === "brand" ? "businessBrand" :
-                                            rewardActiveTab === "tasks" ? "agentTasks" :
-                                            rewardActiveTab === "hours" ? "businessHours" :
-                                            rewardActiveTab === "objectives" ? "objectives" :
-                                            rewardActiveTab === "pricing" ? "productPricing" :
-                                            rewardActiveTab === "financials" ? "financialGuardrails" :
-                                            rewardActiveTab === "cohorts" ? "customerCohorts" :
-                                            rewardActiveTab === "rewards" ? "rewardConstraints" :
-                                            "messagingConstraints";
-                          
-                            setAgentConfig(prev => ({
-                              ...prev,
-                              [sectionKey]: defaultAgentConfig[sectionKey as keyof AgentConfig]
-                            }));
-                          
-                            toast({
-                              title: "Reset",
-                              description: "This section has been reset to default values.",
-                            })
-                          }}
-                          className="h-9 gap-2 border-0 ring-1 ring-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm rounded-md"
+                    <div className="overflow-x-auto pb-2">
+                      <div className="inline-flex bg-gray-50 p-1 rounded-md border border-gray-200 min-w-full">
+                        <button
+                          onClick={() => handleRewardTabChange("brand")}
+                          className={`flex items-center px-3 py-2 text-sm rounded-md transition-all ${
+                            rewardActiveTab === "brand"
+                              ? "bg-white text-blue-600 shadow-sm font-medium"
+                              : "text-gray-600 hover:bg-gray-100"
+                          }`}
                         >
-                          Reset Section
-                        </Button>
-                        
-                        <Button 
-                          onClick={() => saveAgentConfig()}
-                          disabled={saving}
-                          size="sm"
-                          className="max-w-full border-input"
+                          <Building2 className="h-4 w-4 mr-2" />
+                          Business Brand
+                        </button>
+                        <button
+                          onClick={() => handleRewardTabChange("tasks")}
+                          className={`flex items-center px-3 py-2 text-sm rounded-md transition-all ${
+                            rewardActiveTab === "tasks"
+                              ? "bg-white text-blue-600 shadow-sm font-medium"
+                              : "text-gray-600 hover:bg-gray-100"
+                          }`}
                         >
-                          <Check className="mr-1 h-4 w-4" />
-                          <span>{saving ? "Saving..." : "Save"}</span>
-                        </Button>
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Agent Tasks
+                        </button>
+                        <button
+                          onClick={() => handleRewardTabChange("hours")}
+                          className={`flex items-center px-3 py-2 text-sm rounded-md transition-all ${
+                            rewardActiveTab === "hours"
+                              ? "bg-white text-blue-600 shadow-sm font-medium"
+                              : "text-gray-600 hover:bg-gray-100"
+                          }`}
+                        >
+                          <Clock className="h-4 w-4 mr-2" />
+                          Hours
+                        </button>
+                        <button
+                          onClick={() => handleRewardTabChange("objectives")}
+                          className={`flex items-center px-3 py-2 text-sm rounded-md transition-all ${
+                            rewardActiveTab === "objectives"
+                              ? "bg-white text-blue-600 shadow-sm font-medium"
+                              : "text-gray-600 hover:bg-gray-100"
+                          }`}
+                        >
+                          <Target className="h-4 w-4 mr-2" />
+                          Objectives
+                        </button>
+                        <button
+                          onClick={() => handleRewardTabChange("pricing")}
+                          className={`flex items-center px-3 py-2 text-sm rounded-md transition-all ${
+                            rewardActiveTab === "pricing"
+                              ? "bg-white text-blue-600 shadow-sm font-medium"
+                              : "text-gray-600 hover:bg-gray-100"
+                          }`}
+                        >
+                          <TagsIcon className="h-4 w-4 mr-2" />
+                          Pricing
+                        </button>
+                        <button
+                          onClick={() => handleRewardTabChange("financials")}
+                          className={`flex items-center px-3 py-2 text-sm rounded-md transition-all ${
+                            rewardActiveTab === "financials"
+                              ? "bg-white text-blue-600 shadow-sm font-medium"
+                              : "text-gray-600 hover:bg-gray-100"
+                          }`}
+                        >
+                          <LineChart className="h-4 w-4 mr-2" />
+                          Financials
+                        </button>
+                        <button
+                          onClick={() => handleRewardTabChange("cohorts")}
+                          className={`flex items-center px-3 py-2 text-sm rounded-md transition-all ${
+                            rewardActiveTab === "cohorts"
+                              ? "bg-white text-blue-600 shadow-sm font-medium"
+                              : "text-gray-600 hover:bg-gray-100"
+                          }`}
+                        >
+                          <UsersRound className="h-4 w-4 mr-2" />
+                          Cohorts
+                        </button>
+                        <button
+                          onClick={() => handleRewardTabChange("rewards")}
+                          className={`flex items-center px-3 py-2 text-sm rounded-md transition-all ${
+                            rewardActiveTab === "rewards"
+                              ? "bg-white text-blue-600 shadow-sm font-medium"
+                              : "text-gray-600 hover:bg-gray-100"
+                          }`}
+                        >
+                          <Gift className="h-4 w-4 mr-2" />
+                          Rewards
+                        </button>
+                        <button
+                          onClick={() => handleRewardTabChange("messaging")}
+                          className={`flex items-center px-3 py-2 text-sm rounded-md transition-all ${
+                            rewardActiveTab === "messaging"
+                              ? "bg-white text-blue-600 shadow-sm font-medium"
+                              : "text-gray-600 hover:bg-gray-100"
+                          }`}
+                        >
+                          <MessageSquare className="h-4 w-4 mr-2" />
+                          Messages
+                        </button>
                       </div>
                     </div>
                   </div>
-                </Tabs>
-              </TabsContent>
+                  
+                  <ScrollArea className={`${isExpanded ? 'max-h-[calc(100vh-350px)]' : 'max-h-[600px]'} scrollable`}>
+                    <div className={`${isExpanded ? 'px-0' : 'pr-2'}`}>
+                      {rewardActiveTab === "brand" && (
+                        <BusinessBrandForm 
+                          data={agentConfig.businessBrand} 
+                          onChange={(data) => updateSection("businessBrand", data)} 
+                        />
+                      )}
+                      
+                      {rewardActiveTab === "tasks" && (
+                        <AgentTasksForm 
+                          data={agentConfig.agentTasks} 
+                          onChange={(data) => updateSection("agentTasks", data)} 
+                        />
+                      )}
+                      
+                      {rewardActiveTab === "hours" && (
+                        <BusinessHoursForm 
+                          data={agentConfig.businessHours} 
+                          onChange={(data) => updateSection("businessHours", data)} 
+                        />
+                      )}
+                      
+                      {rewardActiveTab === "objectives" && (
+                        <ObjectivesForm 
+                          data={agentConfig.objectives} 
+                          onChange={(data) => updateSection("objectives", data)} 
+                        />
+                      )}
+                      
+                      {rewardActiveTab === "pricing" && (
+                        <ProductPricingForm 
+                          data={agentConfig.productPricing} 
+                          onChange={(data) => updateSection("productPricing", data)} 
+                        />
+                      )}
+                      
+                      {rewardActiveTab === "financials" && (
+                        <FinancialGuardrailsForm 
+                          data={agentConfig.financialGuardrails} 
+                          onChange={(data) => updateSection("financialGuardrails", data)} 
+                        />
+                      )}
+                      
+                      {rewardActiveTab === "cohorts" && (
+                        <CustomerCohortsForm 
+                          data={agentConfig.customerCohorts} 
+                          onChange={(data) => updateSection("customerCohorts", data)} 
+                        />
+                      )}
+                      
+                      {rewardActiveTab === "rewards" && (
+                        <RewardConstraintsForm 
+                          data={agentConfig.rewardConstraints} 
+                          onChange={(data) => updateSection("rewardConstraints", data)} 
+                        />
+                      )}
+                      
+                      {rewardActiveTab === "messaging" && (
+                        <MessagingConstraintsForm 
+                          data={agentConfig.messagingConstraints} 
+                          onChange={(data) => updateSection("messagingConstraints", data)} 
+                        />
+                      )}
+                    </div>
+                  </ScrollArea>
+                  
+                  <div className="flex justify-between mt-6 pt-4 border-t border-[#E2E4E8]">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        // Reset section to default
+                        const sectionKey = rewardActiveTab === "brand" ? "businessBrand" :
+                                        rewardActiveTab === "tasks" ? "agentTasks" :
+                                        rewardActiveTab === "hours" ? "businessHours" :
+                                        rewardActiveTab === "objectives" ? "objectives" :
+                                        rewardActiveTab === "pricing" ? "productPricing" :
+                                        rewardActiveTab === "financials" ? "financialGuardrails" :
+                                        rewardActiveTab === "cohorts" ? "customerCohorts" :
+                                        rewardActiveTab === "rewards" ? "rewardConstraints" :
+                                        "messagingConstraints";
+                      
+                        setAgentConfig(prev => ({
+                          ...prev,
+                          [sectionKey]: defaultAgentConfig[sectionKey as keyof AgentConfig]
+                        }));
+                      
+                        toast({
+                          title: "Reset",
+                          description: "This section has been reset to default values.",
+                        })
+                      }}
+                      className="h-9 gap-2 border-0 ring-1 ring-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm rounded-md"
+                    >
+                      Reset Section
+                    </Button>
+                    
+                    <Button 
+                      onClick={() => saveAgentConfig()}
+                      disabled={saving}
+                      size="sm"
+                      className="max-w-full border-input rounded-md"
+                    >
+                      <Check className="mr-1 h-4 w-4" />
+                      <span>{saving ? "Saving..." : "Save"}</span>
+                    </Button>
+                  </div>
+                </div>
+              )}
               
-              <TabsContent value="customer-service">
+              {agentType === "customer-service" && (
                 <div className="flex flex-col gap-3">
                   <div className="w-full bg-white rounded-md border border-[#E2E4E8] p-8">
                     {agentConfig.businessKnowledge.manualEntries.length > 0 || 
@@ -1452,12 +1514,12 @@ export default function AgentSetup() {
                     )}
                   </div>
                 </div>
-              </TabsContent>
-            </Tabs>
-          </TabsContent>
-          
-          <TabsContent value="customers">
-            <CustomersList />
+              )}
+            </TabsContent>
+            
+            <TabsContent value="customers">
+              <CustomersList />
+            </TabsContent>
           </TabsContent>
         </Tabs>
       </div>

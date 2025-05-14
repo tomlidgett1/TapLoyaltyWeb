@@ -8,15 +8,21 @@ const REDIRECT_URI = "https://app.taployalty.com.au/api/auth/gmail/callback";
 // Use environment variables with fallbacks for credentials
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.GMAIL_CLIENT_ID;
 
-// This is the scope required for Gmail API access
-// Include the send scope so the app can compose / reply as well
-// modify already implies the ability to change message state (e.g. mark as read),
-// but it does NOT let us actually send mail – that requires gmail.send.
-// Having both modify and send is fine as they are non-overlapping.
+// Ensure we always request enough scopes to reliably obtain the user's primary
+// email address as well as basic profile information.  The additional profile
+// scopes do NOT grant any extra write permissions – they simply make it easier
+// to retrieve the user record via the OpenID `userinfo` endpoint or the People
+// API, which some Google accounts require before they will return the
+// `email` claim.
 const GMAIL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/userinfo.profile',
+  'openid',
+  'email',
+  'profile',
 ];
 
 // If the caller appends ?debug=1 the route will return a JSON payload with
@@ -72,7 +78,20 @@ export async function GET(request: NextRequest) {
     authUrl.searchParams.append('client_id', GOOGLE_CLIENT_ID);
     authUrl.searchParams.append('redirect_uri', REDIRECT_URI);
     authUrl.searchParams.append('response_type', 'code');
-    authUrl.searchParams.append('scope', GMAIL_SCOPES.join(' '));
+    
+    // Ensure we always have the required scopes for email access
+    if (!GMAIL_SCOPES.includes('openid')) {
+      console.warn('Adding missing "openid" scope');
+      GMAIL_SCOPES.push('openid');
+    }
+    if (!GMAIL_SCOPES.includes('email')) {
+      console.warn('Adding missing "email" scope');
+      GMAIL_SCOPES.push('email');
+    }
+    
+    const scope = GMAIL_SCOPES.join(' ');
+    authUrl.searchParams.append('scope', scope);
+    console.log('Using OAuth scopes:', scope);
     authUrl.searchParams.append('access_type', 'offline');
     authUrl.searchParams.append('prompt', 'consent');
     authUrl.searchParams.append('include_granted_scopes', 'true');

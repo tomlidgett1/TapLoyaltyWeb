@@ -29,6 +29,14 @@ import {
   MessageSquare,
   User,
   Bell,
+  Loader2,
+  LogOut,
+  Bug,
+  Code,
+  Wrench,
+  CheckCircle,
+  XCircle,
+  Info,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -66,6 +74,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useRouter } from 'next/navigation'
 
 // Custom style for medium rounded cards
 const mediumRoundedCard = "rounded-md overflow-hidden";
@@ -88,6 +97,7 @@ export default function EmailsPage() {
   const [loadingSent, setLoadingSent] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
+  const [connectedEmail, setConnectedEmail] = useState<string | null>(null)
   const [selectedEmail, setSelectedEmail] = useState<GmailMessage | null>(null)
   const [emailContent, setEmailContent] = useState<GmailFullMessage | null>(null)
   const [emailSheetOpen, setEmailSheetOpen] = useState(false)
@@ -107,6 +117,14 @@ export default function EmailsPage() {
   const [generatedResponse, setGeneratedResponse] = useState<string>('')
   const [generatingResponse, setGeneratingResponse] = useState(false)
   const [customToneDescription, setCustomToneDescription] = useState<string>('')
+  const router = useRouter()
+  const [showDebugger, setShowDebugger] = useState(false)
+  const [debugData, setDebugData] = useState<any>(null)
+  const [debugLoading, setDebugLoading] = useState(false)
+  const [fixEmailLoading, setFixEmailLoading] = useState(false)
+  const [fixEmailResult, setFixEmailResult] = useState<any>(null)
+  const [testEmailLoading, setTestEmailLoading] = useState(false)
+  const [testEmailResult, setTestEmailResult] = useState<any>(null)
 
   // Filter emails based on search query
   const filteredEmails = emails.filter(email => {
@@ -502,10 +520,36 @@ export default function EmailsPage() {
         console.log('Gmail is connected');
         setIsConnected(true);
         setConnectionError(null);
+        
+        // Get the connected email address
+        const emailAddress = integrationDoc.data().emailAddress;
+        if (emailAddress) {
+          console.log('Found email address in Firestore:', emailAddress);
+          setConnectedEmail(emailAddress);
+        } else {
+          console.log('No email address found in Firestore, fetching from API...');
+          // Fetch email address if not stored
+          try {
+            const response = await fetch(`/api/auth/gmail/email?merchantId=${user.uid}`);
+            if (response.ok) {
+              const data = await response.json();
+              if (data.emailAddress) {
+                setConnectedEmail(data.emailAddress);
+                console.log('Email address fetched from API:', data.emailAddress);
+              }
+            } else {
+              console.warn('Failed to fetch email address from API');
+            }
+          } catch (error) {
+            console.error('Error fetching email address:', error);
+          }
+        }
+        
         return true;
       } else {
         console.log('Gmail is not connected');
         setIsConnected(false);
+        setConnectedEmail(null);
         
         if (integrationDoc.exists()) {
           setConnectionError('Gmail integration exists but is not properly connected');
@@ -515,6 +559,7 @@ export default function EmailsPage() {
     } catch (error) {
       console.error('Error checking Gmail connection:', error);
       setIsConnected(false);
+      setConnectedEmail(null);
       setConnectionError(`Error checking Gmail connection: ${error instanceof Error ? error.message : String(error)}`);
       return false;
     }
@@ -838,17 +883,391 @@ export default function EmailsPage() {
     return { __html: html };
   };
 
+  // Function to fetch debug data
+  const fetchDebugData = async () => {
+    if (!user?.uid) return;
+    
+    setDebugLoading(true);
+    setDebugData(null);
+    
+    try {
+      const response = await fetch(`/api/auth/gmail/debug?merchantId=${user.uid}`);
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch debug data');
+      }
+      
+      setDebugData(data);
+    } catch (error) {
+      console.error('Error fetching debug data:', error);
+      toast({
+        title: "Debug Error",
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive"
+      });
+    } finally {
+      setDebugLoading(false);
+    }
+  };
+  
+  // Function to fix missing email
+  const fixMissingEmail = async () => {
+    if (!user?.uid) return;
+    
+    setFixEmailLoading(true);
+    setFixEmailResult(null);
+    
+    try {
+      const response = await fetch(`/api/auth/gmail/fix-email?merchantId=${user.uid}`);
+      const data = await response.json();
+      
+      setFixEmailResult(data);
+      
+      if (response.ok && data.success) {
+        toast({
+          title: "Success",
+          description: "Email address has been fixed and saved.",
+          variant: "default"
+        });
+        
+        // Update the UI with the new email
+        if (data.emailAddress) {
+          setConnectedEmail(data.emailAddress);
+        }
+        
+        // Refresh debug data
+        fetchDebugData();
+      } else {
+        throw new Error(data.error || data.message || 'Failed to fix email address');
+      }
+    } catch (error) {
+      console.error('Error fixing email:', error);
+      toast({
+        title: "Fix Error",
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive"
+      });
+    } finally {
+      setFixEmailLoading(false);
+    }
+  };
+  
+  // Function to test email fetching methods
+  const testEmailFetching = async () => {
+    if (!user?.uid) return;
+    
+    setTestEmailLoading(true);
+    setTestEmailResult(null);
+    
+    try {
+      const response = await fetch(`/api/auth/gmail/test-email?merchantId=${user.uid}`);
+      const data = await response.json();
+      
+      setTestEmailResult(data);
+      
+      if (response.ok && data.success && data.results.bestEmail) {
+        toast({
+          title: "Email Found",
+          description: `Found email: ${data.results.bestEmail}`,
+          variant: "default"
+        });
+      } else {
+        toast({
+          title: "Email Test Results",
+          description: "See the debugger for detailed results.",
+          variant: "default"
+        });
+      }
+    } catch (error) {
+      console.error('Error testing email fetching:', error);
+      toast({
+        title: "Test Error",
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive"
+      });
+    } finally {
+      setTestEmailLoading(false);
+    }
+  };
+  
+  // Initialize debugger when opened
+  useEffect(() => {
+    if (showDebugger && user?.uid && !debugData) {
+      fetchDebugData();
+    }
+  }, [showDebugger, user?.uid, debugData]);
+  
+  // Add this after the connection error card
+  const renderDebugger = () => {
+    return (
+      <Dialog open={showDebugger} onOpenChange={setShowDebugger}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bug className="h-5 w-5" />
+              Gmail Integration Debugger
+            </DialogTitle>
+            <DialogDescription>
+              Diagnose and fix issues with your Gmail integration
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Actions */}
+            <div className="flex flex-wrap gap-3">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={fetchDebugData}
+                disabled={debugLoading}
+                className="flex items-center gap-2"
+              >
+                {debugLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Refresh Debug Data
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={fixMissingEmail}
+                disabled={fixEmailLoading}
+                className="flex items-center gap-2"
+              >
+                {fixEmailLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+                Fix Missing Email
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={testEmailFetching}
+                disabled={testEmailLoading}
+                className="flex items-center gap-2"
+              >
+                {testEmailLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Code className="h-4 w-4" />}
+                Test Email Fetching
+              </Button>
+            </div>
+            
+            {/* Integration Status */}
+            {debugData && (
+              <div className="space-y-4">
+                <div className="border rounded-md p-4">
+                  <h3 className="text-lg font-medium mb-2 flex items-center gap-2">
+                    <Info className="h-5 w-5 text-blue-500" />
+                    Integration Status
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium">Connected:</span>
+                          <span className="flex items-center">
+                            {debugData.results?.integration?.connected ? 
+                              <CheckCircle className="h-4 w-4 text-green-500 mr-1" /> : 
+                              <XCircle className="h-4 w-4 text-red-500 mr-1" />
+                            }
+                            {debugData.results?.integration?.connected ? 'Yes' : 'No'}
+                          </span>
+                        </div>
+                        
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium">Email Address:</span>
+                          <span className="flex items-center">
+                            {debugData.results?.integration?.hasEmailAddress ? 
+                              <CheckCircle className="h-4 w-4 text-green-500 mr-1" /> : 
+                              <XCircle className="h-4 w-4 text-red-500 mr-1" />
+                            }
+                            {debugData.results?.integration?.emailAddress || 'Missing'}
+                          </span>
+                        </div>
+                        
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium">Access Token:</span>
+                          <span className="flex items-center">
+                            {debugData.results?.integration?.hasAccessToken ? 
+                              <CheckCircle className="h-4 w-4 text-green-500 mr-1" /> : 
+                              <XCircle className="h-4 w-4 text-red-500 mr-1" />
+                            }
+                            {debugData.results?.integration?.hasAccessToken ? 'Present' : 'Missing'}
+                          </span>
+                        </div>
+                        
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium">Refresh Token:</span>
+                          <span className="flex items-center">
+                            {debugData.results?.integration?.hasRefreshToken ? 
+                              <CheckCircle className="h-4 w-4 text-green-500 mr-1" /> : 
+                              <XCircle className="h-4 w-4 text-red-500 mr-1" />
+                            }
+                            {debugData.results?.integration?.hasRefreshToken ? 'Present' : 'Missing'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium">Token Expires In:</span>
+                          <span>
+                            {debugData.results?.integration?.expiresIn > 0 ? 
+                              `${Math.floor(debugData.results.integration.expiresIn / 60)} minutes` : 
+                              'Expired'
+                            }
+                          </span>
+                        </div>
+                        
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium">Connected At:</span>
+                          <span>{debugData.results?.integration?.connectedAt || 'Unknown'}</span>
+                        </div>
+                        
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium">Last Updated:</span>
+                          <span>{debugData.results?.integration?.lastUpdated || 'Unknown'}</span>
+                        </div>
+                        
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium">Emails Count:</span>
+                          <span>{debugData.results?.emails?.count || 0}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Email Tests Results */}
+                {testEmailResult && (
+                  <div className="border rounded-md p-4">
+                    <h3 className="text-lg font-medium mb-2 flex items-center gap-2">
+                      <Code className="h-5 w-5 text-purple-500" />
+                      Email Test Results
+                    </h3>
+                    
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">Stored Email:</span>
+                        <span>
+                          {testEmailResult.results.storedEmail || 'None'}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">Best Email:</span>
+                        <span className="font-medium text-green-600">
+                          {testEmailResult.results.bestEmail || 'None found'}
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {Object.entries(testEmailResult.results.methods || {}).map(([method, result]) => (
+                          <div key={method} className="border rounded-md p-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-medium">{method}:</span>
+                              <span className="flex items-center">
+                                {(result as any).success ? 
+                                  <CheckCircle className="h-4 w-4 text-green-500 mr-1" /> : 
+                                  <XCircle className="h-4 w-4 text-red-500 mr-1" />
+                                }
+                                {(result as any).success ? 'Success' : 'Failed'}
+                              </span>
+                            </div>
+                            {(result as any).success && (
+                              <div className="text-sm">Email: {(result as any).email}</div>
+                            )}
+                            {!(result as any).success && (result as any).error && (
+                              <div className="text-sm text-red-600">{(result as any).error}</div>
+                            )}
+                            {!(result as any).success && (result as any).reason && (
+                              <div className="text-sm text-red-600">{(result as any).reason}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Fix Email Results */}
+                {fixEmailResult && (
+                  <div className={`border rounded-md p-4 ${fixEmailResult.success ? 'bg-green-50' : 'bg-red-50'}`}>
+                    <h3 className="text-lg font-medium mb-2 flex items-center gap-2">
+                      <Wrench className="h-5 w-5 text-blue-500" />
+                      Fix Email Results
+                    </h3>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">Status:</span>
+                        <span className="flex items-center">
+                          {fixEmailResult.success ? 
+                            <CheckCircle className="h-4 w-4 text-green-500 mr-1" /> : 
+                            <XCircle className="h-4 w-4 text-red-500 mr-1" />
+                          }
+                          {fixEmailResult.success ? 'Success' : 'Failed'}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">Message:</span>
+                        <span>{fixEmailResult.message || fixEmailResult.error}</span>
+                      </div>
+                      
+                      {fixEmailResult.emailAddress && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">Email:</span>
+                          <span className="font-medium">{fixEmailResult.emailAddress}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Raw Debug Data */}
+                <div className="border rounded-md p-4">
+                  <h3 className="text-lg font-medium mb-2 flex items-center gap-2">
+                    <Code className="h-5 w-5 text-gray-500" />
+                    Raw Debug Data
+                  </h3>
+                  
+                  <pre className="bg-gray-100 p-3 rounded-md overflow-auto max-h-96 text-xs">
+                    {JSON.stringify(debugData, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            )}
+            
+            {/* Loading State */}
+            {debugLoading && !debugData && (
+              <div className="flex flex-col items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
+                <p>Loading debug data...</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
   return (
     <div className="container mx-auto px-4 py-6">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold">Email Inbox</h1>
           <p className="text-muted-foreground">
-            Manage your customer emails and inquiries
+            {isConnected 
+              ? connectedEmail 
+                ? `Connected to ${connectedEmail}`
+                : "Connected to Gmail" 
+              : "Connect your Gmail account to manage customer emails"}
           </p>
         </div>
-        
-        {isConnected && (
+       
+        {isConnected ? (
           <div className="flex items-center gap-4 mt-4 md:mt-0">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -859,9 +1278,9 @@ export default function EmailsPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               className="gap-2"
               onClick={handleRefresh}
               disabled={refreshing}
@@ -875,43 +1294,27 @@ export default function EmailsPage() {
               className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50"
               onClick={() => {
                 if (!user?.uid) return;
-                // Call the watchGmail Cloud Function
-                const projectId = 'tap-loyalty-fb6d0';
-                const region = 'us-central1';
-                const url = `https://${region}-${projectId}.cloudfunctions.net/watchGmail?merchantId=${user.uid}`;
-                
-                toast({
-                  title: "Setting up email notifications...",
-                  description: "Please wait while we set up Gmail notifications.",
-                });
-                
-                fetch(url)
-                  .then(response => {
-                    if (!response.ok) {
-                      throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                  })
-                  .then(data => {
-                    toast({
-                      title: "Success",
-                      description: "Email notifications have been set up successfully.",
-                      variant: "default",
-                    });
-                    console.log('watchGmail response:', data);
-                  })
-                  .catch(error => {
-                    console.error('Error setting up email notifications:', error);
-                    toast({
-                      title: "Error",
-                      description: `Failed to set up email notifications: ${error.message}`,
-                      variant: "destructive",
-                    });
-                  });
+                router.push('/store/emails/notifications');
               }}
             >
               <Bell className="h-4 w-4" />
               Setup Email Notifications
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 text-purple-600 border-purple-200 hover:bg-purple-50"
+              onClick={() => setShowDebugger(true)}
+            >
+              <Bug className="h-4 w-4" />
+              Debug
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-4 md:mt-0">
+            <Button onClick={connectGmail} className="gap-2">
+              <Mail className="h-4 w-4" />
+              Connect Gmail
             </Button>
           </div>
         )}
@@ -925,19 +1328,30 @@ export default function EmailsPage() {
               <div>
                 <h3 className="font-medium text-red-800">Connection Error</h3>
                 <p className="text-red-700 text-sm mt-1">{connectionError}</p>
-                <Button 
-                  variant="destructive" 
-                  size="sm" 
-                  className="mt-3"
-                  onClick={connectGmail}
-                >
-                  Reconnect Gmail
-                </Button>
+                <div className="flex gap-3 mt-3">
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={connectGmail}
+                  >
+                    Reconnect Gmail
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowDebugger(true)}
+                  >
+                    Debug Connection
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>
         </Card>
       )}
+      
+      {/* Render the debugger dialog */}
+      {renderDebugger()}
 
       {!isConnected ? (
         <Card className="rounded-md">

@@ -3,12 +3,60 @@ import { NextRequest, NextResponse } from 'next/server';
 // Use environment variables with fallbacks for credentials
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.GMAIL_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || process.env.GMAIL_CLIENT_SECRET;
-const REDIRECT_URI = process.env.NEXT_PUBLIC_BASE_URL 
-  ? `${process.env.NEXT_PUBLIC_BASE_URL}/api/auth/gmail/callback` 
-  : 'http://localhost:3000/api/auth/gmail/callback';
+const REDIRECT_URI = "https://app.taployalty.com.au/api/auth/gmail/callback";
 
 export async function GET(request: NextRequest) {
   try {
+    // Check for access token in query params
+    const { searchParams } = new URL(request.url);
+    const accessToken = searchParams.get('access_token');
+    
+    if (accessToken) {
+      console.log('Testing userinfo endpoint with provided access token');
+      
+      // Try both userinfo endpoints
+      const endpoints = [
+        'https://www.googleapis.com/userinfo/v2/me',
+        'https://www.googleapis.com/oauth2/v2/userinfo'
+      ];
+      
+      const results: Record<string, any> = {};
+      
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Fetching from ${endpoint}`);
+          const response = await fetch(endpoint, {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            results[endpoint] = {
+              status: response.status,
+              data
+            };
+          } else {
+            results[endpoint] = {
+              status: response.status,
+              error: await response.text()
+            };
+          }
+        } catch (error: unknown) {
+          results[endpoint] = {
+            error: `Error fetching: ${error instanceof Error ? error.message : String(error)}`
+          };
+        }
+      }
+      
+      return NextResponse.json({
+        status: 'ok',
+        message: 'Google API userinfo test',
+        results
+      });
+    }
+    
     // Check for environment variables
     const envVars = {
       GOOGLE_CLIENT_ID: !!GOOGLE_CLIENT_ID,

@@ -205,10 +205,9 @@ export default function CustomersPage() {
         <div>
           <PageHeader 
             title="Customers" 
-            subtitle="Manage and track your customer base"
           >
             <Button 
-              className="h-9 gap-2 rounded-md"
+              className="h-8 gap-2 rounded-md"
               onClick={() => router.push('/customers/invite')}
             >
               <Users className="h-4 w-4" />

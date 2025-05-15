@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select"
-import { X, PlusCircle, Trash2, Coffee, Utensils, Pizza, CupSoda, IceCream, Croissant, ChevronDown, Beer, Wine, Beef, ShoppingBag, Edit, Package as PackageIcon } from "lucide-react"
+import { X, PlusCircle, Trash2, Coffee, Utensils, Pizza, CupSoda, IceCream, Croissant, ChevronDown, Beer, Wine, Beef, ShoppingBag, Edit, Package as PackageIcon, Award, Loader2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
 import {
@@ -29,7 +29,6 @@ import {
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
-import { Loader2 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 
 interface Product {
@@ -699,27 +698,45 @@ export function ProductPricingForm({ data, onChange }: ProductPricingFormProps) 
   }
 
   return (
-    <Card className="border-none shadow-none">
-      <CardHeader className="p-0">
-        <CardTitle className="text-xl bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Product Pricing</CardTitle>
-        <CardDescription>
-          Configure your product catalog and pricing information.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-8 p-0 mt-6">
-        {/* Industry Selector */}
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-lg font-medium">Business Type</h3>
-            <p className="text-sm text-muted-foreground">
-              Select your industry to see relevant product templates.
+    <div className="space-y-8">
+      {/* Average Basket Size */}
+      <div className="border rounded-md p-5 space-y-4">
+        <h3 className="font-medium flex items-center">
+          <ShoppingBag className="h-4 w-4 text-blue-600 mr-2" />
+          Average Basket Size
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="averageBasketSize">Average transaction value ($)</Label>
+            <Input
+              id="averageBasketSize"
+              type="number"
+              min="0"
+              step="0.01"
+              value={data.averageBasketSize}
+              onChange={(e) => handleBasketSizeChange(e.target.value)}
+              className="rounded-md"
+            />
+            <p className="text-xs text-muted-foreground">
+              The average amount spent per transaction by your customers
             </p>
           </div>
+        </div>
+      </div>
+      
+      {/* Products Section */}
+      <div className="border rounded-md p-5 space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="font-medium flex items-center">
+            <PackageIcon className="h-4 w-4 text-blue-600 mr-2" />
+            Products
+          </h3>
           
-          <div className="max-w-xs">
+          <div className="flex items-center gap-2">
             <Select value={industry} onValueChange={handleIndustryChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select your industry" />
+              <SelectTrigger className="w-[180px] rounded-md">
+                <SelectValue placeholder="Select industry" />
               </SelectTrigger>
               <SelectContent>
                 {industries.map((ind) => (
@@ -729,611 +746,660 @@ export function ProductPricingForm({ data, onChange }: ProductPricingFormProps) 
                 ))}
               </SelectContent>
             </Select>
+            
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1 rounded-md">
+                  <PlusCircle className="h-4 w-4" />
+                  Quick Add
+                  <ChevronDown className="h-3 w-3 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-0" align="end">
+                <div className="p-3 border-b">
+                  <h4 className="font-medium text-sm">Add Template Products</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Quickly add common products based on your industry
+                  </p>
+                </div>
+                <div className="max-h-[300px] overflow-y-auto p-0">
+                  {getTemplatesByType(currentTemplateType).map((template, i) => (
+                    <div
+                      key={`${template.name}-${i}`}
+                      className="flex items-center justify-between p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                      onClick={() => addTemplateToRegularProducts(template)}
+                    >
+                      <div className="flex items-center gap-2">
+                        {template.icon}
+                        <span className="text-sm">{template.name}</span>
+                      </div>
+                      <div className="text-sm font-medium">${template.price.toFixed(2)}</div>
+                    </div>
+                  ))}
+                  {getTemplatesByType(currentTemplateType).length === 0 && (
+                    <div className="p-3 text-center text-sm text-muted-foreground">
+                      No templates available for this industry
+                    </div>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
-      
-        {/* Average Basket Size */}
-        <div className="space-y-4 border-t pt-6">
+        
+        <p className="text-sm text-muted-foreground">
+          Add your products or services with their pricing details
+        </p>
+        
+        {/* Add Product Form */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <h3 className="text-lg font-medium">Average Basket Size</h3>
-            <p className="text-sm text-muted-foreground">
-              Set the average amount customers spend per transaction.
-            </p>
+            <Label htmlFor="product-name">Name</Label>
+            <Input
+              id="product-name"
+              value={newProduct.name}
+              onChange={(e) => handleProductChange("name", e.target.value)}
+              placeholder="e.g. Coffee"
+              className="rounded-md"
+            />
           </div>
           
-          <div className="flex items-center gap-2 max-w-xs">
-            <span className="text-lg">$</span>
+          <div>
+            <Label htmlFor="product-category">Category</Label>
+            <Select
+              value={newProduct.category}
+              onValueChange={(value) => handleProductChange("category", value)}
+            >
+              <SelectTrigger id="product-category" className="rounded-md">
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                {productCategories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div>
+            <Label htmlFor="product-price">Price ($)</Label>
             <Input
+              id="product-price"
               type="number"
               min="0"
               step="0.01"
-              value={data.averageBasketSize}
-              onChange={(e) => handleBasketSizeChange(e.target.value)}
-              placeholder="0.00"
+              value={newProduct.price || ""}
+              onChange={(e) => handleProductChange("price", e.target.value)}
+              className="rounded-md"
             />
           </div>
-        </div>
-        
-        {/* Product Catalog from POS Inventory */}
-        <div className="space-y-4 border-t pt-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-medium flex items-center">
-                <PackageIcon className="h-5 w-5 mr-2 text-primary" />
-                Product Catalog
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Your imported products from the inventory system
-              </p>
-            </div>
-          </div>
           
-          {loadingPosInventory ? (
-            <div className="flex justify-center py-6">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : posInventoryItems.length === 0 ? (
-            <div className="text-center py-6 border rounded-md">
-              <ShoppingBag className="h-12 w-12 mx-auto text-muted-foreground opacity-40 mb-2" />
-              <h3 className="font-medium text-base">No products added yet</h3>
-              <p className="text-sm text-muted-foreground">
-                Import products from your inventory page to manage them here
-              </p>
-            </div>
-          ) : (
-            <div className="border rounded-md">
-              <div className="mb-2 px-4 py-2 bg-muted/20 text-xs text-muted-foreground">
-                {posInventoryItems.length} product{posInventoryItems.length !== 1 ? 's' : ''} in catalog
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Product Name</TableHead>
-                    <TableHead>Cost Price ($)</TableHead>
-                    <TableHead>Retail Price ($)</TableHead>
-                    <TableHead className="w-[80px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {posInventoryItems.map((item) => (
-                    <TableRow key={item.id || 'unknown'}>
-                      <TableCell className="font-medium">
-                        {item.name || 'Unnamed Product'}
-                        {item.type && (
-                          <Badge variant="outline" className="ml-2 text-xs">
-                            {item.type === 'ITEM' ? 'Product' : 'Variation'}
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {typeof item.costOfGoods === 'number' ? 
-                          item.costOfGoods.toFixed(2) : 
-                          (item.costOfGoods ? String(item.costOfGoods) : 'Not set')}
-                      </TableCell>
-                      <TableCell>
-                        {editingItem === item.id ? (
-                          <div className="flex items-center space-x-2">
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              className="w-20 h-7 text-sm"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  handleSaveRetailPrice(item.id)
-                                } else if (e.key === 'Escape') {
-                                  setEditingItem(null)
-                                }
-                              }}
-                              autoFocus
-                            />
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 px-2"
-                              onClick={() => handleSaveRetailPrice(item.id)}
-                            >
-                              Save
-                            </Button>
-                          </div>
-                        ) : (
-                          <div 
-                            className="flex items-center group cursor-pointer"
-                            onClick={() => {
-                              setEditingItem(item.id)
-                              setEditValue(
-                                typeof item.retailPrice === 'number' 
-                                  ? item.retailPrice.toString() 
-                                  : item.retailPrice || "0"
-                              )
-                            }}
-                          >
-                            <span>
-                              {typeof item.retailPrice === 'number' 
-                                ? item.retailPrice.toFixed(2)
-                                : (item.retailPrice ? String(item.retailPrice) : "Not set")}
-                            </span>
-                            <Edit className="h-3.5 w-3.5 ml-1 opacity-0 group-hover:opacity-100 text-muted-foreground" />
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                          onClick={() => handleRemovePosItem(item.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              <div className="p-3 border-t bg-blue-50/50 text-sm">
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 mr-2 mt-0.5 text-blue-500">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <line x1="12" y1="16" x2="12" y2="12"></line>
-                      <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                    </svg>
-                  </div>
-                  <div className="text-blue-800 text-xs">
-                    <span className="font-medium">Recommendation:</span> Ensure all products have both cost and retail prices. 
-                    This helps Tap Agent create more effective reward campaigns by accurately calculating margins 
-                    and selecting the most profitable products to include in rewards.
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {posInventoryItems.length === 0 && (
-            <div className="flex items-start p-3 bg-blue-50/50 rounded-md mt-2 text-sm">
-              <div className="flex-shrink-0 mr-2 mt-0.5 text-blue-500">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="12" y1="16" x2="12" y2="12"></line>
-                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                </svg>
-              </div>
-              <div className="text-blue-800 text-xs">
-                <span className="font-medium">Tip:</span> Import products from the inventory page and set both cost and retail prices.
-                Complete product information helps Tap Agent make intelligent decisions when creating personalized rewards for your customers.
-              </div>
-            </div>
-          )}
-        </div>
-        
-        {/* Special Product Categories */}
-        <div className="space-y-6 border-t pt-6">
-          {/* Hero Products */}
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
           <div>
-              <h3 className="text-lg font-medium">Hero Products</h3>
-            <p className="text-sm text-muted-foreground">
-                Products you want to promote or that are best sellers.
-            </p>
-          </div>
-          
-              {/* Library Quick Add */}
-              {getTemplateItemsByIndustry().length > 0 && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="flex items-center gap-1">
-                      {industry === "cafe" ? (
-                        <Coffee className="h-4 w-4 mr-1" />
-                      ) : industry === "pub_bar" ? (
-                        <Beer className="h-4 w-4 mr-1" />
-                      ) : (
-                        <ShoppingBag className="h-4 w-4 mr-1" />
-                      )}
-                      Quick Add
-                      <ChevronDown className="h-3 w-3 opacity-70" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[380px] p-0" align="end">
-                    <div className="p-4 border-b bg-gradient-to-r from-blue-50 to-slate-50">
-                      <h4 className="text-base font-medium text-slate-800 flex items-center">
-                        {industry === "cafe" ? (
-                          <Coffee className="h-4 w-4 mr-2 text-blue-600" />
-                        ) : industry === "pub_bar" ? (
-                          <Beer className="h-4 w-4 mr-2 text-amber-600" />
-                        ) : (
-                          <ShoppingBag className="h-4 w-4 mr-2 text-slate-600" />
-                        )}
-                        {industry === "cafe" ? "Cafe" : industry === "pub_bar" ? "Pub/Bar" : "Item"} Templates
-                      </h4>
-                      <p className="text-xs text-slate-500 mt-1">Click to add as Hero Products</p>
-                    </div>
-                    <div className="p-2 border-b bg-slate-50">
-                      <div className="flex items-center space-x-2">
-                        <p className="text-xs text-slate-500 mr-1">Show templates for:</p>
-                        <Button 
-                          size="sm" 
-                          variant={currentTemplateType === "cafe" ? "default" : "outline"} 
-                          className={`h-8 px-3 text-xs ${currentTemplateType === "cafe" ? "bg-blue-600 hover:bg-blue-700" : "hover:border-blue-300 hover:text-blue-600"}`}
-                          onClick={() => setCurrentTemplateType("cafe")}
-                        >
-                          <Coffee className="h-3.5 w-3.5 mr-1.5" /> Cafe
-                        </Button>
-              <Button 
-                size="sm"
-                          variant={currentTemplateType === "pub_bar" ? "default" : "outline"} 
-                          className={`h-8 px-3 text-xs ${currentTemplateType === "pub_bar" ? "bg-amber-600 hover:bg-amber-700" : "hover:border-amber-300 hover:text-amber-600"}`}
-                          onClick={() => setCurrentTemplateType("pub_bar")}
-              >
-                          <Beer className="h-3.5 w-3.5 mr-1.5" /> Pub/Bar
-              </Button>
-                      </div>
-                    </div>
-                    <div className="max-h-[400px] overflow-y-auto py-1">
-                      {getTemplatesByType(currentTemplateType).map((template, i) => (
-                        <button
-                          key={i}
-                          className="w-full px-3 py-2.5 flex items-center text-left hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0"
-                          onClick={() => addTemplateToHeroProducts(template)}
-                        >
-                          <div className="flex items-center w-full">
-                            <div className="bg-blue-50 p-2 rounded-md border border-blue-100 mr-3 flex-shrink-0">
-                              {template.icon}
-                            </div>
-                            <div className="flex-1">
-                              <div className="font-medium text-slate-800">{template.name}</div>
-                              <div className="text-xs text-slate-500">{template.category}</div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-medium text-slate-800">${template.price.toFixed(2)}</div>
-                              <div className="text-xs text-slate-500">Cost: ${template.cost.toFixed(2)}</div>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              )}
-            </div>
-            
-            {data.heroProducts && data.heroProducts.length > 0 ? (
-              <div className="border rounded-md overflow-hidden max-h-[180px]">
-                <div className="overflow-y-auto max-h-[180px]">
-              <Table>
-                    <TableHeader className="sticky top-0 bg-white z-10">
-                  <TableRow>
-                    <TableHead>Product Name</TableHead>
-                        <TableHead>RRP ($)</TableHead>
-                    <TableHead>Cost ($)</TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                      {data.heroProducts.map((product, index) => {
-                        // Safely handle both string and object formats
-                        const productName = typeof product === 'string' ? product : product.name;
-                        const productRrp = typeof product === 'string' ? 0 : (product.rrp || 0);
-                        const productCost = typeof product === 'string' ? 0 : (product.cost || 0);
-                        
-                        return (
-                          <TableRow key={`hero-product-${index}`}>
-                            <TableCell>{productName}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center">
-                                $
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  value={productRrp}
-                                  onChange={(e) => handleHeroProductInlineEdit(index, 'rrp', e.target.value)}
-                                  className="h-7 w-20 ml-1"
-                                />
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center">
-                                $
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  value={productCost}
-                                  onChange={(e) => handleHeroProductInlineEdit(index, 'cost', e.target.value)}
-                                  className="h-7 w-20 ml-1"
-                                />
-                              </div>
-                            </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                                onClick={() => handleRemoveHeroProduct(index)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                        );
-                      })}
-                </TableBody>
-              </Table>
-                </div>
-                <div className="text-xs text-muted-foreground text-right py-1 px-2 border-t">
-                  {data.heroProducts.length} item{data.heroProducts.length !== 1 ? 's' : ''}
-                </div>
-            </div>
-          ) : (
-              <div className="text-center py-4 border rounded-md bg-muted/20">
-                <p className="text-muted-foreground">No hero products added yet</p>
-            </div>
-          )}
-          
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end mt-4">
-            <div className="space-y-2">
-                <Label htmlFor="hero-product-name">Product Name</Label>
+            <Label htmlFor="product-cost">Cost ($)</Label>
+            <div className="flex gap-2">
               <Input
-                  id="hero-product-name"
-                  value={newHeroProduct.name}
-                  onChange={(e) => handleHeroProductChange('name', e.target.value)}
-                  placeholder="e.g. Special Coffee"
-              />
-            </div>
-            
-            <div className="space-y-2">
-                <Label htmlFor="hero-product-rrp">RRP ($)</Label>
-              <Input
-                  id="hero-product-rrp"
+                id="product-cost"
                 type="number"
                 min="0"
                 step="0.01"
-                  value={newHeroProduct.rrp || ""}
-                  onChange={(e) => handleHeroProductChange('rrp', e.target.value)}
-                placeholder="0.00"
+                value={newProduct.cost || ""}
+                onChange={(e) => handleProductChange("cost", e.target.value)}
+                className="rounded-md"
               />
-            </div>
-            
-            <div className="space-y-2">
-                <Label htmlFor="hero-product-cost">Cost ($)</Label>
-              <Input
-                  id="hero-product-cost"
-                type="number"
-                min="0"
-                step="0.01"
-                  value={newHeroProduct.cost || ""}
-                  onChange={(e) => handleHeroProductChange('cost', e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-          
-          <Button
-              onClick={handleAddHeroProduct}
-              disabled={!newHeroProduct.name}
-              size="sm"
-            className="mt-2"
-          >
-            <PlusCircle className="h-4 w-4 mr-2" />
-              Add Hero Product
-                    </Button>
-          </div>
-          
-          {/* Low Velocity Products */}
-          <div className="space-y-4 mt-6">
-            <div className="flex justify-between items-center">
-            <div>
-              <h3 className="text-lg font-medium">Low Velocity Products</h3>
-              <p className="text-sm text-muted-foreground">
-                Products that don't sell well and need promotion.
-              </p>
-            </div>
-            
-              {/* Library Quick Add */}
-              {getTemplateItemsByIndustry().length > 0 && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="flex items-center gap-1">
-                      {industry === "cafe" ? (
-                        <Coffee className="h-4 w-4 mr-1" />
-                      ) : industry === "pub_bar" ? (
-                        <Beer className="h-4 w-4 mr-1" />
-                      ) : (
-                        <ShoppingBag className="h-4 w-4 mr-1" />
-                      )}
-                      Quick Add
-                      <ChevronDown className="h-3 w-3 opacity-70" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[380px] p-0" align="end">
-                    <div className="p-4 border-b bg-gradient-to-r from-blue-50 to-slate-50">
-                      <h4 className="text-base font-medium text-slate-800 flex items-center">
-                        {industry === "cafe" ? (
-                          <Coffee className="h-4 w-4 mr-2 text-blue-600" />
-                        ) : industry === "pub_bar" ? (
-                          <Beer className="h-4 w-4 mr-2 text-amber-600" />
-                        ) : (
-                          <ShoppingBag className="h-4 w-4 mr-2 text-slate-600" />
-                        )}
-                        {industry === "cafe" ? "Cafe" : industry === "pub_bar" ? "Pub/Bar" : "Item"} Templates
-                      </h4>
-                      <p className="text-xs text-slate-500 mt-1">Click to add as Low Velocity Products</p>
-                    </div>
-                    <div className="p-2 border-b bg-slate-50">
-                      <div className="flex items-center space-x-2">
-                        <p className="text-xs text-slate-500 mr-1">Show templates for:</p>
-                        <Button 
-                          size="sm" 
-                          variant={currentTemplateType === "cafe" ? "default" : "outline"} 
-                          className={`h-8 px-3 text-xs ${currentTemplateType === "cafe" ? "bg-blue-600 hover:bg-blue-700" : "hover:border-blue-300 hover:text-blue-600"}`}
-                          onClick={() => setCurrentTemplateType("cafe")}
-                        >
-                          <Coffee className="h-3.5 w-3.5 mr-1.5" /> Cafe
-                        </Button>
               <Button 
-                size="sm"
-                          variant={currentTemplateType === "pub_bar" ? "default" : "outline"} 
-                          className={`h-8 px-3 text-xs ${currentTemplateType === "pub_bar" ? "bg-amber-600 hover:bg-amber-700" : "hover:border-amber-300 hover:text-amber-600"}`}
-                          onClick={() => setCurrentTemplateType("pub_bar")}
+                onClick={handleAddProduct} 
+                disabled={!newProduct.name || !newProduct.category || newProduct.price <= 0}
+                className="rounded-md"
               >
-                          <Beer className="h-3.5 w-3.5 mr-1.5" /> Pub/Bar
+                Add
               </Button>
-                      </div>
-                    </div>
-                    <div className="max-h-[400px] overflow-y-auto py-1">
-                      {getTemplatesByType(currentTemplateType).map((template, i) => (
-                        <button
-                          key={i}
-                          className="w-full px-3 py-2.5 flex items-center text-left hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0"
-                          onClick={() => addTemplateToLowVelocityProducts(template)}
-                        >
-                          <div className="flex items-center w-full">
-                            <div className="bg-blue-50 p-2 rounded-md border border-blue-100 mr-3 flex-shrink-0">
-                              {template.icon}
-                            </div>
-                            <div className="flex-1">
-                              <div className="font-medium text-slate-800">{template.name}</div>
-                              <div className="text-xs text-slate-500">{template.category}</div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-medium text-slate-800">${template.price.toFixed(2)}</div>
-                              <div className="text-xs text-slate-500">Cost: ${template.cost.toFixed(2)}</div>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              )}
             </div>
-            
-            {data.lowVelocityProducts && data.lowVelocityProducts.length > 0 ? (
-              <div className="border rounded-md overflow-hidden max-h-[180px]">
-                <div className="overflow-y-auto max-h-[180px]">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-white z-10">
-                      <TableRow>
-                        <TableHead>Product Name</TableHead>
-                        <TableHead>RRP ($)</TableHead>
-                        <TableHead>Cost ($)</TableHead>
-                        <TableHead className="w-[50px]"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.lowVelocityProducts.map((product, index) => {
-                        // Safely handle both string and object formats
-                        const productName = typeof product === 'string' ? product : product.name;
-                        const productRrp = typeof product === 'string' ? 0 : (product.rrp || 0);
-                        const productCost = typeof product === 'string' ? 0 : (product.cost || 0);
-                        
-                        return (
-                          <TableRow key={`low-velocity-product-${index}`}>
-                            <TableCell>{productName}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center">
-                                $
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  value={productRrp}
-                                  onChange={(e) => handleLowVelocityProductInlineEdit(index, 'rrp', e.target.value)}
-                                  className="h-7 w-20 ml-1"
-                                />
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center">
-                                $
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  value={productCost}
-                                  onChange={(e) => handleLowVelocityProductInlineEdit(index, 'cost', e.target.value)}
-                                  className="h-7 w-20 ml-1"
-                                />
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                                onClick={() => handleRemoveLowVelocityProduct(index)}
-                    >
-                                <Trash2 className="h-4 w-4" />
-                    </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-                <div className="text-xs text-muted-foreground text-right py-1 px-2 border-t">
-                  {data.lowVelocityProducts.length} item{data.lowVelocityProducts.length !== 1 ? 's' : ''}
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-4 border rounded-md bg-muted/20">
-                <p className="text-muted-foreground">No low velocity products added yet</p>
-              </div>
-            )}
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="low-velocity-product-name">Product Name</Label>
-                <Input
-                  id="low-velocity-product-name"
-                  value={newLowVelocityProduct.name}
-                  onChange={(e) => handleLowVelocityProductChange('name', e.target.value)}
-                  placeholder="e.g. Unpopular Dish"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="low-velocity-product-rrp">RRP ($)</Label>
-                <Input
-                  id="low-velocity-product-rrp"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={newLowVelocityProduct.rrp || ""}
-                  onChange={(e) => handleLowVelocityProductChange('rrp', e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="low-velocity-product-cost">Cost ($)</Label>
-                <Input
-                  id="low-velocity-product-cost"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={newLowVelocityProduct.cost || ""}
-                  onChange={(e) => handleLowVelocityProductChange('cost', e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-            
-            <Button 
-              onClick={handleAddLowVelocityProduct}
-              disabled={!newLowVelocityProduct.name}
-              size="sm"
-              className="mt-2"
-            >
-              <PlusCircle className="h-4 w-4 mr-2" />
-              Add Low Velocity Product
-            </Button>
           </div>
         </div>
-      </CardContent>
-    </Card>
+        
+        {/* Products Table */}
+        {data.products.length > 0 ? (
+          <div className="border rounded-md overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>Cost</TableHead>
+                  <TableHead>Margin</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.products.map((product, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{product.name}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="rounded-md">
+                        {product.category}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>${product.price.toFixed(2)}</TableCell>
+                    <TableCell>${product.cost.toFixed(2)}</TableCell>
+                    <TableCell>
+                      {product.price > 0 
+                        ? `${Math.round((1 - product.cost / product.price) * 100)}%` 
+                        : "N/A"}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveProduct(index)}
+                        className="h-8 w-8 rounded-md hover:bg-red-50 hover:text-red-600"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="text-center p-8 border border-dashed rounded-md bg-gray-50">
+            <PackageIcon className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+            <p className="text-sm text-muted-foreground">No products added yet</p>
+            <p className="text-xs text-muted-foreground mt-1">Add products using the form above or quick add templates</p>
+          </div>
+        )}
+      </div>
+      
+      {/* Hero Products Section */}
+      <div className="border rounded-md p-5 space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="font-medium flex items-center">
+            <Award className="h-4 w-4 text-blue-600 mr-2" />
+            Hero Products
+          </h3>
+          
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1 rounded-md">
+                <PlusCircle className="h-4 w-4" />
+                Quick Add
+                <ChevronDown className="h-3 w-3 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-0" align="end">
+              <div className="p-3 border-b">
+                <h4 className="font-medium text-sm">Add Hero Products</h4>
+                <p className="text-xs text-muted-foreground">
+                  Quickly add your best-selling products
+                </p>
+              </div>
+              <div className="max-h-[300px] overflow-y-auto p-0">
+                {getTemplatesByType(currentTemplateType).map((template, i) => (
+                  <div
+                    key={`hero-${template.name}-${i}`}
+                    className="flex items-center justify-between p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                    onClick={() => addTemplateToHeroProducts(template)}
+                  >
+                    <div className="flex items-center gap-2">
+                      {template.icon}
+                      <span className="text-sm">{template.name}</span>
+                    </div>
+                    <div className="text-sm font-medium">${template.price.toFixed(2)}</div>
+                  </div>
+                ))}
+                {getTemplatesByType(currentTemplateType).length === 0 && (
+                  <div className="p-3 text-center text-sm text-muted-foreground">
+                    No templates available for this industry
+                  </div>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+        
+        <p className="text-sm text-muted-foreground">
+          Your best-selling or signature products that you want to highlight
+        </p>
+        
+        {/* Add Hero Product Form */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <Label htmlFor="hero-name">Name</Label>
+            <Input
+              id="hero-name"
+              value={newHeroProduct.name}
+              onChange={(e) => handleHeroProductChange("name", e.target.value)}
+              placeholder="e.g. Signature Dish"
+              className="rounded-md"
+            />
+          </div>
+          
+          <div>
+            <Label htmlFor="hero-rrp">Price ($)</Label>
+            <Input
+              id="hero-rrp"
+              type="number"
+              min="0"
+              step="0.01"
+              value={newHeroProduct.rrp || ""}
+              onChange={(e) => handleHeroProductChange("rrp", e.target.value)}
+              className="rounded-md"
+            />
+          </div>
+          
+          <div>
+            <Label htmlFor="hero-cost">Cost ($)</Label>
+            <div className="flex gap-2">
+              <Input
+                id="hero-cost"
+                type="number"
+                min="0"
+                step="0.01"
+                value={newHeroProduct.cost || ""}
+                onChange={(e) => handleHeroProductChange("cost", e.target.value)}
+                className="rounded-md"
+              />
+              <Button 
+                onClick={handleAddHeroProduct} 
+                disabled={!newHeroProduct.name || newHeroProduct.rrp <= 0}
+                className="rounded-md"
+              >
+                Add
+              </Button>
+            </div>
+          </div>
+        </div>
+        
+        {/* Hero Products Table */}
+        {data.heroProducts.length > 0 ? (
+          <div className="border rounded-md overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>Cost</TableHead>
+                  <TableHead>Margin</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.heroProducts.map((product, index) => (
+                  <TableRow key={index}>
+                    <TableCell>
+                      {editingItem === `hero-${index}-name` ? (
+                        <Input
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => {
+                            handleHeroProductInlineEdit(index, "name", editValue);
+                            setEditingItem(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              handleHeroProductInlineEdit(index, "name", editValue);
+                              setEditingItem(null);
+                            }
+                          }}
+                          className="h-8 rounded-md"
+                          autoFocus
+                        />
+                      ) : (
+                        <div 
+                          className="flex items-center gap-1 cursor-pointer hover:text-blue-600"
+                          onClick={() => {
+                            setEditingItem(`hero-${index}-name`);
+                            setEditValue(product.name);
+                          }}
+                        >
+                          {product.name}
+                          <Edit className="h-3 w-3 opacity-50" />
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingItem === `hero-${index}-rrp` ? (
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => {
+                            handleHeroProductInlineEdit(index, "rrp", editValue);
+                            setEditingItem(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              handleHeroProductInlineEdit(index, "rrp", editValue);
+                              setEditingItem(null);
+                            }
+                          }}
+                          className="h-8 w-24 rounded-md"
+                          autoFocus
+                        />
+                      ) : (
+                        <div 
+                          className="cursor-pointer hover:text-blue-600"
+                          onClick={() => {
+                            setEditingItem(`hero-${index}-rrp`);
+                            setEditValue(product.rrp.toString());
+                          }}
+                        >
+                          ${product.rrp.toFixed(2)}
+                          <Edit className="h-3 w-3 opacity-50 ml-1 inline" />
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingItem === `hero-${index}-cost` ? (
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => {
+                            handleHeroProductInlineEdit(index, "cost", editValue);
+                            setEditingItem(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              handleHeroProductInlineEdit(index, "cost", editValue);
+                              setEditingItem(null);
+                            }
+                          }}
+                          className="h-8 w-24 rounded-md"
+                          autoFocus
+                        />
+                      ) : (
+                        <div 
+                          className="cursor-pointer hover:text-blue-600"
+                          onClick={() => {
+                            setEditingItem(`hero-${index}-cost`);
+                            setEditValue(product.cost.toString());
+                          }}
+                        >
+                          ${product.cost.toFixed(2)}
+                          <Edit className="h-3 w-3 opacity-50 ml-1 inline" />
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {product.rrp > 0 
+                        ? `${Math.round((1 - product.cost / product.rrp) * 100)}%` 
+                        : "N/A"}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveHeroProduct(index)}
+                        className="h-8 w-8 rounded-md hover:bg-red-50 hover:text-red-600"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="text-center p-8 border border-dashed rounded-md bg-gray-50">
+            <Award className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+            <p className="text-sm text-muted-foreground">No hero products added yet</p>
+            <p className="text-xs text-muted-foreground mt-1">Add your signature or best-selling products</p>
+          </div>
+        )}
+      </div>
+      
+      {/* Low Velocity Products Section */}
+      <div className="border rounded-md p-5 space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="font-medium flex items-center">
+            <Loader2 className="h-4 w-4 text-blue-600 mr-2" />
+            Low Velocity Products
+          </h3>
+          
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1 rounded-md">
+                <PlusCircle className="h-4 w-4" />
+                Quick Add
+                <ChevronDown className="h-3 w-3 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-0" align="end">
+              <div className="p-3 border-b">
+                <h4 className="font-medium text-sm">Add Low Velocity Products</h4>
+                <p className="text-xs text-muted-foreground">
+                  Quickly add products that need promotion
+                </p>
+              </div>
+              <div className="max-h-[300px] overflow-y-auto p-0">
+                {getTemplatesByType(currentTemplateType).map((template, i) => (
+                  <div
+                    key={`low-${template.name}-${i}`}
+                    className="flex items-center justify-between p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                    onClick={() => addTemplateToLowVelocityProducts(template)}
+                  >
+                    <div className="flex items-center gap-2">
+                      {template.icon}
+                      <span className="text-sm">{template.name}</span>
+                    </div>
+                    <div className="text-sm font-medium">${template.price.toFixed(2)}</div>
+                  </div>
+                ))}
+                {getTemplatesByType(currentTemplateType).length === 0 && (
+                  <div className="p-3 text-center text-sm text-muted-foreground">
+                    No templates available for this industry
+                  </div>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+        
+        <p className="text-sm text-muted-foreground">
+          Products that sell slowly and could benefit from targeted promotions
+        </p>
+        
+        {/* Add Low Velocity Product Form */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <Label htmlFor="low-name">Name</Label>
+            <Input
+              id="low-name"
+              value={newLowVelocityProduct.name}
+              onChange={(e) => handleLowVelocityProductChange("name", e.target.value)}
+              placeholder="e.g. Slow-moving item"
+              className="rounded-md"
+            />
+          </div>
+          
+          <div>
+            <Label htmlFor="low-rrp">Price ($)</Label>
+            <Input
+              id="low-rrp"
+              type="number"
+              min="0"
+              step="0.01"
+              value={newLowVelocityProduct.rrp || ""}
+              onChange={(e) => handleLowVelocityProductChange("rrp", e.target.value)}
+              className="rounded-md"
+            />
+          </div>
+          
+          <div>
+            <Label htmlFor="low-cost">Cost ($)</Label>
+            <div className="flex gap-2">
+              <Input
+                id="low-cost"
+                type="number"
+                min="0"
+                step="0.01"
+                value={newLowVelocityProduct.cost || ""}
+                onChange={(e) => handleLowVelocityProductChange("cost", e.target.value)}
+                className="rounded-md"
+              />
+              <Button 
+                onClick={handleAddLowVelocityProduct} 
+                disabled={!newLowVelocityProduct.name || newLowVelocityProduct.rrp <= 0}
+                className="rounded-md"
+              >
+                Add
+              </Button>
+            </div>
+          </div>
+        </div>
+        
+        {/* Low Velocity Products Table */}
+        {data.lowVelocityProducts.length > 0 ? (
+          <div className="border rounded-md overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>Cost</TableHead>
+                  <TableHead>Margin</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.lowVelocityProducts.map((product, index) => (
+                  <TableRow key={index}>
+                    <TableCell>
+                      {editingItem === `low-${index}-name` ? (
+                        <Input
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => {
+                            handleLowVelocityProductInlineEdit(index, "name", editValue);
+                            setEditingItem(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              handleLowVelocityProductInlineEdit(index, "name", editValue);
+                              setEditingItem(null);
+                            }
+                          }}
+                          className="h-8 rounded-md"
+                          autoFocus
+                        />
+                      ) : (
+                        <div 
+                          className="flex items-center gap-1 cursor-pointer hover:text-blue-600"
+                          onClick={() => {
+                            setEditingItem(`low-${index}-name`);
+                            setEditValue(product.name);
+                          }}
+                        >
+                          {product.name}
+                          <Edit className="h-3 w-3 opacity-50" />
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingItem === `low-${index}-rrp` ? (
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => {
+                            handleLowVelocityProductInlineEdit(index, "rrp", editValue);
+                            setEditingItem(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              handleLowVelocityProductInlineEdit(index, "rrp", editValue);
+                              setEditingItem(null);
+                            }
+                          }}
+                          className="h-8 w-24 rounded-md"
+                          autoFocus
+                        />
+                      ) : (
+                        <div 
+                          className="cursor-pointer hover:text-blue-600"
+                          onClick={() => {
+                            setEditingItem(`low-${index}-rrp`);
+                            setEditValue(product.rrp.toString());
+                          }}
+                        >
+                          ${product.rrp.toFixed(2)}
+                          <Edit className="h-3 w-3 opacity-50 ml-1 inline" />
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingItem === `low-${index}-cost` ? (
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => {
+                            handleLowVelocityProductInlineEdit(index, "cost", editValue);
+                            setEditingItem(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              handleLowVelocityProductInlineEdit(index, "cost", editValue);
+                              setEditingItem(null);
+                            }
+                          }}
+                          className="h-8 w-24 rounded-md"
+                          autoFocus
+                        />
+                      ) : (
+                        <div 
+                          className="cursor-pointer hover:text-blue-600"
+                          onClick={() => {
+                            setEditingItem(`low-${index}-cost`);
+                            setEditValue(product.cost.toString());
+                          }}
+                        >
+                          ${product.cost.toFixed(2)}
+                          <Edit className="h-3 w-3 opacity-50 ml-1 inline" />
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {product.rrp > 0 
+                        ? `${Math.round((1 - product.cost / product.rrp) * 100)}%` 
+                        : "N/A"}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveLowVelocityProduct(index)}
+                        className="h-8 w-8 rounded-md hover:bg-red-50 hover:text-red-600"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="text-center p-8 border border-dashed rounded-md bg-gray-50">
+            <Loader2 className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+            <p className="text-sm text-muted-foreground">No low velocity products added yet</p>
+            <p className="text-xs text-muted-foreground mt-1">Add products that need targeted promotions</p>
+          </div>
+        )}
+      </div>
+    </div>
   )
 } 

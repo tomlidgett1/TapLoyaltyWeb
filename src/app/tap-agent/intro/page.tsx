@@ -547,13 +547,12 @@ export default function TapAgentIntroPage() {
         <div className="p-6 py-4">
           <PageHeader
             title={<><span className="gradient-text" style={gradientTextStyle}>Tap Agent</span> Dashboard</>}
-            subtitle={`Last active: ${lastActiveDate}`}
           >
             <div className="flex items-center gap-2">
               <Button 
                 variant="outline" 
                 size="sm"
-                className="h-9 gap-2 border-0 ring-1 ring-gray-200 bg-white text-gray-700 shadow-sm rounded-md"
+                className="h-8 gap-2 border-0 ring-1 ring-gray-200 bg-white text-gray-700 shadow-sm rounded-md"
                 asChild
               >
                 <Link href="/tap-agent/setup">
@@ -564,7 +563,7 @@ export default function TapAgentIntroPage() {
               <Button 
                 variant="outline" 
                 size="sm"
-                className="h-9 gap-2 border-0 ring-1 ring-gray-200 bg-white text-red-500 hover:bg-red-50 shadow-sm rounded-md"
+                className="h-8 gap-2 border-0 ring-1 ring-gray-200 bg-white text-red-500 hover:bg-red-50 shadow-sm rounded-md"
                 onClick={handleDisableAgent}
                 disabled={disabling}
               >
@@ -696,8 +695,8 @@ export default function TapAgentIntroPage() {
         <div className="p-6">
           <PageHeader
             title={<>Welcome to <span className="gradient-text" style={gradientTextStyle}>Tap Agent</span></>}
-            subtitle="AI-powered loyalty assistant that helps you create personalized rewards for your customers"
-          />
+          >
+          </PageHeader>
               
           <div className="flex flex-col md:flex-row gap-8 w-full">
             <div className="md:w-2/3">

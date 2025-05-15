@@ -124,6 +124,7 @@ export interface AgentConfig {
     customTone: string[];
     excludedEmails: string[];
     notifyBeforeSend: boolean;
+    customSignature?: string;
   };
   businessKnowledge: {
     generalInfo: string;
@@ -134,5 +135,7 @@ export interface AgentConfig {
       source: 'manual' | 'voice';
     }>;
     lastUpdated: number;
+    publicHolidays?: string;
+    returnPolicy?: string;
   };
 } 

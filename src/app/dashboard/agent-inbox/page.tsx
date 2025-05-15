@@ -250,129 +250,140 @@ export default function AgentInboxPage() {
   }
 
   return (
-    <div className="container max-w-7xl mx-auto px-4 py-4">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+    <div className="container max-w-7xl mx-auto px-4">
+      <div className="pt-4"></div>
+      <div className="flex flex-col md:flex-row justify-between items-center">
         <div>
           <h2 className="text-xl font-medium flex items-center gap-2">
             <GradientText>Agent</GradientText> Inbox
           </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Review and approve agent-suggested actions
-          </p>
         </div>
         
-        <div className="flex items-center gap-4 mt-4 md:mt-0">
-          <Button size="sm" className="gap-2 h-9">
+        <div className="flex items-center gap-4">
+          <Button size="sm" className="gap-2 h-8">
             <CheckCircle className="h-4 w-4" />
             Approve All
           </Button>
         </div>
       </div>
       
-      <Separator className="mb-6 -mt-3" />
+      <div className="mt-4">
+        <div style={{
+          width: "100vw",
+          position: "relative",
+          left: "50%",
+          right: "50%",
+          marginLeft: "-50vw",
+          marginRight: "-50vw",
+          height: "1px",
+          backgroundColor: "rgb(229, 231, 235)"
+        }}></div>
+      </div>
       
-      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-6">
-          <TabsTrigger value="all" className="gap-2">
-            <Clock className="h-4 w-4" />
-            All Actions
-          </TabsTrigger>
-          <TabsTrigger value="high" className="gap-2">
-            <AlertCircle className="h-4 w-4" />
-            High Priority
-          </TabsTrigger>
-          <TabsTrigger value="email" className="gap-2">
-            <Mail className="h-4 w-4" />
-            Email Responses
-          </TabsTrigger>
-          <TabsTrigger value="offer" className="gap-2">
-            <Package className="h-4 w-4" />
-            Customer Offers
-          </TabsTrigger>
-          <TabsTrigger value="program" className="gap-2">
-            <Star className="h-4 w-4" />
-            Program Updates
-          </TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value={activeTab} className="mt-0">
-          {filteredActions.length === 0 ? (
-            <Card className="rounded-md">
-              <CardContent className="pt-10 pb-10 flex flex-col items-center justify-center">
-                <Clock className="h-16 w-16 text-gray-300 mb-4" />
-                <h3 className="text-xl font-medium text-center mb-2">No actions found</h3>
-                <p className="text-sm text-gray-500 text-center max-w-md">
-                  There are no pending agent actions that match your current filter. Try changing your filter or check back later.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 gap-6">
-              {filteredActions.map(action => (
-                <Card key={action.id} className="rounded-md overflow-hidden">
-                  <div className="flex flex-col md:flex-row">
-                    {/* Main content */}
-                    <div className="flex-1 p-6">
-                      <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
-                        <div>
-                          <h3 className="text-lg font-medium mb-1 flex items-center gap-2">
-                            {action.title}
-                            <Badge variant="outline" className={`ml-2 text-xs font-medium ${getPriorityColor(action.priority)}`}>
-                              {action.priority.charAt(0).toUpperCase() + action.priority.slice(1)}
-                            </Badge>
-                          </h3>
-                          <p className="text-sm text-gray-500">
-                            {action.description}
-                          </p>
+      <div className="mt-6">
+        <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="mb-6">
+            <TabsTrigger value="all" className="gap-2">
+              <Clock className="h-4 w-4" />
+              All Actions
+            </TabsTrigger>
+            <TabsTrigger value="high" className="gap-2">
+              <AlertCircle className="h-4 w-4" />
+              High Priority
+            </TabsTrigger>
+            <TabsTrigger value="email" className="gap-2">
+              <Mail className="h-4 w-4" />
+              Email Responses
+            </TabsTrigger>
+            <TabsTrigger value="offer" className="gap-2">
+              <Package className="h-4 w-4" />
+              Customer Offers
+            </TabsTrigger>
+            <TabsTrigger value="program" className="gap-2">
+              <Star className="h-4 w-4" />
+              Program Updates
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value={activeTab} className="mt-0">
+            {filteredActions.length === 0 ? (
+              <Card className="rounded-md">
+                <CardContent className="pt-10 pb-10 flex flex-col items-center justify-center">
+                  <Clock className="h-16 w-16 text-gray-300 mb-4" />
+                  <h3 className="text-xl font-medium text-center mb-2">No actions found</h3>
+                  <p className="text-sm text-gray-500 text-center max-w-md">
+                    There are no pending agent actions that match your current filter. Try changing your filter or check back later.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 gap-6">
+                {filteredActions.map(action => (
+                  <Card key={action.id} className="rounded-md overflow-hidden">
+                    <div className="flex flex-col md:flex-row">
+                      {/* Main content */}
+                      <div className="flex-1 p-6">
+                        <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
+                          <div>
+                            <h3 className="text-lg font-medium mb-1 flex items-center gap-2">
+                              {action.title}
+                              <Badge variant="outline" className={`ml-2 text-xs font-medium ${getPriorityColor(action.priority)}`}>
+                                {action.priority.charAt(0).toUpperCase() + action.priority.slice(1)}
+                              </Badge>
+                            </h3>
+                            <p className="text-sm text-gray-500">
+                              {action.description}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 md:gap-4">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className="gap-2"
+                              onClick={() => viewActionDetails(action)}
+                            >
+                              <Eye className="h-4 w-4" />
+                              View Details
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className="gap-2 text-red-600 border-red-200 hover:bg-red-50"
+                              onClick={() => handleDecline(action.id)}
+                            >
+                              <XCircle className="h-4 w-4" />
+                              Decline
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className="gap-2 text-green-600 border-green-200 hover:bg-gray-50"
+                              onClick={() => handleApprove(action.id)}
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                              Approve
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 md:gap-4">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="gap-2"
-                            onClick={() => viewActionDetails(action)}
-                          >
-                            <Eye className="h-4 w-4" />
-                            View Details
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="gap-2 text-red-600 border-red-200 hover:bg-red-50"
-                            onClick={() => handleDecline(action.id)}
-                          >
-                            <XCircle className="h-4 w-4" />
-                            Decline
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="gap-2 text-green-600 border-green-200 hover:bg-gray-50"
-                            onClick={() => handleApprove(action.id)}
-                          >
-                            <CheckCircle className="h-4 w-4" />
-                            Approve
-                          </Button>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-3 text-xs text-gray-500">
-                        <div>
-                          <span>{getAgentName(action.agent)}</span>
-                        </div>
-                        <span>•</span>
-                        <div>
-                          <span>{formatTimeAgo(action.timestamp)}</span>
+                        
+                        <div className="flex items-center gap-3 text-xs text-gray-500">
+                          <div>
+                            <span>{getAgentName(action.agent)}</span>
+                          </div>
+                          <span>•</span>
+                          <div>
+                            <span>{formatTimeAgo(action.timestamp)}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
       
       {/* Detail Sheet */}
       <Sheet open={isDetailSheetOpen} onOpenChange={setIsDetailSheetOpen}>

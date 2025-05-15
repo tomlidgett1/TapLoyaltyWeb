@@ -1323,13 +1323,12 @@ export default function RewardsPage() {
       <div className="p-6 py-4">
         <PageHeader
           title="Rewards"
-          subtitle="Manage and create rewards for your customers"
         >
           <div className="flex items-center gap-2">
             <Button 
               size="sm"
               variant="default" 
-              className="h-9 gap-2 rounded-md"
+              className="h-8 gap-2 rounded-md"
               onClick={() => router.push('/create')}
             >
               <Plus className="h-4 w-4" />
@@ -1338,7 +1337,7 @@ export default function RewardsPage() {
             <Button 
               size="sm"
               variant="outline" 
-              className="h-9 gap-2 rounded-md"
+              className="h-8 gap-2 rounded-md"
               onClick={handleExportPDF}
             >
               <Download className="h-4 w-4" />

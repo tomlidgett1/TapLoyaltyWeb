@@ -75,6 +75,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useRouter } from 'next/navigation'
+import { PageHeader } from "@/components/page-header"
 
 // Custom style for medium rounded cards
 const mediumRoundedCard = "rounded-md overflow-hidden";
@@ -1255,20 +1256,9 @@ export default function EmailsPage() {
 
   return (
     <div className="container mx-auto px-4 py-6">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Email Inbox</h1>
-          <p className="text-muted-foreground">
-            {isConnected 
-              ? connectedEmail 
-                ? `Connected to ${connectedEmail}`
-                : "Connected to Gmail" 
-              : "Connect your Gmail account to manage customer emails"}
-          </p>
-        </div>
-       
+      <PageHeader title="Email Inbox">
         {isConnected ? (
-          <div className="flex items-center gap-4 mt-4 md:mt-0">
+          <div className="flex items-center gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
@@ -1281,7 +1271,7 @@ export default function EmailsPage() {
             <Button
               variant="outline"
               size="sm"
-              className="gap-2"
+              className="gap-2 h-8"
               onClick={handleRefresh}
               disabled={refreshing}
             >
@@ -1291,7 +1281,7 @@ export default function EmailsPage() {
             <Button
               variant="outline"
               size="sm"
-              className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50"
+              className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50 h-8"
               onClick={() => {
                 if (!user?.uid) return;
                 router.push('/store/emails/notifications');
@@ -1303,7 +1293,7 @@ export default function EmailsPage() {
             <Button
               variant="outline"
               size="sm"
-              className="gap-2 text-purple-600 border-purple-200 hover:bg-purple-50"
+              className="gap-2 text-purple-600 border-purple-200 hover:bg-purple-50 h-8"
               onClick={() => setShowDebugger(true)}
             >
               <Bug className="h-4 w-4" />
@@ -1311,14 +1301,22 @@ export default function EmailsPage() {
             </Button>
           </div>
         ) : (
-          <div className="mt-4 md:mt-0">
-            <Button onClick={connectGmail} className="gap-2">
+          <div>
+            <Button onClick={connectGmail} className="gap-2 h-8">
               <Mail className="h-4 w-4" />
               Connect Gmail
             </Button>
           </div>
         )}
-      </header>
+      </PageHeader>
+
+      <p className="text-muted-foreground mb-6">
+        {isConnected 
+          ? connectedEmail 
+            ? `Connected to ${connectedEmail}`
+            : "Connected to Gmail" 
+          : "Connect your Gmail account to manage customer emails"}
+      </p>
 
       {connectionError && (
         <Card className="mb-6 border-red-200 bg-red-50 rounded-md">

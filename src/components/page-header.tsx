@@ -9,7 +9,7 @@ interface PageHeaderProps {
 export function PageHeader({ title, subtitle, children }: PageHeaderProps) {
   return (
     <div className="mb-6">
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-3">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-0">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
           {subtitle && (
@@ -19,12 +19,23 @@ export function PageHeader({ title, subtitle, children }: PageHeaderProps) {
           )}
         </div>
         {children && (
-          <div className="flex-shrink-0 md:pt-1">
+          <div className="flex-shrink-0">
             {children}
           </div>
         )}
       </div>
-      <div className="h-px w-full bg-gray-200 mt-3"></div>
+      <div className="mt-4">
+        <div style={{
+          width: "100vw",
+          position: "relative",
+          left: "50%",
+          right: "50%",
+          marginLeft: "-50vw",
+          marginRight: "-50vw",
+          height: "1px",
+          backgroundColor: "rgb(229, 231, 235)"
+        }}></div>
+      </div>
     </div>
   )
 } 

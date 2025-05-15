@@ -472,11 +472,11 @@ export default function IntegrationsPage() {
       <div className="p-6 py-4">
         <PageHeader
           title="Integrations"
-          subtitle="Connect your POS system and other services"
         >
           <Button 
             variant="outline" 
             size="sm" 
+            className="h-8"
             onClick={refreshIntegrationStatus}
             disabled={refreshing}
           >

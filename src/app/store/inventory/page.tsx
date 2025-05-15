@@ -886,13 +886,12 @@ export default function InventoryPage() {
       <div className="p-6 py-4">
         <PageHeader
           title="Inventory"
-          subtitle="Manage your product inventory from Square"
         >
           <div className="flex items-center gap-2">
             <Button 
               variant="outline" 
               size="sm" 
-              className="h-9"
+              className="h-8"
               onClick={handleRefresh}
               disabled={refreshing || loading}
             >
@@ -911,7 +910,7 @@ export default function InventoryPage() {
             <Button 
               variant="outline" 
               size="sm" 
-              className="h-9"
+              className="h-8"
               disabled={!isSquareConnected}
             >
               <Download className="h-4 w-4 mr-2" />
@@ -920,7 +919,7 @@ export default function InventoryPage() {
             <Button 
               variant="default" 
               size="sm" 
-              className="h-9"
+              className="h-8"
               disabled={!isSquareConnected || loading}
               onClick={handleOpenTapAgentSheet}
             >

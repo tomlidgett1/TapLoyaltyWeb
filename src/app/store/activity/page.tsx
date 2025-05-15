@@ -1022,13 +1022,12 @@ export default function ActivityPage() {
       <div className="p-6 py-4">
         <PageHeader
           title="Activity"
-          subtitle="Track transactions, redemptions, and sales activity"
         >
           <div className="flex items-center gap-2">
             <Button 
               variant="outline" 
               size="sm" 
-              className="h-9"
+              className="h-8"
               onClick={handleExportPDF}
             >
               <Download className="h-4 w-4 mr-2" />
@@ -1037,7 +1036,7 @@ export default function ActivityPage() {
             <Button 
               variant="outline" 
               size="sm" 
-              className="h-9"
+              className="h-8"
               onClick={() => setShowFilters(!showFilters)}
             >
               <Filter className="h-4 w-4 mr-2" />

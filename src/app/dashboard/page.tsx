@@ -2320,26 +2320,37 @@ export default function DashboardPage() {
         <div className="space-y-6">
           {/* Welcome Section with Timeframe Tabs */}
           <div>
+            <style jsx>{`
+              .full-width-divider {
+                width: 100vw;
+                position: relative;
+                left: 50%;
+                right: 50%;
+                margin-left: -50vw;
+                margin-right: -50vw;
+                height: 1px;
+                background-color: rgb(229, 231, 235);
+              }
+            `}</style>
             <PageHeader
               title="Welcome back"
-              subtitle="Here's an overview of your business"
             >
               <div className="flex space-x-2">
                 <Button 
                   variant="outline" 
                   size="sm"
-                  className="h-9 gap-2 border-[#007AFF] hover:bg-[#007AFF]/5"
+                  className="h-8 gap-1 border-[#007AFF] hover:bg-[#007AFF]/5 text-xs px-2 py-0"
                   onClick={fetchDailySummaries}
                   disabled={isDailySummaryLoading}
                 >
                   {isDailySummaryLoading ? (
                     <>
-                      <div className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+                      <div className="h-3 w-3 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
                       <GradientText>Processing...</GradientText>
                     </>
                   ) : (
                     <>
-                      <Calendar className="h-4 w-4 text-blue-500" />
+                      <Calendar className="h-3 w-3 text-blue-500" />
                       <GradientText>Daily Summary</GradientText>
                     </>
                   )}
@@ -2347,10 +2358,10 @@ export default function DashboardPage() {
               <Button 
                 variant="outline" 
                 size="sm"
-                className="h-9 gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                className="h-8 gap-1 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800 text-xs px-2 py-0"
                 onClick={() => setIsSetupWizardOpen(true)}
               >
-                <PlusCircle className="h-4 w-4" />
+                <PlusCircle className="h-3 w-3" />
                 Setup Wizard
               </Button>
               </div>

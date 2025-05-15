@@ -589,18 +589,15 @@ const SettingsPage: React.FC = () => {
     <PageTransition>
       <div className="p-6 py-4 space-y-6">
         <div>
-          <div className="flex justify-between items-start mb-3">
+          <div className="flex justify-between items-center mb-0">
             <div>
               <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Manage your account and preferences
-              </p>
             </div>
             
             {/* Store Activation Toggle - Updated without nested buttons */}
             <div
               onClick={!loading ? toggleStoreStatus : undefined}
-              className={`h-10 px-4 flex items-center gap-2 border rounded-md cursor-pointer ${
+              className={`h-8 px-4 flex items-center gap-2 border rounded-md cursor-pointer ${
                 storeActive 
                   ? 'bg-green-50 border-green-200 hover:bg-green-100 hover:border-green-300' 
                   : 'bg-red-50 border-red-200 hover:bg-red-100 hover:border-red-300'
@@ -618,7 +615,18 @@ const SettingsPage: React.FC = () => {
               />
             </div>
           </div>
-          <div className="h-px w-full bg-gray-200 mt-1"></div>
+          <div className="mt-4">
+            <div style={{
+              width: "100vw",
+              position: "relative",
+              left: "50%",
+              right: "50%",
+              marginLeft: "-50vw",
+              marginRight: "-50vw",
+              height: "1px",
+              backgroundColor: "rgb(229, 231, 235)"
+            }}></div>
+          </div>
         </div>
         
         <Tabs defaultValue="profile" className="space-y-6">

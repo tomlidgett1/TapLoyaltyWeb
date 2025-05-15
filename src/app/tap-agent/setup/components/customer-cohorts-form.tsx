@@ -20,6 +20,7 @@ import {
   Form
 } from "@/components/ui/form"
 import { useEffect } from "react"
+import { Users, UserCheck, UserMinus, UserX, ChevronRight, BarChart3, RefreshCcw, Info } from "lucide-react"
 
 interface CustomerCohorts {
   new: {
@@ -113,216 +114,292 @@ export function CustomerCohortsForm({ data, onChange }: CustomerCohortsFormProps
   }, [data.resurrected.wasDormantOrChurned]);
 
   return (
-    <Card className="border-none shadow-none">
-      <CardHeader className="p-0">
-        <CardTitle className="text-xl bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Customer Cohorts</CardTitle>
-        <CardDescription>
-          Define customer lifecycle stages and behaviors.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-8 p-0 mt-6">
-        {/* New Customers */}
-        <div className="space-y-4 border-b pb-4">
-          <div>
-            <h3 className="text-lg font-medium">New Customers</h3>
-            <p className="text-sm text-muted-foreground">
-              Define what constitutes a new customer.
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="firstVisitWithinDays">
-                First visit within (days)
-              </Label>
-              <Input
-                id="firstVisitWithinDays"
-                type="number"
-                min="1"
-                value={data.new.firstVisitWithinDays}
-                onChange={(e) => handleNumberChange('new', 'firstVisitWithinDays', e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Customers whose first visit was within this many days.
-              </p>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="maxLifetimeVisits">
-                Maximum lifetime visits
-              </Label>
-              <Input
-                id="maxLifetimeVisits"
-                type="number"
-                min="1"
-                value={data.new.maxLifetimeVisits}
-                onChange={(e) => handleNumberChange('new', 'maxLifetimeVisits', e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Maximum number of visits to still be considered new.
-              </p>
-            </div>
-          </div>
-        </div>
+    <div className="space-y-8">
+      {/* New Customers */}
+      <div className="border rounded-md p-5 space-y-4">
+        <h3 className="font-medium flex items-center">
+          <Users className="h-4 w-4 text-blue-600 mr-2" />
+          New Customers
+        </h3>
         
-        {/* Active Customers */}
-        <div className="space-y-4 border-b pb-4">
-          <div>
-            <h3 className="text-lg font-medium">Active Customers</h3>
-            <p className="text-sm text-muted-foreground">
-              Define what constitutes an active customer.
+        <p className="text-sm text-muted-foreground">
+          Define what constitutes a new customer based on their first visit and activity level.
+        </p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="firstVisitWithinDays">First visit within (days)</Label>
+            <Input
+              id="firstVisitWithinDays"
+              type="number"
+              min="1"
+              value={data.new.firstVisitWithinDays}
+              onChange={(e) => handleNumberChange('new', 'firstVisitWithinDays', e.target.value)}
+              className="rounded-md"
+            />
+            <p className="text-xs text-muted-foreground">
+              Customers whose first visit was within this many days
             </p>
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="lastVisitWithinDays">
-              Last visit within (days)
-            </Label>
+            <Label htmlFor="maxLifetimeVisits">Maximum lifetime visits</Label>
             <Input
-              id="lastVisitWithinDays"
+              id="maxLifetimeVisits"
               type="number"
               min="1"
-              value={data.active.lastVisitWithinDays}
-              onChange={(e) => handleNumberChange('active', 'lastVisitWithinDays', e.target.value)}
+              value={data.new.maxLifetimeVisits}
+              onChange={(e) => handleNumberChange('new', 'maxLifetimeVisits', e.target.value)}
+              className="rounded-md"
             />
             <p className="text-xs text-muted-foreground">
-              Customers who have visited within this many days are considered active.
+              Maximum number of visits to still be considered new
             </p>
           </div>
         </div>
+      </div>
+      
+      {/* Active Customers */}
+      <div className="border rounded-md p-5 space-y-4">
+        <h3 className="font-medium flex items-center">
+          <UserCheck className="h-4 w-4 text-blue-600 mr-2" />
+          Active Customers
+        </h3>
         
-        {/* Dormant Customers */}
-        <div className="space-y-4 border-b pb-4">
-          <div>
-            <h3 className="text-lg font-medium">Dormant Customers</h3>
-            <p className="text-sm text-muted-foreground">
-              Define what constitutes a dormant customer.
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="dormantMin">
-                Last visit between (min days)
-              </Label>
-              <Input
-                id="dormantMin"
-                type="number"
-                min="1"
-                value={data.dormant.lastVisitBetween[0]}
-                onChange={(e) => {
-                  const newArray: [number, number] = [...data.dormant.lastVisitBetween];
-                  newArray[0] = parseInt(e.target.value || '0');
-                  onChange({
-                    ...data,
-                    dormant: {
-                      ...data.dormant,
-                      lastVisitBetween: newArray
-                    }
-                  });
-                }}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="dormantMax">
-                Last visit between (max days)
-              </Label>
-              <Input
-                id="dormantMax"
-                type="number"
-                min="1"
-                value={data.dormant.lastVisitBetween[1]}
-                onChange={(e) => {
-                  const newArray: [number, number] = [...data.dormant.lastVisitBetween];
-                  newArray[1] = parseInt(e.target.value || '0');
-                  onChange({
-                    ...data,
-                    dormant: {
-                      ...data.dormant,
-                      lastVisitBetween: newArray
-                    }
-                  });
-                }}
-              />
-            </div>
-          </div>
+        <p className="text-sm text-muted-foreground">
+          Define what constitutes an active customer based on recent activity.
+        </p>
+        
+        <div className="space-y-2">
+          <Label htmlFor="lastVisitWithinDays">Last visit within (days)</Label>
+          <Input
+            id="lastVisitWithinDays"
+            type="number"
+            min="1"
+            value={data.active.lastVisitWithinDays}
+            onChange={(e) => handleNumberChange('active', 'lastVisitWithinDays', e.target.value)}
+            className="rounded-md max-w-md"
+          />
           <p className="text-xs text-muted-foreground">
-            Customers whose last visit was between these values (in days) are considered dormant.
+            Customers who have visited within this many days are considered active
           </p>
         </div>
+      </div>
+      
+      {/* Dormant Customers */}
+      <div className="border rounded-md p-5 space-y-4">
+        <h3 className="font-medium flex items-center">
+          <UserMinus className="h-4 w-4 text-blue-600 mr-2" />
+          Dormant Customers
+        </h3>
         
-        {/* Churned Customers */}
-        <div className="space-y-4 border-b pb-4">
-          <div>
-            <h3 className="text-lg font-medium">Churned Customers</h3>
-            <p className="text-sm text-muted-foreground">
-              Define what constitutes a churned customer.
+        <p className="text-sm text-muted-foreground">
+          Define what constitutes a dormant customer based on inactivity period.
+        </p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="dormantMin">Last visit between (min days)</Label>
+            <Input
+              id="dormantMin"
+              type="number"
+              min="1"
+              value={data.dormant.lastVisitBetween[0]}
+              onChange={(e) => {
+                const newArray: [number, number] = [...data.dormant.lastVisitBetween];
+                newArray[0] = parseInt(e.target.value || '0');
+                onChange({
+                  ...data,
+                  dormant: {
+                    ...data.dormant,
+                    lastVisitBetween: newArray
+                  }
+                });
+              }}
+              className="rounded-md"
+            />
+            <p className="text-xs text-muted-foreground">
+              Minimum days since last visit to be considered dormant
             </p>
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="lastVisitMoreThanDays">
-              Last visit more than (days)
-            </Label>
+            <Label htmlFor="dormantMax">Last visit between (max days)</Label>
             <Input
-              id="lastVisitMoreThanDays"
+              id="dormantMax"
               type="number"
               min="1"
-              value={data.churned.lastVisitMoreThanDays}
-              onChange={(e) => handleNumberChange('churned', 'lastVisitMoreThanDays', e.target.value)}
+              value={data.dormant.lastVisitBetween[1]}
+              onChange={(e) => {
+                const newArray: [number, number] = [...data.dormant.lastVisitBetween];
+                newArray[1] = parseInt(e.target.value || '0');
+                onChange({
+                  ...data,
+                  dormant: {
+                    ...data.dormant,
+                    lastVisitBetween: newArray
+                  }
+                });
+              }}
+              className="rounded-md"
             />
             <p className="text-xs text-muted-foreground">
-              Customers who haven't visited in more than this many days are considered churned.
+              Maximum days since last visit to be considered dormant
             </p>
           </div>
         </div>
+      </div>
+      
+      {/* Churned Customers */}
+      <div className="border rounded-md p-5 space-y-4">
+        <h3 className="font-medium flex items-center">
+          <UserX className="h-4 w-4 text-blue-600 mr-2" />
+          Churned Customers
+        </h3>
         
-        {/* Resurrected Customers */}
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-lg font-medium">Resurrected Customers</h3>
-            <p className="text-sm text-muted-foreground">
-              Define what constitutes a resurrected customer.
+        <p className="text-sm text-muted-foreground">
+          Define what constitutes a churned customer based on extended inactivity.
+        </p>
+        
+        <div className="space-y-2">
+          <Label htmlFor="lastVisitMoreThanDays">Last visit more than (days)</Label>
+          <Input
+            id="lastVisitMoreThanDays"
+            type="number"
+            min="1"
+            value={data.churned.lastVisitMoreThanDays}
+            onChange={(e) => handleNumberChange('churned', 'lastVisitMoreThanDays', e.target.value)}
+            className="rounded-md max-w-md"
+          />
+          <p className="text-xs text-muted-foreground">
+            Customers who haven't visited for more than this many days are considered churned
+          </p>
+        </div>
+      </div>
+      
+      {/* Resurrected Customers */}
+      <div className="border rounded-md p-5 space-y-4">
+        <h3 className="font-medium flex items-center">
+          <RefreshCcw className="h-4 w-4 text-blue-600 mr-2" />
+          Resurrected Customers
+        </h3>
+        
+        <p className="text-sm text-muted-foreground">
+          Define what constitutes a resurrected customer based on return after inactivity.
+        </p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="wasDormantOrChurned">Was dormant or churned</Label>
+              <Switch
+                id="wasDormantOrChurned"
+                checked={data.resurrected.wasDormantOrChurned}
+                onCheckedChange={(checked) => handleSwitchChange('resurrected', 'wasDormantOrChurned', checked)}
+                disabled={true}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Customer was previously dormant or churned (always enabled)
             </p>
           </div>
           
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label htmlFor="wasDormantOrChurned" className="mb-1 block">
-                  Was dormant or churned
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Customer was previously in dormant or churned state.
-                </p>
+          <div className="space-y-2">
+            <Label htmlFor="recentVisitWithinDays">Recent visit within (days)</Label>
+            <Input
+              id="recentVisitWithinDays"
+              type="number"
+              min="1"
+              value={data.resurrected.recentVisitWithinDays}
+              onChange={(e) => handleNumberChange('resurrected', 'recentVisitWithinDays', e.target.value)}
+              className="rounded-md"
+            />
+            <p className="text-xs text-muted-foreground">
+              Customer has returned within this many days
+            </p>
+          </div>
+        </div>
+      </div>
+      
+      {/* Customer Lifecycle Visualization */}
+      <div className="border rounded-md p-5 space-y-4">
+        <h3 className="font-medium flex items-center">
+          <BarChart3 className="h-4 w-4 text-blue-600 mr-2" />
+          Customer Lifecycle Visualization
+        </h3>
+        
+        <div className="bg-gray-50 p-4 rounded-md">
+          <div className="flex flex-wrap gap-2 md:gap-0 justify-between">
+            <div className="flex flex-col items-center p-2 min-w-[100px]">
+              <div className="h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center mb-2">
+                <Users className="h-6 w-6 text-blue-600" />
               </div>
-              <Switch
-                id="wasDormantOrChurned"
-                checked={true}
-                disabled={true}
-                onCheckedChange={() => {}}
-              />
+              <span className="text-sm font-medium">New</span>
+              <span className="text-xs text-muted-foreground">{data.new.firstVisitWithinDays} days</span>
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="recentVisitWithinDays">
-                Recent visit within (days)
-              </Label>
-              <Input
-                id="recentVisitWithinDays"
-                type="number"
-                min="1"
-                value={data.resurrected.recentVisitWithinDays}
-                onChange={(e) => handleNumberChange('resurrected', 'recentVisitWithinDays', e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                A dormant/churned customer who returned within this many days is considered resurrected.
+            <div className="flex items-center text-gray-300">
+              <ChevronRight className="h-5 w-5" />
+            </div>
+            
+            <div className="flex flex-col items-center p-2 min-w-[100px]">
+              <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mb-2">
+                <UserCheck className="h-6 w-6 text-green-600" />
+              </div>
+              <span className="text-sm font-medium">Active</span>
+              <span className="text-xs text-muted-foreground">{data.active.lastVisitWithinDays} days</span>
+            </div>
+            
+            <div className="flex items-center text-gray-300">
+              <ChevronRight className="h-5 w-5" />
+            </div>
+            
+            <div className="flex flex-col items-center p-2 min-w-[100px]">
+              <div className="h-16 w-16 bg-amber-100 rounded-full flex items-center justify-center mb-2">
+                <UserMinus className="h-6 w-6 text-amber-600" />
+              </div>
+              <span className="text-sm font-medium">Dormant</span>
+              <span className="text-xs text-muted-foreground">{data.dormant.lastVisitBetween[0]}-{data.dormant.lastVisitBetween[1]} days</span>
+            </div>
+            
+            <div className="flex items-center text-gray-300">
+              <ChevronRight className="h-5 w-5" />
+            </div>
+            
+            <div className="flex flex-col items-center p-2 min-w-[100px]">
+              <div className="h-16 w-16 bg-red-100 rounded-full flex items-center justify-center mb-2">
+                <UserX className="h-6 w-6 text-red-600" />
+              </div>
+              <span className="text-sm font-medium">Churned</span>
+              <span className="text-xs text-muted-foreground">{data.churned.lastVisitMoreThanDays}+ days</span>
+            </div>
+          </div>
+          
+          <div className="mt-6 border-t pt-4">
+            <div className="flex items-center justify-center">
+              <div className="flex flex-col items-center p-2">
+                <div className="h-16 w-16 bg-purple-100 rounded-full flex items-center justify-center mb-2">
+                  <RefreshCcw className="h-6 w-6 text-purple-600" />
+                </div>
+                <span className="text-sm font-medium">Resurrected</span>
+                <span className="text-xs text-muted-foreground">Within {data.resurrected.recentVisitWithinDays} days</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
+          <div className="flex gap-2">
+            <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm text-blue-800 font-medium">Customer Lifecycle Management</p>
+              <p className="text-xs text-blue-700 mt-1">
+                These settings determine how customers are categorised throughout their lifecycle. The Tap Agent will use these segments to create targeted rewards and re-engagement campaigns.
               </p>
             </div>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 } 

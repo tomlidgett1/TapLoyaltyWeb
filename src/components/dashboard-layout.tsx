@@ -756,7 +756,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         
         {/* Main content - wider for onboarding */}
         <div className="flex-1 overflow-auto bg-[#F5F5F5] p-2">
-          <div className="bg-white rounded-lg shadow-sm h-full overflow-auto">
+          <div className="bg-white rounded-md h-full overflow-auto border border-gray-200">
             {children}
           </div>
         </div>
@@ -956,7 +956,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         
         {/* Main Content */}
         <main className="flex-1 overflow-auto px-2 pb-2">
-          <div className="bg-white rounded-lg shadow-sm h-full overflow-auto custom-scrollbar">
+          <div className="bg-white rounded-md h-full overflow-auto custom-scrollbar border border-gray-200">
             {children}
           </div>
         </main>
@@ -1011,7 +1011,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 {/* Agent workflow animation - steps appear sequentially */}
                 <div className="w-full space-y-2">
                   {/* Step 1 */}
-                  <div id="step-1-container" className="w-full bg-white rounded-md p-3 border border-gray-200 shadow-sm">
+                  <div id="step-1-container" className="w-full bg-white rounded-md p-3 border border-gray-800 shadow-sm">
                     <div className="flex items-center">
                       <div id="step-1-spinner" className="relative h-6 w-6 mr-3 flex-shrink-0">
                         <div className="absolute inset-0 rounded-full border-2 border-orange-400 border-t-transparent animate-spin"></div>

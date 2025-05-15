@@ -8,7 +8,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyB_bAVEjBiSLbhAVVyLulwRzU1547AwY4Q",
   authDomain: "tap-loyalty-fb6d0.firebaseapp.com",
   projectId: "tap-loyalty-fb6d0",
-  storageBucket: "tap-loyalty-fb6d0.appspot.com",
+  storageBucket: "tap-loyalty-fb6d0",
   messagingSenderId: "1035054543006",
   appId: "1:1035054543006:web:bd0ae160a4bcda6df5cb8f",
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
@@ -19,7 +19,7 @@ console.log('Initializing Firebase with config:', {
   apiKey: firebaseConfig.apiKey,
   authDomain: firebaseConfig.authDomain,
   projectId: firebaseConfig.projectId,
-  // Don't log storage bucket for security
+  storageBucket: firebaseConfig.storageBucket,
   hasAppId: !!firebaseConfig.appId,
   environment: process.env.NODE_ENV
 });
@@ -70,10 +70,7 @@ try {
   console.log('Initializing Firebase Storage');
   storage = getStorage(app);
   console.log('Firebase Storage initialized');
-  
-  // The correct format should be the one in the firebaseConfig
-  // No need to override it as it's already set correctly
-  console.log('Using storage bucket:', firebaseConfig.storageBucket);
+  console.log('Using storage bucket from config:', firebaseConfig.storageBucket);
 } catch (error) {
   console.error('Error initializing Firebase Storage:', error);
 }

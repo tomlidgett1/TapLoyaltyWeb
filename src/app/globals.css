@@ -124,6 +124,11 @@ body {
   100% { transform: translateX(200%); }
 }
 
+@keyframes wipeRight {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
 .animate-progress {
   animation: progress 1.5s ease-in-out infinite;
 }

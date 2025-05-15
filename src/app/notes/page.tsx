@@ -32,6 +32,7 @@ import {
   AlertDialogAction, 
   AlertDialogCancel, 
   AlertDialogContent, 
+  AlertDialogDescription, 
   AlertDialogFooter, 
   AlertDialogHeader, 
   AlertDialogTitle
@@ -96,6 +97,7 @@ export default function NotesPage() {
   const [animatingReward, setAnimatingReward] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingFile, setDeletingFile] = useState(false);
+  const [searchMode, setSearchMode] = useState<"filter" | "semantic">("filter");
   
   // Semantic search state
   const [semanticSearchQuery, setSemanticSearchQuery] = useState("");
@@ -135,6 +137,10 @@ export default function NotesPage() {
   
   // Document type selector state
   const [isUpdatingDocType, setIsUpdatingDocType] = useState(false);
+  
+  // Add a state for PDF blob at the beginning of the component
+  const [currentPdfUrl, setCurrentPdfUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
   
   // Safe date formatting function
   const safeFormatDate = (date: Date | null, formatString: string): string => {
@@ -286,6 +292,60 @@ export default function NotesPage() {
     setNumPages(nextNumPages);
   }
 
+  // Add a helper function to fetch PDFs with proper CORS handling
+  const fetchPdfAsDataUrl = async (url: string): Promise<string> => {
+    setPdfLoading(true);
+    try {
+      // Create a new URL with a proxy service that handles CORS
+      // For development purposes, you can use a CORS proxy service
+      // In production, this should be replaced with your own proxy or Firebase function
+      const corsAnywhereUrl = `https://cors-anywhere.herokuapp.com/${url}`;
+      
+      const response = await fetch(corsAnywhereUrl);
+      if (!response.ok) throw new Error(`Failed to fetch PDF: ${response.status}`);
+      
+      const blob = await response.blob();
+      return URL.createObjectURL(blob);
+    } catch (error) {
+      console.error("Error fetching PDF:", error);
+      toast({
+        title: "PDF Error",
+        description: "CORS issue detected. Try downloading the file instead or open in a new tab.",
+        variant: "destructive"
+      });
+      throw error;
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  // Move the useEffect out of renderFileViewer and into the main component
+  useEffect(() => {
+    let isMounted = true;
+    
+    if (selectedNote?.fileUrl && 
+        (selectedNote.type === 'pdf' || 
+         (selectedNote.fileUrl && selectedNote.fileUrl.toLowerCase().endsWith('.pdf')))) {
+      
+      // Check if we already have this PDF loaded
+      if (currentPdfUrl && currentPdfUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(currentPdfUrl);
+        setCurrentPdfUrl(null);
+      }
+      
+      // Direct inline embedding with PDF object tag as a fallback approach
+      setCurrentPdfUrl(selectedNote.fileUrl);
+    }
+    
+    return () => {
+      isMounted = false;
+      if (currentPdfUrl && currentPdfUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(currentPdfUrl);
+      }
+    };
+  }, [selectedNote, currentPdfUrl]);
+
+  // Now update the renderFileViewer function without the useEffect inside it
   const renderFileViewer = () => {
     if (!selectedNote?.fileUrl) return null;
     
@@ -297,25 +357,49 @@ export default function NotesPage() {
     if (isPdf) {
       return (
         <div ref={pdfViewerContainerRef} className="w-full h-full overflow-y-auto rounded-md">
-          <Document
-            file={fileUrl}
-            onLoadSuccess={onDocumentLoadSuccess}
-            onLoadError={(error) => toast({ title: "PDF Error", description: `Failed to load PDF: ${error.message}`, variant: "destructive"})}
-            loading={<div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>}
-            className="flex flex-col items-center py-4"
-          >
-            {Array.from(new Array(numPages || 0), (el, index) => (
-              <Page 
-                key={`page_${index + 1}`} 
-                pageNumber={index + 1} 
-                renderTextLayer={false} 
-                renderAnnotationLayer={false}
-                className="mb-4 shadow-lg border border-gray-300"
-                width={pdfViewerContainerRef.current?.clientWidth ? Math.min(pdfViewerContainerRef.current.clientWidth * 0.95, 800) : undefined}
-                scale={pdfScale}
-              />
-            ))}
-          </Document>
+          {pdfLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+              <span className="ml-2 text-gray-600">Loading PDF...</span>
+            </div>
+          ) : (
+            <>
+              {/* Fallback to object tag which can sometimes bypass CORS */}
+              <object 
+                data={fileUrl} 
+                type="application/pdf" 
+                width="100%" 
+                height="100%" 
+                className="w-full h-full min-h-[500px] rounded-md"
+              >
+                <div className="flex flex-col items-center justify-center p-8 text-center">
+                  <FileIcon className="h-12 w-12 text-red-500 mb-4" />
+                  <h3 className="font-medium mb-2">Unable to display PDF</h3>
+                  <p className="text-sm text-muted-foreground mb-4">Your browser couldn't display this PDF due to security restrictions.</p>
+                  <div className="flex gap-3">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="gap-2"
+                      onClick={handleDownload}
+                    >
+                      <Download className="h-4 w-4" />
+                      <span>Download PDF</span>
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="gap-2"
+                      onClick={() => window.open(fileUrl, '_blank')}
+                    >
+                      <Eye className="h-4 w-4" />
+                      <span>Open in New Tab</span>
+                    </Button>
+                  </div>
+                </div>
+              </object>
+            </>
+          )}
         </div>
       );
     } else if (isImage) {
@@ -787,32 +871,118 @@ export default function NotesPage() {
         return newSearches;
       });
       
-      // Call Firebase function
-      const apiUrl = 'https://us-central1-taployalty.cloudfunctions.net/knowledgeChat';
-      
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        mode: 'cors',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          merchantId: user.uid,
-          question: semanticSearchQuery
-        }),
+      // Log request details for debugging
+      console.log('🔍 Knowledge Base Request:', {
+        url: 'https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/knowledgeBase',
+        userId: user.uid,
+        prompt: semanticSearchQuery
       });
       
+      // Make API call directly to knowledgeBase function - same approach as tap-agent-sheet.tsx
+      const response = await fetch(
+        'https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/knowledgeBase', 
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            merchantId: user.uid,
+            prompt: semanticSearchQuery
+          }),
+        }
+      );
+      
+      console.log('📥 Response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error(`Error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ Error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`Error ${response.status}: ${errorText || response.statusText}`);
       }
       
-      const data = await response.json();
-      setKnowledgeChatResponse(data);
+      // Clone the response so we can log it and still use it
+      const clonedResponse = response.clone();
+      const responseText = await clonedResponse.text();
+      console.log('📥 Response body:', responseText);
+      
+      // Parse the original response
+      try {
+        const data = JSON.parse(responseText);
+        console.log('✅ Parsed response data:', data);
+        
+        // Check for multiple possible response formats like in tap-agent-sheet.tsx
+        if (data?.answer) {
+          // Make sure we have a sources array even if it doesn't exist in the response
+          setKnowledgeChatResponse({
+            ...data,
+            sources: data.sources || [],
+            metadata: data.metadata || { 
+              contextCount: 0, 
+              query: semanticSearchQuery 
+            }
+          });
+        } else if (data?.success && data?.summary) {
+          setKnowledgeChatResponse({ 
+            answer: data.summary,
+            sources: [],
+            metadata: { contextCount: 0, query: semanticSearchQuery }
+          });
+        } else if (data?.success && data?.answer) {
+          setKnowledgeChatResponse({ 
+            ...data,
+            answer: data.answer,
+            sources: data.sources || [],
+            metadata: data.metadata || { contextCount: 0, query: semanticSearchQuery }
+          });
+        } else if (data?.result?.summary) {
+          setKnowledgeChatResponse({ 
+            answer: data.result.summary,
+            sources: [],
+            metadata: { contextCount: 0, query: semanticSearchQuery } 
+          });
+        } else if (data?.summary) {
+          setKnowledgeChatResponse({ 
+            answer: data.summary,
+            sources: [],
+            metadata: { contextCount: 0, query: semanticSearchQuery }
+          });
+        } else if (data?.error) {
+          throw new Error(data.error);
+        } else {
+          // Fallback for any other format
+          setKnowledgeChatResponse({ 
+            answer: typeof data === 'string' ? data : JSON.stringify(data),
+            sources: [],
+            metadata: { contextCount: 0, query: semanticSearchQuery }
+          });
+        }
+        
+        toast({
+          title: "Knowledge Search Complete",
+          description: "Your search has been processed successfully",
+          variant: "default"
+        });
+      } catch (parseError) {
+        console.error('❌ JSON parse error:', parseError);
+        console.error('❌ Failed to parse response text:', responseText);
+        throw new Error('Failed to parse response as JSON');
+      }
     } catch (error) {
-      console.error('Error calling knowledgeChat function:', error);
+      console.error('❌ Knowledge chat error:', error);
+      if (error instanceof Error) {
+        console.error('❌ Error details:', {
+          message: error.message,
+          stack: error.stack
+        });
+      }
       toast({
         title: "Error",
-        description: "Failed to search documents. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to search documents. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -856,10 +1026,16 @@ export default function NotesPage() {
       // Command/Ctrl + K to focus search
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        const searchInput = document.getElementById('semantic-search-input');
+        const searchInput = document.getElementById('unified-search-input');
         if (searchInput) {
           (searchInput as HTMLInputElement).focus();
         }
+      }
+
+      // Command/Ctrl + / to toggle search mode
+      if ((e.metaKey || e.ctrlKey) && e.key === '/') {
+        e.preventDefault();
+        setSearchMode(prev => prev === "filter" ? "semantic" : "filter");
       }
       
       // Escape to close search results or knowledge chat
@@ -876,7 +1052,7 @@ export default function NotesPage() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [showSearchResults, showKnowledgeChatResponse]);
+  }, [showSearchResults, showKnowledgeChatResponse, setSearchMode]);
   
   return (
     <DashboardLayout>
@@ -884,218 +1060,22 @@ export default function NotesPage() {
         {/* Custom header without margin */}
         <div className="px-6 py-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <h1 className="text-xl font-semibold tracking-tight">Notes</h1>
-            <div className="flex flex-col sm:flex-row items-center gap-2 flex-1 md:max-w-3xl">
-              <div className="relative w-full semantic-search-container">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-                    id="semantic-search-input"
-                    placeholder="Ask a question about your documents..." 
-                    className="pl-10 pr-10 h-8 rounded-md w-full"
-                    value={semanticSearchQuery}
-                    onChange={handleSemanticSearch}
-                    onFocus={() => semanticSearchQuery.trim() !== "" && setShowSearchResults(true)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        callKnowledgeChatFunction();
-                      }
-                    }}
-            />
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-muted-foreground">
-                    ⌘K
-          </div>
-        </div>
-        
-                {/* Semantic search results dropdown */}
-                {showSearchResults && (
-                  <div className="absolute mt-1 w-full bg-white rounded-md border border-gray-200 shadow-lg z-10">
-                    <div className="p-2 border-b">
-                      <h3 className="text-xs font-medium text-muted-foreground">Similar documents</h3>
-                    </div>
-                    {searchResults.length > 0 ? (
-                      <div className="max-h-60 overflow-y-auto py-1 scrollable">
-                        {searchResults.map((result, index) => (
-                          <div 
-                            key={index} 
-                            className="px-2 py-1.5 hover:bg-muted cursor-pointer"
-                            onClick={() => {
-                              // Find the note that matches this result and select it
-                              const matchingNote = notes.find(note => note.title === result.title);
-                              if (matchingNote) {
-                                setSelectedNote(matchingNote);
-                                setShowSearchResults(false);
-                                setSemanticSearchQuery("");
-                              }
-                            }}
-                          >
-                            <div className="flex items-start gap-2">
-                              {getSearchResultIcon(result.type)}
-                              <div>
-                                <p className="text-sm font-medium">{result.title}</p>
-                                <p className="text-xs text-muted-foreground">{result.summary}</p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : semanticSearchQuery.trim() !== "" ? (
-                      <div className="py-4 px-2 text-center">
-                        <p className="text-sm text-muted-foreground">No matching documents found</p>
-                      </div>
-                    ) : recentSearches.length > 0 ? (
-                      <div className="py-2">
-                        <div className="px-2 pb-1">
-                          <h4 className="text-xs font-medium text-muted-foreground">Recent searches</h4>
-                        </div>
-                        {recentSearches.map((search, index) => (
-                          <div
-                            key={index}
-                            className="px-3 py-1.5 hover:bg-muted cursor-pointer flex items-center gap-2"
-                            onClick={() => {
-                              setSemanticSearchQuery(search);
-                              callKnowledgeChatFunction();
-                            }}
+            <div className="flex items-center gap-4">
+              <h1 className="text-xl font-semibold tracking-tight whitespace-nowrap">Notes</h1>
+            </div>
+            
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="outline" className="h-8 gap-2 rounded-md">
+                <Plus className="h-4 w-4" />
+                New Note
+              </Button>
+              <Button 
+                className="h-8 gap-2 rounded-md"
+                onClick={() => setUploadDialogOpen(true)}
               >
-                            <Clock className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-sm truncate">{search}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="py-4 px-2 text-center">
-                        <p className="text-sm text-muted-foreground">Type to search documents</p>
-                      </div>
-                    )}
-                    <div className="p-2 border-t">
-                      <button 
-                        className="w-full text-xs text-primary hover:underline text-left flex items-center gap-1.5"
-                        onClick={() => {
-                          callKnowledgeChatFunction();
-                        }}
-                >
-                        <Search className="h-3 w-3" />
-                        <span>Press Enter to search all documents</span>
-                        <span className="ml-auto text-muted-foreground">⏎</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Knowledge Chat Response */}
-                {showKnowledgeChatResponse && (
-                  <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-md shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
-                      <div className="px-4 py-3 border-b flex justify-between items-center bg-gray-50">
-                        <div className="flex items-center gap-2">
-                          <Search className="h-4 w-4 text-muted-foreground" />
-                          <h3 className="font-medium">Knowledge Search Results</h3>
-                        </div>
-            <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 rounded-md" 
-                          onClick={() => setShowKnowledgeChatResponse(false)}
-            >
-                          <X className="h-4 w-4" />
-            </Button>
-                      </div>
-                      
-                      <div className="flex-1 overflow-y-auto p-5">
-                        {isLoadingKnowledgeChat ? (
-                          <div className="h-60 flex flex-col items-center justify-center">
-                            <div className="relative">
-                              <div className="h-16 w-16 rounded-full border-t-2 border-b-2 border-gray-200 animate-spin"></div>
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <Search className="h-6 w-6 text-primary" />
-                              </div>
-                            </div>
-                            <p className="mt-4 text-muted-foreground">Analysing your documents...</p>
-                          </div>
-                        ) : knowledgeChatResponse ? (
-                          <div>
-                            <div className="prose prose-sm max-w-none mb-6">
-                              <div className="markdown-content bg-[#f8f9fb] p-4 rounded-md border border-gray-200" dangerouslySetInnerHTML={{ 
-                                __html: knowledgeChatResponse.answer
-                                  .replace(/\n\n/g, '</p><p>')
-                                  .replace(/\n/g, '<br>')
-                                  .replace(/\*\*(.*?)\*\*/g, '<strong class="font-medium">$1</strong>')
-                                  .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                                  .replace(/^### (.*?)$/gm, '</p><h3 class="text-lg font-medium my-3">$1</h3><p>')
-                                  .replace(/^## (.*?)$/gm, '</p><h2 class="text-xl font-semibold my-4">$1</h2><p>')
-                                  .replace(/^# (.*?)$/gm, '</p><h1 class="text-2xl font-bold my-4">$1</h1><p>')
-                                  .replace(/^\- (.*?)$/gm, '<li class="ml-5">$1</li>')
-                                  .replace(/<li class="ml-5">(.*?)<\/li>/g, '<ul class="my-2 space-y-1 list-disc"><li class="ml-5">$1</li></ul>')
-                                  .replace(/<\/ul><ul class="my-2 space-y-1 list-disc">/g, '')
-                                  .replace(/^(.+)$/gm, '<p>$1</p>')
-                                  .replace(/<p><\/p>/g, '')
-                                  .replace(/<p><p>/g, '<p>')
-                                  .replace(/<\/p><\/p>/g, '</p>')
-                              }} />
-                            </div>
-                            
-                            {knowledgeChatResponse.sources.length > 0 && (
-                              <div className="mt-6 pt-4 border-t">
-                                <h4 className="text-sm font-medium mb-3">Sources:</h4>
-                                <ul className="space-y-2">
-                                  {knowledgeChatResponse.sources.map((source, i) => (
-                                    <li key={i} className="flex gap-2 items-start bg-gray-50 p-2 rounded-md border border-gray-200">
-                                      <div className="bg-primary/10 p-1.5 rounded-md">
-                                        <File className="h-4 w-4 text-primary" />
-                                      </div>
-                                      <span className="text-sm">{source}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-                            
-                            <div className="mt-6 pt-4 border-t text-xs text-muted-foreground">
-                              <p>Query: "{knowledgeChatResponse.metadata.query}"</p>
-                              <p>Found {knowledgeChatResponse.metadata.contextCount} relevant document chunks</p>
-        </div>
-                          </div>
-                        ) : (
-                          <div className="h-40 flex items-center justify-center">
-                            <div className="text-center">
-                              <FileQuestion className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                              <p className="text-muted-foreground">No results found</p>
-                            </div>
-                          </div>
-                        )}
-      </div>
-      
-                      <div className="px-4 py-3 border-t bg-gray-50 flex justify-between">
-                        <div className="text-xs text-muted-foreground">
-                          Powered by AI
-                        </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          className="h-8 text-sm rounded-md"
-                          onClick={() => setShowKnowledgeChatResponse(false)}
-                        >
-                          Close
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex items-center gap-2 shrink-0 mt-2 sm:mt-0">
-                <Button variant="outline" className="h-8 gap-2 rounded-md">
-                  <Plus className="h-4 w-4" />
-                  New Note
-                </Button>
-                <Button 
-                  className="h-8 gap-2 rounded-md"
-                  onClick={() => setUploadDialogOpen(true)}
-                >
-                  <FileUp className="h-4 w-4" />
-                  Upload Document
-                </Button>
-              </div>
+                <FileUp className="h-4 w-4" />
+                Upload Document
+              </Button>
             </div>
           </div>
         </div>
@@ -1104,24 +1084,151 @@ export default function NotesPage() {
           {/* Left Column - Notes List */}
           <div className="lg:col-span-1 border-r flex flex-col">
             <div className="p-4 border-b flex-shrink-0">
+              {/* Unified search box */}
               <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-                  placeholder="Search notes..." 
-                  className="pl-10 h-9"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-        </div>
-        
+                <div className="flex items-center">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                      id="unified-search-input"
+                      placeholder={searchMode === "filter" ? "Search notes..." : "Ask a question about your documents..."}
+                      className={`pl-10 ${searchMode === "filter" ? "pr-[110px]" : "pr-12"} h-9 rounded-md`}
+                      value={searchMode === "filter" ? searchQuery : semanticSearchQuery}
+                      onChange={(e) => {
+                        if (searchMode === "filter") {
+                          setSearchQuery(e.target.value);
+                        } else {
+                          handleSemanticSearch(e);
+                        }
+                      }}
+                      onFocus={() => {
+                        if (searchMode === "semantic" && semanticSearchQuery.trim() !== "") {
+                          setShowSearchResults(true);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (searchMode === "semantic" && e.key === 'Enter') {
+                          callKnowledgeChatFunction();
+                          setSelectedNote(null);
+                        }
+                      }}
+                    />
+                    
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
+                      {searchMode === "filter" ? (
+                        <button
+                          type="button"
+                          className="text-xs text-primary hover:text-primary/80 font-medium px-2 py-1 rounded-sm bg-primary/5 hover:bg-primary/10 transition-colors flex items-center gap-1"
+                          onClick={() => setSearchMode("semantic")}
+                          title="Switch to AI search (⌘/)"
+                        >
+                          <MessageSquare className="h-3 w-3" />
+                          <span>Ask a question</span>
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="text-xs text-muted-foreground hover:text-primary font-medium px-2 py-1 rounded-sm hover:bg-gray-100 transition-colors flex items-center gap-1"
+                            onClick={() => setSearchMode("filter")}
+                            title="Switch to filter search (⌘/)"
+                          >
+                            <Filter className="h-3 w-3" />
+                            <span>Filter</span>
+                          </button>
+                          <kbd className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-muted-foreground/20 opacity-70">
+                            <span className="text-xs">⏎</span>
+                          </kbd>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Semantic search results dropdown */}
+              {searchMode === "semantic" && showSearchResults && (
+                <div className="absolute mt-1 w-full bg-white rounded-md border border-gray-200 shadow-lg z-10 left-0 right-0 max-w-md semantic-search-container">
+                  <div className="p-2 border-b">
+                    <h3 className="text-xs font-medium text-muted-foreground">Similar documents</h3>
+                  </div>
+                  {searchResults.length > 0 ? (
+                    <div className="max-h-60 overflow-y-auto py-1 scrollable">
+                      {searchResults.map((result, index) => (
+                        <div 
+                          key={index} 
+                          className="px-2 py-1.5 hover:bg-muted cursor-pointer"
+                          onClick={() => {
+                            // Find the note that matches this result and select it
+                            const matchingNote = notes.find(note => note.title === result.title);
+                            if (matchingNote) {
+                              setSelectedNote(matchingNote);
+                              setShowSearchResults(false);
+                              setSemanticSearchQuery("");
+                            }
+                          }}
+                        >
+                          <div className="flex items-start gap-2">
+                            {getSearchResultIcon(result.type)}
+                            <div>
+                              <p className="text-sm font-medium">{result.title}</p>
+                              <p className="text-xs text-muted-foreground">{result.summary}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : semanticSearchQuery.trim() !== "" ? (
+                    <div className="py-4 px-2 text-center">
+                      <p className="text-sm text-muted-foreground">No matching documents found</p>
+                    </div>
+                  ) : recentSearches.length > 0 ? (
+                    <div className="py-2">
+                      <div className="px-2 pb-1">
+                        <h4 className="text-xs font-medium text-muted-foreground">Recent searches</h4>
+                      </div>
+                      {recentSearches.map((search, index) => (
+                        <div
+                          key={index}
+                          className="px-3 py-1.5 hover:bg-muted cursor-pointer flex items-center gap-2"
+                          onClick={() => {
+                            setSemanticSearchQuery(search);
+                            callKnowledgeChatFunction();
+                          }}
+                        >
+                          <Clock className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-sm truncate">{search}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-4 px-2 text-center">
+                      <p className="text-sm text-muted-foreground">Type to search documents</p>
+                    </div>
+                  )}
+                  <div className="p-2 border-t">
+                    <button 
+                      className="w-full text-xs text-primary hover:underline text-left flex items-center gap-1.5"
+                      onClick={() => {
+                        callKnowledgeChatFunction();
+                      }}
+                    >
+                      <Search className="h-3 w-3" />
+                      <span>Press Enter to search all documents</span>
+                      <span className="ml-auto text-muted-foreground">⏎</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+              
               <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="grid grid-cols-4 w-full">
                   <TabsTrigger value="all">All</TabsTrigger>
                   <TabsTrigger value="invoices">Invoices</TabsTrigger>
                   <TabsTrigger value="notes">Notes</TabsTrigger>
                   <TabsTrigger value="other">Other</TabsTrigger>
-        </TabsList>
-      </Tabs>
+                </TabsList>
+              </Tabs>
             </div>
       
             <div className="flex-grow overflow-y-auto">
@@ -1366,13 +1473,157 @@ export default function NotesPage() {
                   )}
                 </div>
               </div>
+            ) : showKnowledgeChatResponse ? (
+              <div className="flex flex-col h-full">
+                <div className="px-6 py-4 border-b flex items-center justify-between flex-shrink-0 bg-gray-50">
+                  <div className="flex items-center gap-2">
+                    <Search className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="font-medium">Knowledge Search Results</h3>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 rounded-md" 
+                    onClick={() => setShowKnowledgeChatResponse(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-5">
+                  {isLoadingKnowledgeChat ? (
+                    <div className="h-60 flex flex-col items-center justify-center">
+                      <div className="relative">
+                        <div className="h-16 w-16 rounded-full border-t-2 border-b-2 border-gray-200 animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Search className="h-6 w-6 text-primary" />
+                        </div>
+                      </div>
+                      <p className="mt-4 text-muted-foreground">Analysing your documents...</p>
+                    </div>
+                  ) : knowledgeChatResponse ? (
+                    <div>
+                      <div 
+                        className="markdown-content bg-[#f8f9fb] p-5 rounded-md border border-gray-200 shadow-sm"
+                        dangerouslySetInnerHTML={{ 
+                          __html: knowledgeChatResponse?.answer
+                            // First, escape any HTML that might be in the content
+                            .replace(/&/g, '&amp;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;')
+                            
+                            // Process markdown elements in the correct order
+                            
+                            // Headings with more modest spacing
+                            .replace(/^### (.*?)$/gm, '<h3 class="text-lg font-medium mt-5 mb-2 text-gray-900 border-b pb-1">$1</h3>')
+                            .replace(/^## (.*?)$/gm, '<h2 class="text-xl font-semibold mt-6 mb-3 text-gray-900 border-b pb-1">$1</h2>')
+                            .replace(/^# (.*?)$/gm, '<h1 class="text-2xl font-bold mt-6 mb-3 text-gray-900 border-b pb-1">$1</h1>')
+                            
+                            // Blockquotes with better spacing
+                            .replace(/^> (.*?)$/gm, '<blockquote class="border-l-4 border-gray-300 pl-4 py-1 my-3 text-gray-700 italic">$1</blockquote>')
+                            
+                            // Lists (unordered) with tighter spacing
+                            .replace(/^\- (.*?)$/gm, '<li class="ml-5 text-gray-800">$1</li>')
+                            
+                            // Lists (ordered) with tighter spacing
+                            .replace(/^\d+\. (.*?)$/gm, '<li class="ml-5 text-gray-800">$1</li>')
+                            
+                            // Process list items into proper list containers with minimal spacing
+                            .replace(/<li class="ml-5 text-gray-800">(.*?)<\/li>/g, function(match) {
+                              if (match.includes('1. ') || match.includes('2. ') || match.includes('3. ')) {
+                                return '<ol class="my-3 pl-1 list-decimal text-gray-800">' + match + '</ol>';
+                              } else {
+                                return '<ul class="my-3 pl-1 list-disc text-gray-800">' + match + '</ul>';
+                              }
+                            })
+                            
+                            // Clean up consecutive lists
+                            .replace(/<\/ul><ul class="my-3 pl-1 list-disc text-gray-800">/g, '')
+                            .replace(/<\/ol><ol class="my-3 pl-1 list-decimal text-gray-800">/g, '')
+                            
+                            // Horizontal rule with better spacing
+                            .replace(/^---$/gm, '<hr class="my-4 border-t border-gray-300">')
+                            
+                            // These inline text formatting should come before paragraph processing
+                            // Bold text
+                            .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>')
+                            
+                            // Italic text
+                            .replace(/\*(.*?)\*/g, '<em class="text-gray-700">$1</em>')
+                            
+                            // Code blocks (inline) with improved appearance
+                            .replace(/`([^`]+)`/g, '<code class="bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded text-sm font-mono">$1</code>')
+                            
+                            // Links
+                            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>')
+                            
+                            // Handle multiple line breaks for better paragraph spacing
+                            .replace(/\n\n+/g, '</p><p class="text-gray-800 mb-3">')
+                            .replace(/\n/g, '<br>')
+                            
+                            // Paragraphs - process last to avoid nested paragraphs
+                            // Wrap content in paragraphs, but not if it's already a block element
+                            .replace(/^([^<].+[^>])$/gm, '<p class="text-gray-800 mb-3">$1</p>')
+
+                            // Process all remaining plain text into paragraphs and clean up
+                            .replace(/<p><\/p>/g, '')
+                            .replace(/<p><(h|ul|ol|blockquote|hr)/g, '<$1')
+                            .replace(/(<\/h\d|<\/ul|<\/ol|<\/blockquote|<hr)><\/p>/g, '$1>')
+                        }} 
+                      />
+                      
+                      {knowledgeChatResponse?.sources && knowledgeChatResponse.sources.length > 0 && (
+                        <div className="mt-6 pt-4 border-t">
+                          <h4 className="text-sm font-medium mb-3">Sources:</h4>
+                          <ul className="space-y-2">
+                            {knowledgeChatResponse.sources.map((source, i) => (
+                              <li key={i} className="flex gap-2 items-start bg-gray-50 p-2 rounded-md border border-gray-200">
+                                <div className="bg-primary/10 p-1.5 rounded-md">
+                                  <File className="h-4 w-4 text-primary" />
+                                </div>
+                                <span className="text-sm">{source}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      <div className="mt-6 pt-4 border-t text-xs text-muted-foreground">
+                        <p>Query: "{knowledgeChatResponse?.metadata?.query || semanticSearchQuery}"</p>
+                        <p>Found {knowledgeChatResponse?.metadata?.contextCount || 0} relevant document chunks</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="h-40 flex items-center justify-center">
+                      <div className="text-center">
+                        <FileQuestion className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-muted-foreground">No results found</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="px-6 py-3 border-t bg-gray-50 flex justify-between">
+                  <div className="text-xs text-muted-foreground">
+                    Powered by AI
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    className="h-8 text-sm rounded-md"
+                    onClick={() => setShowKnowledgeChatResponse(false)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
             ) : (
               <div className="h-full flex items-center justify-center p-8">
                 <div className="text-center">
                   <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                   <h3 className="text-lg font-medium mb-2">No document selected</h3>
                   <p className="text-muted-foreground">
-                    Select a document from the list to view its contents
+                    Select a document from the list to view its contents or search to see results here
                   </p>
                 </div>
               </div>
@@ -1496,9 +1747,9 @@ export default function NotesPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete file</AlertDialogTitle>
-            <DialogDescription>
+            <AlertDialogDescription>
               Are you sure you want to delete this file? This action cannot be undone.
-            </DialogDescription>
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deletingFile}>Cancel</AlertDialogCancel>

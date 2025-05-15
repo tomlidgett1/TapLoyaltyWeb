@@ -1,0 +1,345 @@
+"use client"
+
+import { useEffect, useState, useRef } from "react"
+import { db } from "@/lib/firebase"
+import { collection, query, orderBy, getDocs, Timestamp, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, DocumentData, QueryDocumentSnapshot } from "firebase/firestore"
+import { getStorage, ref, getDownloadURL, uploadBytesResumable } from "firebase/storage"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Search, Calendar, Tag, Clock, FileText, Filter, ChevronDown, Eye, ArrowRight, LayoutGrid, MessageSquare, Gift, Plus, FileUp, Inbox, FileImage, FilePlus, FileQuestion, Check, Loader2, Image as ImageIcon, File as FileIcon, ChevronLeft, ChevronRight as ChevronRightIcon, ZoomIn, ZoomOut, Download, CornerDownLeft, File, ChevronRight, MoreVertical, PlusCircle, PlusIcon, Upload, X } from "lucide-react"
+import { format, isValid, formatRelative } from "date-fns"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { DashboardLayout } from "@/components/dashboard-layout"
+import { cn } from "@/lib/utils"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { toast } from "@/components/ui/use-toast"
+import { useAuth } from "@/contexts/auth-context"
+import { Avatar, AvatarImage } from "@/components/ui/avatar"
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle
+} from "@/components/ui/alert-dialog"
+import { 
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command"
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
+import { AnimatedCheckbox, ConnectionButton } from "@/components/ui/checkbox"
+
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
+// Define the Note interface
+interface Note {
+  id: string;
+  title: string;
+  summary: string;
+  rawText: string;
+  tags: string[];
+  areaId: string;
+  areaTitle: string;
+  categoryId: string;
+  categoryTitle: string;
+  createdAt: Date;
+  reminderTime: Date | null;
+  reminderSent: boolean;
+  type: "note" | "invoice" | "other" | "pdf" | "image";
+  fileUrl?: string;
+  fileType?: string;
+  fileName?: string;
+  contentType?: string;
+  vectorStored?: boolean; // Indicates if the document is stored in vector database
+}
+
+// Knowledge chat response interface
+interface KnowledgeChatResponse {
+  answer: string;
+  sources: string[];
+  metadata: {
+    contextCount: number;
+    query: string;
+  };
+}
+
+export default function NotesPage() {
+  const { user } = useAuth();
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedArea, setSelectedArea] = useState<string | null>(null);
+  const [areas, setAreas] = useState<{id: string, title: string}[]>([]);
+  const [activeTab, setActiveTab] = useState("all");
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
+  const [csAgentSelected, setCsAgentSelected] = useState(false);
+  const [rewardAgentSelected, setRewardAgentSelected] = useState(false);
+  const [animatingCs, setAnimatingCs] = useState(false);
+  const [animatingReward, setAnimatingReward] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingFile, setDeletingFile] = useState(false);
+  const [searchMode, setSearchMode] = useState<"filter" | "semantic">("filter");
+  
+  // Semantic search state
+  const [semanticSearchQuery, setSemanticSearchQuery] = useState("");
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [searchResults, setSearchResults] = useState<{title: string; summary: string; type: string}[]>([
+    { title: "Invoice April 2023", summary: "Contains payment details and due dates", type: "invoice" },
+    { title: "Client meeting notes", summary: "Discussion about payment schedules", type: "note" },
+    { title: "Quarterly budget", summary: "Financial projections and expense tracking", type: "other" }
+  ]);
+  
+  // Knowledge chat state
+  const [isLoadingKnowledgeChat, setIsLoadingKnowledgeChat] = useState(false);
+  const [knowledgeChatResponse, setKnowledgeChatResponse] = useState<KnowledgeChatResponse | null>(null);
+  const [showKnowledgeChatResponse, setShowKnowledgeChatResponse] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  
+  // Title editing state
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState("");
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const listTitleInputRef = useRef<HTMLInputElement>(null);
+  
+  // Upload dialog state
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadSummary, setUploadSummary] = useState("");
+  const [uploadTags, setUploadTags] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // PDF Viewer state
+  const [numPages, setNumPages] = useState<number | null>(null);
+  const [pdfScale, setPdfScale] = useState(1.0);
+  const pdfViewerContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Document type selector state
+  const [isUpdatingDocType, setIsUpdatingDocType] = useState(false);
+  
+  // Add a state for PDF blob at the beginning of the component
+  const [currentPdfUrl, setCurrentPdfUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  
+  // Safe date formatting function
+  const safeFormatDate = (date: Date | null, formatString: string): string => {
+    if (!date || !isValid(date)) {
+      return "Invalid date";
+    }
+    try {
+      return format(date, formatString);
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return "Invalid date";
+    }
+  };
+  
+  // Fetch notes from Firestore
+  const fetchNotes = async () => {
+    if (!user || !user.uid) {
+      setLoading(false);
+      setNotes([]);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const notesRef = collection(db, `customers/${user.uid}/ThoughtsX`);
+      const notesQuery = query(notesRef, orderBy("createdAt", "desc"));
+      const querySnapshot = await getDocs(notesQuery);
+      
+      const notesData: Note[] = [];
+      const areasMap = new Map<string, string>();
+      
+      // Create an array of promises to check vector storage status
+      const notesWithStatusPromises = querySnapshot.docs.map(async (docSnapshot: QueryDocumentSnapshot<DocumentData>) => {
+        const data = docSnapshot.data();
+        
+        // Convert Firestore timestamp to Date, with proper checks
+        const createdAt = data.createdAt && typeof data.createdAt.toDate === 'function' 
+          ? data.createdAt.toDate() 
+          : new Date();
+        
+        // Handle reminderTime safely
+        let reminderTime: Date | null = null;
+        if (data.reminderTime) {
+          if (data.reminderTime.toDate) {
+            reminderTime = data.reminderTime.toDate();
+          } else if (data.reminderTime instanceof Date) {
+            reminderTime = data.reminderTime;
+          } else if (typeof data.reminderTime === 'string') {
+            reminderTime = new Date(data.reminderTime);
+          } else if (typeof data.reminderTime === 'number') {
+            reminderTime = new Date(data.reminderTime);
+          }
+        }
+      
+        // Assign a type based on some criteria (for demo purposes)
+        // In a real app, this would come from the data
+        let noteType = data.type || "other";
+        const fileName = data.fileName || "";
+        const fileTypeFromData = data.fileType || fileName.split('.').pop()?.toLowerCase() || '';
+
+        if (!data.type) { // Only override if type isn't explicitly set
+          if (fileTypeFromData === 'pdf') {
+            noteType = fileName.toLowerCase().includes('invoice') ? "invoice" : "pdf";
+          } else if (['jpg', 'jpeg', 'png', 'gif'].includes(fileTypeFromData)) {
+            noteType = "image";
+          } else if (['doc', 'docx', 'txt', 'md'].includes(fileTypeFromData)) {
+            noteType = "note";
+          } else if (fileName) { // If there is a filename but type is unknown
+             noteType = "other"; // or a more generic 'file' type
+          }
+        }
+        
+        // Check vector database status if document has a file
+        let vectorStored = false;
+        if (fileName) {
+          try {
+            // Check if the document exists in the merchants/merchantId/documents collection
+            const vectorDocRef = doc(db, `merchants/${user.uid}/documents`, fileName);
+            const vectorDoc = await getDoc(vectorDocRef);
+            // If document exists and has status field, check if it's stored
+            if (vectorDoc.exists()) {
+              const vectorData = vectorDoc.data() as Record<string, any>;
+              vectorStored = vectorData.status === 'stored' || vectorData.status === 'processed';
+            }
+          } catch (error) {
+            console.error("Error checking vector status:", error);
+          }
+        }
+        
+        const note: Note = {
+          id: docSnapshot.id,
+          title: data.title || "Untitled",
+          summary: data.summary || "",
+          rawText: data.rawText || "",
+          tags: data.tags || [],
+          areaId: data.areaId || "",
+          areaTitle: data.areaTitle || "Uncategorized",
+          categoryId: data.categoryId || "",
+          categoryTitle: data.categoryTitle || "General",
+          createdAt,
+          reminderTime,
+          reminderSent: data.reminderSent || false,
+          type: noteType as Note['type'],
+          fileUrl: data.fileUrl || "",
+          fileType: fileTypeFromData,
+          fileName: fileName,
+          contentType: data.contentType || "",
+          vectorStored
+        };
+        
+        // Collect unique areas
+        if (data.areaId && data.areaTitle) {
+          areasMap.set(data.areaId, data.areaTitle);
+        }
+        
+        return note;
+      });
+      
+      // Wait for all status checks to complete
+      const resolvedNotes = await Promise.all(notesWithStatusPromises);
+      notesData.push(...resolvedNotes);
+      
+      // Convert areas map to array
+      const areasArray = Array.from(areasMap).map(([id, title]) => ({ id, title }));
+      
+      setNotes(notesData);
+      setAreas(areasArray);
+    
+    // Set the first note as selected by default if available
+    if (notesData.length > 0 && !selectedNote) {
+      setSelectedNote(notesData[0]);
+    } else if (notesData.length === 0) {
+      setSelectedNote(null);
+    }
+    } catch (error) {
+      console.error("Error fetching notes:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load notes. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  useEffect(() => {
+    if (user && user.uid) {
+    fetchNotes();
+    }
+  }, [user]);
+  
+  useEffect(() => {
+    if (selectedNote && selectedNote.type === 'pdf') {
+      setNumPages(null); // Reset numPages when a new PDF is selected
+    } 
+  }, [selectedNote]);
+  
+  // Handle file selection
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setUploadFile(file);
+      
+      // Auto-fill title with filename (without extension)
+      const fileName = file.name.split('.').slice(0, -1).join('.');
+      setUploadTitle(fileName);
+    }
+  };
+  
+  function onDocumentLoadSuccess({ numPages: nextNumPages }: { numPages: number }) {
+    setNumPages(nextNumPages);
+  }
+
+  // Add a helper function to fetch PDFs with proper CORS handling
+  const fetchPdfAsDataUrl = async (url: string): Promise<string> => {
+    setPdfLoading(true);
+    try {
+      // Create a new URL with a proxy service that handles CORS
+      // For development purposes, you can use a CORS proxy service
+      // In production, this should be replaced with your own proxy or Firebase function
+      const corsAnywhereUrl = `https://cors-anywhere.herokuapp.com/${url}`;
+      
+      const response = await fetch(corsAnywhereUrl);
+      if (!response.ok) throw new Error(`Failed to fetch PDF: ${response.status}`);
+      
+      const blob = await response.blob();
+      return URL.createObjectURL(blob);
+    } catch (error) {
+      console.error("Error fetching PDF:", error);
+      toast({
+        title: "PDF Error",
+        description: "CORS issue detected. Try downloading the file instead or open in a new tab.",
+        variant: "destructive"
+      });
+      throw error;
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+}

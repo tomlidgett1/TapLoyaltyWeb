@@ -164,6 +164,10 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
   const [showQuickActionMenu, setShowQuickActionMenu] = useState<string | null>(null);
   const [debugResponse, setDebugResponse] = useState<string | null>(null);
   const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const [knowledgeBaseResponse, setKnowledgeBaseResponse] = useState<string | null>(null);
+  const [knowledgeBaseLoading, setKnowledgeBaseLoading] = useState(false);
+  const [knowledgeBaseProcessingStage, setKnowledgeBaseProcessingStage] = useState(0);
+  const [knowledgeBaseSelected, setKnowledgeBaseSelected] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -449,6 +453,14 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
       promptToSend = forcedPrompt;
     } else {
       promptToSend = commandInput.trim();
+    }
+    
+    // Check if Knowledge Base is selected
+    if (knowledgeBaseSelected) {
+      await handleKnowledgeBaseQuery(promptToSend);
+      // Reset Knowledge Base selection
+      setKnowledgeBaseSelected(false);
+      return;
     }
     
     const integrationsToUse = explicitIntegrations ?? selectedIntegrations;
@@ -1052,6 +1064,25 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
     };
   }, [assistantLoading]);
   
+  // Add effect for cycling Knowledge Base processing messages
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (knowledgeBaseLoading) {
+      // Reset to first message when loading starts
+      setKnowledgeBaseProcessingStage(0);
+      
+      // Set up interval to cycle through messages every 2 seconds
+      interval = setInterval(() => {
+        setKnowledgeBaseProcessingStage(prev => (prev + 1) % 3);
+      }, 2000);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [knowledgeBaseLoading]);
+  
   // Lightspeed processing messages based on stage
   const getLightspeedProcessingMessage = () => {
     switch (lightspeedProcessingStage) {
@@ -1106,6 +1137,135 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
         return "Processing your request...";
     }
   };
+  
+  // Knowledge Base processing messages based on stage
+  const getKnowledgeBaseProcessingMessage = () => {
+    switch (knowledgeBaseProcessingStage) {
+      case 0:
+        return "Searching knowledge base...";
+      case 1:
+        return "Finding relevant information...";
+      case 2:
+        return "Preparing response...";
+      default:
+        return "Searching knowledge base...";
+    }
+  };
+
+  // Handle knowledge base query
+  const handleKnowledgeBaseQuery = async (forcedPrompt?: string) => {
+    const promptToSend = forcedPrompt || commandInput.trim();
+    
+    if (promptToSend) {
+      try {
+        setKnowledgeBaseLoading(true);
+        
+        // Make API call to knowledgeBase function
+        const response = await fetch(
+          `https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/knowledgeBase`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            merchantId: user?.uid,
+            prompt: promptToSend
+          }),
+        });
+        
+        // Get the response
+        const rawResponse = await response.text();
+        console.log("Raw Knowledge Base response:", rawResponse);
+        
+        try {
+          const data = JSON.parse(rawResponse);
+          console.log("Knowledge Base response parsed:", data);
+          
+          // Set debug response for inspection
+          setDebugResponse(rawResponse);
+          
+          // Check for multiple possible response formats
+          if (data?.answer) {
+            // This is the expected format from knowledgeBase: {"answer":"response text"}
+            setKnowledgeBaseResponse(data.answer);
+            
+            toast({
+              title: "Knowledge Base Response",
+              description: "Your question has been answered",
+              variant: "default"
+            });
+          } else if (data?.success && data?.summary) {
+            setKnowledgeBaseResponse(data.summary);
+            
+            toast({
+              title: "Knowledge Base Response",
+              description: "Your question has been answered",
+              variant: "default"
+            });
+          } else if (data?.success && data?.answer) {
+            setKnowledgeBaseResponse(data.answer);
+            
+            toast({
+              title: "Knowledge Base Response",
+              description: "Your question has been answered",
+              variant: "default"
+            });
+          } else if (data?.result?.summary) {
+            setKnowledgeBaseResponse(data.result.summary);
+            
+            toast({
+              title: "Knowledge Base Response",
+              description: "Your question has been answered",
+              variant: "default"
+            });
+          } else if (data?.summary) {
+            setKnowledgeBaseResponse(data.summary);
+            
+            toast({
+              title: "Knowledge Base Response",
+              description: "Your question has been answered",
+              variant: "default"
+            });
+          } else if (data?.error) {
+            toast({
+              title: "Knowledge Base Error",
+              description: data.error,
+              variant: "destructive"
+            });
+          } else {
+            // No recognizable format - display what we received for debugging
+            console.error("Unrecognized response format:", data);
+            setKnowledgeBaseResponse(`The Knowledge Base returned data in an unexpected format. Please check with your developer.\n\nReceived: ${JSON.stringify(data, null, 2)}`);
+            
+            toast({
+              title: "Unexpected Response Format",
+              description: "The response format wasn't recognized, but we've displayed what we received",
+              variant: "destructive"
+            });
+          }
+        } catch (e) {
+          console.error("Error parsing Knowledge Base response:", e);
+          toast({
+            title: "Error Processing Response",
+            description: "Could not process the Knowledge Base response",
+            variant: "destructive"
+          });
+        }
+      } catch (error) {
+        console.error("Error querying Knowledge Base:", error);
+        toast({
+          title: "Knowledge Base Query Failed",
+          description: error instanceof Error ? error.message : "Unknown error occurred",
+          variant: "destructive"
+        });
+      } finally {
+        setKnowledgeBaseLoading(false);
+      }
+      
+      // Reset input field immediately after sending
+      setCommandInput("");
+    }
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -1123,7 +1283,7 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
         <div className="px-6 pt-4 pb-2 border-b">
           <div className="w-full">
             <div className="relative flex-1">
-              <div className="flex flex-wrap items-start px-3 py-2 min-h-[44px] w-full border rounded-lg shadow-sm bg-gray-50">
+              <div className="flex flex-wrap items-start px-3 py-2 min-h-[44px] w-full border rounded-md shadow-sm bg-gray-50">
                 <div className="flex flex-wrap flex-grow gap-2 mr-2">
                   {selectedIntegrations.map(integration => (
                     <div 
@@ -1148,6 +1308,21 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                       </div>
                     </div>
                   ))}
+                  
+                  {/* Show Knowledge Base mode indicator */}
+                  {knowledgeBaseSelected && (
+                    <div className="flex items-center h-7 px-2 rounded-md bg-blue-50 border border-blue-200 text-blue-700">
+                      <Globe className="h-3.5 w-3.5 mr-1.5 text-blue-500" />
+                      <span className="text-xs font-medium">Knowledge Base</span>
+                      <X
+                        className="ml-1.5 h-3.5 w-3.5 text-blue-400 hover:text-blue-700 cursor-pointer"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setKnowledgeBaseSelected(false);
+                        }}
+                      />
+                    </div>
+                  )}
                   
                   <input
                     ref={inputRef}
@@ -1441,10 +1616,119 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                   </div>
                 )}
               </div>
+              
+              {/* Knowledge Base Button */}
+              <div className="relative">
+                <Button 
+                  size="sm" 
+                  variant={knowledgeBaseSelected ? "default" : "outline"}
+                  className={cn(
+                    "h-8 text-xs font-normal px-3 flex items-center gap-1.5",
+                    knowledgeBaseSelected && "bg-blue-100 text-blue-700 border-blue-300"
+                  )}
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    setKnowledgeBaseSelected(!knowledgeBaseSelected);
+                    // Focus on the input box after selecting
+                    setTimeout(() => {
+                      if (inputRef.current) {
+                        inputRef.current.focus();
+                      }
+                    }, 0);
+                  }}
+                >
+                  <Globe className="h-3.5 w-3.5 text-blue-500" />
+                  Knowledge Base
+                </Button>
+              </div>
             </div>
 
             {/* Divider line to separate quick actions from responses */}
             <div className="border-t border-gray-200 mb-6"></div>
+
+            {/* Knowledge Base loading indicator */}
+            {knowledgeBaseLoading && (
+              <div className="bg-white border border-gray-200 shadow-sm rounded-md p-6 mb-4 animate-slowFadeIn">
+                <div className="flex items-center gap-3 mb-1">
+                  <Globe className="h-5 w-5 text-blue-500" />
+                  <div className="flex items-center gap-1">
+                    <h3 className="text-sm font-medium text-gray-900">Knowledge Base is processing...</h3>
+                    <div className="w-4 h-4 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+                  </div>
+                </div>
+                <div className="mt-1 flex flex-col items-start text-left py-2 pl-8">
+                  <p className="text-xs animate-fade-in-out bg-gradient-to-r from-gray-400 to-gray-700 bg-clip-text text-transparent font-medium w-full text-left">
+                    {getKnowledgeBaseProcessingMessage()}
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            {/* Knowledge Base Response */}
+            {knowledgeBaseResponse && (
+              <div className="mb-6 relative">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center h-6 w-6 rounded-md bg-blue-50">
+                      <Globe className="h-4 w-4 text-blue-500" />
+                    </div>
+                    <h3 className="text-sm font-medium text-gray-900">Knowledge Base Response</h3>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 w-7 p-0 rounded-full"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setKnowledgeBaseResponse(null);
+                      setDebugResponse(null);
+                      setShowDebugInfo(false);
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                {processApiResponse(knowledgeBaseResponse)?.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i) ? 
+                  renderHtml(processApiResponse(knowledgeBaseResponse)) :
+                  <ReactMarkdown 
+                    className="tap-agent-response text-gray-800 leading-relaxed space-y-4"
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
+                    components={{
+                      h1: ({node, ...props}) => <h1 className="text-xl font-bold my-4 text-gray-900" {...props} />,
+                      h2: ({node, ...props}) => <h2 className="text-lg font-bold my-3 text-gray-900" {...props} />,
+                      h3: ({node, ...props}) => <h3 className="text-base font-semibold my-2 text-gray-900" {...props} />,
+                      p: ({node, ...props}) => <p className="my-3 text-gray-700" {...props} />,
+                      ul: ({node, ...props}) => <ul className="list-disc pl-6 my-3 space-y-2" {...props} />,
+                      ol: ({node, ...props}) => <ol className="list-decimal pl-6 my-3 space-y-2" {...props} />,
+                      li: ({node, ...props}) => <li className="my-1.5 pl-1" {...props} />,
+                      blockquote: ({node, ...props}) => <blockquote className="pl-4 border-l-2 border-gray-300 text-gray-600 italic my-4" {...props} />,
+                      a: ({node, ...props}) => <a className="text-blue-600 hover:text-blue-800 hover:underline" {...props} />,
+                      code: ({node, inline, className, children, ...props}: any) => {
+                        const match = /language-(\w+)/.exec(className || '')
+                        return !inline && match ? (
+                          <pre className="rounded-md bg-gray-50 p-4 overflow-x-auto text-sm my-4 border border-gray-200">
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          </pre>
+                        ) : (
+                          <code className="bg-gray-100 text-gray-800 rounded-md px-1.5 py-0.5 text-sm font-mono" {...props}>
+                            {children}
+                          </code>
+                        )
+                      },
+                      table: ({node, ...props}) => <div className="overflow-x-auto my-4 border border-gray-200 rounded-md"><table className="min-w-full" {...props} /></div>,
+                      thead: ({node, ...props}) => <thead className="bg-gray-50 border-b border-gray-200" {...props} />,
+                      th: ({node, ...props}) => <th className="px-4 py-3 text-left text-sm font-medium text-gray-900" {...props} />,
+                      td: ({node, ...props}) => <td className="px-4 py-3 text-sm text-gray-700 border-t border-gray-200" {...props} />
+                    }}
+                  >
+                    {processApiResponse(knowledgeBaseResponse) || ""}
+                  </ReactMarkdown>
+                }
+              </div>
+            )}
 
             {/* Assistant loading indicator */}
             {assistantLoading && (
@@ -1474,9 +1758,9 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                     </div>
                     <h3 className="text-sm font-medium text-gray-900">Tap Loyalty Response</h3>
                   </div>
-                  <Button 
+                <Button 
                     variant="ghost" 
-                    size="sm" 
+                  size="sm" 
                     className="h-7 w-7 p-0 rounded-full"
                     onClick={(e) => {
                       e.preventDefault();
@@ -1486,8 +1770,8 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                     }}
                   >
                     <X className="h-4 w-4" />
-                  </Button>
-                </div>
+                </Button>
+              </div>
                 {processApiResponse(assistantResponse)?.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i) ? 
                   renderHtml(processApiResponse(assistantResponse)) :
                   <ReactMarkdown 
@@ -1527,7 +1811,7 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
                     {processApiResponse(assistantResponse) || ""}
                   </ReactMarkdown>
                 }
-              </div>
+            </div>
             )}
             
             {/* Gmail loading indicator */}
@@ -1788,5 +2072,5 @@ export function TapAgentSheet({ open, onOpenChange }: TapAgentSheetProps) {
         </ScrollArea>
       </SheetContent>
     </Sheet>
-  )
-} 
+  );
+}

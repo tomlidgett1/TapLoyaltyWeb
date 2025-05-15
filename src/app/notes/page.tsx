@@ -47,6 +47,8 @@ import {
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { AnimatedCheckbox, ConnectionButton } from "@/components/ui/checkbox"
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -70,6 +72,7 @@ interface Note {
   fileType?: string;
   fileName?: string;
   contentType?: string;
+  inKnowledgeBase?: boolean;
 }
 
 // Knowledge chat response interface
@@ -86,6 +89,7 @@ export default function NotesPage() {
   const { user } = useAuth();
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
+  const [knowledgeBaseLoading, setKnowledgeBaseLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [areas, setAreas] = useState<{id: string, title: string}[]>([]);
@@ -112,6 +116,7 @@ export default function NotesPage() {
   const [isLoadingKnowledgeChat, setIsLoadingKnowledgeChat] = useState(false);
   const [knowledgeChatResponse, setKnowledgeChatResponse] = useState<KnowledgeChatResponse | null>(null);
   const [showKnowledgeChatResponse, setShowKnowledgeChatResponse] = useState(false);
+  const [isKnowledgeResponseVisible, setIsKnowledgeResponseVisible] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   
   // Title editing state
@@ -172,6 +177,9 @@ export default function NotesPage() {
         const notesData: Note[] = [];
         const areasMap = new Map<string, string>();
         
+        // Gather all filenames for knowledge base check
+        const fileNames: string[] = [];
+        
         querySnapshot.forEach((doc) => {
           const data = doc.data();
           
@@ -224,13 +232,18 @@ export default function NotesPage() {
             categoryTitle: data.categoryTitle || "General",
             createdAt,
             reminderTime,
-          reminderSent: data.reminderSent || false,
-          type: noteType as Note['type'],
-          fileUrl: data.fileUrl || "",
-          fileType: fileTypeFromData,
-          fileName: fileName,
-          contentType: data.contentType || ""
+            reminderSent: data.reminderSent || false,
+            type: noteType as Note['type'],
+            fileUrl: data.fileUrl || "",
+            fileType: fileTypeFromData,
+            fileName: fileName,
+            contentType: data.contentType || "",
+            inKnowledgeBase: false // Default to false, will check later
           };
+          
+          if (fileName) {
+            fileNames.push(fileName);
+          }
           
           notesData.push(note);
           
@@ -252,6 +265,12 @@ export default function NotesPage() {
       } else if (notesData.length === 0) {
         setSelectedNote(null);
       }
+      
+      // Check knowledge base status for all notes with filenames
+      if (notesData.length > 0 && user && user.uid) {
+        checkKnowledgeBaseStatus(notesData, user.uid);
+      }
+      
       } catch (error) {
         console.error("Error fetching notes:", error);
       toast({
@@ -263,6 +282,69 @@ export default function NotesPage() {
         setLoading(false);
       }
     };
+    
+  // Function to check if documents have been added to the knowledge base
+  const checkKnowledgeBaseStatus = async (notesData: Note[], merchantId: string) => {
+    try {
+      setKnowledgeBaseLoading(true);
+      
+      // Create a batch of promises to check knowledge base status
+      const knowledgeBasePromises = notesData
+        .filter(note => note.fileName)
+        .map(async (note) => {
+          if (!note.fileName) return null;
+          
+          // Check the knowledge base collection for this file
+          const kbRef = collection(db, `merchants/${merchantId}/knowledgebase`);
+          const kbQuery = query(kbRef, orderBy("createTime", "desc")); 
+          const kbSnapshot = await getDocs(kbQuery);
+          
+          // Check if any document matches this file name and has status success
+          let isInKnowledgeBase = false;
+          
+          kbSnapshot.forEach((doc) => {
+            const kbData = doc.data();
+            // Check if file name is in source or fileName field and status is success
+            if (
+              (kbData.source?.includes(note.fileName) || 
+               kbData.fileName === note.fileName) && 
+              kbData.status === "success"
+            ) {
+              isInKnowledgeBase = true;
+            }
+          });
+          
+          return { noteId: note.id, isInKnowledgeBase };
+        });
+        
+      // Wait for all promises to resolve
+      const results = await Promise.all(knowledgeBasePromises);
+      
+      // Update the notes state with knowledge base info
+      setNotes(prevNotes => {
+        return prevNotes.map(note => {
+          const result = results.find(r => r && r.noteId === note.id);
+          if (result) {
+            return { ...note, inKnowledgeBase: result.isInKnowledgeBase };
+          }
+          return note;
+        });
+      });
+      
+      // Also update selectedNote if it exists
+      if (selectedNote) {
+        const result = results.find(r => r && r.noteId === selectedNote.id);
+        if (result && result.isInKnowledgeBase) {
+          setSelectedNote({ ...selectedNote, inKnowledgeBase: true });
+        }
+      }
+      
+    } catch (error) {
+      console.error("Error checking knowledge base status:", error);
+    } finally {
+      setKnowledgeBaseLoading(false);
+    }
+  };
     
   useEffect(() => {
     if (user && user.uid) {
@@ -325,6 +407,7 @@ export default function NotesPage() {
     
     if (selectedNote?.fileUrl && 
         (selectedNote.type === 'pdf' || 
+         (selectedNote.type === 'invoice' && selectedNote.fileUrl) || 
          (selectedNote.fileUrl && selectedNote.fileUrl.toLowerCase().endsWith('.pdf')))) {
       
       // Check if we already have this PDF loaded
@@ -350,13 +433,16 @@ export default function NotesPage() {
     if (!selectedNote?.fileUrl) return null;
     
     const fileUrl = selectedNote.fileUrl;
-    const isPdf = selectedNote.type === 'pdf' || (selectedNote.fileUrl && selectedNote.fileUrl.toLowerCase().endsWith('.pdf'));
+    const isPdf = selectedNote.type === 'pdf' || 
+                  (selectedNote.type === 'invoice' && selectedNote.fileUrl) || 
+                  (selectedNote.fileUrl && selectedNote.fileUrl.toLowerCase().endsWith('.pdf'));
+                  
     const isImage = selectedNote.type === 'image' || (['jpg', 'jpeg', 'png', 'gif'].some(ext => 
       selectedNote.fileType?.toLowerCase() === ext || (selectedNote.fileUrl && selectedNote.fileUrl.toLowerCase().endsWith(`.${ext}`))));
 
     if (isPdf) {
       return (
-        <div ref={pdfViewerContainerRef} className="w-full h-full overflow-y-auto rounded-md">
+        <div ref={pdfViewerContainerRef} className="w-full h-full overflow-y-auto rounded-md scrollbar-thin">
           {pdfLoading ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
@@ -1054,6 +1140,22 @@ export default function NotesPage() {
     };
   }, [showSearchResults, showKnowledgeChatResponse, setSearchMode]);
   
+  useEffect(() => {
+    let fadeInTimer: NodeJS.Timeout;
+    if (!isLoadingKnowledgeChat && knowledgeChatResponse && !isKnowledgeResponseVisible && showKnowledgeChatResponse) {
+      // Short delay to ensure element is mounted before transition starts
+      fadeInTimer = setTimeout(() => {
+        setIsKnowledgeResponseVisible(true);
+      }, 50);
+    } else if (isLoadingKnowledgeChat || !knowledgeChatResponse || !showKnowledgeChatResponse) {
+      // Reset visibility if loading, no response, or panel is hidden
+      setIsKnowledgeResponseVisible(false);
+    }
+    return () => {
+      if (fadeInTimer) clearTimeout(fadeInTimer);
+    };
+  }, [isLoadingKnowledgeChat, knowledgeChatResponse, isKnowledgeResponseVisible, showKnowledgeChatResponse]);
+  
   return (
     <DashboardLayout>
       <div className="flex flex-col h-full">
@@ -1080,9 +1182,9 @@ export default function NotesPage() {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 border-t flex-1 min-h-0">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 border-t flex-1 min-h-0 h-[calc(100vh-9rem)]">
           {/* Left Column - Notes List */}
-          <div className="lg:col-span-1 border-r flex flex-col">
+          <div className="lg:col-span-1 border-r flex flex-col h-full overflow-hidden">
             <div className="p-4 border-b flex-shrink-0">
               {/* Unified search box */}
               <div className="relative mb-4">
@@ -1231,7 +1333,26 @@ export default function NotesPage() {
               </Tabs>
             </div>
       
-            <div className="flex-grow overflow-y-auto">
+            <div className="flex-grow overflow-y-auto h-[calc(100%-8rem)] min-h-0 scrollbar-thin">
+              <style jsx global>{`
+                .scrollbar-thin {
+                  scrollbar-width: thin;
+                  scrollbar-color: rgba(203, 213, 225, 0.5) transparent;
+                }
+                .scrollbar-thin::-webkit-scrollbar {
+                  width: 6px;
+                }
+                .scrollbar-thin::-webkit-scrollbar-track {
+                  background: transparent;
+                }
+                .scrollbar-thin::-webkit-scrollbar-thumb {
+                  background-color: rgba(203, 213, 225, 0.5);
+                  border-radius: 20px;
+                }
+                .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+                  background-color: rgba(148, 163, 184, 0.7);
+                }
+              `}</style>
       {loading ? (
                 <div className="p-4 space-y-4">
           {[...Array(5)].map((_, i) => (
@@ -1260,7 +1381,8 @@ export default function NotesPage() {
                     key={note.id}
                       className={cn(
                         "p-4 cursor-pointer hover:bg-muted/50 transition-colors",
-                        selectedNote?.id === note.id && "bg-muted"
+                        selectedNote?.id === note.id && "bg-muted",
+                        note.inKnowledgeBase && "border-l-4 border-l-primary" // Add highlight for knowledge base docs
                       )}
                       onClick={() => {
                         // Stop editing title if selecting a different note
@@ -1302,11 +1424,16 @@ export default function NotesPage() {
                           </div>
                         </div>
                         <div className="flex flex-col items-end flex-shrink-0">
-                          <Badge variant="outline" className="text-xs capitalize mb-1 whitespace-nowrap">
-                            {note.type === 'pdf' ? 'PDF Document' : 
-                             note.type === 'image' ? 'Image File' : 
-                             note.type} 
+                          <div className="flex items-center gap-1 mb-1">
+                            {note.inKnowledgeBase && (
+                              <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20 px-1 py-0 h-5 mr-1">KB</Badge>
+                            )}
+                            <Badge variant="outline" className="text-xs capitalize whitespace-nowrap">
+                              {note.type === 'pdf' ? 'PDF Document' : 
+                               note.type === 'image' ? 'Image File' : 
+                               note.type} 
                             </Badge>
+                          </div>
                           <div className="text-xs text-muted-foreground whitespace-nowrap">
                             {safeFormatDate(note.createdAt, "MMM d, yyyy")}
                           </div>
@@ -1370,86 +1497,71 @@ export default function NotesPage() {
                       }}
                       type="reward"
                     />
+                    
+                    {selectedNote.fileUrl && (
+                      <>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-8 gap-1 rounded-md">
+                              <Tag className="h-4 w-4" />
+                              <span>{selectedNote.type}</span>
+                              <ChevronDown className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Document Type</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              onClick={() => updateDocumentType("invoice")}
+                              disabled={isUpdatingDocType || selectedNote.type === "invoice"}
+                            >
+                              <FileText className="h-4 w-4 text-green-500 mr-2" />
+                              Invoice
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => updateDocumentType("pdf")}
+                              disabled={isUpdatingDocType || selectedNote.type === "pdf"}
+                            >
+                              <FileIcon className="h-4 w-4 text-red-500 mr-2" />
+                              PDF Document
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => updateDocumentType("image")}
+                              disabled={isUpdatingDocType || selectedNote.type === "image"}
+                            >
+                              <ImageIcon className="h-4 w-4 text-blue-500 mr-2" />
+                              Image
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => updateDocumentType("note")}
+                              disabled={isUpdatingDocType || selectedNote.type === "note"}
+                            >
+                              <FileText className="h-4 w-4 text-yellow-500 mr-2" />
+                              Note
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => updateDocumentType("other")}
+                              disabled={isUpdatingDocType || selectedNote.type === "other"}
+                            >
+                              <FileQuestion className="h-4 w-4 text-purple-500 mr-2" />
+                              Other Document
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          className="h-8 gap-1 rounded-md text-red-500 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => setDeleteDialogOpen(true)}
+                        >
+                          <X className="h-4 w-4" />
+                          <span>Delete</span>
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
-                
-                {/* Document Controls Bar */}
-                {selectedNote.fileUrl && (
-                  <div className="px-6 py-2 border-b flex items-center justify-between flex-shrink-0 bg-muted/30">
-                    <div className="flex items-center gap-2">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="outline" size="sm" className="h-8 gap-2 rounded-md">
-                            <Tag className="h-4 w-4" />
-                            <span>Mark as {selectedNote.type}</span>
-                            <ChevronDown className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start">
-                          <DropdownMenuLabel>Document Type</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem 
-                            onClick={() => updateDocumentType("invoice")}
-                            disabled={isUpdatingDocType || selectedNote.type === "invoice"}
-                          >
-                            <FileText className="h-4 w-4 text-green-500 mr-2" />
-                            Invoice
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => updateDocumentType("pdf")}
-                            disabled={isUpdatingDocType || selectedNote.type === "pdf"}
-                          >
-                            <FileIcon className="h-4 w-4 text-red-500 mr-2" />
-                            PDF Document
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => updateDocumentType("image")}
-                            disabled={isUpdatingDocType || selectedNote.type === "image"}
-                          >
-                            <ImageIcon className="h-4 w-4 text-blue-500 mr-2" />
-                            Image
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => updateDocumentType("note")}
-                            disabled={isUpdatingDocType || selectedNote.type === "note"}
-                          >
-                            <FileText className="h-4 w-4 text-yellow-500 mr-2" />
-                            Note
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => updateDocumentType("other")}
-                            disabled={isUpdatingDocType || selectedNote.type === "other"}
-                      >
-                            <FileQuestion className="h-4 w-4 text-purple-500 mr-2" />
-                            Other Document
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                      
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="h-8 gap-2 rounded-md text-red-500 hover:text-red-600 hover:bg-red-50"
-                        onClick={() => setDeleteDialogOpen(true)}
-                      >
-                        <X className="h-4 w-4" />
-                        <span>Delete file</span>
-                      </Button>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="icon" className="h-8 w-8 rounded-md" onClick={handleZoomOut}>
-                        <ZoomOut className="h-4 w-4" />
-                      </Button>
-                      <Button variant="outline" size="icon" className="h-8 w-8 rounded-md" onClick={handleZoomIn}>
-                        <ZoomIn className="h-4 w-4" />
-                      </Button>
-                      <Button variant="outline" size="icon" className="h-8 w-8 rounded-md" onClick={handleDownload}>
-                        <Download className="h-4 w-4" />
-                      </Button>
-                  </div>
-              </div>
-                )}
                 
                 <div className="px-6 py-6 flex-grow overflow-y-auto">
                   {selectedNote.fileUrl ? (
@@ -1479,6 +1591,9 @@ export default function NotesPage() {
                   <div className="flex items-center gap-2">
                     <Search className="h-4 w-4 text-muted-foreground" />
                     <h3 className="font-medium">Knowledge Search Results</h3>
+                    <span className="text-sm bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-medium ml-2">
+                      Powered By Tap Agent
+                    </span>
                   </div>
                   <Button 
                     variant="ghost" 
@@ -1502,75 +1617,49 @@ export default function NotesPage() {
                       <p className="mt-4 text-muted-foreground">Analysing your documents...</p>
                     </div>
                   ) : knowledgeChatResponse ? (
-                    <div>
+                    <div 
+                      className={cn(
+                        "transition-opacity duration-700 ease-in-out",
+                        isKnowledgeResponseVisible ? "opacity-100" : "opacity-0"
+                      )}
+                    >
                       <div 
-                        className="markdown-content bg-[#f8f9fb] p-5 rounded-md border border-gray-200 shadow-sm"
-                        dangerouslySetInnerHTML={{ 
-                          __html: knowledgeChatResponse?.answer
-                            // First, escape any HTML that might be in the content
-                            .replace(/&/g, '&amp;')
-                            .replace(/</g, '&lt;')
-                            .replace(/>/g, '&gt;')
-                            
-                            // Process markdown elements in the correct order
-                            
-                            // Headings with more modest spacing
-                            .replace(/^### (.*?)$/gm, '<h3 class="text-lg font-medium mt-5 mb-2 text-gray-900 border-b pb-1">$1</h3>')
-                            .replace(/^## (.*?)$/gm, '<h2 class="text-xl font-semibold mt-6 mb-3 text-gray-900 border-b pb-1">$1</h2>')
-                            .replace(/^# (.*?)$/gm, '<h1 class="text-2xl font-bold mt-6 mb-3 text-gray-900 border-b pb-1">$1</h1>')
-                            
-                            // Blockquotes with better spacing
-                            .replace(/^> (.*?)$/gm, '<blockquote class="border-l-4 border-gray-300 pl-4 py-1 my-3 text-gray-700 italic">$1</blockquote>')
-                            
-                            // Lists (unordered) with tighter spacing
-                            .replace(/^\- (.*?)$/gm, '<li class="ml-5 text-gray-800">$1</li>')
-                            
-                            // Lists (ordered) with tighter spacing
-                            .replace(/^\d+\. (.*?)$/gm, '<li class="ml-5 text-gray-800">$1</li>')
-                            
-                            // Process list items into proper list containers with minimal spacing
-                            .replace(/<li class="ml-5 text-gray-800">(.*?)<\/li>/g, function(match) {
-                              if (match.includes('1. ') || match.includes('2. ') || match.includes('3. ')) {
-                                return '<ol class="my-3 pl-1 list-decimal text-gray-800">' + match + '</ol>';
-                              } else {
-                                return '<ul class="my-3 pl-1 list-disc text-gray-800">' + match + '</ul>';
-                              }
-                            })
-                            
-                            // Clean up consecutive lists
-                            .replace(/<\/ul><ul class="my-3 pl-1 list-disc text-gray-800">/g, '')
-                            .replace(/<\/ol><ol class="my-3 pl-1 list-decimal text-gray-800">/g, '')
-                            
-                            // Horizontal rule with better spacing
-                            .replace(/^---$/gm, '<hr class="my-4 border-t border-gray-300">')
-                            
-                            // These inline text formatting should come before paragraph processing
-                            // Bold text
-                            .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>')
-                            
-                            // Italic text
-                            .replace(/\*(.*?)\*/g, '<em class="text-gray-700">$1</em>')
-                            
-                            // Code blocks (inline) with improved appearance
-                            .replace(/`([^`]+)`/g, '<code class="bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded text-sm font-mono">$1</code>')
-                            
-                            // Links
-                            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>')
-                            
-                            // Handle multiple line breaks for better paragraph spacing
-                            .replace(/\n\n+/g, '</p><p class="text-gray-800 mb-3">')
-                            .replace(/\n/g, '<br>')
-                            
-                            // Paragraphs - process last to avoid nested paragraphs
-                            // Wrap content in paragraphs, but not if it's already a block element
-                            .replace(/^([^<].+[^>])$/gm, '<p class="text-gray-800 mb-3">$1</p>')
-
-                            // Process all remaining plain text into paragraphs and clean up
-                            .replace(/<p><\/p>/g, '')
-                            .replace(/<p><(h|ul|ol|blockquote|hr)/g, '<$1')
-                            .replace(/(<\/h\d|<\/ul|<\/ol|<\/blockquote|<hr)><\/p>/g, '$1>')
-                        }} 
-                      />
+                        className="markdown-content rounded-md"
+                      >
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            h1: ({node, ...props}) => <h1 className="text-2xl font-bold mt-6 mb-3 text-gray-900 border-b pb-1" {...props} />,
+                            h2: ({node, ...props}) => <h2 className="text-xl font-semibold mt-6 mb-3 text-gray-900 border-b pb-1" {...props} />,
+                            h3: ({node, ...props}) => <h3 className="text-lg font-medium mt-5 mb-2 text-gray-900 border-b pb-1" {...props} />,
+                            p: ({node, ...props}) => <p className="text-gray-800 mb-3" {...props} />,
+                            ul: ({node, ...props}) => <ul className="my-3 pl-5 list-disc text-gray-800 space-y-1" {...props} />,
+                            ol: ({node, ...props}) => <ol className="my-3 pl-5 list-decimal text-gray-800 space-y-1" {...props} />,
+                            li: ({node, ...props}) => <li className="text-gray-800" {...props} />,
+                            blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 pl-4 py-1 my-3 text-gray-700 italic" {...props} />,
+                            hr: ({node, ...props}) => <hr className="my-4 border-t border-gray-300" {...props} />,
+                            strong: ({node, ...props}) => <strong className="font-semibold text-gray-900" {...props} />,
+                            em: ({node, ...props}) => <em className="text-gray-700" {...props} />,
+                            code: ({node, inline, className, children, ...rest}: any) => {
+                              const match = /language-(\w+)/.exec(className || '')
+                              return !inline && match ? (
+                                <pre className="bg-gray-100 p-3 rounded-md my-3 overflow-x-auto">
+                                  <code className={`language-${match[1]}`} {...rest}>
+                                    {String(children).replace(/\n$/, '')}
+                                  </code>
+                                </pre>
+                              ) : (
+                                <code className="bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded-sm text-sm font-mono" {...rest}>
+                                  {children}
+                                </code>
+                              )
+                            },
+                            a: ({node, ...props}) => <a className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
+                          }}
+                        >
+                          {knowledgeChatResponse?.answer}
+                        </ReactMarkdown>
+                      </div>
                       
                       {knowledgeChatResponse?.sources && knowledgeChatResponse.sources.length > 0 && (
                         <div className="mt-6 pt-4 border-t">
@@ -1590,7 +1679,6 @@ export default function NotesPage() {
                       
                       <div className="mt-6 pt-4 border-t text-xs text-muted-foreground">
                         <p>Query: "{knowledgeChatResponse?.metadata?.query || semanticSearchQuery}"</p>
-                        <p>Found {knowledgeChatResponse?.metadata?.contextCount || 0} relevant document chunks</p>
                       </div>
                     </div>
                   ) : (

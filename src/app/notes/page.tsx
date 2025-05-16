@@ -2,13 +2,14 @@
 
 import { useEffect, useState, useRef } from "react"
 import { db } from "@/lib/firebase"
-import { collection, query, orderBy, getDocs, Timestamp, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from "firebase/firestore"
+import { collection, query, orderBy, getDocs, Timestamp, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, onSnapshot } from "firebase/firestore"
 import { getStorage, ref, getDownloadURL, uploadBytesResumable } from "firebase/storage"
+import { v4 as uuidv4 } from "uuid"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, Calendar, Tag, Clock, FileText, Filter, ChevronDown, Eye, ArrowRight, LayoutGrid, MessageSquare, Gift, Plus, FileUp, Inbox, FileImage, FilePlus, FileQuestion, Check, Loader2, Image as ImageIcon, File as FileIcon, ChevronLeft, ChevronRight as ChevronRightIcon, ZoomIn, ZoomOut, Download, CornerDownLeft, File, ChevronRight, MoreVertical, PlusCircle, PlusIcon, Upload, X } from "lucide-react"
+import { Search, Calendar, Tag, Clock, FileText, Filter, ChevronDown, Eye, ArrowRight, LayoutGrid, MessageSquare, Gift, Plus, FileUp, Inbox, FileImage, FilePlus, FileQuestion, Check, Loader2, Image as ImageIcon, File as FileIcon, ChevronLeft, ChevronRight as ChevronRightIcon, ZoomIn, ZoomOut, Download, CornerDownLeft, File, ChevronRight, MoreVertical, PlusCircle, PlusIcon, Upload, X, Share2, ExternalLink } from "lucide-react"
 import { format, isValid, formatRelative } from "date-fns"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -50,6 +51,62 @@ import 'react-pdf/dist/esm/Page/TextLayer.css';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AnimatedCheckbox, ConnectionButton } from "@/components/ui/checkbox"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import Image from "next/image"
+import { getFunctions, httpsCallable } from "firebase/functions";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+
+// Add custom animation styles
+const customAnimationStyles = `
+  @keyframes pulseLeftToRight {
+    0% {
+      background-position: 0% 0;
+    }
+    100% {
+      background-position: 100% 0;
+    }
+  }
+  
+  .animate-pulse-left-to-right {
+    animation: pulseLeftToRight 2s ease-in-out infinite;
+  }
+
+  @keyframes fadeInOut {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+  
+  .animate-fade-in-out {
+    animation: fadeInOut 2s ease-in-out infinite;
+  }
+
+  @keyframes fadeInSlide {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .knowledge-response {
+    animation: fadeInSlide 0.3s ease-out forwards;
+  }
+  
+  @keyframes slowFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  .animate-slowFadeIn {
+    animation: slowFadeIn 0.5s ease-out forwards;
+  }
+`;
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -71,8 +128,12 @@ interface Note {
   fileUrl?: string;
   fileType?: string;
   fileName?: string;
+  originalFileName?: string;
+  fileId?: string;
   contentType?: string;
   inKnowledgeBase?: boolean;
+  pendingKnowledgeBase?: boolean;
+  origin?: string; // Add origin field to identify if note came from Gmail
 }
 
 // Knowledge chat response interface
@@ -83,6 +144,41 @@ interface KnowledgeChatResponse {
     contextCount: number;
     query: string;
   };
+}
+
+// Add AILogo component with gradient
+const AILogo = () => (
+  <svg 
+    width="18" 
+    height="18" 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    xmlns="http://www.w3.org/2000/svg"
+    className="flex-shrink-0"
+  >
+    <defs>
+      <linearGradient id="aiLogoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#4285F4" /> {/* Blue */}
+        <stop offset="100%" stopColor="#EA4335" /> {/* Orange-red */}
+      </linearGradient>
+    </defs>
+    <path 
+      d="M12 1.999c-5.523 0-10 4.477-10 10s4.477 10 10 10 10-4.477 10-10-4.477-10-10-10zm4.709 15.096a1 1 0 01-1.414 0L12 13.414l-3.292 3.293a1 1 0 11-1.414-1.414l3.293-3.293-3.29-3.292a1 1 0 011.414-1.414L12 10.586l3.295-3.294a1 1 0 011.414 1.414l-3.293 3.293 3.293 3.295a1 1 0 010 1.414zM7.404 6.126a1 1 0 00-.819 1.819A5.99 5.99 0 0112 18a1 1 0 100-2 4 4 0 01-3.538-6.066 1 1 0 00-.858-1.809zm9.195.016a1 1 0 10-.817 1.826A5.98 5.98 0 0118 12a6.003 6.003 0 01-6 6 1 1 0 100 2c4.411 0 8-3.589 8-8 0-2.129-.835-4.15-2.346-5.655a1 1 0 00-.055-.204z"
+      fill="url(#aiLogoGradient)"
+    />
+  </svg>
+);
+
+// Add a new interface for RelatedNote
+interface RelatedNote {
+  id: string;
+  title: string; 
+  summary: string;
+  rawText: string;
+  type: "note" | "invoice" | "other" | "pdf" | "image";
+  fileUrl?: string;
+  fileName?: string;
+  score: number;
 }
 
 export default function NotesPage() {
@@ -161,19 +257,20 @@ export default function NotesPage() {
   };
   
   // Fetch notes from Firestore
-    const fetchNotes = async () => {
+  const fetchNotes = () => {
     if (!user || !user.uid) {
       setLoading(false);
       setNotes([]);
-      return;
+      return () => {};
     }
     
-      try {
-        setLoading(true);
-      const notesRef = collection(db, `customers/${user.uid}/ThoughtsX`);
-        const notesQuery = query(notesRef, orderBy("createdAt", "desc"));
-        const querySnapshot = await getDocs(notesQuery);
-        
+    try {
+      setLoading(true);
+      const notesRef = collection(db, `merchants/${user.uid}/files`);
+      const notesQuery = query(notesRef, orderBy("createdAt", "desc"));
+      
+      // Setup real-time listener for notes collection
+      const unsubscribe = onSnapshot(notesQuery, (querySnapshot) => {
         const notesData: Note[] = [];
         const areasMap = new Map<string, string>();
         
@@ -191,7 +288,7 @@ export default function NotesPage() {
           // Handle reminderTime safely
           let reminderTime: Date | null = null;
           if (data.reminderTime) {
-          if (data.reminderTime.toDate) {
+            if (data.reminderTime.toDate) {
               reminderTime = data.reminderTime.toDate();
             } else if (data.reminderTime instanceof Date) {
               reminderTime = data.reminderTime;
@@ -202,84 +299,103 @@ export default function NotesPage() {
             }
           }
         
-        // Assign a type based on some criteria (for demo purposes)
-        // In a real app, this would come from the data
-        let noteType = data.type || "other";
-        const fileName = data.fileName || "";
-        const fileTypeFromData = data.fileType || fileName.split('.').pop()?.toLowerCase() || '';
+          // Assign a type based on some criteria (for demo purposes)
+          // In a real app, this would come from the data
+          let noteType = data.type || "other";
+          const fileName = data.fileName || "";
+          const fileTypeFromData = data.fileType || fileName.split('.').pop()?.toLowerCase() || '';
 
-        if (!data.type) { // Only override if type isn't explicitly set
-          if (fileTypeFromData === 'pdf') {
-            noteType = fileName.toLowerCase().includes('invoice') ? "invoice" : "pdf";
-          } else if (['jpg', 'jpeg', 'png', 'gif'].includes(fileTypeFromData)) {
-            noteType = "image";
-          } else if (['doc', 'docx', 'txt', 'md'].includes(fileTypeFromData)) {
-            noteType = "note";
-          } else if (fileName) { // If there is a filename but type is unknown
-             noteType = "other"; // or a more generic 'file' type
+          if (!data.type) { // Only override if type isn't explicitly set
+            if (fileTypeFromData === 'pdf') {
+              noteType = fileName.toLowerCase().includes('invoice') ? "invoice" : "pdf";
+            } else if (['jpg', 'jpeg', 'png', 'gif'].includes(fileTypeFromData)) {
+              noteType = "image";
+            } else if (['doc', 'docx', 'txt', 'md'].includes(fileTypeFromData)) {
+              noteType = "note";
+            } else if (fileName) { // If there is a filename but type is unknown
+               noteType = "other"; // or a more generic 'file' type
+              }
             }
+            
+            const note: Note = {
+              id: doc.id,
+              title: data.title || "Untitled",
+              summary: data.summary || "",
+              rawText: data.rawText || "",
+              tags: data.tags || [],
+              areaId: data.areaId || "",
+              areaTitle: data.areaTitle || "Uncategorized",
+              categoryId: data.categoryId || "",
+              categoryTitle: data.categoryTitle || "General",
+              createdAt,
+              reminderTime,
+              reminderSent: data.reminderSent || false,
+              type: noteType as Note['type'],
+              fileUrl: data.fileUrl || "",
+              fileType: fileTypeFromData,
+              fileName: fileName,
+              originalFileName: data.originalFileName || "",
+              fileId: data.fileId || "",
+              contentType: data.contentType || "",
+              inKnowledgeBase: data.inKnowledgeBase === true,
+              // Set pending status for documents with files that don't yet have inKnowledgeBase=true
+              // Documents older than 10 minutes won't show the spinner
+              pendingKnowledgeBase: !data.inKnowledgeBase && !!fileName && 
+                createdAt && ((new Date().getTime() - createdAt.getTime()) < 10 * 60 * 1000),
+              origin: data.origin || "" // Capture the origin field
+            };
+            
+            if (fileName) {
+              fileNames.push(fileName);
+            }
+            
+            notesData.push(note);
+            
+            // Collect unique areas
+            if (data.areaId && data.areaTitle) {
+              areasMap.set(data.areaId, data.areaTitle);
+            }
+          });
+          
+          // Convert areas map to array
+          const areasArray = Array.from(areasMap).map(([id, title]) => ({ id, title }));
+          
+          setNotes(notesData);
+          setAreas(areasArray);
+          setLoading(false);
+        
+          // Set the first note as selected by default if available
+          if (notesData.length > 0 && !selectedNote) {
+            setSelectedNote(notesData[0]);
+          } else if (notesData.length === 0) {
+            setSelectedNote(null);
           }
           
-          const note: Note = {
-            id: doc.id,
-            title: data.title || "Untitled",
-            summary: data.summary || "",
-            rawText: data.rawText || "",
-            tags: data.tags || [],
-            areaId: data.areaId || "",
-            areaTitle: data.areaTitle || "Uncategorized",
-            categoryId: data.categoryId || "",
-            categoryTitle: data.categoryTitle || "General",
-            createdAt,
-            reminderTime,
-            reminderSent: data.reminderSent || false,
-            type: noteType as Note['type'],
-            fileUrl: data.fileUrl || "",
-            fileType: fileTypeFromData,
-            fileName: fileName,
-            contentType: data.contentType || "",
-            inKnowledgeBase: false // Default to false, will check later
-          };
-          
-          if (fileName) {
-            fileNames.push(fileName);
+          // Check knowledge base status for all notes with filenames
+          if (notesData.length > 0 && user && user.uid) {
+            checkKnowledgeBaseStatus(notesData, user.uid);
           }
-          
-          notesData.push(note);
-          
-          // Collect unique areas
-          if (data.areaId && data.areaTitle) {
-            areasMap.set(data.areaId, data.areaTitle);
-          }
+        }, (error) => {
+          console.error("Error listening to notes collection:", error);
+          toast({
+            title: "Error",
+            description: "Failed to listen for notes updates. Please refresh the page.",
+            variant: "destructive"
+          });
+          setLoading(false);
         });
         
-        // Convert areas map to array
-        const areasArray = Array.from(areasMap).map(([id, title]) => ({ id, title }));
-        
-        setNotes(notesData);
-        setAreas(areasArray);
-      
-      // Set the first note as selected by default if available
-      if (notesData.length > 0 && !selectedNote) {
-        setSelectedNote(notesData[0]);
-      } else if (notesData.length === 0) {
-        setSelectedNote(null);
-      }
-      
-      // Check knowledge base status for all notes with filenames
-      if (notesData.length > 0 && user && user.uid) {
-        checkKnowledgeBaseStatus(notesData, user.uid);
-      }
-      
+        // Return the unsubscribe function directly
+        return unsubscribe;
       } catch (error) {
-        console.error("Error fetching notes:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load notes. Please try again.",
-        variant: "destructive"
-      });
-      } finally {
+        console.error("Error setting up notes listener:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load notes. Please try again.",
+          variant: "destructive"
+        });
         setLoading(false);
+        return () => {}; // Return empty function if setup fails
       }
     };
     
@@ -290,9 +406,15 @@ export default function NotesPage() {
       
       // Create a batch of promises to check knowledge base status
       const knowledgeBasePromises = notesData
-        .filter(note => note.fileName)
+        .filter(note => note.fileName || note.originalFileName)
         .map(async (note) => {
-          if (!note.fileName) return null;
+          // If inKnowledgeBase is already true from the file document, keep it
+          if (note.inKnowledgeBase === true) {
+            console.log(`Note already marked as in KB: ${note.fileName || note.originalFileName}`);
+            return { noteId: note.id, isInKnowledgeBase: true, isPending: false };
+          }
+          
+          if (!note.fileName && !note.originalFileName) return null;
           
           // Check the knowledge base collection for this file
           const kbRef = collection(db, `merchants/${merchantId}/knowledgebase`);
@@ -301,20 +423,49 @@ export default function NotesPage() {
           
           // Check if any document matches this file name and has status success
           let isInKnowledgeBase = false;
+          let isPending = note.pendingKnowledgeBase || false;
           
-          kbSnapshot.forEach((doc) => {
-            const kbData = doc.data();
-            // Check if file name is in source or fileName field and status is success
-            if (
-              (kbData.source?.includes(note.fileName) || 
-               kbData.fileName === note.fileName) && 
-              kbData.status === "success"
-            ) {
-              isInKnowledgeBase = true;
+          console.log(`Checking KB for file: ${note.fileName || note.originalFileName}`);
+          
+          kbSnapshot.forEach((docSnap) => {
+            const kbData = docSnap.data();
+            
+            // Check for matches against multiple possible identifiers
+            const isMatch = (note.fileId && kbData.fileId === note.fileId) ||
+              ((note.fileName && (kbData.source?.includes(note.fileName) || kbData.fileName === note.fileName)) ||
+               (note.originalFileName && (kbData.source?.includes(note.originalFileName) || kbData.fileName === note.originalFileName)) ||
+               (note.fileName && note.fileName.includes('_') && 
+                kbData.source?.includes(note.fileName.substring(note.fileName.lastIndexOf('_') + 1))));
+                
+            if (isMatch) {
+              // If we find a matching entry in knowledge base
+              if (kbData.status === "success") {
+                isInKnowledgeBase = true;
+                isPending = false;
+                console.log(`KB Match found for: ${note.fileName || note.originalFileName}`);
+                
+                // Update file document to set inKnowledgeBase field for future reference
+                updateFileKnowledgeBaseStatus(merchantId, note.id).catch(err => 
+                  console.error(`Error updating inKnowledgeBase field: ${err}`)
+                );
+              } 
+              // If status is pending/processing, keep the pending state true
+              else if (kbData.status === "pending" || kbData.status === "processing") {
+                isPending = true;
+                console.log(`KB processing for: ${note.fileName || note.originalFileName}`);
+              }
             }
           });
           
-          return { noteId: note.id, isInKnowledgeBase };
+          if (!isInKnowledgeBase && !isPending) {
+            console.log(`No KB match found for: ${note.fileName || note.originalFileName}`);
+            // If it's been pending for more than 10 minutes, clear the pending status
+            if (note.createdAt && ((new Date().getTime() - note.createdAt.getTime()) > 10 * 60 * 1000)) {
+              isPending = false;
+            }
+          }
+          
+          return { noteId: note.id, isInKnowledgeBase, isPending };
         });
         
       // Wait for all promises to resolve
@@ -325,7 +476,11 @@ export default function NotesPage() {
         return prevNotes.map(note => {
           const result = results.find(r => r && r.noteId === note.id);
           if (result) {
-            return { ...note, inKnowledgeBase: result.isInKnowledgeBase };
+            return { 
+              ...note, 
+              inKnowledgeBase: result.isInKnowledgeBase,
+              pendingKnowledgeBase: result.isPending
+            };
           }
           return note;
         });
@@ -334,8 +489,12 @@ export default function NotesPage() {
       // Also update selectedNote if it exists
       if (selectedNote) {
         const result = results.find(r => r && r.noteId === selectedNote.id);
-        if (result && result.isInKnowledgeBase) {
-          setSelectedNote({ ...selectedNote, inKnowledgeBase: true });
+        if (result) {
+          setSelectedNote({ 
+            ...selectedNote, 
+            inKnowledgeBase: result.isInKnowledgeBase,
+            pendingKnowledgeBase: result.isPending
+          });
         }
       }
       
@@ -347,9 +506,18 @@ export default function NotesPage() {
   };
     
   useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+    
     if (user && user.uid) {
-    fetchNotes();
+      unsubscribe = fetchNotes();
     }
+    
+    // Cleanup function to unsubscribe from real-time listeners when component unmounts
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [user]);
   
   useEffect(() => {
@@ -449,20 +617,35 @@ export default function NotesPage() {
               <span className="ml-2 text-gray-600">Loading PDF...</span>
             </div>
           ) : (
-            <>
-              {/* Fallback to object tag which can sometimes bypass CORS */}
+            <div className="pdf-container w-full h-full min-h-[500px] relative">
+              {/* Try iframe first as it handles CORS better in many cases */}
+              <iframe 
+                src={fileUrl} 
+                className="w-full h-full rounded-md"
+                style={{ display: 'block' }}
+                onError={(e) => {
+                  // If iframe fails, the fallback object tag will be shown
+                  (e.target as HTMLIFrameElement).style.display = 'none';
+                }}
+              />
+              
+              {/* Fallback to object tag which sometimes works better */}
               <object 
                 data={fileUrl} 
                 type="application/pdf" 
                 width="100%" 
                 height="100%" 
-                className="w-full h-full min-h-[500px] rounded-md"
+                className="w-full h-full rounded-md"
               >
-                <div className="flex flex-col items-center justify-center p-8 text-center">
+                {/* User-friendly error message with multiple options */}
+                <div className="flex flex-col items-center justify-center p-8 text-center bg-gray-50 rounded-md border border-gray-200 h-full">
                   <FileIcon className="h-12 w-12 text-red-500 mb-4" />
                   <h3 className="font-medium mb-2">Unable to display PDF</h3>
-                  <p className="text-sm text-muted-foreground mb-4">Your browser couldn't display this PDF due to security restrictions.</p>
-                  <div className="flex gap-3">
+                  <p className="text-sm text-muted-foreground mb-4 max-w-md">
+                    Your browser couldn't display this PDF due to security restrictions (CORS policy). 
+                    Try one of these options:
+                  </p>
+                  <div className="flex flex-wrap gap-3 justify-center">
                     <Button 
                       variant="outline" 
                       size="sm" 
@@ -482,9 +665,15 @@ export default function NotesPage() {
                       <span>Open in New Tab</span>
                     </Button>
                   </div>
+                  <div className="mt-6 border-t border-gray-200 pt-4 w-full max-w-md">
+                    <p className="text-xs text-muted-foreground mb-2">
+                      PDF preview may be unavailable when documents are hosted on a different domain.
+                      This is a security feature of web browsers.
+                    </p>
+                  </div>
                 </div>
               </object>
-            </>
+            </div>
           )}
         </div>
       );
@@ -537,7 +726,6 @@ export default function NotesPage() {
       
       const fileExtension = uploadFile.name.split('.').pop()?.toLowerCase() || '';
       const fileName = uploadFile.name;
-      let fileType = fileExtension;
       let noteType: "note" | "invoice" | "other" | "pdf" | "image" = "other";
       
       if (fileExtension === 'pdf') {
@@ -560,8 +748,13 @@ export default function NotesPage() {
         else if (fileExtension === 'txt') contentType = 'text/plain';
       }
 
+      // Generate a unique file identifier
+      const fileId = uuidv4();
+      const timestamp = Date.now();
+      const uniqueFileName = `${fileId}_${timestamp}_${uploadFile.name}`;
+      
       const storage = getStorage();
-      const storageRef = ref(storage, `customers/${user.uid}/documents/${Date.now()}_${uploadFile.name}`);
+      const storageRef = ref(storage, `merchants/${user.uid}/files/${uniqueFileName}`);
       
       const uploadTask = uploadBytesResumable(storageRef, uploadFile, {
         contentType: contentType
@@ -612,9 +805,10 @@ export default function NotesPage() {
             try {
               const downloadURL = await getDownloadURL(storageRef);
               
-              const notesRef = collection(db, `customers/${user.uid}/ThoughtsX`);
+              const notesRef = collection(db, `merchants/${user.uid}/files`);
               const tags = uploadTags.split(',').map(tag => tag.trim()).filter(tag => tag);
               
+              // Use the exact same uniqueFileName for storage and Firestore
               const noteData = {
                 title: uploadTitle || fileName,
                 summary: uploadSummary,
@@ -628,7 +822,9 @@ export default function NotesPage() {
                 type: noteType,
                 fileUrl: downloadURL,
                 fileType: fileExtension,
-                fileName,
+                fileName: uniqueFileName,
+                originalFileName: fileName, // Store original filename separately
+                fileId: fileId, // Store the UUID as a separate field for easy searching
                 contentType
               };
               
@@ -696,6 +892,7 @@ export default function NotesPage() {
     const matchesTab = activeTab === "all" || 
       (activeTab === "invoices" && note.type === "invoice") ||
       (activeTab === "notes" && note.type === "note") ||
+      (activeTab === "gmail" && note.origin === "gmail") ||
       (activeTab === "other" && note.type === "other");
     
     return matchesSearch && matchesArea && matchesTab;
@@ -730,7 +927,7 @@ export default function NotesPage() {
       // This would require additional Firebase storage functions
       
       // Delete the document from Firestore
-      const noteRef = doc(db, `customers/${user.uid}/ThoughtsX`, selectedNote.id);
+      const noteRef = doc(db, `merchants/${user.uid}/files`, selectedNote.id);
       await deleteDoc(noteRef);
       
       // Update local state
@@ -769,7 +966,7 @@ export default function NotesPage() {
     
     try {
       setIsUpdatingDocType(true);
-      const noteRef = doc(db, `customers/${user.uid}/ThoughtsX`, selectedNote.id);
+      const noteRef = doc(db, `merchants/${user.uid}/files`, selectedNote.id);
       
       await updateDoc(noteRef, {
         type: newType
@@ -830,7 +1027,7 @@ export default function NotesPage() {
     if (!selectedNote || !user || !user.uid || !editedTitle.trim()) return;
     
     try {
-      const noteRef = doc(db, `customers/${user.uid}/ThoughtsX`, selectedNote.id);
+      const noteRef = doc(db, `merchants/${user.uid}/files`, selectedNote.id);
       
       await updateDoc(noteRef, {
         title: editedTitle
@@ -949,6 +1146,7 @@ export default function NotesPage() {
       setIsLoadingKnowledgeChat(true);
       setShowSearchResults(false);
       setShowKnowledgeChatResponse(true);
+      setIsKnowledgeResponseVisible(false); // Reset visibility for fade-in effect
       
       // Add to recent searches
       setRecentSearches(prev => {
@@ -1012,11 +1210,23 @@ export default function NotesPage() {
               query: semanticSearchQuery 
             }
           });
+          
+          toast({
+            title: "Vault Search Complete",
+            description: "Your vault search has been processed successfully",
+            variant: "default"
+          });
         } else if (data?.success && data?.summary) {
           setKnowledgeChatResponse({ 
             answer: data.summary,
             sources: [],
             metadata: { contextCount: 0, query: semanticSearchQuery }
+          });
+          
+          toast({
+            title: "Vault Search Complete",
+            description: "Your vault search has been processed successfully",
+            variant: "default"
           });
         } else if (data?.success && data?.answer) {
           setKnowledgeChatResponse({ 
@@ -1025,11 +1235,23 @@ export default function NotesPage() {
             sources: data.sources || [],
             metadata: data.metadata || { contextCount: 0, query: semanticSearchQuery }
           });
+          
+          toast({
+            title: "Vault Search Complete",
+            description: "Your vault search has been processed successfully",
+            variant: "default"
+          });
         } else if (data?.result?.summary) {
           setKnowledgeChatResponse({ 
             answer: data.result.summary,
             sources: [],
             metadata: { contextCount: 0, query: semanticSearchQuery } 
+          });
+          
+          toast({
+            title: "Vault Search Complete",
+            description: "Your vault search has been processed successfully",
+            variant: "default"
           });
         } else if (data?.summary) {
           setKnowledgeChatResponse({ 
@@ -1037,26 +1259,49 @@ export default function NotesPage() {
             sources: [],
             metadata: { contextCount: 0, query: semanticSearchQuery }
           });
+          
+          toast({
+            title: "Vault Search Complete",
+            description: "Your vault search has been processed successfully",
+            variant: "default"
+          });
         } else if (data?.error) {
+          toast({
+            title: "Vault Search Error",
+            description: data.error,
+            variant: "destructive"
+          });
           throw new Error(data.error);
         } else {
           // Fallback for any other format
+          console.error("Unrecognized response format:", data);
           setKnowledgeChatResponse({ 
-            answer: typeof data === 'string' ? data : JSON.stringify(data),
+            answer: `I couldn't process the documents properly. The response format was unexpected.\n\nPlease try a different search query or contact support if this issue persists.`,
             sources: [],
             metadata: { contextCount: 0, query: semanticSearchQuery }
           });
+          
+          toast({
+            title: "Unexpected Response Format",
+            description: "The response format wasn't recognized, but I've tried to display what I found",
+            variant: "destructive"
+          });
         }
         
-        toast({
-          title: "Knowledge Search Complete",
-          description: "Your search has been processed successfully",
-          variant: "default"
-        });
       } catch (parseError) {
         console.error('❌ JSON parse error:', parseError);
         console.error('❌ Failed to parse response text:', responseText);
-        throw new Error('Failed to parse response as JSON');
+        setKnowledgeChatResponse({ 
+          answer: "I encountered an error while processing your search results. The response couldn't be parsed properly.",
+          sources: [],
+          metadata: { contextCount: 0, query: semanticSearchQuery }
+        });
+        
+        toast({
+          title: "Error Processing Response",
+          description: "Could not process the vault search response",
+          variant: "destructive"
+        });
       }
     } catch (error) {
       console.error('❌ Knowledge chat error:', error);
@@ -1066,8 +1311,15 @@ export default function NotesPage() {
           stack: error.stack
         });
       }
+      
+      setKnowledgeChatResponse({ 
+        answer: `I encountered an error while searching your vault: ${error instanceof Error ? error.message : "Unknown error"}.\n\nPlease try again with a different search query.`,
+        sources: [],
+        metadata: { contextCount: 0, query: semanticSearchQuery }
+      });
+      
       toast({
-        title: "Error",
+        title: "Vault Search Failed",
         description: error instanceof Error ? error.message : "Failed to search documents. Please try again.",
         variant: "destructive"
       });
@@ -1147,29 +1399,279 @@ export default function NotesPage() {
       fadeInTimer = setTimeout(() => {
         setIsKnowledgeResponseVisible(true);
       }, 50);
-    } else if (isLoadingKnowledgeChat || !knowledgeChatResponse || !showKnowledgeChatResponse) {
-      // Reset visibility if loading, no response, or panel is hidden
-      setIsKnowledgeResponseVisible(false);
     }
     return () => {
       if (fadeInTimer) clearTimeout(fadeInTimer);
     };
   }, [isLoadingKnowledgeChat, knowledgeChatResponse, isKnowledgeResponseVisible, showKnowledgeChatResponse]);
   
+  // Add this helper function before setupKnowledgeBaseListeners
+  const updateFileKnowledgeBaseStatus = async (merchantId: string, fileId: string) => {
+    try {
+      const fileDocRef = doc(db, `merchants/${merchantId}/files`, fileId);
+      await updateDoc(fileDocRef, { inKnowledgeBase: true });
+      console.log(`Updated inKnowledgeBase field for file: ${fileId}`);
+    } catch (updateErr: any) {
+      console.error("Error updating file document:", updateErr);
+      throw updateErr; // Re-throw to be caught by the caller
+    }
+  };
+
+  // Add a function to set up real-time listeners for knowledge base status
+  const setupKnowledgeBaseListeners = (notesData: Note[], merchantId: string): (() => void) => {
+    if (!merchantId || notesData.length === 0) return () => {};
+
+    console.log('Setting up knowledge base listeners');
+    
+    // Listen to the knowledgebase collection for changes
+    const kbRef = collection(db, `merchants/${merchantId}/knowledgebase`);
+    const kbQuery = query(kbRef, orderBy("createTime", "desc"));
+    
+    // Create an array to collect all unsubscribe functions
+    const unsubscribeFunctions: Array<() => void> = [];
+    
+    // Set up a listener for the knowledge base collection
+    const kbUnsubscribe = onSnapshot(kbQuery, (snapshot) => {
+      console.log('Knowledge base collection updated');
+      
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'added' || change.type === 'modified') {
+          const kbData = change.doc.data();
+          const kbStatus = kbData.status;
+          
+          // Only process if status is "success"
+          if (kbStatus === "success") {
+            // Find matching notes in our local state
+            setNotes(prevNotes => {
+              return prevNotes.map(note => {
+                // Check if this KB entry matches this note
+                const isMatch = (note.fileId && kbData.fileId === note.fileId) ||
+                  ((note.fileName && (kbData.source?.includes(note.fileName) || kbData.fileName === note.fileName)) ||
+                  (note.originalFileName && (kbData.source?.includes(note.originalFileName) || kbData.fileName === note.originalFileName)) ||
+                  (note.fileName && note.fileName.includes('_') && 
+                  kbData.source?.includes(note.fileName.substring(note.fileName.lastIndexOf('_') + 1))));
+                
+                if (isMatch) {
+                  console.log(`Realtime update: KB success for ${note.title}`);
+                  
+                  // Update the document in Firestore to set inKnowledgeBase=true
+                  const docRef = doc(db, `merchants/${merchantId}/files`, note.id);
+                  updateDoc(docRef, { inKnowledgeBase: true })
+                    .catch((err: Error) => console.error('Error updating KB status in files collection:', err));
+                  
+                  // Update in local state
+                  return { 
+                    ...note, 
+                    inKnowledgeBase: true,
+                    pendingKnowledgeBase: false
+                  };
+                }
+                return note;
+              });
+            });
+            
+            // Also update selectedNote if it exists and matches
+            if (selectedNote) {
+              const isSelectedMatch = (selectedNote.fileId && kbData.fileId === selectedNote.fileId) ||
+                ((selectedNote.fileName && (kbData.source?.includes(selectedNote.fileName) || kbData.fileName === selectedNote.fileName)) ||
+                (selectedNote.originalFileName && (kbData.source?.includes(selectedNote.originalFileName) || kbData.fileName === selectedNote.originalFileName)) ||
+                (selectedNote.fileName && selectedNote.fileName.includes('_') && 
+                kbData.source?.includes(selectedNote.fileName.substring(selectedNote.fileName.lastIndexOf('_') + 1))));
+              
+              if (isSelectedMatch) {
+                setSelectedNote(prev => prev ? {
+                  ...prev,
+                  inKnowledgeBase: true,
+                  pendingKnowledgeBase: false
+                } : null);
+              }
+            }
+          }
+        }
+      });
+    }, error => {
+      console.error('Error in knowledge base listener:', error);
+    });
+    
+    unsubscribeFunctions.push(kbUnsubscribe);
+    
+    // Set up individual listeners for each file document to detect direct updates to inKnowledgeBase
+    notesData.forEach(note => {
+      if (note.pendingKnowledgeBase && !note.inKnowledgeBase) {
+        const fileDocRef = doc(db, `merchants/${merchantId}/files`, note.id);
+        const fileUnsubscribe = onSnapshot(fileDocRef, (docSnapshot) => {
+          if (docSnapshot.exists()) {
+            const data = docSnapshot.data();
+            if (data.inKnowledgeBase === true) {
+              console.log(`Realtime update: Document ${note.title} directly marked as in KB`);
+              
+              // Update our local state
+              setNotes(prevNotes => prevNotes.map(n => 
+                n.id === note.id 
+                  ? { ...n, inKnowledgeBase: true, pendingKnowledgeBase: false } 
+                  : n
+              ));
+              
+              // Update selected note if it matches
+              if (selectedNote && selectedNote.id === note.id) {
+                setSelectedNote(prev => prev ? {
+                  ...prev,
+                  inKnowledgeBase: true,
+                  pendingKnowledgeBase: false
+                } : null);
+              }
+            }
+          }
+        }, error => {
+          console.error(`Error in file listener for ${note.id}:`, error);
+        });
+        
+        unsubscribeFunctions.push(fileUnsubscribe);
+      }
+    });
+    
+    // Return a function to unsubscribe from all listeners
+    return () => {
+      console.log('Cleaning up knowledge base listeners');
+      unsubscribeFunctions.forEach(unsubscribe => unsubscribe());
+    };
+  };
+
+  // Fix the useEffect hook
+  useEffect(() => {
+    // Set up realtime listeners when notes are loaded and user is authenticated
+    if (notes.length > 0 && user && user.uid) {
+      const unsubscribe = setupKnowledgeBaseListeners(notes, user.uid);
+      return unsubscribe;
+    }
+    return undefined;
+  }, [notes, user, selectedNote]);
+  
+  // Add state for related notes
+  const [relatedNotes, setRelatedNotes] = useState<RelatedNote[]>([]);
+  const [loadingRelated, setLoadingRelated] = useState(false);
+  const [relatedError, setRelatedError] = useState<string | null>(null);
+  
+  // Add function to fetch related notes
+  const fetchRelatedNotes = async (noteId: string) => {
+    if (!user || !user.uid) return;
+    
+    try {
+      setLoadingRelated(true);
+      setRelatedError(null);
+      
+      const functions = getFunctions();
+      const getRelatedNotesFunction = httpsCallable(functions, 'getRelatedNotes');
+      
+      const result = await getRelatedNotesFunction({
+        merchantId: user.uid,
+        noteId: noteId,
+        limit: 5,
+        minScore: 0.7
+      });
+      
+      // Firebase functions return data in a 'data' property
+      const data = result.data as { related: RelatedNote[] };
+      setRelatedNotes(data.related || []);
+      
+      console.log('Related notes:', data.related);
+    } catch (error) {
+      console.error('Error fetching related notes:', error);
+      setRelatedError('Failed to load similar documents');
+      setRelatedNotes([]);
+    } finally {
+      setLoadingRelated(false);
+    }
+  };
+  
+  // Call fetchRelatedNotes when a note is selected
+  useEffect(() => {
+    if (selectedNote) {
+      fetchRelatedNotes(selectedNote.id);
+    } else {
+      setRelatedNotes([]);
+    }
+  }, [selectedNote, user]);
+  
+  // Add new state for knowledge base processing stages
+  const [knowledgeBaseProcessingStage, setKnowledgeBaseProcessingStage] = useState(0);
+  
+  // Add effect for cycling Knowledge Base processing messages
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (isLoadingKnowledgeChat) {
+      // Reset to first message when loading starts
+      setKnowledgeBaseProcessingStage(0);
+      
+      // Set up interval to cycle through messages every 2 seconds
+      interval = setInterval(() => {
+        setKnowledgeBaseProcessingStage(prev => (prev + 1) % 4);
+      }, 2000);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isLoadingKnowledgeChat]);
+  
+  // Knowledge Base processing messages based on stage
+  const getKnowledgeBaseProcessingMessage = () => {
+    switch (knowledgeBaseProcessingStage) {
+      case 0:
+        return "Searching your vault...";
+      case 1:
+        return "Finding relevant documents...";
+      case 2:
+        return "Analysing content...";
+      case 3:
+        return "Generating response...";
+      default:
+        return "Processing your request...";
+    }
+  };
+  
   return (
     <DashboardLayout>
+      {/* Add custom animation styles */}
+      <style dangerouslySetInnerHTML={{ __html: customAnimationStyles }} />
       <div className="flex flex-col h-full">
         {/* Custom header without margin */}
         <div className="px-6 py-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-4">
-              <h1 className="text-xl font-semibold tracking-tight whitespace-nowrap">Notes</h1>
+              <h1 className="text-xl font-semibold tracking-tight whitespace-nowrap">Vault</h1>
             </div>
             
             <div className="flex items-center gap-2 shrink-0">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" className="h-8 gap-2 rounded-md bg-white hover:bg-gray-50 border-gray-200">
+                      <Image 
+                        src="/gmail.png" 
+                        alt="Gmail" 
+                        width={16} 
+                        height={12} 
+                        className="flex-shrink-0" 
+                      />
+                      <span className="text-sm">Auto Sync Gmail</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs p-4 bg-white shadow-lg rounded-md border border-gray-200">
+                    <div className="space-y-2">
+                      <h4 className="font-semibold text-sm text-black">Gmail Auto Sync</h4>
+                      <p className="text-xs text-black">
+                        Automatically extract all files from your Gmail account and upload them directly to your Vault for easy reference and searching.
+                      </p>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              
               <Button variant="outline" className="h-8 gap-2 rounded-md">
                 <Plus className="h-4 w-4" />
-                New Note
+                New Document
               </Button>
               <Button 
                 className="h-8 gap-2 rounded-md"
@@ -1186,82 +1688,118 @@ export default function NotesPage() {
           {/* Left Column - Notes List */}
           <div className="lg:col-span-1 border-r flex flex-col h-full overflow-hidden">
             <div className="p-4 border-b flex-shrink-0">
-              {/* Unified search box */}
-              <div className="relative mb-4">
-                <div className="flex items-center">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      id="unified-search-input"
-                      placeholder={searchMode === "filter" ? "Search notes..." : "Ask a question about your documents..."}
-                      className={`pl-10 ${searchMode === "filter" ? "pr-[110px]" : "pr-12"} h-9 rounded-md`}
-                      value={searchMode === "filter" ? searchQuery : semanticSearchQuery}
-                      onChange={(e) => {
-                        if (searchMode === "filter") {
-                          setSearchQuery(e.target.value);
-                        } else {
-                          handleSemanticSearch(e);
-                        }
-                      }}
-                      onFocus={() => {
-                        if (searchMode === "semantic" && semanticSearchQuery.trim() !== "") {
+              {/* Replace unified search with two separate search boxes */}
+              <div className="flex gap-2 mb-4">
+                {/* Filter search box */}
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    id="filter-search-input"
+                    placeholder="Search your Vault..."
+                    className="pl-10 h-9 rounded-md w-full"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+
+                {/* AI Search Button */}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 rounded-md bg-white hover:bg-gray-50 border-gray-200"
+                        onClick={() => {
                           setShowSearchResults(true);
-                        }
-                      }}
+                          // Focus a hidden input for keyboard entry
+                          const hiddenInput = document.getElementById('semantic-search-hidden-input');
+                          if (hiddenInput) {
+                            (hiddenInput as HTMLInputElement).focus();
+                          }
+                        }}
+                      >
+                        <AILogo />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent className="p-2 bg-white rounded-md border border-gray-200">
+                      <p className="text-xs text-black">Ask a question about your documents</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                
+                {/* Hidden input to capture keyboard entry when AI button clicked */}
+                <input
+                  id="semantic-search-hidden-input"
+                  type="text"
+                  className="sr-only"
+                  value={semanticSearchQuery}
+                  onChange={handleSemanticSearch}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && semanticSearchQuery.trim() !== '') {
+                      callKnowledgeChatFunction();
+                      setSelectedNote(null);
+                    }
+                  }}
+                />
+              </div>
+
+              {/* AI Search Dialog instead of dropdown */}
+              {showSearchResults && (
+                <div className="absolute mt-1 right-4 w-full max-w-md bg-white rounded-md border border-gray-200 shadow-lg z-10 semantic-search-container">
+                  <div className="p-3 border-b flex items-center gap-2">
+                    <AILogo />
+                    <Input 
+                      autoFocus
+                      placeholder="Ask a question about your documents..."
+                      className="rounded-md h-9"
+                      value={semanticSearchQuery}
+                      onChange={handleSemanticSearch}
                       onKeyDown={(e) => {
-                        if (searchMode === "semantic" && e.key === 'Enter') {
+                        if (e.key === 'Enter' && semanticSearchQuery.trim() !== '') {
                           callKnowledgeChatFunction();
                           setSelectedNote(null);
+                        } else if (e.key === 'Escape') {
+                          setShowSearchResults(false);
                         }
                       }}
                     />
-                    
-                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
-                      {searchMode === "filter" ? (
-                        <button
-                          type="button"
-                          className="text-xs text-primary hover:text-primary/80 font-medium px-2 py-1 rounded-sm bg-primary/5 hover:bg-primary/10 transition-colors flex items-center gap-1"
-                          onClick={() => setSearchMode("semantic")}
-                          title="Switch to AI search (⌘/)"
+                    <Button 
+                      size="icon" 
+                      variant="ghost" 
+                      className="h-8 w-8 rounded-md" 
+                      onClick={() => setShowSearchResults(false)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  
+                  {semanticSearchQuery.trim() === '' && recentSearches.length > 0 ? (
+                    <div className="py-2">
+                      <div className="px-3 pb-1">
+                        <h4 className="text-xs font-medium text-muted-foreground">Recent searches</h4>
+                      </div>
+                      {recentSearches.map((search, index) => (
+                        <div
+                          key={index}
+                          className="px-3 py-1.5 hover:bg-muted cursor-pointer flex items-center gap-2"
+                          onClick={() => {
+                            setSemanticSearchQuery(search);
+                            callKnowledgeChatFunction();
+                          }}
                         >
-                          <MessageSquare className="h-3 w-3" />
-                          <span>Ask a question</span>
-                        </button>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            className="text-xs text-muted-foreground hover:text-primary font-medium px-2 py-1 rounded-sm hover:bg-gray-100 transition-colors flex items-center gap-1"
-                            onClick={() => setSearchMode("filter")}
-                            title="Switch to filter search (⌘/)"
-                          >
-                            <Filter className="h-3 w-3" />
-                            <span>Filter</span>
-                          </button>
-                          <kbd className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-muted-foreground/20 opacity-70">
-                            <span className="text-xs">⏎</span>
-                          </kbd>
-                        </>
-                      )}
+                          <Clock className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-sm truncate">{search}</span>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Semantic search results dropdown */}
-              {searchMode === "semantic" && showSearchResults && (
-                <div className="absolute mt-1 w-full bg-white rounded-md border border-gray-200 shadow-lg z-10 left-0 right-0 max-w-md semantic-search-container">
-                  <div className="p-2 border-b">
-                    <h3 className="text-xs font-medium text-muted-foreground">Similar documents</h3>
-                  </div>
-                  {searchResults.length > 0 ? (
+                  ) : searchResults.length > 0 ? (
                     <div className="max-h-60 overflow-y-auto py-1 scrollable">
                       {searchResults.map((result, index) => (
                         <div 
                           key={index} 
-                          className="px-2 py-1.5 hover:bg-muted cursor-pointer"
+                          className="px-3 py-1.5 hover:bg-muted cursor-pointer"
                           onClick={() => {
-                            // Find the note that matches this result and select it
                             const matchingNote = notes.find(note => note.title === result.title);
                             if (matchingNote) {
                               setSelectedNote(matchingNote);
@@ -1281,44 +1819,37 @@ export default function NotesPage() {
                       ))}
                     </div>
                   ) : semanticSearchQuery.trim() !== "" ? (
-                    <div className="py-4 px-2 text-center">
+                    <div className="py-4 px-3 text-center">
                       <p className="text-sm text-muted-foreground">No matching documents found</p>
                     </div>
-                  ) : recentSearches.length > 0 ? (
-                    <div className="py-2">
-                      <div className="px-2 pb-1">
-                        <h4 className="text-xs font-medium text-muted-foreground">Recent searches</h4>
-                      </div>
-                      {recentSearches.map((search, index) => (
-                        <div
-                          key={index}
-                          className="px-3 py-1.5 hover:bg-muted cursor-pointer flex items-center gap-2"
-                          onClick={() => {
-                            setSemanticSearchQuery(search);
-                            callKnowledgeChatFunction();
-                          }}
-                        >
-                          <Clock className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm truncate">{search}</span>
-                        </div>
-                      ))}
-                    </div>
                   ) : (
-                    <div className="py-4 px-2 text-center">
+                    <div className="py-4 px-3 text-center">
                       <p className="text-sm text-muted-foreground">Type to search documents</p>
                     </div>
                   )}
-                  <div className="p-2 border-t">
-                    <button 
-                      className="w-full text-xs text-primary hover:underline text-left flex items-center gap-1.5"
-                      onClick={() => {
-                        callKnowledgeChatFunction();
-                      }}
+                  
+                  <div className="p-3 border-t">
+                    <Button 
+                      className={cn(
+                        "w-full gap-1.5 rounded-md",
+                        isLoadingKnowledgeChat && "bg-blue-400 text-white hover:bg-blue-400"
+                      )}
+                      size="sm"
+                      disabled={semanticSearchQuery.trim() === '' || isLoadingKnowledgeChat}
+                      onClick={(() => callKnowledgeChatFunction()) as unknown as React.MouseEventHandler<HTMLButtonElement>}
                     >
-                      <Search className="h-3 w-3" />
-                      <span>Press Enter to search all documents</span>
-                      <span className="ml-auto text-muted-foreground">⏎</span>
-                    </button>
+                      {isLoadingKnowledgeChat ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <span>Searching Vault...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Search className="h-3.5 w-3.5" />
+                          <span>Search Vault</span>
+                        </>
+                      )}
+                    </Button>
                   </div>
                 </div>
               )}
@@ -1326,8 +1857,17 @@ export default function NotesPage() {
               <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="grid grid-cols-4 w-full">
                   <TabsTrigger value="all">All</TabsTrigger>
+                  <TabsTrigger value="gmail" className="flex items-center justify-center gap-1">
+                    <Image 
+                      src="/gmail.png" 
+                      alt="Gmail" 
+                      width={16} 
+                      height={12} 
+                      className="flex-shrink-0" 
+                    />
+                    <span>Gmail</span>
+                  </TabsTrigger>
                   <TabsTrigger value="invoices">Invoices</TabsTrigger>
-                  <TabsTrigger value="notes">Notes</TabsTrigger>
                   <TabsTrigger value="other">Other</TabsTrigger>
                 </TabsList>
               </Tabs>
@@ -1382,7 +1922,7 @@ export default function NotesPage() {
                       className={cn(
                         "p-4 cursor-pointer hover:bg-muted/50 transition-colors",
                         selectedNote?.id === note.id && "bg-muted",
-                        note.inKnowledgeBase && "border-l-4 border-l-primary" // Add highlight for knowledge base docs
+                        note.inKnowledgeBase && "border-l-4 border-l-primary bg-gradient-to-r from-primary/5 to-transparent" // Enhanced highlight for KB docs
                       )}
                       onClick={() => {
                         // Stop editing title if selecting a different note
@@ -1425,14 +1965,32 @@ export default function NotesPage() {
                         </div>
                         <div className="flex flex-col items-end flex-shrink-0">
                           <div className="flex items-center gap-1 mb-1">
-                            {note.inKnowledgeBase && (
-                              <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20 px-1 py-0 h-5 mr-1">KB</Badge>
-                            )}
-                            <Badge variant="outline" className="text-xs capitalize whitespace-nowrap">
-                              {note.type === 'pdf' ? 'PDF Document' : 
+                            <Badge variant="outline" className="text-xs capitalize whitespace-nowrap bg-gray-50 border-gray-200 px-2 py-0 h-5 font-medium rounded-md">
+                              {note.type === 'pdf' ? 'PDF' : 
                                note.type === 'image' ? 'Image File' : 
                                note.type} 
                             </Badge>
+                            {note.inKnowledgeBase ? (
+                              <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20 px-2 py-0 h-5 ml-1 font-medium rounded-md">
+                                <Check className="h-3 w-3 mr-1" />Vault
+                              </Badge>
+                            ) : note.pendingKnowledgeBase ? (
+                              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-600 border-amber-200 px-2 py-0 h-5 ml-1 font-medium rounded-md">
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />Vault
+                              </Badge>
+                            ) : null}
+                            {note.origin === "gmail" && (
+                              <div className="ml-1 flex items-center justify-center h-5 w-5">
+                                <Image 
+                                  src="/gmail.png" 
+                                  alt="Gmail" 
+                                  width={16} 
+                                  height={12}
+                                  className="object-contain" 
+                                  title="Imported from Gmail"
+                                />
+                              </div>
+                            )}
                           </div>
                           <div className="text-xs text-muted-foreground whitespace-nowrap">
                             {safeFormatDate(note.createdAt, "MMM d, yyyy")}
@@ -1469,8 +2027,19 @@ export default function NotesPage() {
                         {selectedNote.title}
                       </h2>
                     )}
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                       {safeFormatDate(selectedNote.createdAt, "MMMM d, yyyy")} • {selectedNote.areaTitle}
+                      {selectedNote.origin === "gmail" && (
+                        <span className="flex items-center" title="Imported from Gmail">
+                          <Image 
+                            src="/gmail.png" 
+                            alt="Gmail" 
+                            width={16} 
+                            height={12}
+                            className="object-contain" 
+                          />
+                        </span>
+                      )}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1563,6 +2132,153 @@ export default function NotesPage() {
                   </div>
                 </div>
                 
+                {/* Add Summary section right after the document header, before Similar Documents */}
+                <div className="border-b bg-gradient-to-r from-blue-50 to-transparent">
+                  <Collapsible defaultOpen={true} className="w-full">
+                    <div className="px-6 py-3 flex items-center justify-between cursor-pointer">
+                      <CollapsibleTrigger className="flex items-center gap-2 w-full justify-between hover:opacity-80 transition-opacity">
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <FileText className="h-4 w-4 text-blue-500" />
+                            <h3 className="text-sm font-medium">Summary</h3>
+                          </div>
+                          <span className="text-xs bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-medium">
+                            Powered by Tap Agent
+                          </span>
+                        </div>
+                        <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform ui-open:rotate-180" />
+                      </CollapsibleTrigger>
+                    </div>
+                    <CollapsibleContent>
+                      <div className="px-6 py-3 pt-0">
+                        {selectedNote?.summary ? (
+                          <div className="p-3 bg-white rounded-md border border-blue-100 shadow-sm">
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedNote.summary}</p>
+                          </div>
+                        ) : (
+                          <div className="p-3 bg-white rounded-md border border-gray-200 text-muted-foreground text-sm italic text-center">
+                            No summary available for this document
+                          </div>
+                        )}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </div>
+                
+                {/* Add Similar Documents section */}
+                {selectedNote && (
+                  <div className="border-b">
+                    <div className="px-6 py-2 flex items-center justify-between">
+                      <h3 className="text-xs font-medium flex items-center gap-1.5">
+                        <Share2 className="h-3 w-3 text-muted-foreground" />
+                        Similar Documents
+                      </h3>
+                      
+                      {loadingRelated && (
+                        <div className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span>Finding similar...</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="px-4 pb-2">
+                      {relatedError ? (
+                        <div className="text-xs text-muted-foreground py-1 px-2">
+                          {relatedError}
+                        </div>
+                      ) : loadingRelated ? (
+                        <div className="flex gap-2 overflow-x-auto py-1 px-2 scrollbar-thin">
+                          {[1, 2, 3].map(i => (
+                            <Skeleton key={i} className="h-7 w-40 flex-shrink-0" />
+                          ))}
+                        </div>
+                      ) : relatedNotes.length > 0 ? (
+                        <div className="flex flex-wrap gap-2 py-1">
+                          {relatedNotes.map(note => (
+                            <TooltipProvider key={note.id}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div 
+                                    className="h-7 flex items-center bg-white border border-gray-100 rounded-full px-2 py-1 hover:border-blue-200 hover:bg-blue-50/30 cursor-pointer transition-colors shadow-sm group"
+                                    onClick={() => {
+                                      const fullNote = notes.find(n => n.id === note.id);
+                                      if (fullNote) {
+                                        setSelectedNote(fullNote);
+                                      }
+                                    }}
+                                  >
+                                    {note.type === 'pdf' ? (
+                                      <FileIcon className="h-3 w-3 text-red-500 flex-shrink-0 mr-1.5" />
+                                    ) : note.type === 'image' ? (
+                                      <ImageIcon className="h-3 w-3 text-blue-500 flex-shrink-0 mr-1.5" />
+                                    ) : note.type === 'invoice' ? (
+                                      <FileText className="h-3 w-3 text-green-500 flex-shrink-0 mr-1.5" />
+                                    ) : (
+                                      <FileText className="h-3 w-3 text-gray-500 flex-shrink-0 mr-1.5" />
+                                    )}
+                                    <span className="text-xs font-medium truncate min-w-[120px] max-w-[180px]">{note.title}</span>
+                                    <Badge className="ml-1.5 text-[8px] py-0 h-3 px-1 rounded-md bg-blue-50 text-blue-600 border-blue-100">
+                                      {Math.round(note.score * 100)}%
+                                    </Badge>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-4 w-4 ml-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const fullNote = notes.find(n => n.id === note.id);
+                                        if (fullNote && fullNote.fileUrl) {
+                                          window.open(fullNote.fileUrl, '_blank');
+                                        }
+                                      }}
+                                    >
+                                      <ExternalLink className="h-2 w-2 text-gray-400" />
+                                    </Button>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" className="max-w-[280px] p-3">
+                                  <div className="space-y-1.5">
+                                    <div className="flex items-center gap-1.5">
+                                      <h4 className="text-sm font-medium">{note.title}</h4>
+                                      <Badge className="text-[8px] py-0 h-3 px-1 rounded-md bg-primary/10 text-primary border-primary/20">
+                                        {Math.round(note.score * 100)}% Match
+                                      </Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                      {note.summary || "No summary available for this document"}
+                                    </p>
+                                    <div className="flex justify-end pt-1">
+                                      <Button 
+                                        variant="link" 
+                                        size="sm" 
+                                        className="h-5 p-0 text-xs text-blue-500"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const fullNote = notes.find(n => n.id === note.id);
+                                          if (fullNote) {
+                                            setSelectedNote(fullNote);
+                                          }
+                                        }}
+                                      >
+                                        View Document <ArrowRight className="h-3 w-3 ml-1" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-center text-muted-foreground py-1">
+                          No similar documents found
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
                 <div className="px-6 py-6 flex-grow overflow-y-auto">
                   {selectedNote.fileUrl ? (
                     renderFileViewer()
@@ -1590,7 +2306,7 @@ export default function NotesPage() {
                 <div className="px-6 py-4 border-b flex items-center justify-between flex-shrink-0 bg-gray-50">
                   <div className="flex items-center gap-2">
                     <Search className="h-4 w-4 text-muted-foreground" />
-                    <h3 className="font-medium">Knowledge Search Results</h3>
+                    <h3 className="font-medium">Vault Search Results</h3>
                     <span className="text-sm bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-medium ml-2">
                       Powered By Tap Agent
                     </span>
@@ -1608,18 +2324,26 @@ export default function NotesPage() {
                 <div className="flex-1 overflow-y-auto p-5">
                   {isLoadingKnowledgeChat ? (
                     <div className="h-60 flex flex-col items-center justify-center">
-                      <div className="relative">
-                        <div className="h-16 w-16 rounded-full border-t-2 border-b-2 border-gray-200 animate-spin"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <Search className="h-6 w-6 text-primary" />
+                      {/* Updated loading indicator with thinking box from tap-agent-sheet */}
+                      <div className="bg-white border border-gray-200 shadow-sm rounded-md p-6 mb-4 w-full max-w-xl animate-slowFadeIn">
+                        <div className="flex items-center gap-3 mb-2">
+                          <Search className="h-5 w-5 text-blue-500" />
+                          <div className="flex items-center gap-1">
+                            <h3 className="text-sm font-medium text-gray-900">Vault search in progress...</h3>
+                            <div className="w-4 h-4 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+                          </div>
+                        </div>
+                        <div className="mt-1 flex flex-col items-start text-left py-2 pl-8">
+                          <p className="text-xs animate-fade-in-out bg-gradient-to-r from-gray-400 to-gray-700 bg-clip-text text-transparent font-medium w-full text-left">
+                            {getKnowledgeBaseProcessingMessage()}
+                          </p>
                         </div>
                       </div>
-                      <p className="mt-4 text-muted-foreground">Analysing your documents...</p>
                     </div>
                   ) : knowledgeChatResponse ? (
                     <div 
                       className={cn(
-                        "transition-opacity duration-700 ease-in-out",
+                        "knowledge-response transition-opacity duration-700 ease-in-out",
                         isKnowledgeResponseVisible ? "opacity-100" : "opacity-0"
                       )}
                     >
@@ -1640,16 +2364,16 @@ export default function NotesPage() {
                             hr: ({node, ...props}) => <hr className="my-4 border-t border-gray-300" {...props} />,
                             strong: ({node, ...props}) => <strong className="font-semibold text-gray-900" {...props} />,
                             em: ({node, ...props}) => <em className="text-gray-700" {...props} />,
-                            code: ({node, inline, className, children, ...rest}: any) => {
+                            code: ({node, inline, className, children, ...props}: any) => {
                               const match = /language-(\w+)/.exec(className || '')
                               return !inline && match ? (
                                 <pre className="bg-gray-100 p-3 rounded-md my-3 overflow-x-auto">
-                                  <code className={`language-${match[1]}`} {...rest}>
+                                  <code className={className} {...props}>
                                     {String(children).replace(/\n$/, '')}
                                   </code>
                                 </pre>
                               ) : (
-                                <code className="bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded-sm text-sm font-mono" {...rest}>
+                                <code className="bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded-sm text-sm font-mono" {...props}>
                                   {children}
                                 </code>
                               )

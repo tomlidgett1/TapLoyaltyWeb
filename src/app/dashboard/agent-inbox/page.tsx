@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Mail, Package, AlertCircle, CheckCircle, XCircle, ChevronDown, Star, Clock, Eye } from "lucide-react"
+import { Mail, Package, AlertCircle, CheckCircle, XCircle, ChevronDown, Star, Clock, Eye, Filter } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -9,15 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { Separator } from "@/components/ui/separator"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetFooter,
-  SheetClose,
-} from "@/components/ui/sheet"
+import { cn } from "@/lib/utils"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,7 +46,6 @@ export default function AgentInboxPage() {
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState<string>("all")
   const [selectedAction, setSelectedAction] = useState<AgentAction | null>(null)
-  const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false)
   const [pendingActions, setPendingActions] = useState<AgentAction[]>([
     {
       id: "act-1",
@@ -154,8 +146,6 @@ export default function AgentInboxPage() {
       description: "The agent will now implement this action.",
       variant: "default",
     })
-    
-    setIsDetailSheetOpen(false)
   }
   
   // Handle action decline
@@ -173,14 +163,11 @@ export default function AgentInboxPage() {
       description: "The agent will not proceed with this action.",
       variant: "destructive",
     })
-    
-    setIsDetailSheetOpen(false)
   }
   
   // Show action details
   const viewActionDetails = (action: AgentAction) => {
     setSelectedAction(action)
-    setIsDetailSheetOpen(true)
   }
   
   // Format relative time
@@ -225,13 +212,13 @@ export default function AgentInboxPage() {
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case "high":
-        return "bg-gray-100 text-gray-800 hover:bg-gray-200 border-gray-200"
+        return "bg-red-50 text-red-700 border-red-200"
       case "medium":
-        return "bg-gray-100 text-gray-800 hover:bg-gray-200 border-gray-200"
+        return "bg-orange-50 text-orange-700 border-orange-200"
       case "low":
-        return "bg-gray-100 text-gray-800 hover:bg-gray-200 border-gray-200"
+        return "bg-blue-50 text-blue-700 border-blue-200"
       default:
-        return "bg-gray-100 text-gray-800 hover:bg-gray-200 border-gray-200"
+        return "bg-gray-100 text-gray-800 border-gray-200"
     }
   }
   
@@ -250,371 +237,366 @@ export default function AgentInboxPage() {
   }
 
   return (
-    <div className="container max-w-7xl mx-auto px-4">
-      <div className="pt-4"></div>
-      <div className="flex flex-col md:flex-row justify-between items-center">
-        <div>
-          <h2 className="text-xl font-medium flex items-center gap-2">
-            <GradientText>Agent</GradientText> Inbox
-          </h2>
-        </div>
-        
-        <div className="flex items-center gap-4">
-          <Button size="sm" className="gap-2 h-8">
-            <CheckCircle className="h-4 w-4" />
-            Approve All
-          </Button>
+    <div className="flex flex-col h-screen">
+      <div className="px-6 py-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <h1 className="text-xl font-semibold tracking-tight whitespace-nowrap flex items-center gap-2">
+              <GradientText>Agent</GradientText> Inbox
+            </h1>
+          </div>
+          
+          <div className="flex items-center gap-2 shrink-0">
+            <Button variant="outline" className="h-8 gap-2 rounded-md">
+              <Filter className="h-4 w-4" />
+              <span className="text-sm">Filter</span>
+            </Button>
+            <Button className="h-8 gap-2 rounded-md">
+              <CheckCircle className="h-4 w-4" />
+              <span>Approve All</span>
+            </Button>
+          </div>
         </div>
       </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 border-t flex-1 min-h-0 h-[calc(100vh-9rem)]">
+        {/* Left Column - Agent Requests List */}
+        <div className="lg:col-span-1 border-r flex flex-col h-full overflow-hidden">
+          <div className="p-4 border-b flex-shrink-0">
+            <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid grid-cols-5 w-full">
+                <TabsTrigger value="all">All</TabsTrigger>
+                <TabsTrigger value="high" className="flex items-center justify-center gap-1">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  <span>High Priority</span>
+                </TabsTrigger>
+                <TabsTrigger value="email">Email</TabsTrigger>
+                <TabsTrigger value="offer">Offers</TabsTrigger>
+                <TabsTrigger value="program">Programs</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
       
-      <div className="mt-4">
-        <div style={{
-          width: "100vw",
-          position: "relative",
-          left: "50%",
-          right: "50%",
-          marginLeft: "-50vw",
-          marginRight: "-50vw",
-          height: "1px",
-          backgroundColor: "rgb(229, 231, 235)"
-        }}></div>
-      </div>
-      
-      <div className="mt-6">
-      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-6">
-          <TabsTrigger value="all" className="gap-2">
-            <Clock className="h-4 w-4" />
-            All Actions
-          </TabsTrigger>
-          <TabsTrigger value="high" className="gap-2">
-            <AlertCircle className="h-4 w-4" />
-            High Priority
-          </TabsTrigger>
-          <TabsTrigger value="email" className="gap-2">
-            <Mail className="h-4 w-4" />
-            Email Responses
-          </TabsTrigger>
-          <TabsTrigger value="offer" className="gap-2">
-            <Package className="h-4 w-4" />
-            Customer Offers
-          </TabsTrigger>
-          <TabsTrigger value="program" className="gap-2">
-            <Star className="h-4 w-4" />
-            Program Updates
-          </TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value={activeTab} className="mt-0">
-          {filteredActions.length === 0 ? (
-            <Card className="rounded-md">
-              <CardContent className="pt-10 pb-10 flex flex-col items-center justify-center">
-                <Clock className="h-16 w-16 text-gray-300 mb-4" />
-                <h3 className="text-xl font-medium text-center mb-2">No actions found</h3>
-                <p className="text-sm text-gray-500 text-center max-w-md">
-                  There are no pending agent actions that match your current filter. Try changing your filter or check back later.
+          <div className="flex-grow overflow-y-auto h-[calc(100%-8rem)] min-h-0 scrollbar-thin">
+            <style jsx global>{`
+              .scrollbar-thin {
+                scrollbar-width: thin;
+                scrollbar-color: rgba(203, 213, 225, 0.5) transparent;
+              }
+              .scrollbar-thin::-webkit-scrollbar {
+                width: 6px;
+              }
+              .scrollbar-thin::-webkit-scrollbar-track {
+                background: transparent;
+              }
+              .scrollbar-thin::-webkit-scrollbar-thumb {
+                background-color: rgba(203, 213, 225, 0.5);
+                border-radius: 20px;
+              }
+              .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+                background-color: rgba(148, 163, 184, 0.7);
+              }
+            `}</style>
+            {filteredActions.length === 0 ? (
+              <div className="p-8 text-center">
+                <Clock className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+                <h3 className="font-medium mb-1">No agent actions found</h3>
+                <p className="text-sm text-muted-foreground">
+                  There are no pending agent actions that match your current filter.
                 </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 gap-6">
-              {filteredActions.map(action => (
-                <Card key={action.id} className="rounded-md overflow-hidden">
-                  <div className="flex flex-col md:flex-row">
-                    {/* Main content */}
-                    <div className="flex-1 p-6">
-                      <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
-                        <div>
-                          <h3 className="text-lg font-medium mb-1 flex items-center gap-2">
-                            {action.title}
-                            <Badge variant="outline" className={`ml-2 text-xs font-medium ${getPriorityColor(action.priority)}`}>
-                              {action.priority.charAt(0).toUpperCase() + action.priority.slice(1)}
-                            </Badge>
-                          </h3>
-                          <p className="text-sm text-gray-500">
-                            {action.description}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 md:gap-4">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="gap-2"
-                            onClick={() => viewActionDetails(action)}
-                          >
-                            <Eye className="h-4 w-4" />
-                            View Details
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="gap-2 text-red-600 border-red-200 hover:bg-red-50"
-                            onClick={() => handleDecline(action.id)}
-                          >
-                            <XCircle className="h-4 w-4" />
-                            Decline
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="gap-2 text-green-600 border-green-200 hover:bg-gray-50"
-                            onClick={() => handleApprove(action.id)}
-                          >
-                            <CheckCircle className="h-4 w-4" />
-                            Approve
-                          </Button>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {filteredActions.map((action) => (
+                  <div 
+                    key={action.id}
+                    className={cn(
+                      "p-4 cursor-pointer hover:bg-muted/50 transition-colors",
+                      selectedAction?.id === action.id && "bg-muted",
+                      action.priority === "high" && "border-l-4 border-l-red-500"
+                    )}
+                    onClick={() => viewActionDetails(action)}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 min-w-0 flex-shrink">
+                        {getActionIcon(action.type)}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium text-sm truncate">{action.title}</h3>
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{action.description}</p>
                         </div>
                       </div>
-                      
-                      <div className="flex items-center gap-3 text-xs text-gray-500">
-                        <div>
-                          <span>{getAgentName(action.agent)}</span>
-                        </div>
-                        <span>•</span>
-                        <div>
-                          <span>{formatTimeAgo(action.timestamp)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
-      </div>
-      
-      {/* Detail Sheet */}
-      <Sheet open={isDetailSheetOpen} onOpenChange={setIsDetailSheetOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md md:max-w-xl lg:max-w-2xl overflow-auto">
-          {selectedAction && (
-            <>
-              <SheetHeader className="mb-6">
-                <SheetTitle className="flex items-center gap-2 text-lg">
-                  {selectedAction.title}
-                </SheetTitle>
-                <SheetDescription>
-                  Suggested by {getAgentName(selectedAction.agent)} {formatTimeAgo(selectedAction.timestamp)}
-                </SheetDescription>
-              </SheetHeader>
-              
-              <div className="space-y-6">
-                {/* Different content based on action type */}
-                {selectedAction.type === "email" && (
-                  <div className="space-y-6">
-                    <Card className="rounded-md">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base">Customer Information</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-2">
-                          <div className="flex justify-between">
-                            <span className="text-sm font-medium">Customer:</span>
-                            <span className="text-sm">{selectedAction.content.customerName}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-sm font-medium">Email:</span>
-                            <span className="text-sm">{selectedAction.content.customerEmail}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-sm font-medium">Subject:</span>
-                            <span className="text-sm">{selectedAction.content.subject}</span>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    
-                    <div>
-                      <h4 className="text-sm font-medium mb-2">Customer's Inquiry:</h4>
-                      <Card className="rounded-md">
-                        <CardContent className="p-4">
-                          <p className="text-sm whitespace-pre-line">{selectedAction.content.inquiry}</p>
-                        </CardContent>
-                      </Card>
-                    </div>
-                    
-                    <div>
-                      <h4 className="text-sm font-medium mb-2">Suggested Response:</h4>
-                      <Textarea 
-                        className="font-mono text-sm min-h-[200px]"
-                        value={selectedAction.content.suggestedResponse}
-                        readOnly
-                      />
-                    </div>
-                    
-                    <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
-                      <h4 className="text-sm font-medium text-gray-800 mb-2">Agent Notes</h4>
-                      <p className="text-sm text-gray-700">
-                        This response addresses the customer's questions about international shipping to Canada and sample pack availability. I've included specific details about delivery timeframes and the Coffee Explorer package to provide complete information.
-                      </p>
-                    </div>
-                  </div>
-                )}
-                
-                {selectedAction.type === "offer" && (
-                  <div className="space-y-6">
-                    <Card className="rounded-md">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base">Customer Information</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-2">
-                          <div className="flex justify-between">
-                            <span className="text-sm font-medium">Customer:</span>
-                            <span className="text-sm">{selectedAction.content.customerName}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-sm font-medium">Email:</span>
-                            <span className="text-sm">{selectedAction.content.customerEmail}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-sm font-medium">Last Purchase:</span>
-                            <span className="text-sm">{formatTimeAgo(selectedAction.content.lastPurchaseDate)}</span>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    
-                    <div>
-                      <h4 className="text-sm font-medium mb-2">Purchase History:</h4>
-                      <Card className="rounded-md">
-                        <CardContent className="p-4">
-                          <div className="space-y-4">
-                            {selectedAction.content.purchaseHistory.map((purchase: any, index: number) => (
-                              <div key={index} className="border-b last:border-b-0 pb-3 last:pb-0">
-                                <div className="flex justify-between text-sm">
-                                  <span className="font-medium">{purchase.date}</span>
-                                  <span className="text-green-600">${purchase.amount.toFixed(2)}</span>
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                  {purchase.items.join(", ")}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                    
-                    <Card className="rounded-md border-gray-200">
-                      <CardHeader className="bg-gray-50 border-b border-gray-100 pb-3">
-                        <CardTitle className="text-base text-gray-800">Suggested Offer</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-4 space-y-4">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium">Discount:</span>
-                          <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-200 border-none">
-                            {selectedAction.content.suggestedOffer.discountAmount}% Off
+                      <div className="flex flex-col items-end flex-shrink-0">
+                        <div className="flex items-center gap-1 mb-1">
+                          <Badge variant="outline" className={`text-xs whitespace-nowrap px-2 py-0 h-5 font-medium rounded-md ${getPriorityColor(action.priority)}`}>
+                            {action.priority.charAt(0).toUpperCase() + action.priority.slice(1)}
                           </Badge>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm font-medium">Expires:</span>
-                          <span className="text-sm">In {selectedAction.content.suggestedOffer.expirationDays} days</span>
+                        <div className="text-xs text-muted-foreground whitespace-nowrap">
+                          {formatTimeAgo(action.timestamp)}
                         </div>
-                        <div>
-                          <h5 className="text-sm font-medium mb-1">Message to Customer:</h5>
-                          <p className="text-sm p-2 bg-gray-50 rounded-md border">
-                            {selectedAction.content.suggestedOffer.message}
-                          </p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    
-                    <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
-                      <h4 className="text-sm font-medium text-gray-800 mb-2">Agent Analysis</h4>
-                      <p className="text-sm text-gray-700">
-                        {selectedAction.content.suggestedOffer.reasoning}
-                      </p>
+                      </div>
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      {getAgentName(action.agent)}
                     </div>
                   </div>
-                )}
-                
-                {selectedAction.type === "program" && (
-                  <div className="space-y-6">
-                    <Card className="rounded-md">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base">Program Recommendation: {selectedAction.content.programName}</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm mb-4">{selectedAction.content.analysis}</p>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                          <div className="bg-gray-50 p-3 rounded-md border">
-                            <h5 className="text-xs font-medium text-gray-500 mb-1">CUSTOMER SEGMENT</h5>
-                            <p className="text-sm font-medium">{selectedAction.content.customerSegmentSize}</p>
-                          </div>
-                          <div className="bg-gray-50 p-3 rounded-md border">
-                            <h5 className="text-xs font-medium text-gray-500 mb-1">AVERAGE MONTHLY SPEND</h5>
-                            <p className="text-sm font-medium">{selectedAction.content.averageSpend}</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    
-                    <Card className="rounded-md border-gray-200">
-                      <CardHeader className="bg-gray-50 border-b border-gray-100 pb-3">
-                        <CardTitle className="text-base text-gray-800">
-                          Recommendation Details: {selectedAction.content.recommendation.tierName}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-4 space-y-4">
-                        <div>
-                          <h5 className="text-sm font-medium mb-2">Qualification Criteria:</h5>
-                          <p className="text-sm p-2 bg-gray-50 rounded-md border">
-                            {selectedAction.content.recommendation.qualifications}
-                          </p>
-                        </div>
-                        
-                        <div>
-                          <h5 className="text-sm font-medium mb-2">Benefits:</h5>
-                          <ul className="space-y-1">
-                            {selectedAction.content.recommendation.benefits.map((benefit: string, index: number) => (
-                              <li key={index} className="text-sm flex items-start gap-2">
-                                <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
-                                <span>{benefit}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                            <h5 className="text-xs font-medium text-gray-700 mb-1">EXPECTED RESULTS</h5>
-                            <p className="text-sm text-gray-800">{selectedAction.content.recommendation.expectedResults}</p>
-                          </div>
-                          <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                            <h5 className="text-xs font-medium text-gray-700 mb-1">IMPLEMENTATION</h5>
-                            <p className="text-sm text-gray-800">{selectedAction.content.recommendation.implementationDifficulty}</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                )}
+                ))}
               </div>
-              
-              <SheetFooter className="mt-8 flex gap-2 justify-end">
-                <Button 
-                  variant="outline" 
-                  className="gap-2 text-red-600 border-red-200 hover:bg-red-50"
-                  onClick={() => handleDecline(selectedAction.id)}
-                >
-                  <XCircle className="h-4 w-4" />
-                  Decline
-                </Button>
-                <Button 
-                  className="gap-2"
-                  onClick={() => handleApprove(selectedAction.id)}
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  Approve Action
-                </Button>
-              </SheetFooter>
-            </>
+            )}
+          </div>
+        </div>
+                      
+        {/* Right Column - Action Detail */}
+        <div className="lg:col-span-1 flex flex-col min-h-0 p-0">
+          {selectedAction ? (
+            <div className="flex flex-col h-full">
+              <div className="px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
+                <div>
+                  <h2 className="text-lg font-medium">
+                    {selectedAction.title}
+                  </h2>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                    {getAgentName(selectedAction.agent)} • {formatTimeAgo(selectedAction.timestamp)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="h-8 gap-1 rounded-md text-red-600 hover:text-red-700 hover:bg-red-50"
+                    onClick={() => handleDecline(selectedAction.id)}
+                  >
+                    <XCircle className="h-4 w-4" />
+                    <span>Decline</span>
+                  </Button>
+                  <Button 
+                    size="sm"
+                    className="h-8 gap-1 rounded-md"
+                    onClick={() => handleApprove(selectedAction.id)}
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    <span>Approve</span>
+                  </Button>
+                </div>
+              </div>
+
+              <div className="px-6 py-6 flex-grow overflow-y-auto">
+                <div className="space-y-6">
+                  {/* Different content based on action type */}
+                  {selectedAction.type === "email" && (
+                    <div className="space-y-6">
+                      <Card className="rounded-md">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-base">Customer Information</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            <div className="flex justify-between">
+                              <span className="text-sm font-medium">Customer:</span>
+                              <span className="text-sm">{selectedAction.content.customerName}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm font-medium">Email:</span>
+                              <span className="text-sm">{selectedAction.content.customerEmail}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm font-medium">Subject:</span>
+                              <span className="text-sm">{selectedAction.content.subject}</span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <div>
+                        <h4 className="text-sm font-medium mb-2">Customer's Inquiry:</h4>
+                        <Card className="rounded-md">
+                          <CardContent className="p-4">
+                            <p className="text-sm whitespace-pre-line">{selectedAction.content.inquiry}</p>
+                          </CardContent>
+                        </Card>
+                      </div>
+                      
+                      <div>
+                        <h4 className="text-sm font-medium mb-2">Suggested Response:</h4>
+                        <Textarea 
+                          className="font-mono text-sm min-h-[200px]"
+                          value={selectedAction.content.suggestedResponse}
+                          readOnly
+                        />
+                      </div>
+                      
+                      <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
+                        <h4 className="text-sm font-medium text-blue-800 mb-2">Agent Reasoning</h4>
+                        <p className="text-sm text-blue-700">
+                          This response addresses the customer's questions about international shipping to Canada and sample pack availability. I've included specific details about delivery timeframes and the Coffee Explorer package to provide complete information.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {selectedAction.type === "offer" && (
+                    <div className="space-y-6">
+                      <Card className="rounded-md">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-base">Customer Information</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            <div className="flex justify-between">
+                              <span className="text-sm font-medium">Customer:</span>
+                              <span className="text-sm">{selectedAction.content.customerName}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm font-medium">Email:</span>
+                              <span className="text-sm">{selectedAction.content.customerEmail}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm font-medium">Last Purchase:</span>
+                              <span className="text-sm">{formatTimeAgo(selectedAction.content.lastPurchaseDate)}</span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <div>
+                        <h4 className="text-sm font-medium mb-2">Purchase History:</h4>
+                        <Card className="rounded-md">
+                          <CardContent className="p-4">
+                            <div className="space-y-4">
+                              {selectedAction.content.purchaseHistory.map((purchase: any, index: number) => (
+                                <div key={index} className="border-b last:border-b-0 pb-3 last:pb-0">
+                                  <div className="flex justify-between text-sm">
+                                    <span className="font-medium">{purchase.date}</span>
+                                    <span className="text-green-600">${purchase.amount.toFixed(2)}</span>
+                                  </div>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {purchase.items.join(", ")}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                      
+                      <Card className="rounded-md border-gray-200">
+                        <CardHeader className="bg-gray-50 border-b border-gray-100 pb-3">
+                          <CardTitle className="text-base text-gray-800">Suggested Offer</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 space-y-4">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium">Discount:</span>
+                            <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-200 border-none">
+                              {selectedAction.content.suggestedOffer.discountAmount}% Off
+                            </Badge>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-sm font-medium">Expires:</span>
+                            <span className="text-sm">In {selectedAction.content.suggestedOffer.expirationDays} days</span>
+                          </div>
+                          <div>
+                            <h5 className="text-sm font-medium mb-1">Message to Customer:</h5>
+                            <p className="text-sm p-2 bg-gray-50 rounded-md border">
+                              {selectedAction.content.suggestedOffer.message}
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
+                        <h4 className="text-sm font-medium text-blue-800 mb-2">Agent Reasoning</h4>
+                        <p className="text-sm text-blue-700">
+                          {selectedAction.content.suggestedOffer.reasoning}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {selectedAction.type === "program" && (
+                    <div className="space-y-6">
+                      <Card className="rounded-md">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-base">Program Recommendation: {selectedAction.content.programName}</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-sm mb-4">{selectedAction.content.analysis}</p>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div className="bg-gray-50 p-3 rounded-md border">
+                              <h5 className="text-xs font-medium text-gray-500 mb-1">CUSTOMER SEGMENT</h5>
+                              <p className="text-sm font-medium">{selectedAction.content.customerSegmentSize}</p>
+                            </div>
+                            <div className="bg-gray-50 p-3 rounded-md border">
+                              <h5 className="text-xs font-medium text-gray-500 mb-1">AVERAGE MONTHLY SPEND</h5>
+                              <p className="text-sm font-medium">{selectedAction.content.averageSpend}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card className="rounded-md border-gray-200">
+                        <CardHeader className="bg-gray-50 border-b border-gray-100 pb-3">
+                          <CardTitle className="text-base text-gray-800">
+                            Recommendation Details: {selectedAction.content.recommendation.tierName}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 space-y-4">
+                          <div>
+                            <h5 className="text-sm font-medium mb-2">Qualification Criteria:</h5>
+                            <p className="text-sm p-2 bg-gray-50 rounded-md border">
+                              {selectedAction.content.recommendation.qualifications}
+                            </p>
+                          </div>
+                          
+                          <div>
+                            <h5 className="text-sm font-medium mb-2">Benefits:</h5>
+                            <ul className="space-y-1">
+                              {selectedAction.content.recommendation.benefits.map((benefit: string, index: number) => (
+                                <li key={index} className="text-sm flex items-start gap-2">
+                                  <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
+                                  <span>{benefit}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                              <h5 className="text-xs font-medium text-gray-700 mb-1">EXPECTED RESULTS</h5>
+                              <p className="text-sm text-gray-800">{selectedAction.content.recommendation.expectedResults}</p>
+                            </div>
+                            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                              <h5 className="text-xs font-medium text-gray-700 mb-1">IMPLEMENTATION</h5>
+                              <p className="text-sm text-gray-800">{selectedAction.content.recommendation.implementationDifficulty}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
+                        <h4 className="text-sm font-medium text-blue-800 mb-2">Agent Reasoning</h4>
+                        <p className="text-sm text-blue-700">
+                          I've identified a growth opportunity by creating a new loyalty tier. This tier targets the 12% of customers who are heavy coffee purchasers but don't qualify for premium benefits. Based on purchasing patterns, offering these specific benefits should increase both retention and average order value for this valuable customer segment.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center p-8">
+              <div className="text-center">
+                <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium mb-2">No action selected</h3>
+                <p className="text-muted-foreground">
+                  Select an action from the list to view its details
+                </p>
+              </div>
+            </div>
           )}
-        </SheetContent>
-      </Sheet>
+        </div>
+      </div>
     </div>
   )
 } 

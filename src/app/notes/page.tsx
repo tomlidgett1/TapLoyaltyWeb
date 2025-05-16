@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useState, useEffect, useRef, useMemo, memo } from "react"
 import { db } from "@/lib/firebase"
 import { collection, query, orderBy, getDocs, Timestamp, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, onSnapshot, getDoc, setDoc } from "firebase/firestore"
 import { getStorage, ref, getDownloadURL, uploadBytesResumable } from "firebase/storage"
@@ -9,14 +9,13 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, Calendar, Tag, Clock, FileText, Filter, ChevronDown, Eye, ArrowRight, LayoutGrid, MessageSquare, Gift, Plus, FileUp, Inbox, FileImage, FilePlus, FileQuestion, Check, Loader2, Image as ImageIcon, File as FileIcon, ChevronLeft, ChevronRight as ChevronRightIcon, ZoomIn, ZoomOut, Download, CornerDownLeft, File, ChevronRight, MoreVertical, PlusCircle, PlusIcon, Upload, X, Share2, ExternalLink, Check as CheckIcon } from "lucide-react"
-import { format, isValid, formatRelative } from "date-fns"
+import { Search, Plus, FileUp, X, DownloadCloud, ExternalLink, MoreHorizontal, Edit, Trash2, Check, FileText, File as FileIcon, Image as ImageIcon, Calendar, Filter, User, ArrowRight, Loader2 } from "lucide-react"
+import { format, isValid } from "date-fns"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -27,7 +26,6 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
-import { Avatar, AvatarImage } from "@/components/ui/avatar"
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -38,19 +36,7 @@ import {
   AlertDialogHeader, 
   AlertDialogTitle
 } from "@/components/ui/alert-dialog"
-import { 
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-} from "@/components/ui/command"
-import { Document, Page, pdfjs } from 'react-pdf';
-import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
-import 'react-pdf/dist/esm/Page/TextLayer.css';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { AnimatedCheckbox, ConnectionButton } from "@/components/ui/checkbox"
+
 import {
   Tooltip,
   TooltipContent,
@@ -58,113 +44,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import Image from "next/image"
-import { getFunctions, httpsCallable } from "firebase/functions";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
-import { Bold, Italic, Underline, List, ListOrdered, AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, Heading3, Quote, Link2, Type, Text } from "lucide-react"
-import { Separator } from "@/components/ui/separator"
+import { getFunctions, httpsCallable } from "firebase/functions"
 
-// Add custom animation styles
-const customAnimationStyles = `
-  @keyframes pulseLeftToRight {
-    0% {
-      background-position: 0% 0;
-    }
-    100% {
-      background-position: 100% 0;
-    }
-  }
-  
-  .animate-pulse-left-to-right {
-    animation: pulseLeftToRight 2s ease-in-out infinite;
-  }
-
-  @keyframes fadeInOut {
-    0%, 100% { opacity: 0.5; }
-    50% { opacity: 1; }
-  }
-  
-  .animate-fade-in-out {
-    animation: fadeInOut 2s ease-in-out infinite;
-  }
-
-  @keyframes fadeInSlide {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  
-  .knowledge-response {
-    animation: fadeInSlide 0.3s ease-out forwards;
-  }
-  
-  @keyframes slowFadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-  
-  .animate-slowFadeIn {
-    animation: slowFadeIn 0.5s ease-out forwards;
-  }
-`;
-
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-
-// Add custom editor styles
-const editorStyles = `
-  #document-editor-content {
-    min-height: 100%;
-    padding: 2rem;
-    outline: none;
-    line-height: 1.5;
-    color: #333;
-  }
-  
-  #document-editor-content h1 {
-    font-size: 2.25rem;
-    font-weight: 700;
-    margin-top: 1.5rem;
-    margin-bottom: 1rem;
-    color: #111;
-  }
-  
-  #document-editor-content h2 {
-    font-size: 1.8rem;
-    font-weight: 600;
-    margin-top: 1.2rem;
-    margin-bottom: 0.8rem;
-    color: #111;
-  }
-  
-  #document-editor-content h3 {
-    font-size: 1.5rem;
-    font-weight: 600;
-    margin-top: 1rem;
-    margin-bottom: 0.6rem;
-    color: #111;
-  }
-  
-  #document-editor-content p {
-    margin-bottom: 0.75rem;
-  }
-  
-  #document-editor-content ul, #document-editor-content ol {
-    margin-left: 1.5rem;
-    margin-bottom: 0.75rem;
-  }
-  
-  #document-editor-content blockquote {
-    border-left: 3px solid #e2e8f0;
-    padding-left: 1rem;
-    font-style: italic;
-    color: #4a5568;
-    margin: 1rem 0;
-  }
-`;
-
-// Define the Note interface
+// Define types we need
 interface Note {
   id: string;
   title: string;
@@ -176,8 +58,6 @@ interface Note {
   categoryId: string;
   categoryTitle: string;
   createdAt: Date;
-  reminderTime: Date | null;
-  reminderSent: boolean;
   type: "note" | "invoice" | "other" | "pdf" | "image";
   fileUrl?: string;
   fileType?: string;
@@ -187,10 +67,10 @@ interface Note {
   contentType?: string;
   inKnowledgeBase?: boolean;
   pendingKnowledgeBase?: boolean;
-  origin?: string; // Add origin field to identify if note came from Gmail
+  origin?: string;
 }
 
-// Knowledge chat response interface
+// Add Knowledge chat response interface after the Note interface
 interface KnowledgeChatResponse {
   answer: string;
   sources: string[];
@@ -200,11 +80,149 @@ interface KnowledgeChatResponse {
   };
 }
 
-// Add AILogo component with gradient
+// Add the RelatedNote interface after the KnowledgeChatResponse interface
+interface RelatedNote {
+  id: string;
+  title: string; 
+  summary: string;
+  type: "note" | "invoice" | "other" | "pdf" | "image";
+  fileUrl?: string;
+  fileName?: string;
+  score: number;
+}
+
+// Apple-like smooth transition styles
+const transitionStyles = `
+  .smooth-appear {
+    animation: smoothAppear 0.3s ease-out forwards;
+  }
+  
+  @keyframes smoothAppear {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  .scale-in {
+    animation: scaleIn 0.3s ease-out forwards;
+  }
+  
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  
+  .document-container {
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    will-change: auto;
+  }
+  
+  .document-container:hover {
+    background-color: rgba(246, 246, 246, 0.7);
+  }
+  
+  .document-container.selected {
+    background-color: rgba(239, 246, 255, 0.6);
+    border-color: rgba(191, 219, 254, 1);
+  }
+  
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(203, 213, 225, 0.3) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(203, 213, 225, 0.3);
+    border-radius: 20px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(203, 213, 225, 0.5);
+  }
+  
+  /* Editor styles */
+  .document-editor {
+    width: 100%;
+    height: 100%;
+    outline: none;
+    padding: 1.5rem;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: #333;
+    min-height: 300px;
+  }
+  
+  .document-editor:empty:before {
+    content: "Start typing your document...";
+    color: #9ca3af;
+    position: absolute;
+    pointer-events: none;
+  }
+  
+  .document-editor h1 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  .document-editor h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-top: 1.25rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  .document-editor p {
+    margin-bottom: 0.75rem;
+  }
+  
+  /* Smooth transitions between document selection */
+  .detail-view-container {
+    will-change: opacity;
+    transition: opacity 0.2s ease-out;
+  }
+  
+  .detail-view-container.fade-out {
+    opacity: 0;
+  }
+  
+  .detail-view-container.fade-in {
+    opacity: 1;
+  }
+  
+  /* Optimize renders by using contain */
+  .document-list-container {
+    contain: content;
+  }
+  
+  /* AI response styles */
+  .ai-response-container {
+    animation: fadeIn 0.3s ease-out;
+  }
+`;
+
+// Add the AI Logo component after interfaces
 const AILogo = () => (
   <svg 
-    width="18" 
-    height="18" 
+    width="16" 
+    height="16" 
     viewBox="0 0 24 24" 
     fill="none" 
     xmlns="http://www.w3.org/2000/svg"
@@ -223,81 +241,141 @@ const AILogo = () => (
   </svg>
 );
 
-// Add a new interface for RelatedNote
-interface RelatedNote {
-  id: string;
-  title: string; 
-  summary: string;
-  rawText: string;
-  type: "note" | "invoice" | "other" | "pdf" | "image";
-  fileUrl?: string;
-  fileName?: string;
-  score: number;
-}
+// Add memoized DocumentItem component
+const DocumentItem = memo(({ 
+  note, 
+  isSelected, 
+  onSelect, 
+  formatDate 
+}: { 
+  note: Note; 
+  isSelected: boolean; 
+  onSelect: (note: Note) => void;
+  formatDate: (date: Date, format: string) => string;
+}) => {
+  return (
+    <div 
+      className={cn(
+        "p-3 cursor-pointer border bg-white rounded-md document-container transition-colors",
+        isSelected ? "selected" : "border-transparent"
+      )}
+      onClick={() => onSelect(note)}
+    >
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5">
+          {note.type === 'pdf' || (note.fileUrl && note.fileName?.toLowerCase().endsWith('.pdf')) ? (
+            <FileIcon className="h-4 w-4 text-red-500 flex-shrink-0" />
+          ) : note.type === 'image' || (note.fileUrl && ['jpg', 'jpeg', 'png', 'gif'].some(ext => note.fileName?.toLowerCase().endsWith(ext))) ? (
+            <ImageIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
+          ) : note.type === 'invoice' ? (
+            <FileText className="h-4 w-4 text-green-500 flex-shrink-0" />
+          ) : note.type === 'note' ? (
+            <FileText className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+          ) : (
+            <FileIcon className="h-4 w-4 text-gray-500 flex-shrink-0" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-medium text-sm truncate">{note.title}</h3>
+          <p className="text-xs text-gray-500 truncate mt-0.5">
+            {note.summary || (note.fileName ? note.fileName : 'No description')}
+          </p>
+          <div className="flex items-center gap-1.5 mt-2">
+            <Badge 
+              variant="outline" 
+              className="text-[10px] px-1.5 py-0 h-4 rounded-full bg-gray-50 border-gray-200"
+            >
+              {note.type}
+            </Badge>
+            <span className="text-[10px] text-gray-400">
+              {formatDate(note.createdAt, "MMM d, yyyy")}
+            </span>
+            {note.origin === "gmail" && (
+              <span className="flex items-center" title="Imported from Gmail">
+                <Image 
+                  src="/gmail.png" 
+                  alt="Gmail" 
+                  width={12} 
+                  height={9}
+                  className="object-contain ml-1" 
+                />
+              </span>
+            )}
+            {note.inKnowledgeBase && (
+              <Badge 
+                className="flex items-center gap-0.5 text-[10px] h-4 px-1.5 py-0 bg-blue-50 text-blue-600 border-blue-100 rounded-full"
+              >
+                <Check className="h-2 w-2" /> Vault
+              </Badge>
+            )}
+            {note.pendingKnowledgeBase && (
+              <Badge 
+                className="flex items-center gap-0.5 text-xs ml-2 bg-amber-50 text-amber-600 border-amber-100 rounded-full"
+              >
+                <Loader2 className="h-2 w-2 animate-spin" /> Processing
+              </Badge>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+DocumentItem.displayName = "DocumentItem";
 
 export default function NotesPage() {
   const { user } = useAuth();
   const [notes, setNotes] = useState<Note[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [knowledgeBaseLoading, setKnowledgeBaseLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedArea, setSelectedArea] = useState<string | null>(null);
-  const [areas, setAreas] = useState<{id: string, title: string}[]>([]);
-  const [activeTab, setActiveTab] = useState("all");
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
-  const [csAgentSelected, setCsAgentSelected] = useState(false);
-  const [rewardAgentSelected, setRewardAgentSelected] = useState(false);
-  const [animatingCs, setAnimatingCs] = useState(false);
-  const [animatingReward, setAnimatingReward] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deletingFile, setDeletingFile] = useState(false);
-  const [searchMode, setSearchMode] = useState<"filter" | "semantic">("filter");
-  
-  // Semantic search state
-  const [semanticSearchQuery, setSemanticSearchQuery] = useState("");
-  const [showSearchResults, setShowSearchResults] = useState(false);
-  const [searchResults, setSearchResults] = useState<{title: string; summary: string; type: string}[]>([
-    { title: "Invoice April 2023", summary: "Contains payment details and due dates", type: "invoice" },
-    { title: "Client meeting notes", summary: "Discussion about payment schedules", type: "note" },
-    { title: "Quarterly budget", summary: "Financial projections and expense tracking", type: "other" }
-  ]);
-  
-  // Knowledge chat state
-  const [isLoadingKnowledgeChat, setIsLoadingKnowledgeChat] = useState(false);
-  const [knowledgeChatResponse, setKnowledgeChatResponse] = useState<KnowledgeChatResponse | null>(null);
-  const [showKnowledgeChatResponse, setShowKnowledgeChatResponse] = useState(false);
-  const [isKnowledgeResponseVisible, setIsKnowledgeResponseVisible] = useState(false);
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const [isQuestionMode, setIsQuestionMode] = useState(false); // Add state for question mode
-  
-  // Title editing state
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("all");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
-  const titleInputRef = useRef<HTMLInputElement>(null);
-  const listTitleInputRef = useRef<HTMLInputElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null); // Add ref for search input
   
-  // Upload dialog state
+  // Upload state
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadSummary, setUploadSummary] = useState("");
   const [uploadTags, setUploadTags] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // PDF Viewer state
-  const [numPages, setNumPages] = useState<number | null>(null);
-  const [pdfScale, setPdfScale] = useState(1.0);
-  const pdfViewerContainerRef = useRef<HTMLDivElement>(null);
+  // Delete state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingFile, setDeletingFile] = useState(false);
   
-  // Document type selector state
-  const [isUpdatingDocType, setIsUpdatingDocType] = useState(false);
+  // Title editing
+  const titleInputRef = useRef<HTMLInputElement>(null);
   
-  // Add a state for PDF blob at the beginning of the component
-  const [currentPdfUrl, setCurrentPdfUrl] = useState<string | null>(null);
-  const [pdfLoading, setPdfLoading] = useState(false);
+  // Knowledge Chat states
+  const [searchMode, setSearchMode] = useState<"filter" | "semantic">("filter");
+  const [semanticSearchQuery, setSemanticSearchQuery] = useState("");
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [isLoadingKnowledgeChat, setIsLoadingKnowledgeChat] = useState(false);
+  const [knowledgeChatResponse, setKnowledgeChatResponse] = useState<KnowledgeChatResponse | null>(null);
+  const [showKnowledgeChatResponse, setShowKnowledgeChatResponse] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+   
+  // Related notes states
+  const [relatedNotes, setRelatedNotes] = useState<RelatedNote[]>([]);
+  const [loadingRelated, setLoadingRelated] = useState(false);
+  
+  // Add document editor states
+  const [showDocumentEditor, setShowDocumentEditor] = useState(false);
+  const [documentTitle, setDocumentTitle] = useState("Untitled Document");
+  const [documentContent, setDocumentContent] = useState("");
+  const [isSavingDocument, setIsSavingDocument] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
+  
+  // Add transition states
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  
+  // Add state for showing AI response in main content
+  const [showAiResponseInContent, setShowAiResponseInContent] = useState(false);
   
   // Safe date formatting function
   const safeFormatDate = (date: Date | null, formatString: string): string => {
@@ -313,50 +391,29 @@ export default function NotesPage() {
   };
   
   // Fetch notes from Firestore
-  const fetchNotes = () => {
+  useEffect(() => {
     if (!user || !user.uid) {
       setLoading(false);
       setNotes([]);
-      return () => {};
+      return;
     }
     
-      try {
         setLoading(true);
       const notesRef = collection(db, `merchants/${user.uid}/files`);
         const notesQuery = query(notesRef, orderBy("createdAt", "desc"));
         
-      // Setup real-time listener for notes collection
       const unsubscribe = onSnapshot(notesQuery, (querySnapshot) => {
         const notesData: Note[] = [];
-        const areasMap = new Map<string, string>();
-        
-        // Gather all filenames for knowledge base check
-        const fileNames: string[] = [];
         
         querySnapshot.forEach((doc) => {
           const data = doc.data();
           
-          // Convert Firestore timestamp to Date, with proper checks
+        // Convert Firestore timestamp to Date
           const createdAt = data.createdAt && typeof data.createdAt.toDate === 'function' 
             ? data.createdAt.toDate() 
             : new Date();
           
-          // Handle reminderTime safely
-          let reminderTime: Date | null = null;
-          if (data.reminderTime) {
-            if (data.reminderTime.toDate) {
-              reminderTime = data.reminderTime.toDate();
-            } else if (data.reminderTime instanceof Date) {
-              reminderTime = data.reminderTime;
-            } else if (typeof data.reminderTime === 'string') {
-              reminderTime = new Date(data.reminderTime);
-            } else if (typeof data.reminderTime === 'number') {
-              reminderTime = new Date(data.reminderTime);
-            }
-          }
-        
-        // Assign a type based on some criteria (for demo purposes)
-        // In a real app, this would come from the data
+        // Determine file type
         let noteType = data.type || "other";
         const fileName = data.fileName || "";
         const fileTypeFromData = data.fileType || fileName.split('.').pop()?.toLowerCase() || '';
@@ -368,8 +425,6 @@ export default function NotesPage() {
             noteType = "image";
           } else if (['doc', 'docx', 'txt', 'md'].includes(fileTypeFromData)) {
             noteType = "note";
-          } else if (fileName) { // If there is a filename but type is unknown
-             noteType = "other"; // or a more generic 'file' type
             }
           }
           
@@ -384,8 +439,6 @@ export default function NotesPage() {
             categoryId: data.categoryId || "",
             categoryTitle: data.categoryTitle || "General",
             createdAt,
-            reminderTime,
-            reminderSent: data.reminderSent || false,
             type: noteType as Note['type'],
             fileUrl: data.fileUrl || "",
             fileType: fileTypeFromData,
@@ -394,30 +447,18 @@ export default function NotesPage() {
             fileId: data.fileId || "",
             contentType: data.contentType || "",
             inKnowledgeBase: data.inKnowledgeBase === true,
-            // Set pending status for documents with files that don't yet have inKnowledgeBase=true
-            // Documents older than 10 minutes won't show the spinner
-            pendingKnowledgeBase: !data.inKnowledgeBase && !!fileName && 
-                createdAt && ((new Date().getTime() - createdAt.getTime()) < 10 * 60 * 1000),
-              origin: data.origin || "" // Capture the origin field
-          };
-          
-          if (fileName) {
-            fileNames.push(fileName);
-          }
+          pendingKnowledgeBase: data.pendingKnowledgeBase === true,
+          origin: data.origin || ""
+        };
           
           notesData.push(note);
-          
-          // Collect unique areas
-          if (data.areaId && data.areaTitle) {
-            areasMap.set(data.areaId, data.areaTitle);
-          }
         });
         
-        // Convert areas map to array
-        const areasArray = Array.from(areasMap).map(([id, title]) => ({ id, title }));
-        
         setNotes(notesData);
-        setAreas(areasArray);
+      
+      // Run KB status check
+      checkKnowledgeBaseStatus(notesData);
+      
           setLoading(false);
       
       // Set the first note as selected by default if available
@@ -426,161 +467,37 @@ export default function NotesPage() {
       } else if (notesData.length === 0) {
         setSelectedNote(null);
       }
-      
-      // Check knowledge base status for all notes with filenames
-      if (notesData.length > 0 && user && user.uid) {
-        checkKnowledgeBaseStatus(notesData, user.uid);
-      }
         }, (error) => {
           console.error("Error listening to notes collection:", error);
           toast({
             title: "Error",
-            description: "Failed to listen for notes updates. Please refresh the page.",
+        description: "Failed to load documents. Please try again.",
             variant: "destructive"
           });
           setLoading(false);
         });
         
-        // Return the unsubscribe function directly
-        return unsubscribe;
-      } catch (error) {
-        console.error("Error setting up notes listener:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load notes. Please try again.",
-        variant: "destructive"
-      });
-        setLoading(false);
-        return () => {}; // Return empty function if setup fails
-      }
-    };
-    
-  // Function to check if documents have been added to the knowledge base
-  const checkKnowledgeBaseStatus = async (notesData: Note[], merchantId: string) => {
-    try {
-      setKnowledgeBaseLoading(true);
-      
-      // Create a batch of promises to check knowledge base status
-      const knowledgeBasePromises = notesData
-        .filter(note => note.fileName || note.originalFileName)
-        .map(async (note) => {
-          // If inKnowledgeBase is already true from the file document, keep it
-          if (note.inKnowledgeBase === true) {
-            console.log(`Note already marked as in KB: ${note.fileName || note.originalFileName}`);
-            return { noteId: note.id, isInKnowledgeBase: true, isPending: false };
-          }
-          
-          if (!note.fileName && !note.originalFileName) return null;
-          
-          // Check the knowledge base collection for this file
-          const kbRef = collection(db, `merchants/${merchantId}/knowledgebase`);
-          const kbQuery = query(kbRef, orderBy("createTime", "desc")); 
-          const kbSnapshot = await getDocs(kbQuery);
-          
-          // Check if any document matches this file name and has status success
-          let isInKnowledgeBase = false;
-          let isPending = note.pendingKnowledgeBase || false;
-          
-          console.log(`Checking KB for file: ${note.fileName || note.originalFileName}`);
-          
-          kbSnapshot.forEach((docSnap) => {
-            const kbData = docSnap.data();
-            
-            // Check for matches against multiple possible identifiers
-            const isMatch = (note.fileId && kbData.fileId === note.fileId) ||
-              ((note.fileName && (kbData.source?.includes(note.fileName) || kbData.fileName === note.fileName)) ||
-               (note.originalFileName && (kbData.source?.includes(note.originalFileName) || kbData.fileName === note.originalFileName)) ||
-               (note.fileName && note.fileName.includes('_') && 
-                kbData.source?.includes(note.fileName.substring(note.fileName.lastIndexOf('_') + 1))));
-                
-            if (isMatch) {
-              // If we find a matching entry in knowledge base
-              if (kbData.status === "success") {
-                isInKnowledgeBase = true;
-                isPending = false;
-                console.log(`KB Match found for: ${note.fileName || note.originalFileName}`);
-                
-                // Update file document to set inKnowledgeBase field for future reference
-                updateFileKnowledgeBaseStatus(merchantId, note.id).catch(err => 
-                  console.error(`Error updating inKnowledgeBase field: ${err}`)
-                );
-              } 
-              // If status is pending/processing, keep the pending state true
-              else if (kbData.status === "pending" || kbData.status === "processing") {
-                isPending = true;
-                console.log(`KB processing for: ${note.fileName || note.originalFileName}`);
-              }
-            }
-          });
-          
-          if (!isInKnowledgeBase && !isPending) {
-            console.log(`No KB match found for: ${note.fileName || note.originalFileName}`);
-            // If it's been pending for more than 10 minutes, clear the pending status
-            if (note.createdAt && ((new Date().getTime() - note.createdAt.getTime()) > 10 * 60 * 1000)) {
-              isPending = false;
-            }
-          }
-          
-          return { noteId: note.id, isInKnowledgeBase, isPending };
-        });
-        
-      // Wait for all promises to resolve
-      const results = await Promise.all(knowledgeBasePromises);
-      
-      // Update the notes state with knowledge base info
-      setNotes(prevNotes => {
-        return prevNotes.map(note => {
-          const result = results.find(r => r && r.noteId === note.id);
-          if (result) {
-            return { 
-              ...note, 
-              inKnowledgeBase: result.isInKnowledgeBase,
-              pendingKnowledgeBase: result.isPending
-            };
-          }
-          return note;
-        });
-      });
-      
-      // Also update selectedNote if it exists
-      if (selectedNote) {
-        const result = results.find(r => r && r.noteId === selectedNote.id);
-        if (result) {
-          setSelectedNote({ 
-            ...selectedNote, 
-            inKnowledgeBase: result.isInKnowledgeBase,
-            pendingKnowledgeBase: result.isPending
-          });
-        }
-      }
-      
-    } catch (error) {
-      console.error("Error checking knowledge base status:", error);
-    } finally {
-      setKnowledgeBaseLoading(false);
-    }
-  };
-    
-  useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-    
-    if (user && user.uid) {
-      unsubscribe = fetchNotes();
-    }
-    
-    // Cleanup function to unsubscribe from real-time listeners when component unmounts
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
-  }, [user]);
+    return () => unsubscribe();
+  }, [user, selectedNote]);
   
-  useEffect(() => {
-    if (selectedNote && selectedNote.type === 'pdf') {
-      setNumPages(null); // Reset numPages when a new PDF is selected
-    } 
-  }, [selectedNote]);
+  // Filter notes based on search query and active tab
+  const filteredNotes = useMemo(() => {
+    return notes.filter(note => {
+      const matchesSearch = searchQuery === "" || 
+        note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        note.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        note.rawText.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        note.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+      
+      const matchesTab = activeTab === "all" || 
+        (activeTab === "invoices" && note.type === "invoice") ||
+        (activeTab === "notes" && note.type === "note") ||
+        (activeTab === "gmail" && note.origin === "gmail") ||
+        (activeTab === "other" && (note.type === "other" || note.type === "pdf" || note.type === "image"));
+      
+      return matchesSearch && matchesTab;
+    });
+  }, [notes, searchQuery, activeTab]);
   
   // Handle file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -592,173 +509,6 @@ export default function NotesPage() {
       const fileName = file.name.split('.').slice(0, -1).join('.');
       setUploadTitle(fileName);
     }
-  };
-  
-  function onDocumentLoadSuccess({ numPages: nextNumPages }: { numPages: number }) {
-    setNumPages(nextNumPages);
-  }
-
-  // Add a helper function to fetch PDFs with proper CORS handling
-  const fetchPdfAsDataUrl = async (url: string): Promise<string> => {
-    setPdfLoading(true);
-    try {
-      // Create a new URL with a proxy service that handles CORS
-      // For development purposes, you can use a CORS proxy service
-      // In production, this should be replaced with your own proxy or Firebase function
-      const corsAnywhereUrl = `https://cors-anywhere.herokuapp.com/${url}`;
-      
-      const response = await fetch(corsAnywhereUrl);
-      if (!response.ok) throw new Error(`Failed to fetch PDF: ${response.status}`);
-      
-      const blob = await response.blob();
-      return URL.createObjectURL(blob);
-    } catch (error) {
-      console.error("Error fetching PDF:", error);
-      toast({
-        title: "PDF Error",
-        description: "CORS issue detected. Try downloading the file instead or open in a new tab.",
-        variant: "destructive"
-      });
-      throw error;
-    } finally {
-      setPdfLoading(false);
-    }
-  };
-
-  // Move the useEffect out of renderFileViewer and into the main component
-  useEffect(() => {
-    let isMounted = true;
-    
-    if (selectedNote?.fileUrl && 
-        (selectedNote.type === 'pdf' || 
-         (selectedNote.type === 'invoice' && selectedNote.fileUrl) || 
-         (selectedNote.fileUrl && selectedNote.fileUrl.toLowerCase().endsWith('.pdf')))) {
-      
-      // Check if we already have this PDF loaded
-      if (currentPdfUrl && currentPdfUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(currentPdfUrl);
-        setCurrentPdfUrl(null);
-      }
-      
-      // Direct inline embedding with PDF object tag as a fallback approach
-      setCurrentPdfUrl(selectedNote.fileUrl);
-    }
-    
-    return () => {
-      isMounted = false;
-      if (currentPdfUrl && currentPdfUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(currentPdfUrl);
-      }
-    };
-  }, [selectedNote, currentPdfUrl]);
-
-  // Add this state below the other PDF-related states
-  const [iframeError, setIframeError] = useState(false);
-  
-  // Add this effect at the top level of the component
-  useEffect(() => {
-    // Reset iframe error state when changing notes
-    setIframeError(false);
-  }, [selectedNote]);
-
-  // Now update the renderFileViewer function without the useEffect inside it
-  const renderFileViewer = () => {
-    if (!selectedNote?.fileUrl) return null;
-    
-    const fileUrl = selectedNote.fileUrl;
-    const isPdf = selectedNote.type === 'pdf' || 
-                  (selectedNote.type === 'invoice' && selectedNote.fileUrl) || 
-                  (selectedNote.fileUrl && selectedNote.fileUrl.toLowerCase().endsWith('.pdf'));
-                  
-    const isImage = selectedNote.type === 'image' || (['jpg', 'jpeg', 'png', 'gif'].some(ext => 
-      selectedNote.fileType?.toLowerCase() === ext || (selectedNote.fileUrl && selectedNote.fileUrl.toLowerCase().endsWith(`.${ext}`))));
-
-    if (isPdf) {
-      return (
-        <div ref={pdfViewerContainerRef} className="w-full h-full overflow-y-auto rounded-md scrollbar-thin">
-          {pdfLoading ? (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-              <span className="ml-2 text-gray-600">Loading PDF...</span>
-            </div>
-          ) : (
-            <div className="pdf-container w-full h-full min-h-[500px] relative">
-              {!iframeError ? (
-              <iframe 
-                src={fileUrl} 
-                className="w-full h-full rounded-md"
-                  onError={() => setIframeError(true)}
-                />
-              ) : (
-              <object 
-                data={fileUrl} 
-                type="application/pdf" 
-                width="100%" 
-                height="100%" 
-                className="w-full h-full rounded-md"
-              >
-                {/* User-friendly error message with multiple options */}
-                <div className="flex flex-col items-center justify-center p-8 text-center bg-gray-50 rounded-md border border-gray-200 h-full">
-                  <FileIcon className="h-12 w-12 text-red-500 mb-4" />
-                  <h3 className="font-medium mb-2">Unable to display PDF</h3>
-                  <p className="text-sm text-muted-foreground mb-4 max-w-md">
-                    Your browser couldn't display this PDF due to security restrictions (CORS policy). 
-                    Try one of these options:
-                  </p>
-                  <div className="flex flex-wrap gap-3 justify-center">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                        className="gap-2 rounded-md"
-                      onClick={handleDownload}
-                    >
-                      <Download className="h-4 w-4" />
-                      <span>Download PDF</span>
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                        className="gap-2 rounded-md"
-                      onClick={() => window.open(fileUrl, '_blank')}
-                    >
-                      <Eye className="h-4 w-4" />
-                      <span>Open in New Tab</span>
-                    </Button>
-                  </div>
-                  <div className="mt-6 border-t border-gray-200 pt-4 w-full max-w-md">
-                    <p className="text-xs text-muted-foreground mb-2">
-                      PDF preview may be unavailable when documents are hosted on a different domain.
-                      This is a security feature of web browsers.
-                    </p>
-                  </div>
-                </div>
-              </object>
-              )}
-            </div>
-          )}
-        </div>
-      );
-    } else if (isImage) {
-      return (
-        <div className="w-full h-full flex items-center justify-center p-2 bg-gray-50 rounded-md">
-          <img 
-            src={fileUrl} 
-            alt={selectedNote.title} 
-            className="max-w-full max-h-full object-contain rounded-sm shadow-md border border-gray-200"
-            style={{ transform: `scale(${pdfScale})` }}
-          />
-        </div>
-      );
-    }
-    
-    return (
-      <div className="flex flex-col items-center justify-center p-4 border border-dashed rounded-md h-full bg-gray-50">
-        <FileImage className="h-12 w-12 text-muted-foreground mb-4" />
-        <p className="text-center text-muted-foreground">
-          Preview not available. <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Download file</a>
-        </p>
-      </div>
-    );
   };
   
   // Upload document to Firebase Storage and create a note in Firestore
@@ -830,46 +580,20 @@ export default function NotesPage() {
           },
           (error) => {
             console.error('Upload error:', error);
-            switch (error.code) {
-              case 'storage/unauthorized':
-                toast({
-                  title: "Upload Error",
-                  description: "Permission denied. Check Firebase Storage rules.",
-                  variant: "destructive"
-                });
-                break;
-              case 'storage/canceled':
-                toast({
-                  title: "Upload Canceled",
-                  description: "The upload was canceled.",
-                  variant: "destructive"
-                });
-                break;
-              case 'storage/unknown':
-                toast({
-                  title: "Upload Error",
-                  description: "An unknown error occurred. Check CORS configuration on Firebase Storage.",
-                  variant: "destructive"
-                });
-                break;
-              default:
                 toast({
                   title: "Upload Error",
                   description: error.message,
                   variant: "destructive"
                 });
-            }
             reject(error);
           },
           async () => {
-            console.log('Upload successful');
             try {
               const downloadURL = await getDownloadURL(storageRef);
               
               const notesRef = collection(db, `merchants/${user.uid}/files`);
               const tags = uploadTags.split(',').map(tag => tag.trim()).filter(tag => tag);
               
-              // Use the exact same uniqueFileName for storage and Firestore
               const noteData = {
                 title: uploadTitle || fileName,
                 summary: uploadSummary,
@@ -884,14 +608,12 @@ export default function NotesPage() {
                 fileUrl: downloadURL,
                 fileType: fileExtension,
                 fileName: uniqueFileName,
-                originalFileName: fileName, // Store original filename separately
-                fileId: fileId, // Store the UUID as a separate field for easy searching
+                originalFileName: fileName,
+                fileId: fileId,
                 contentType
               };
               
               await addDoc(notesRef, noteData);
-              
-              await fetchNotes();
               
               resetUploadForm();
               setUploadDialogOpen(false);
@@ -905,7 +627,7 @@ export default function NotesPage() {
               console.error("Error creating Firestore document:", firestoreError);
               toast({
                 title: "Error",
-                description: "File uploaded, but failed to save note details.",
+                description: "File uploaded, but failed to save document details.",
                 variant: "destructive"
               });
               reject(firestoreError);
@@ -915,14 +637,12 @@ export default function NotesPage() {
       });
       
     } catch (error) {
-      console.error("Outer error during upload process:", error);
-      if (!(error instanceof Error && (error.name === 'FirebaseError' || (error as any).code?.startsWith('storage/')))) {
+      console.error("Error during upload process:", error);
         toast({
           title: "Upload failed",
-          description: "An unexpected error occurred during the upload setup.",
+        description: "An unexpected error occurred during the upload.",
           variant: "destructive"
         });
-      }
     } finally {
       setUploading(false);
     }
@@ -940,26 +660,7 @@ export default function NotesPage() {
     }
   };
   
-  // Filter notes based on search query, selected area, and active tab
-  const filteredNotes = notes.filter(note => {
-    const matchesSearch = searchQuery === "" || 
-      note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      note.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      note.rawText.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      note.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
-    
-    const matchesArea = selectedArea === null || note.areaId === selectedArea;
-    
-    const matchesTab = activeTab === "all" || 
-      (activeTab === "invoices" && note.type === "invoice") ||
-      (activeTab === "notes" && note.type === "note") ||
-      (activeTab === "gmail" && note.origin === "gmail") ||
-      (activeTab === "other" && note.type === "other");
-    
-    return matchesSearch && matchesArea && matchesTab;
-  });
-  
-  // Updated function to get icon based on note type and fileType
+  // Function to get icon based on note type
   const getNoteIcon = (note: Note) => {
     if (note.type === 'pdf' || (note.fileUrl && note.fileName?.toLowerCase().endsWith('.pdf'))) {
       return <FileIcon className="h-4 w-4 text-red-500 flex-shrink-0" />;
@@ -969,12 +670,8 @@ export default function NotesPage() {
       return <FileText className="h-4 w-4 text-green-500 flex-shrink-0" />;
     } else if (note.type === 'note') {
       return <FileText className="h-4 w-4 text-yellow-500 flex-shrink-0" />;
-    } else if (note.type === 'other' && note.fileUrl) {
-      return <FileText className="h-4 w-4 text-gray-500 flex-shrink-0" />;
-    } else if (note.type === 'other') {
-      return <FileQuestion className="h-4 w-4 text-purple-500 flex-shrink-0" />;
     }
-    return <FileText className="h-4 w-4 text-gray-500 flex-shrink-0" />;
+    return <FileIcon className="h-4 w-4 text-gray-500 flex-shrink-0" />;
   };
   
   // Function to delete the current file/note
@@ -983,9 +680,6 @@ export default function NotesPage() {
     
     try {
       setDeletingFile(true);
-      
-      // If there's a file URL, we might want to delete from storage too
-      // This would require additional Firebase storage functions
       
       // Delete the document from Firestore
       const noteRef = doc(db, `merchants/${user.uid}/files`, selectedNote.id);
@@ -1004,8 +698,8 @@ export default function NotesPage() {
       }
       
       toast({
-        title: "File deleted",
-        description: "The file has been successfully deleted.",
+        title: "Document deleted",
+        description: "The document has been successfully deleted.",
       });
       
       setDeleteDialogOpen(false);
@@ -1013,74 +707,12 @@ export default function NotesPage() {
       console.error("Error deleting file:", error);
       toast({
         title: "Delete failed",
-        description: "Failed to delete the file. Please try again.",
+        description: "Failed to delete the document. Please try again.",
         variant: "destructive"
       });
     } finally {
       setDeletingFile(false);
     }
-  };
-  
-  // Update document type in Firestore
-  const updateDocumentType = async (newType: Note['type']) => {
-    if (!selectedNote || !user || !user.uid) return;
-    
-    try {
-      setIsUpdatingDocType(true);
-      const noteRef = doc(db, `merchants/${user.uid}/files`, selectedNote.id);
-      
-      await updateDoc(noteRef, {
-        type: newType
-      });
-  
-      // Update local state
-      setSelectedNote({
-        ...selectedNote,
-        type: newType
-      });
-      
-      // Update the notes array
-      setNotes(notes.map(note => 
-        note.id === selectedNote.id 
-        ? { ...note, type: newType }
-        : note
-      ));
-      
-      toast({
-        title: "Document updated",
-        description: `Document type changed to ${newType}.`,
-      });
-    } catch (error) {
-      console.error("Error updating document type:", error);
-      toast({
-        title: "Update failed",
-        description: "Failed to update document type. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsUpdatingDocType(false);
-    }
-  };
-  
-  // Handle zoom in/out for PDF viewer
-  const handleZoomIn = () => {
-    setPdfScale(prev => Math.min(prev + 0.25, 3.0));
-  };
-  
-  const handleZoomOut = () => {
-    setPdfScale(prev => Math.max(prev - 0.25, 0.5));
-  };
-  
-  // Handle document download
-  const handleDownload = () => {
-    if (!selectedNote?.fileUrl) return;
-    
-    const link = document.createElement('a');
-    link.href = selectedNote.fileUrl;
-    link.download = selectedNote.fileName || selectedNote.title;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
   
   // Update document title in Firestore
@@ -1093,7 +725,7 @@ export default function NotesPage() {
       await updateDoc(noteRef, {
         title: editedTitle
       });
-      
+  
       // Update local state
       setSelectedNote({
         ...selectedNote,
@@ -1123,25 +755,34 @@ export default function NotesPage() {
     }
   };
   
-  // Handle double click on title to edit
-  const handleTitleDoubleClick = (inListView = false) => {
+  // Handle document download
+  const handleDownload = () => {
+    if (!selectedNote?.fileUrl) return;
+    
+    const link = document.createElement('a');
+    link.href = selectedNote.fileUrl;
+    link.download = selectedNote.fileName || selectedNote.title;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+  
+  // Handle opening document in new tab
+  const handleOpenInNewTab = () => {
+    if (!selectedNote?.fileUrl) return;
+    window.open(selectedNote.fileUrl, '_blank');
+  };
+  
+  // Handle title editing
+  const handleStartTitleEdit = () => {
     if (!selectedNote) return;
     setEditedTitle(selectedNote.title);
     setIsEditingTitle(true);
-    // Focus the input after rendering
-    setTimeout(() => {
-      if (inListView && listTitleInputRef.current) {
-        listTitleInputRef.current.focus();
-        listTitleInputRef.current.select();
-      } else if (titleInputRef.current) {
-        titleInputRef.current.focus();
-        titleInputRef.current.select();
-      }
-    }, 10);
+    setTimeout(() => titleInputRef.current?.focus(), 0);
   };
   
-  // Handle title input blur or Enter key
-  const handleTitleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  // Handle title input key down
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       updateDocumentTitle();
     } else if (e.key === 'Escape') {
@@ -1149,81 +790,123 @@ export default function NotesPage() {
     }
   };
   
-  // Handle title input blur
-  const handleTitleInputBlur = () => {
-    updateDocumentTitle();
+  // Render file preview
+  const renderFilePreview = () => {
+    if (!selectedNote?.fileUrl) return null;
+    
+    const fileUrl = selectedNote.fileUrl;
+    const isPdf = selectedNote.type === 'pdf' || 
+                  (selectedNote.type === 'invoice' && selectedNote.fileUrl) || 
+                  (selectedNote.fileUrl && selectedNote.fileUrl.toLowerCase().endsWith('.pdf'));
+                  
+    const isImage = selectedNote.type === 'image' || (['jpg', 'jpeg', 'png', 'gif'].some(ext => 
+      selectedNote.fileType?.toLowerCase() === ext || (selectedNote.fileUrl && selectedNote.fileUrl.toLowerCase().endsWith(`.${ext}`))));
+
+    if (isPdf) {
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-gray-50 rounded-lg overflow-hidden">
+          <iframe 
+            src={fileUrl} 
+            className="w-full h-full rounded-md"
+          />
+        </div>
+      );
+    } else if (isImage) {
+      return (
+        <div className="w-full h-full flex items-center justify-center p-4 bg-gray-50 rounded-lg">
+          <img 
+            src={fileUrl} 
+            alt={selectedNote.title} 
+            className="max-w-full max-h-full object-contain rounded-lg shadow-sm"
+          />
+        </div>
+      );
+    }
+    
+    return (
+      <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg h-full bg-gray-50">
+        <FileIcon className="h-12 w-12 text-gray-300 mb-4" />
+        <p className="text-center text-gray-500 mb-4">
+          Preview not available for this file type
+        </p>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline" 
+            size="sm"
+            className="gap-2 rounded-md"
+            onClick={handleDownload}
+          >
+            <DownloadCloud className="h-4 w-4" />
+            <span>Download</span>
+          </Button>
+          
+          <Button
+            variant="outline" 
+            size="sm"
+            className="gap-2 rounded-md"
+            onClick={handleOpenInNewTab}
+          >
+            <ExternalLink className="h-4 w-4" />
+            <span>Open</span>
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  // Fix the handleNoteSelection function to prevent sidebar flashing
+  const handleNoteSelection = (note: Note) => {
+    if (note.id === selectedNote?.id) return;
+    
+    // First clear AI response view if it's showing
+    if (showAiResponseInContent) {
+      setShowAiResponseInContent(false);
+    }
+    
+    // Just set transition state on the detail view
+    setIsTransitioning(true);
+    
+    // Set selected note immediately to prevent sidebar re-rendering
+    // This prevents the list from flashing
+    setSelectedNote(note);
+    
+    // Use requestAnimationFrame to ensure smooth transition only on the content area
+    requestAnimationFrame(() => {
+      // After a brief moment, complete the transition
+      setTimeout(() => {
+        setIsTransitioning(false);
+      }, 100);
+    });
+    
+    // Also fetch related notes now
+    if (note) {
+      fetchRelatedNotes(note.id);
+    }
   };
   
-  // Function to get icon for search results
-  const getSearchResultIcon = (type: string) => {
-    switch (type) {
-      case 'invoice':
-        return <FileText className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />;
-      case 'note':
-        return <FileText className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />;
-      case 'pdf':
-        return <FileIcon className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />;
-      case 'image':
-        return <ImageIcon className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />;
-      default:
-        return <FileText className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />;
-    }
-  };
-
-  // Function to handle semantic search
-  const handleSemanticSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const query = e.target.value;
-    setSemanticSearchQuery(query);
-    
-    if (query.trim() === "") {
-      setShowSearchResults(false);
-      return;
-    }
-    
-    // Simulate semantic search results
-    // In a real app, this would call an API or use a library for semantic search
-    const filteredResults = notes
-      .filter(note => 
-        note.title.toLowerCase().includes(query.toLowerCase()) ||
-        note.summary.toLowerCase().includes(query.toLowerCase()) ||
-        note.rawText.toLowerCase().includes(query.toLowerCase())
-      )
-      .slice(0, 5)
-      .map(note => ({
-        title: note.title,
-        summary: note.summary || (note.fileName ? `File: ${note.fileName}` : 'No summary'),
-        type: note.type
-      }));
-    
-    setSearchResults(filteredResults.length > 0 ? filteredResults : searchResults);
-    setShowSearchResults(true);
-  };
-
-  // Function to call the knowledgeChat Firebase function
+  // Update the knowledge chat function to show results in main content
   const callKnowledgeChatFunction = async () => {
     if (!semanticSearchQuery.trim() || !user?.uid) return;
     
     try {
+      // Hide the selected note or document editor
+      setSelectedNote(null);
+      setShowDocumentEditor(false);
+      
+      // Show AI response in main content
+      setShowAiResponseInContent(true);
       setIsLoadingKnowledgeChat(true);
-      setShowSearchResults(false);
-      setShowKnowledgeChatResponse(true);
-      setIsKnowledgeResponseVisible(false); // Reset visibility for fade-in effect
       
-      // Add to recent searches
-      setRecentSearches(prev => {
-        const newSearches = [semanticSearchQuery, ...prev.filter(s => s !== semanticSearchQuery)].slice(0, 5);
-        localStorage.setItem('recentSearches', JSON.stringify(newSearches));
-        return newSearches;
-      });
+      // Close any dialog
+      setShowKnowledgeChatResponse(false);
       
-      // Log request details for debugging
-      console.log('🔍 Knowledge Base Request:', {
-        url: 'https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/knowledgeBase',
-        userId: user.uid,
+      // Log request
+      console.log('Knowledge Base Search:', {
+        merchantId: user.uid,
         prompt: semanticSearchQuery
       });
       
-      // Make API call directly to knowledgeBase function - same approach as tap-agent-sheet.tsx
+      // Make API call to knowledge base
       const response = await fetch(
         'https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/knowledgeBase', 
         {
@@ -1238,81 +921,38 @@ export default function NotesPage() {
         }
       );
       
-      console.log('📥 Response status:', response.status);
-      
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ Error response:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText
-        });
         throw new Error(`Error ${response.status}: ${errorText || response.statusText}`);
       }
       
-      // Clone the response so we can log it and still use it
-      const clonedResponse = response.clone();
-      const responseText = await clonedResponse.text();
-      console.log('📥 Response body:', responseText);
+      const responseText = await response.text();
+      console.log('Response body:', responseText);
       
-      // Parse the original response
+      // Handle multiple possible response formats
       try {
         const data = JSON.parse(responseText);
-        console.log('✅ Parsed response data:', data);
         
-        // Check for multiple possible response formats like in tap-agent-sheet.tsx
         if (data?.answer) {
-          // Make sure we have a sources array even if it doesn't exist in the response
           setKnowledgeChatResponse({
-            ...data,
+            answer: data.answer,
             sources: data.sources || [],
             metadata: data.metadata || { 
               contextCount: 0, 
               query: semanticSearchQuery 
             }
           });
-          
-          toast({
-            title: "Vault Search Complete",
-            description: "Your vault search has been processed successfully",
-            variant: "default"
-          });
         } else if (data?.success && data?.summary) {
           setKnowledgeChatResponse({ 
             answer: data.summary,
             sources: [],
             metadata: { contextCount: 0, query: semanticSearchQuery }
           });
-          
-          toast({
-            title: "Vault Search Complete",
-            description: "Your vault search has been processed successfully",
-            variant: "default"
-          });
         } else if (data?.success && data?.answer) {
           setKnowledgeChatResponse({ 
-            ...data,
             answer: data.answer,
             sources: data.sources || [],
             metadata: data.metadata || { contextCount: 0, query: semanticSearchQuery }
-          });
-          
-          toast({
-            title: "Vault Search Complete",
-            description: "Your vault search has been processed successfully",
-            variant: "default"
-          });
-        } else if (data?.result?.summary) {
-          setKnowledgeChatResponse({ 
-            answer: data.result.summary,
-            sources: [],
-            metadata: { contextCount: 0, query: semanticSearchQuery } 
-          });
-          
-          toast({
-            title: "Vault Search Complete",
-            description: "Your vault search has been processed successfully",
-            variant: "default"
           });
         } else if (data?.summary) {
           setKnowledgeChatResponse({ 
@@ -1320,487 +960,38 @@ export default function NotesPage() {
             sources: [],
             metadata: { contextCount: 0, query: semanticSearchQuery }
           });
-          
-          toast({
-            title: "Vault Search Complete",
-            description: "Your vault search has been processed successfully",
-            variant: "default"
-          });
-        } else if (data?.error) {
-          toast({
-            title: "Vault Search Error",
-            description: data.error,
-            variant: "destructive"
-          });
-          throw new Error(data.error);
         } else {
-          // Fallback for any other format
-          console.error("Unrecognized response format:", data);
-          setKnowledgeChatResponse({ 
-            answer: `I couldn't process the documents properly. The response format was unexpected.\n\nPlease try a different search query or contact support if this issue persists.`,
-            sources: [],
-            metadata: { contextCount: 0, query: semanticSearchQuery }
-          });
-          
-          toast({
-            title: "Unexpected Response Format",
-            description: "The response format wasn't recognized, but I've tried to display what I found",
-            variant: "destructive"
-          });
+          throw new Error("Unexpected response format");
         }
         
-      } catch (parseError) {
-        console.error('❌ JSON parse error:', parseError);
-        console.error('❌ Failed to parse response text:', responseText);
-        setKnowledgeChatResponse({ 
-          answer: "I encountered an error while processing your search results. The response couldn't be parsed properly.",
-          sources: [],
-          metadata: { contextCount: 0, query: semanticSearchQuery }
+        toast({
+          title: "Search Complete",
+          description: "Your document search has been processed",
+          variant: "default"
         });
         
-        toast({
-          title: "Error Processing Response",
-          description: "Could not process the vault search response",
-          variant: "destructive"
-        });
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        throw new Error("Failed to parse response");
       }
     } catch (error) {
-      console.error('❌ Knowledge chat error:', error);
-      if (error instanceof Error) {
-        console.error('❌ Error details:', {
-          message: error.message,
-          stack: error.stack
-        });
-      }
+      console.error('Knowledge chat error:', error);
       
       setKnowledgeChatResponse({ 
-        answer: `I encountered an error while searching your vault: ${error instanceof Error ? error.message : "Unknown error"}.\n\nPlease try again with a different search query.`,
+        answer: `I encountered an error while searching your documents: ${error instanceof Error ? error.message : "Unknown error"}.\n\nPlease try again with a different search query.`,
         sources: [],
         metadata: { contextCount: 0, query: semanticSearchQuery }
       });
       
       toast({
-        title: "Vault Search Failed",
-        description: error instanceof Error ? error.message : "Failed to search documents. Please try again.",
+        title: "Search Failed",
+        description: error instanceof Error ? error.message : "Failed to search documents",
         variant: "destructive"
       });
     } finally {
       setIsLoadingKnowledgeChat(false);
     }
   };
-
-  // Function to call the knowledgeChat Firebase function directly without updating semanticSearchQuery
-  const callKnowledgeChatFunctionDirect = async (query: string) => {
-    if (!query.trim() || !user?.uid) return;
-    
-    try {
-      setIsLoadingKnowledgeChat(true);
-      setShowKnowledgeChatResponse(true);
-      setIsKnowledgeResponseVisible(false); // Reset visibility for fade-in effect
-      
-      // Add to recent searches
-      setRecentSearches(prev => {
-        const newSearches = [query, ...prev.filter(s => s !== query)].slice(0, 5);
-        localStorage.setItem('recentSearches', JSON.stringify(newSearches));
-        return newSearches;
-      });
-      
-      // Log request details for debugging
-      console.log('🔍 Knowledge Base Request:', {
-        url: 'https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/knowledgeBase',
-        userId: user.uid,
-        prompt: query
-      });
-      
-      // Make API call directly to knowledgeBase function - same approach as tap-agent-sheet.tsx
-      const response = await fetch(
-        'https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/knowledgeBase', 
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            merchantId: user.uid,
-            prompt: query
-          }),
-        }
-      );
-      
-      console.log('📥 Response status:', response.status);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Error response:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText
-        });
-        throw new Error(`Error ${response.status}: ${errorText || response.statusText}`);
-      }
-      
-      // Clone the response so we can log it and still use it
-      const clonedResponse = response.clone();
-      const responseText = await clonedResponse.text();
-      console.log('📥 Response body:', responseText);
-      
-      // Parse the original response
-      try {
-        const data = JSON.parse(responseText);
-        console.log('✅ Parsed response data:', data);
-        
-        // Check for multiple possible response formats like in tap-agent-sheet.tsx
-        if (data?.answer) {
-          // Make sure we have a sources array even if it doesn't exist in the response
-          setKnowledgeChatResponse({
-            ...data,
-            sources: data.sources || [],
-            metadata: data.metadata || { 
-              contextCount: 0, 
-              query: query 
-            }
-          });
-          
-          toast({
-            title: "Vault Search Complete",
-            description: "Your vault search has been processed successfully",
-          variant: "default"
-        });
-        } else if (data?.success && data?.summary) {
-          setKnowledgeChatResponse({ 
-            answer: data.summary,
-            sources: [],
-            metadata: { contextCount: 0, query: query }
-          });
-          
-          toast({
-            title: "Vault Search Complete",
-            description: "Your vault search has been processed successfully",
-            variant: "default"
-          });
-        } else if (data?.success && data?.answer) {
-          setKnowledgeChatResponse({ 
-            ...data,
-            answer: data.answer,
-            sources: data.sources || [],
-            metadata: data.metadata || { contextCount: 0, query: query }
-          });
-          
-          toast({
-            title: "Vault Search Complete",
-            description: "Your vault search has been processed successfully",
-            variant: "default"
-          });
-        } else if (data?.result?.summary) {
-          setKnowledgeChatResponse({ 
-            answer: data.result.summary,
-            sources: [],
-            metadata: { contextCount: 0, query: query } 
-          });
-          
-          toast({
-            title: "Vault Search Complete",
-            description: "Your vault search has been processed successfully",
-            variant: "default"
-          });
-        } else if (data?.summary) {
-          setKnowledgeChatResponse({ 
-            answer: data.summary,
-            sources: [],
-            metadata: { contextCount: 0, query: query }
-          });
-          
-          toast({
-            title: "Vault Search Complete",
-            description: "Your vault search has been processed successfully",
-            variant: "default"
-          });
-        } else if (data?.error) {
-          toast({
-            title: "Vault Search Error",
-            description: data.error,
-            variant: "destructive"
-          });
-          throw new Error(data.error);
-        } else {
-          // Fallback for any other format
-          console.error("Unrecognized response format:", data);
-          setKnowledgeChatResponse({ 
-            answer: `I couldn't process the documents properly. The response format was unexpected.\n\nPlease try a different search query or contact support if this issue persists.`,
-            sources: [],
-            metadata: { contextCount: 0, query: query }
-          });
-          
-          toast({
-            title: "Unexpected Response Format",
-            description: "The response format wasn't recognized, but I've tried to display what I found",
-            variant: "destructive"
-          });
-        }
-        
-      } catch (parseError) {
-        console.error('❌ JSON parse error:', parseError);
-        console.error('❌ Failed to parse response text:', responseText);
-        setKnowledgeChatResponse({ 
-          answer: "I encountered an error while processing your search results. The response couldn't be parsed properly.",
-          sources: [],
-          metadata: { contextCount: 0, query: query }
-        });
-        
-        toast({
-          title: "Error Processing Response",
-          description: "Could not process the vault search response",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error('❌ Knowledge chat error:', error);
-      if (error instanceof Error) {
-        console.error('❌ Error details:', {
-          message: error.message,
-          stack: error.stack
-        });
-      }
-      
-      setKnowledgeChatResponse({ 
-        answer: `I encountered an error while searching your vault: ${error instanceof Error ? error.message : "Unknown error"}.\n\nPlease try again with a different search query.`,
-        sources: [],
-        metadata: { contextCount: 0, query: query }
-      });
-      
-      toast({
-        title: "Vault Search Failed",
-        description: error instanceof Error ? error.message : "Failed to search documents. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoadingKnowledgeChat(false);
-    }
-  };
-
-  // Load recent searches from localStorage on component mount
-  useEffect(() => {
-    const savedSearches = localStorage.getItem('recentSearches');
-    if (savedSearches) {
-      try {
-        const parsed = JSON.parse(savedSearches);
-        if (Array.isArray(parsed)) {
-          setRecentSearches(parsed);
-        }
-      } catch (e) {
-        console.error("Failed to parse recent searches", e);
-      }
-    }
-  }, []);
-
-  // Function to handle clicking outside the search results
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (!target.closest('.semantic-search-container')) {
-        setShowSearchResults(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  // Handle keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Command/Ctrl + K to focus search
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        const searchInput = document.getElementById('unified-search-input');
-        if (searchInput) {
-          (searchInput as HTMLInputElement).focus();
-        }
-      }
-
-      // Command/Ctrl + / to toggle search mode
-      if ((e.metaKey || e.ctrlKey) && e.key === '/') {
-        e.preventDefault();
-        setSearchMode(prev => prev === "filter" ? "semantic" : "filter");
-      }
-      
-      // Escape to close search results or knowledge chat
-      if (e.key === 'Escape') {
-        if (showKnowledgeChatResponse) {
-          setShowKnowledgeChatResponse(false);
-        } else {
-          setShowSearchResults(false);
-        }
-      }
-    };
-    
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [showSearchResults, showKnowledgeChatResponse, setSearchMode]);
-  
-  useEffect(() => {
-    let fadeInTimer: NodeJS.Timeout;
-    if (!isLoadingKnowledgeChat && knowledgeChatResponse && !isKnowledgeResponseVisible && showKnowledgeChatResponse) {
-      // Short delay to ensure element is mounted before transition starts
-      fadeInTimer = setTimeout(() => {
-        setIsKnowledgeResponseVisible(true);
-      }, 50);
-    }
-    return () => {
-      if (fadeInTimer) clearTimeout(fadeInTimer);
-    };
-  }, [isLoadingKnowledgeChat, knowledgeChatResponse, isKnowledgeResponseVisible, showKnowledgeChatResponse]);
-  
-  // Add this helper function before setupKnowledgeBaseListeners
-  const updateFileKnowledgeBaseStatus = async (merchantId: string, fileId: string) => {
-    try {
-      const fileDocRef = doc(db, `merchants/${merchantId}/files`, fileId);
-      await updateDoc(fileDocRef, { inKnowledgeBase: true });
-      console.log(`Updated inKnowledgeBase field for file: ${fileId}`);
-    } catch (updateErr: any) {
-      console.error("Error updating file document:", updateErr);
-      throw updateErr; // Re-throw to be caught by the caller
-    }
-  };
-
-  // Add a function to set up real-time listeners for knowledge base status
-  const setupKnowledgeBaseListeners = (notesData: Note[], merchantId: string): (() => void) => {
-    if (!merchantId || notesData.length === 0) return () => {};
-
-    console.log('Setting up knowledge base listeners');
-    
-    // Listen to the knowledgebase collection for changes
-    const kbRef = collection(db, `merchants/${merchantId}/knowledgebase`);
-    const kbQuery = query(kbRef, orderBy("createTime", "desc"));
-    
-    // Create an array to collect all unsubscribe functions
-    const unsubscribeFunctions: Array<() => void> = [];
-    
-    // Set up a listener for the knowledge base collection
-    const kbUnsubscribe = onSnapshot(kbQuery, (snapshot) => {
-      console.log('Knowledge base collection updated');
-      
-      snapshot.docChanges().forEach(change => {
-        if (change.type === 'added' || change.type === 'modified') {
-          const kbData = change.doc.data();
-          const kbStatus = kbData.status;
-          
-          // Only process if status is "success"
-          if (kbStatus === "success") {
-            // Find matching notes in our local state
-            setNotes(prevNotes => {
-              return prevNotes.map(note => {
-                // Check if this KB entry matches this note
-                const isMatch = (note.fileId && kbData.fileId === note.fileId) ||
-                  ((note.fileName && (kbData.source?.includes(note.fileName) || kbData.fileName === note.fileName)) ||
-                  (note.originalFileName && (kbData.source?.includes(note.originalFileName) || kbData.fileName === note.originalFileName)) ||
-                  (note.fileName && note.fileName.includes('_') && 
-                  kbData.source?.includes(note.fileName.substring(note.fileName.lastIndexOf('_') + 1))));
-                
-                if (isMatch) {
-                  console.log(`Realtime update: KB success for ${note.title}`);
-                  
-                  // Update the document in Firestore to set inKnowledgeBase=true
-                  const docRef = doc(db, `merchants/${merchantId}/files`, note.id);
-                  updateDoc(docRef, { inKnowledgeBase: true })
-                    .catch((err: Error) => console.error('Error updating KB status in files collection:', err));
-                  
-                  // Update in local state
-                  return { 
-                    ...note, 
-                    inKnowledgeBase: true,
-                    pendingKnowledgeBase: false
-                  };
-                }
-                return note;
-              });
-            });
-            
-            // Also update selectedNote if it exists and matches
-            if (selectedNote) {
-              const isSelectedMatch = (selectedNote.fileId && kbData.fileId === selectedNote.fileId) ||
-                ((selectedNote.fileName && (kbData.source?.includes(selectedNote.fileName) || kbData.fileName === selectedNote.fileName)) ||
-                (selectedNote.originalFileName && (kbData.source?.includes(selectedNote.originalFileName) || kbData.fileName === selectedNote.originalFileName)) ||
-                (selectedNote.fileName && selectedNote.fileName.includes('_') && 
-                kbData.source?.includes(selectedNote.fileName.substring(selectedNote.fileName.lastIndexOf('_') + 1))));
-              
-              if (isSelectedMatch) {
-                setSelectedNote(prev => prev ? {
-                  ...prev,
-                  inKnowledgeBase: true,
-                  pendingKnowledgeBase: false
-                } : null);
-              }
-            }
-          }
-        }
-      });
-    }, error => {
-      console.error('Error in knowledge base listener:', error);
-    });
-    
-    unsubscribeFunctions.push(kbUnsubscribe);
-    
-    // Set up individual listeners for each file document to detect direct updates to inKnowledgeBase
-    notesData.forEach(note => {
-      if (note.pendingKnowledgeBase && !note.inKnowledgeBase) {
-        const fileDocRef = doc(db, `merchants/${merchantId}/files`, note.id);
-        const fileUnsubscribe = onSnapshot(fileDocRef, (docSnapshot) => {
-          if (docSnapshot.exists()) {
-            const data = docSnapshot.data();
-            if (data.inKnowledgeBase === true) {
-              console.log(`Realtime update: Document ${note.title} directly marked as in KB`);
-              
-              // Update our local state
-              setNotes(prevNotes => prevNotes.map(n => 
-                n.id === note.id 
-                  ? { ...n, inKnowledgeBase: true, pendingKnowledgeBase: false } 
-                  : n
-              ));
-              
-              // Update selected note if it matches
-              if (selectedNote && selectedNote.id === note.id) {
-                setSelectedNote(prev => prev ? {
-                  ...prev,
-                  inKnowledgeBase: true,
-                  pendingKnowledgeBase: false
-                } : null);
-              }
-            }
-          }
-        }, error => {
-          console.error(`Error in file listener for ${note.id}:`, error);
-        });
-        
-        unsubscribeFunctions.push(fileUnsubscribe);
-      }
-    });
-    
-    // Return a function to unsubscribe from all listeners
-    return () => {
-      console.log('Cleaning up knowledge base listeners');
-      unsubscribeFunctions.forEach(unsubscribe => unsubscribe());
-    };
-  };
-
-  // Fix the useEffect hook
-  useEffect(() => {
-    // Set up realtime listeners when notes are loaded and user is authenticated
-    if (notes.length > 0 && user && user.uid) {
-      const unsubscribe = setupKnowledgeBaseListeners(notes, user.uid);
-      return unsubscribe;
-    }
-    return undefined;
-  }, [notes, user, selectedNote]);
-  
-  // Add state for related notes
-  const [relatedNotes, setRelatedNotes] = useState<RelatedNote[]>([]);
-  const [loadingRelated, setLoadingRelated] = useState(false);
-  const [relatedError, setRelatedError] = useState<string | null>(null);
   
   // Add function to fetch related notes
   const fetchRelatedNotes = async (noteId: string) => {
@@ -1808,7 +999,6 @@ export default function NotesPage() {
     
     try {
       setLoadingRelated(true);
-      setRelatedError(null);
       
       const functions = getFunctions();
       const getRelatedNotesFunction = httpsCallable(functions, 'getRelatedNotes');
@@ -1816,168 +1006,42 @@ export default function NotesPage() {
       const result = await getRelatedNotesFunction({
         merchantId: user.uid,
         noteId: noteId,
-        limit: 5,
+        limit: 3,
         minScore: 0.7
       });
       
       // Firebase functions return data in a 'data' property
       const data = result.data as { related: RelatedNote[] };
       setRelatedNotes(data.related || []);
-      
-      console.log('Related notes:', data.related);
     } catch (error) {
       console.error('Error fetching related notes:', error);
-      setRelatedError('Failed to load similar documents');
       setRelatedNotes([]);
     } finally {
       setLoadingRelated(false);
     }
   };
   
-  // Call fetchRelatedNotes when a note is selected
+  // Modify the effect that fetches related notes to avoid unnecessary fetches
   useEffect(() => {
-    if (selectedNote) {
-      fetchRelatedNotes(selectedNote.id);
+    if (selectedNote && !isTransitioning) {
+      // Only fetch if we're not transitioning between notes
+      // This prevents duplicate fetches from handleNoteSelection
     } else {
       setRelatedNotes([]);
     }
-  }, [selectedNote, user]);
+  }, [selectedNote, isTransitioning, user]);
   
-  // Add new state for knowledge base processing stages
-  const [knowledgeBaseProcessingStage, setKnowledgeBaseProcessingStage] = useState(0);
-  
-  // Add effect for cycling Knowledge Base processing messages
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    
-    if (isLoadingKnowledgeChat) {
-      // Reset to first message when loading starts
-      setKnowledgeBaseProcessingStage(0);
-      
-      // Set up interval to cycle through messages every 2 seconds
-      interval = setInterval(() => {
-        setKnowledgeBaseProcessingStage(prev => (prev + 1) % 4);
-      }, 2000);
-    }
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isLoadingKnowledgeChat]);
-  
-  // Knowledge Base processing messages based on stage
-  const getKnowledgeBaseProcessingMessage = () => {
-    switch (knowledgeBaseProcessingStage) {
-      case 0:
-        return "Searching your vault...";
-      case 1:
-        return "Finding relevant documents...";
-      case 2:
-        return "Analysing content...";
-      case 3:
-        return "Generating response...";
-      default:
-        return "Processing your request...";
-    }
-  };
-  
-  // Add state for Gmail sync setting
-  const [gmailSyncEnabled, setGmailSyncEnabled] = useState(false);
-  const [updatingGmailSync, setUpdatingGmailSync] = useState(false);
-  
-  // Add new effect to handle the Gmail sync toggle functionality
-  useEffect(() => {
-    const fetchGmailSyncSetting = async () => {
-      if (!user || !user.uid) return;
-      
-      try {
-        const agentDocRef = doc(db, `agents/${user.uid}`);
-        const agentDocSnap = await getDoc(agentDocRef);
-        
-        if (agentDocSnap.exists()) {
-          const data = agentDocSnap.data();
-          setGmailSyncEnabled(data.gmailfilesync === true);
-        }
-      } catch (error) {
-        console.error("Error fetching Gmail sync setting:", error);
-      }
-    };
-    
-    fetchGmailSyncSetting();
-  }, [user]);
-  
-  // Add function to toggle Gmail file sync
-  const toggleGmailFileSync = async () => {
-    if (!user || !user.uid || updatingGmailSync) return;
-    
-    try {
-      setUpdatingGmailSync(true);
-      
-      // Reference to the agent document
-      const agentDocRef = doc(db, `agents/${user.uid}`);
-      
-      // Get current state
-      const newState = !gmailSyncEnabled;
-      
-      // Artificially delay for 3.5 seconds to show the spinner
-      await new Promise(resolve => setTimeout(resolve, 3500));
-      
-      // Update Firestore
-      await setDoc(agentDocRef, {
-        gmailfilesync: newState
-      }, { merge: true });
-      
-      // Update local state
-      setGmailSyncEnabled(newState);
-      
-      toast({
-        title: newState ? "Gmail Sync Activated" : "Gmail Sync Deactivated",
-        description: newState 
-          ? "Your Gmail attachments will now be automatically synced to your vault" 
-          : "Gmail attachment sync has been turned off",
-        variant: "default"
-      });
-      
-    } catch (error) {
-      console.error("Error toggling Gmail sync:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update Gmail sync setting. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setUpdatingGmailSync(false);
-    }
-  };
-  
-  // Add state for the document editor
-  const [showDocumentEditor, setShowDocumentEditor] = useState(false);
-  const [documentTitle, setDocumentTitle] = useState("Untitled Document");
-  const [isEditingDocumentTitle, setIsEditingDocumentTitle] = useState(false);
-  const documentTitleRef = useRef<HTMLInputElement>(null);
-  
-  // Add state to track if we're creating a new document
-  const [unsavedChanges, setUnsavedChanges] = useState(false);
-  
-  // Function to handle creating a new document
+  // Add function to handle creating a new document
   const handleNewDocument = () => {
     setSelectedNote(null);
     setShowKnowledgeChatResponse(false);
-    setShowDocumentEditor(true);
     setDocumentTitle("Untitled Document");
-    setUnsavedChanges(false);
-    
-    // Initialize with a paragraph after rendering
-    setTimeout(() => {
-      const editorElement = document.getElementById('document-editor-content');
-      if (editorElement && !editorElement.innerHTML.trim()) {
-        editorElement.innerHTML = '<p><br></p>';
-      }
-    }, 100);
+    setDocumentContent("");
+    setShowDocumentEditor(true);
   };
   
-  // Function to save the document to Firestore
-  const saveDocument = async (content: string) => {
+  // Add function to save document
+  const saveDocument = async () => {
     if (!user || !user.uid) {
       toast({
         title: "Authentication Error",
@@ -1988,16 +1052,15 @@ export default function NotesPage() {
     }
     
     try {
+      setIsSavingDocument(true);
+      
+      // Get content from editor
+      const editorContent = editorRef.current?.innerHTML || "";
+      const plainText = editorRef.current?.textContent || "";
+      
       const notesRef = collection(db, `merchants/${user.uid}/files`);
       
-      // Get the content from the contentEditable div
-      const editorElement = document.getElementById('document-editor-content');
-      const documentContent = editorElement ? editorElement.innerHTML : '';
-      
-      // Extract plain text for search
-      const plainText = editorElement ? editorElement.innerText : '';
-      
-      // Create a new note document
+      // Create document data
       const noteData = {
         title: documentTitle,
         summary: plainText.slice(0, 150) + (plainText.length > 150 ? '...' : ''),
@@ -2009,7 +1072,7 @@ export default function NotesPage() {
         categoryTitle: "Notes",
         createdAt: serverTimestamp(),
         type: "note",
-        content: documentContent, // Store the HTML content
+        content: editorContent
       };
       
       await addDoc(notesRef, noteData);
@@ -2019,15 +1082,8 @@ export default function NotesPage() {
         description: "Your document has been saved successfully.",
       });
       
-      // Refresh the document list
-      fetchNotes();
-      
-      // Clear unsaved changes flag
-      setUnsavedChanges(false);
-      
-      // Close the editor
+      // Close editor and update UI
       setShowDocumentEditor(false);
-      
     } catch (error) {
       console.error("Error saving document:", error);
       toast({
@@ -2035,442 +1091,167 @@ export default function NotesPage() {
         description: "Failed to save your document. Please try again.",
         variant: "destructive"
       });
+    } finally {
+      setIsSavingDocument(false);
     }
   };
   
-  // Function for formatting commands
-  const execFormatCommand = (command: string, value: string | undefined = undefined) => {
-    document.execCommand(command, false, value);
-    const editorElement = document.getElementById('document-editor-content');
-    if (editorElement) {
-      editorElement.focus();
-      setUnsavedChanges(true);
-    }
-  };
-  
-  // Apply heading formats properly
-  const applyHeadingFormat = (level: number) => {
-    // First clear any existing format
-    execFormatCommand('formatBlock', 'div');
+  // Check knowledge base status
+  const checkKnowledgeBaseStatus = async (notesData: Note[]) => {
+    if (!user?.uid) return;
     
-    // Then apply the heading
-    const headingTag = level === 0 ? 'p' : `h${level}`;
-    execFormatCommand('formatBlock', `<${headingTag}>`);
-    
-    // Focus back on the editor
-    const editorElement = document.getElementById('document-editor-content');
-    if (editorElement) {
-      editorElement.focus();
-    }
-  };
-  
-  // Apply font size
-  const applyFontSize = (size: string) => {
-    execFormatCommand('fontSize', size);
-    
-    // Focus back on the editor
-    const editorElement = document.getElementById('document-editor-content');
-    if (editorElement) {
-      editorElement.focus();
-    }
-  };
-  
-  // Apply font family
-  const applyFontFamily = (fontFamily: string) => {
-    // Apply to current selection
-    document.execCommand('fontName', false, fontFamily);
-    
-    // Focus back on the editor
-    const editorElement = document.getElementById('document-editor-content');
-    if (editorElement) {
-      editorElement.focus();
-      setUnsavedChanges(true);
+    try {
+      // Create a batch of promises to check KB status
+      const knowledgeBasePromises = notesData
+        .filter(note => note.fileName || note.originalFileName)
+        .map(async (note) => {
+          if (note.inKnowledgeBase === true) {
+            return { noteId: note.id, isInKnowledgeBase: true, isPending: false };
+          }
+          
+          // Check the knowledge base collection for this file
+          const kbRef = collection(db, `merchants/${user.uid}/knowledgebase`);
+          const kbQuery = query(kbRef, orderBy("createTime", "desc")); 
+          const kbSnapshot = await getDocs(kbQuery);
+          
+          let isInKnowledgeBase = false;
+          let isPending = note.pendingKnowledgeBase || false;
+          
+          kbSnapshot.forEach((docSnap) => {
+            const kbData = docSnap.data();
+            
+            const isMatch = (note.fileId && kbData.fileId === note.fileId) ||
+              ((note.fileName && (kbData.source?.includes(note.fileName) || kbData.fileName === note.fileName)) ||
+               (note.originalFileName && (kbData.source?.includes(note.originalFileName) || kbData.fileName === note.originalFileName)));
+                
+            if (isMatch && kbData.status === "success") {
+              isInKnowledgeBase = true;
+              isPending = false;
+            } else if (isMatch && (kbData.status === "pending" || kbData.status === "processing")) {
+              isPending = true;
+            }
+          });
+          
+          return { noteId: note.id, isInKnowledgeBase, isPending };
+        });
+      
+      // Wait for all promises to resolve
+      const results = await Promise.all(knowledgeBasePromises);
+      
+      // Update notes with KB status
+      setNotes(prevNotes => {
+        return prevNotes.map(note => {
+          const result = results.find(r => r && r.noteId === note.id);
+          if (result) {
+            return { 
+              ...note, 
+              inKnowledgeBase: result.isInKnowledgeBase,
+              pendingKnowledgeBase: result.isPending
+            };
+          }
+          return note;
+        });
+      });
+    } catch (error) {
+      console.error("Error checking knowledge base status:", error);
     }
   };
   
   return (
     <DashboardLayout>
-      {/* Add custom animation styles */}
-      <style dangerouslySetInnerHTML={{ __html: customAnimationStyles + editorStyles }} />
-      <div className="flex flex-col h-full">
-        {/* Custom header without margin */}
+      {/* Apply custom styles */}
+      <style dangerouslySetInnerHTML={{ __html: transitionStyles }} />
+      
+      <div className="flex flex-col h-full max-w-full">
+        {/* Header */}
         <div className="px-6 py-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-4">
-              <h1 className="text-xl font-semibold tracking-tight whitespace-nowrap">Vault</h1>
+              <h1 className="text-xl font-semibold tracking-tight">Documents</h1>
             </div>
             
-            <div className="flex items-center gap-2 shrink-0">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="outline"
-                      className="h-8 gap-2 rounded-md bg-white hover:bg-gray-50 border-gray-200"
-                      onClick={toggleGmailFileSync}
-                      disabled={updatingGmailSync}
-                    >
-                      {updatingGmailSync ? (
-                        <div className="flex items-center justify-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span className="text-sm">{gmailSyncEnabled ? "Disconnecting..." : "Connecting..."}</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                      <Image 
-                        src="/gmail.png" 
-                        alt="Gmail" 
-                        width={16} 
-                        height={12} 
-                        className="flex-shrink-0" 
-                      />
-                          <span className="text-sm">{gmailSyncEnabled ? "File Syncing Connected" : "Auto Sync Gmail"}</span>
-                          {gmailSyncEnabled && <CheckIcon className="h-3.5 w-3.5 text-green-400 ml-1" />}
+            <div className="flex items-center gap-3">
+              <div className="relative w-64">
+                <div className="flex items-center">
+                  {searchMode === "filter" ? (
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                      <AILogo />
                         </div>
                       )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs p-4 bg-white shadow-lg rounded-md border border-gray-200">
-                    <div className="space-y-2">
-                      <h4 className="font-semibold text-sm text-black">Gmail Auto Sync</h4>
-                      <p className="text-xs text-black">
-                        {gmailSyncEnabled 
-                          ? "Currently active: Automatically extracting all files from your Gmail account and uploading them directly to your Vault."
-                          : "Automatically extract all files from your Gmail account and upload them directly to your Vault for easy reference and searching."}
-                      </p>
-                      {gmailSyncEnabled && (
-                        <div className="bg-blue-50 p-2 rounded-md text-xs text-blue-700 mt-2">
-                          <CheckIcon className="h-3 w-3 inline-block mr-1" />
-                          Gmail sync is currently active
-                        </div>
-                      )}
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              
-              <Button 
-                variant="outline" 
-                className="h-8 gap-2 rounded-md"
-                onClick={handleNewDocument}
-              >
-                <Plus className="h-4 w-4" />
-                New Document
-              </Button>
-              <Button 
-                className="h-8 gap-2 rounded-md"
-                onClick={() => setUploadDialogOpen(true)}
-              >
-                <FileUp className="h-4 w-4" />
-                Upload Document
-              </Button>
-            </div>
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 border-t flex-1 min-h-0 h-[calc(100vh-9rem)]">
-          {/* Left Column - Notes List */}
-          <div className="lg:col-span-1 border-r flex flex-col h-full overflow-hidden">
-            <div className="p-4 border-b flex-shrink-0">
-              {/* Replace unified search with dropdown search options */}
-              <div className="relative mb-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
-                    id="filter-search-input"
                     ref={searchInputRef}
-                    placeholder={isQuestionMode ? "Ask me anything" : "Search your Vault..."}
-                    className="pl-10 h-9 rounded-md w-full pr-10"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        setShowSearchResults(false);
-                        if (isQuestionMode && searchQuery.trim() !== '') {
-                          // In question mode, run knowledge chat directly
-                          setSelectedNote(null);
-                          // Instead of setting semanticSearchQuery which would trigger the secondary input
-                          // Use the searchQuery directly with the knowledge chat function
-                          callKnowledgeChatFunctionDirect(searchQuery);
-                        }
+                    placeholder={searchMode === "filter" ? "Search documents..." : "Ask about your documents..."}
+                    className="pl-10 h-9 rounded-md w-full pr-24"
+                    value={searchMode === "filter" ? searchQuery : semanticSearchQuery}
+                    onChange={(e) => {
+                      if (searchMode === "filter") {
+                        setSearchQuery(e.target.value);
+                          } else {
+                        setSemanticSearchQuery(e.target.value);
                       }
                     }}
-                  />
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
-                    {isQuestionMode ? (
-                      <Badge 
-                        className="h-5 text-xs bg-primary/10 text-primary border-primary/20 cursor-pointer hover:bg-primary/20 transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowSearchResults(true);
-                          // Keep focus on the input
-                          if (searchInputRef.current) {
-                            searchInputRef.current.focus();
-                          }
-                        }}
-                      >
-                        Question Mode
-                      </Badge>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-5 px-2 text-xs rounded-md hover:bg-muted"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowSearchResults(true);
-                          // Keep focus on the input
-                          if (searchInputRef.current) {
-                            searchInputRef.current.focus();
-                          }
-                        }}
-                      >
-                        Filter Mode
-                      </Button>
-                    )}
-                    <ChevronDown 
-                      className="h-4 w-4 text-muted-foreground cursor-pointer" 
-                        onClick={() => {
-                          setShowSearchResults(true);
-                        // Keep focus on the input
-                        if (searchInputRef.current) {
-                          searchInputRef.current.focus();
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Search Options Dropdown */}
-                {showSearchResults && (
-                  <div className="absolute mt-1 w-full bg-white rounded-md border border-gray-200 shadow-lg z-10 semantic-search-container">
-                    <div className="p-2">
-                      <div 
-                        className="flex items-center gap-2 p-2 hover:bg-muted cursor-pointer rounded-md"
-                        onClick={() => {
-                          setShowSearchResults(false);
-                          // Keep current search mode as filter
-                          setIsQuestionMode(false);
-                          setSearchMode("filter");
-                          // Focus back on the input after selection
-                          setTimeout(() => {
-                            if (searchInputRef.current) {
-                              searchInputRef.current.focus();
-                            }
-                          }, 10);
-                        }}
-                      >
-                        <Search className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm font-medium">Search files</p>
-                          <p className="text-xs text-muted-foreground">Find documents by keyword</p>
-                        </div>
-                      </div>
-                      
-                      <div 
-                        className="flex items-center gap-2 p-2 hover:bg-muted cursor-pointer rounded-md mt-1"
-                        onClick={() => {
-                          setShowSearchResults(false);
-                          // Set question mode
-                          setIsQuestionMode(true);
-                          
-                          // If there's a search query, immediately trigger the knowledge base search directly
-                          if (searchQuery.trim() !== '') {
-                            setSelectedNote(null);
-                            callKnowledgeChatFunctionDirect(searchQuery);
-                          } else {
-                            // Focus back on the input after selection to continue typing
-                            setTimeout(() => {
-                              if (searchInputRef.current) {
-                                searchInputRef.current.focus();
-                              }
-                            }, 10);
-                          }
-                        }}
-                      >
-                        <AILogo />
-                        <div>
-                          <p className="text-sm font-medium">Ask a question</p>
-                          <p className="text-xs text-muted-foreground">Get answers from your documents</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Hidden input to capture keyboard entry */}
-                <input
-                  id="semantic-search-hidden-input"
-                  type="text"
-                  className="sr-only"
-                  value={semanticSearchQuery}
-                  onChange={handleSemanticSearch}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && semanticSearchQuery.trim() !== '') {
+                      if (e.key === 'Enter' && searchMode === "semantic") {
                       callKnowledgeChatFunction();
-                      setSelectedNote(null);
                     }
                   }}
                 />
-
-              {/* AI Search Dialog instead of dropdown */}
-              {semanticSearchQuery.length > 0 && (
-                <div className="absolute mt-1 right-4 w-full max-w-md bg-white rounded-md border border-gray-200 shadow-lg z-10 semantic-search-container">
-                  <div className="p-3 border-b flex items-center gap-2">
-                    <AILogo />
-                    <Input 
-                      autoFocus
-                      placeholder="Ask a question about your documents..."
-                      className="rounded-md h-9"
-                      value={semanticSearchQuery}
-                      onChange={handleSemanticSearch}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && semanticSearchQuery.trim() !== '') {
-                          callKnowledgeChatFunction();
-                          setSelectedNote(null);
-                        } else if (e.key === 'Escape') {
-                          setShowSearchResults(false);
-                          setSemanticSearchQuery("");
-                        }
-                      }}
-                    />
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                     <Button 
-                      size="icon" 
                       variant="ghost" 
-                      className="h-8 w-8 rounded-md" 
+                      size="sm"
+                      className="h-5 px-2 text-xs rounded-md"
                       onClick={() => {
-                        setShowSearchResults(false);
-                        setSemanticSearchQuery("");
+                        setSearchMode(prev => prev === "filter" ? "semantic" : "filter");
+                        setTimeout(() => searchInputRef.current?.focus(), 0);
                       }}
                     >
-                      <X className="h-4 w-4" />
+                      {searchMode === "filter" ? "Filter Mode" : "Ask AI"}
                     </Button>
                   </div>
-                  
-                  {semanticSearchQuery.trim() === '' && recentSearches.length > 0 ? (
-                    <div className="py-2">
-                      <div className="px-3 pb-1">
-                        <h4 className="text-xs font-medium text-muted-foreground">Recent searches</h4>
                       </div>
-                      {recentSearches.map((search, index) => (
-                        <div
-                          key={`recent-search-${index}`}
-                          className="px-3 py-1.5 hover:bg-muted cursor-pointer flex items-center gap-2"
-                          onClick={() => {
-                            setSemanticSearchQuery(search);
-                            callKnowledgeChatFunction();
-                          }}
-                        >
-                          <Clock className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm truncate">{search}</span>
                         </div>
-                      ))}
-                    </div>
-                  ) : searchResults.length > 0 ? (
-                    <div className="max-h-60 overflow-y-auto py-1 scrollable">
-                      {searchResults.map((result, index) => (
-                        <div 
-                          key={index} 
-                          className="px-3 py-1.5 hover:bg-muted cursor-pointer"
-                          onClick={() => {
-                            const matchingNote = notes.find(note => note.title === result.title);
-                            if (matchingNote) {
-                              setSelectedNote(matchingNote);
-                              setShowSearchResults(false);
-                              setSemanticSearchQuery("");
-                            }
-                          }}
-                        >
-                          <div className="flex items-start gap-2">
-                            {getSearchResultIcon(result.type)}
-                            <div>
-                              <p className="text-sm font-medium">{result.title}</p>
-                              <p className="text-xs text-muted-foreground">{result.summary}</p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : semanticSearchQuery.trim() !== "" ? (
-                    <div className="py-4 px-3 text-center">
-                      <p className="text-sm text-muted-foreground">No matching documents found</p>
-                    </div>
-                  ) : (
-                    <div className="py-4 px-3 text-center">
-                      <p className="text-sm text-muted-foreground">Type to search documents</p>
-                    </div>
-                  )}
-                  
-                  <div className="p-3 border-t">
+              
                     <Button 
-                      className={cn(
-                        "w-full gap-1.5 rounded-md",
-                        isLoadingKnowledgeChat && "bg-blue-400 text-white hover:bg-blue-400"
-                      )}
-                      size="sm"
-                      disabled={semanticSearchQuery.trim() === '' || isLoadingKnowledgeChat}
-                      onClick={(() => callKnowledgeChatFunction()) as unknown as React.MouseEventHandler<HTMLButtonElement>}
-                    >
-                      {isLoadingKnowledgeChat ? (
-                        <>
-                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          <span>Searching Vault...</span>
-                        </>
-                      ) : (
-                        <>
-                      <Search className="h-3.5 w-3.5" />
-                      <span>Search Vault</span>
-                        </>
-                      )}
+                variant="outline" 
+                className="h-9 gap-2 rounded-md"
+                onClick={handleNewDocument}
+              >
+                <Plus className="h-4 w-4" />
+                <span>New</span>
+              </Button>
+              <Button 
+                className="h-9 gap-2 rounded-md"
+                onClick={() => setUploadDialogOpen(true)}
+              >
+                <FileUp className="h-4 w-4" />
+                <span>Upload</span>
                     </Button>
                   </div>
                 </div>
-              )}
-              
-              <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 border-t flex-1 min-h-0 h-[calc(100vh-9rem)]">
+          {/* Left Column - Document List */}
+          <div className="lg:col-span-1 border-r flex flex-col h-full overflow-hidden bg-gray-50/50">
+            <div className="p-4 border-b flex-shrink-0">
+              <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="grid grid-cols-4 w-full">
                   <TabsTrigger value="all">All</TabsTrigger>
-                  <TabsTrigger value="gmail" className="flex items-center justify-center gap-1">
-                    <Image 
-                      src="/gmail.png" 
-                      alt="Gmail" 
-                      width={16} 
-                      height={12} 
-                      className="flex-shrink-0" 
-                    />
-                    <span>Gmail</span>
-                  </TabsTrigger>
                   <TabsTrigger value="invoices">Invoices</TabsTrigger>
+                  <TabsTrigger value="notes">Notes</TabsTrigger>
                   <TabsTrigger value="other">Other</TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
       
-            <div className="flex-grow overflow-y-auto h-[calc(100%-8rem)] min-h-0 scrollbar-thin">
-              <style jsx global>{`
-                .scrollbar-thin {
-                  scrollbar-width: thin;
-                  scrollbar-color: rgba(203, 213, 225, 0.5) transparent;
-                }
-                .scrollbar-thin::-webkit-scrollbar {
-                  width: 6px;
-                }
-                .scrollbar-thin::-webkit-scrollbar-track {
-                  background: transparent;
-                }
-                .scrollbar-thin::-webkit-scrollbar-thumb {
-                  background-color: rgba(203, 213, 225, 0.5);
-                  border-radius: 20px;
-                }
-                .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-                  background-color: rgba(148, 163, 184, 0.7);
-                }
-              `}</style>
+            <div className="flex-grow overflow-y-auto h-[calc(100%-4rem)] min-h-0 scrollbar-thin p-1 document-list-container">
       {loading ? (
-                <div className="p-4 space-y-4">
-          {[...Array(5)].map((_, i) => (
-                    <div key={i} className="border rounded-md p-3">
+                <div className="p-4 space-y-3">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="border bg-white rounded-lg p-3 smooth-appear" style={{ animationDelay: `${i * 0.1}s` }}>
               <div className="flex justify-between items-start mb-2">
                         <Skeleton className="h-5 w-1/2" />
                         <Skeleton className="h-4 w-16" />
@@ -2482,722 +1263,387 @@ export default function NotesPage() {
         </div>
       ) : filteredNotes.length === 0 ? (
                 <div className="p-8 text-center">
-                  <Inbox className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+                  <FileText className="h-10 w-10 mx-auto text-gray-300 mb-3" />
                   <h3 className="font-medium mb-1">No documents found</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-gray-500">
                     {searchQuery ? "Try adjusting your search" : "Upload or create a new document"}
           </p>
         </div>
       ) : (
-                <div className="divide-y">
-                  {filteredNotes.map((note) => (
-                  <div 
-                    key={note.id}
-                      className={cn(
-                        "p-4 cursor-pointer hover:bg-muted/50 transition-colors",
-                        selectedNote?.id === note.id && "bg-muted"
-                        // Removed highlighting for knowledge base files
-                      )}
-                      onClick={() => {
-                        // Stop editing title if selecting a different note
-                        if (isEditingTitle && selectedNote && selectedNote.id !== note.id) {
-                          updateDocumentTitle();
-                        }
-                        setSelectedNote(note);
-                      }}
-                  >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-2 min-w-0 flex-shrink">
-                           {getNoteIcon(note)}
-                           <div className="flex-1 min-w-0">
-                            {isEditingTitle && selectedNote?.id === note.id ? (
-                              <div onClick={(e) => e.stopPropagation()}>
-                                <Input
-                                  ref={listTitleInputRef}
-                                  value={editedTitle}
-                                  onChange={(e) => setEditedTitle(e.target.value)}
-                                  onKeyDown={handleTitleInputKeyDown}
-                                  onBlur={handleTitleInputBlur}
-                                  className="text-sm font-medium h-6 py-0 px-1 rounded-md"
-                                />
-                        </div>
-                            ) : (
-                              <h3 
-                                className="font-medium text-sm truncate"
-                                onDoubleClick={(e) => {
-                                e.stopPropagation();
-                                  if (selectedNote?.id === note.id) {
-                                    handleTitleDoubleClick(true);
-                                  }
-                                }}
-                              >
-                                {note.title}
-                              </h3>
-                            )}
-                            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{note.summary || (note.fileName ? `File: ${note.fileName}` : 'No summary')}</p>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end flex-shrink-0">
-                          <div className="flex items-center gap-1 mb-1">
-                            <Badge variant="outline" className="text-xs capitalize whitespace-nowrap bg-gray-50 border-gray-200 px-2 py-0 h-5 font-medium rounded-md">
-                              {note.type === 'pdf' ? 'PDF' : 
-                               note.type === 'image' ? 'Image File' : 
-                               note.type} 
-                            </Badge>
-                            {note.inKnowledgeBase ? (
-                              <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20 px-2 py-0 h-5 ml-1 font-medium rounded-md">
-                                <Check className="h-3 w-3 mr-1" />Vault
-                              </Badge>
-                            ) : note.pendingKnowledgeBase ? (
-                              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-600 border-amber-200 px-2 py-0 h-5 ml-1 font-medium rounded-md">
-                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />Vault
-                              </Badge>
-                            ) : null}
-                            {note.origin === "gmail" && (
-                              <div className="ml-1 flex items-center justify-center h-5 w-5">
-                                <Image 
-                                  src="/gmail.png" 
-                                  alt="Gmail" 
-                                  width={16} 
-                                  height={12}
-                                  className="object-contain" 
-                                  title="Imported from Gmail"
-                                />
-                              </div>
-                            )}
-                          </div>
-                          <div className="text-xs text-muted-foreground whitespace-nowrap">
-                            {safeFormatDate(note.createdAt, "MMM d, yyyy")}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                <div className="space-y-2 p-2">
+                  {filteredNotes.map(note => (
+                    <DocumentItem
+                      key={note.id}
+                      note={note}
+                      isSelected={selectedNote?.id === note.id}
+                      onSelect={handleNoteSelection}
+                      formatDate={safeFormatDate}
+                    />
                   ))}
                 </div>
               )}
                         </div>
                       </div>
                       
-          {/* Right Column - Note Detail or Document Editor */}
-          <div className="lg:col-span-2 flex flex-col min-h-0 p-0">
-            {showDocumentEditor ? (
+          {/* Right Column - Document Detail */}
+          <div className="lg:col-span-2 flex flex-col min-h-0 p-0 overflow-hidden">
+            {showAiResponseInContent ? (
+              <div className="flex flex-col h-full ai-response-container">
+                <div className="px-6 py-4 border-b flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <AILogo />
+                    <h2 className="text-lg font-medium">AI Search Results</h2>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-blue-50 text-blue-600 border-blue-100">
+                      Query: {semanticSearchQuery}
+                    </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1 rounded-md"
+                      onClick={() => setShowAiResponseInContent(false)}
+                    >
+                      <X className="h-4 w-4" />
+                      <span>Close</span>
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="flex-grow overflow-auto p-6">
+                  {isLoadingKnowledgeChat ? (
+                    <div className="flex flex-col items-center justify-center h-full">
+                      <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                      <p className="text-blue-600">Searching your documents...</p>
+                    </div>
+                  ) : knowledgeChatResponse ? (
+                    <div className="prose prose-sm max-w-none">
+                      <div className="bg-white p-6 rounded-lg border shadow-sm">
+                        {knowledgeChatResponse.answer.split('\n').map((paragraph, idx) => (
+                          <p key={idx}>{paragraph}</p>
+                        ))}
+                      </div>
+                      
+                      {knowledgeChatResponse.sources && knowledgeChatResponse.sources.length > 0 && (
+                        <div className="mt-6">
+                          <h4 className="text-sm font-medium mb-3">Sources:</h4>
+                          <div className="space-y-2">
+                            {knowledgeChatResponse.sources.map((source, i) => (
+                              <div key={i} className="flex items-start gap-2 bg-gray-50 p-3 rounded-md border">
+                                <FileIcon className="h-4 w-4 text-blue-500 mt-0.5" />
+                                <div className="text-sm">{source}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full">
+                      <p className="text-gray-500">No results found</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : showDocumentEditor ? (
               <div className="flex flex-col h-full">
-                <div className="px-6 py-4 border-b flex items-center justify-between flex-shrink-0 bg-white">
-                  <div className="flex-1">
-                    {isEditingDocumentTitle ? (
-                      <input
-                        ref={documentTitleRef}
-                        type="text"
+                <div className="px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
+                  <div className="flex-1 min-w-0">
+                    <Input
                         value={documentTitle}
                         onChange={(e) => setDocumentTitle(e.target.value)}
-                        onBlur={() => setIsEditingDocumentTitle(false)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            setIsEditingDocumentTitle(false);
-                          }
-                        }}
-                        className="text-lg font-medium border-none outline-none focus:ring-1 focus:ring-blue-200 rounded-md px-1 w-full"
-                        autoFocus
-                      />
-                    ) : (
-                      <h2 
-                        className="text-lg font-medium cursor-text" 
-                        onClick={() => {
-                          setIsEditingDocumentTitle(true);
-                          setTimeout(() => documentTitleRef.current?.focus(), 0);
-                        }}
-                      >
-                        {documentTitle}
-                      </h2>
-                    )}
+                      className="text-lg font-medium py-0 h-9 rounded-md"
+                      placeholder="Document title"
+                    />
                   </div>
                   <div className="flex items-center gap-2">
                     <Button 
                       variant="outline" 
-                      size="sm" 
-                      className="h-8 rounded-md"
+                      className="h-9 rounded-md"
                       onClick={() => setShowDocumentEditor(false)}
                     >
                       Cancel
                     </Button>
                     <Button 
-                      size="sm" 
-                      className="h-8 rounded-md"
-                      onClick={() => saveDocument('')}
+                      className="h-9 rounded-md"
+                      onClick={saveDocument}
+                      disabled={isSavingDocument}
                     >
-                      Save
+                      {isSavingDocument ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        "Save"
+                      )}
                     </Button>
                   </div>
                 </div>
                 
-                {/* Toolbar */}
-                <div className="border-b px-4 py-2 flex flex-wrap items-center gap-1 bg-gray-50">
-                  {/* Text formatting */}
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 rounded-md" 
-                    onClick={() => execFormatCommand('bold')}
-                    title="Bold"
-                  >
-                    <Bold className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 rounded-md" 
-                    onClick={() => execFormatCommand('italic')}
-                    title="Italic"
-                  >
-                    <Italic className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 rounded-md" 
-                    onClick={() => execFormatCommand('underline')}
-                    title="Underline"
-                  >
-                    <Underline className="h-4 w-4" />
-                  </Button>
-                  
-                  <Separator orientation="vertical" className="mx-1 h-6" />
-                  
-                  {/* Font Family Dropdown */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8 px-2 gap-1 rounded-md">
-                        <Text className="h-4 w-4" />
-                        <span className="text-xs">Font</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
-                      <DropdownMenuLabel className="text-xs">Font Family</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => applyFontFamily("Arial, sans-serif")}>
-                        <span style={{ fontFamily: "Arial, sans-serif" }}>Arial</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => applyFontFamily("Helvetica, sans-serif")}>
-                        <span style={{ fontFamily: "Helvetica, sans-serif" }}>Helvetica</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => applyFontFamily("Georgia, serif")}>
-                        <span style={{ fontFamily: "Georgia, serif" }}>Georgia</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => applyFontFamily("Times New Roman, serif")}>
-                        <span style={{ fontFamily: "Times New Roman, serif" }}>Times New Roman</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => applyFontFamily("Courier New, monospace")}>
-                        <span style={{ fontFamily: "Courier New, monospace" }}>Courier New</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => applyFontFamily("Verdana, sans-serif")}>
-                        <span style={{ fontFamily: "Verdana, sans-serif" }}>Verdana</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  
-                  {/* Font Size Dropdown */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8 px-2 gap-1 rounded-md">
-                        <Type className="h-4 w-4" />
-                        <span className="text-xs">Size</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
-                      <DropdownMenuLabel className="text-xs">Font Size</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => applyFontSize("1")}>
-                        <span className="text-xs">Small</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => applyFontSize("3")}>
-                        <span className="text-sm">Normal</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => applyFontSize("4")}>
-                        <span className="text-base">Large</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => applyFontSize("5")}>
-                        <span className="text-lg">Extra Large</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => applyFontSize("7")}>
-                        <span className="text-xl">Huge</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                
-                {/* Editor Content */}
-                <div className="flex-grow overflow-y-auto p-0">
-                  <div 
-                    id="document-editor-content"
-                    className="h-full outline-none"
+                <div className="flex-grow overflow-auto p-0 relative">
+                  <div
+                    ref={editorRef}
+                    className="document-editor"
                     contentEditable={true}
-                    onInput={() => setUnsavedChanges(true)}
                     suppressContentEditableWarning={true}
-                    onClick={(e) => {
-                      const target = e.target as HTMLElement;
-                      if (target.id === 'document-editor-content') {
-                        // If clicking on the empty editor, make sure it has a paragraph to start
-                        if (!target.innerHTML.trim()) {
-                          target.innerHTML = '<p><br></p>';
-                        }
-                      }
-                    }}
                   />
                 </div>
               </div>
             ) : selectedNote ? (
-              // Existing note display
-              <div className="flex flex-col h-full">
+              <div 
+                className={`flex flex-col h-full detail-view-container ${isTransitioning ? 'fade-out' : 'fade-in'}`}
+                style={{ 
+                  transitionDuration: isTransitioning ? '150ms' : '250ms',
+                  willChange: 'opacity'
+                }}
+              >
                 <div className="px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
-                  <div>
+                  <div className="flex-1 min-w-0">
                     {isEditingTitle ? (
                       <Input
                         ref={titleInputRef}
                         value={editedTitle}
                         onChange={(e) => setEditedTitle(e.target.value)}
-                        onKeyDown={handleTitleInputKeyDown}
-                        onBlur={handleTitleInputBlur}
-                        className="text-lg font-medium py-0 h-8 rounded-md"
+                        onKeyDown={handleTitleKeyDown}
+                        onBlur={updateDocumentTitle}
+                        className="text-lg font-medium py-0 h-9 rounded-md"
                       />
                     ) : (
                       <h2 
-                        className="text-lg font-medium cursor-text" 
-                        onDoubleClick={() => handleTitleDoubleClick(false)}
+                        className="text-lg font-medium truncate cursor-text" 
+                        onDoubleClick={handleStartTitleEdit}
                       >
                         {selectedNote.title}
                       </h2>
                     )}
-                    <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                      {safeFormatDate(selectedNote.createdAt, "MMMM d, yyyy")} • {selectedNote.areaTitle}
+                    <div className="flex items-center mt-1 gap-3">
+                      <div className="flex items-center gap-1.5 text-gray-500 text-sm">
+                        <Calendar className="h-3.5 w-3.5" />
+                        {safeFormatDate(selectedNote.createdAt, "MMMM d, yyyy")}
                       {selectedNote.origin === "gmail" && (
-                        <span className="flex items-center" title="Imported from Gmail">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="flex items-center ml-2">
                           <Image 
                             src="/gmail.png" 
                             alt="Gmail" 
-                            width={16} 
-                            height={12}
+                                    width={14} 
+                                    height={10}
                             className="object-contain" 
                           />
                         </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">Imported from Gmail</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                        {selectedNote.inKnowledgeBase && (
+                          <Badge 
+                            className="flex items-center gap-0.5 text-xs ml-2 bg-blue-50 text-blue-600 border-blue-100"
+                          >
+                            <Check className="h-3 w-3" /> In Vault
+                          </Badge>
+                        )}
+                        {selectedNote.pendingKnowledgeBase && (
+                          <Badge 
+                            className="flex items-center gap-0.5 text-xs ml-2 bg-amber-50 text-amber-600 border-amber-100"
+                          >
+                            <Loader2 className="h-3 w-3 animate-spin" /> Processing
+                          </Badge>
+                        )}
+                  </div>
+                      {selectedNote.tags.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          {selectedNote.tags.slice(0, 2).map((tag, i) => (
+                            <Badge key={i} variant="secondary" className="text-xs bg-gray-100 border-0">
+                              {tag}
+                            </Badge>
+                          ))}
+                          {selectedNote.tags.length > 2 && (
+                            <Badge variant="outline" className="text-xs">+{selectedNote.tags.length - 2}</Badge>
+                          )}
+                        </div>
                       )}
-                    </p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {/* Combined agent dropdown */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" className="h-8 gap-1 rounded-md">
-                          <span>Add to </span>
-                          <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-medium">
-                            Agent
-                          </span>
-                          {(csAgentSelected || rewardAgentSelected) && (
-                            <Badge className="ml-1 h-5 px-1.5 text-xs bg-primary/10 text-primary border-primary/20 rounded-md">
-                              {csAgentSelected && rewardAgentSelected ? '2' : '1'}
-                            </Badge>
-                          )}
-                          <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-70" />
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 rounded-md text-gray-500"
+                            onClick={handleStartTitleEdit}
+                          >
+                            <Edit className="h-4 w-4" />
                         </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-56">
-                        <DropdownMenuLabel className="text-xs">Connect to agents</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="flex items-center justify-between cursor-pointer"
-                          onClick={() => {
-                            setCsAgentSelected(!csAgentSelected);
-                        setAnimatingCs(true);
-                        setTimeout(() => setAnimatingCs(false), 500);
-                      }}
-                        >
-                          <span>Customer Service Agent</span>
-                          {csAgentSelected && <Check className="h-4 w-4" />}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="flex items-center justify-between cursor-pointer"
-                          onClick={() => {
-                            setRewardAgentSelected(!rewardAgentSelected);
-                        setAnimatingReward(true);
-                        setTimeout(() => setAnimatingReward(false), 500);
-                      }}
-                        >
-                          <span>Reward Agent</span>
-                          {rewardAgentSelected && <Check className="h-4 w-4" />}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                        </TooltipTrigger>
+                        <TooltipContent>Edit title</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                     
                     {selectedNote.fileUrl && (
+                      <>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-9 w-9 rounded-md text-gray-500"
+                                onClick={handleDownload}
+                              >
+                                <DownloadCloud className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Download</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-9 w-9 rounded-md text-gray-500"
+                                onClick={handleOpenInNewTab}
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Open in new tab</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </>
+                    )}
+                    
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm" className="h-8 gap-1 rounded-md">
-                              <Tag className="h-4 w-4" />
-                              <span>{selectedNote.type}</span>
-                              <ChevronDown className="h-4 w-4" />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9 rounded-md text-gray-500"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Document Type</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
                             <DropdownMenuItem 
-                              onClick={() => updateDocumentType("invoice")}
-                              disabled={isUpdatingDocType || selectedNote.type === "invoice"}
+                          className="gap-2 cursor-pointer"
+                          onClick={handleStartTitleEdit}
                             >
-                              <FileText className="h-4 w-4 text-green-500 mr-2" />
-                              Invoice
+                          <Edit className="h-4 w-4" />
+                          <span>Rename</span>
                             </DropdownMenuItem>
                             <DropdownMenuItem 
-                              onClick={() => updateDocumentType("pdf")}
-                              disabled={isUpdatingDocType || selectedNote.type === "pdf"}
-                            >
-                              <FileIcon className="h-4 w-4 text-red-500 mr-2" />
-                              PDF Document
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => updateDocumentType("image")}
-                              disabled={isUpdatingDocType || selectedNote.type === "image"}
-                            >
-                              <ImageIcon className="h-4 w-4 text-blue-500 mr-2" />
-                              Image
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => updateDocumentType("note")}
-                              disabled={isUpdatingDocType || selectedNote.type === "note"}
-                            >
-                              <FileText className="h-4 w-4 text-yellow-500 mr-2" />
-                              Note
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => updateDocumentType("other")}
-                              disabled={isUpdatingDocType || selectedNote.type === "other"}
-                            >
-                              <FileQuestion className="h-4 w-4 text-purple-500 mr-2" />
-                              Other Document
+                          className="gap-2 cursor-pointer"
+                          onClick={() => setDeleteDialogOpen(true)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          <span>Delete</span>
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
-                    )}
-                        
-                        <Button 
-                          variant="outline"
-                          size="sm"
-                          className="h-8 gap-1 rounded-md text-red-500 hover:text-red-600 hover:bg-red-50"
-                          onClick={() => setDeleteDialogOpen(true)}
-                        >
-                          <X className="h-4 w-4" />
-                          <span>Delete</span>
-                        </Button>
                   </div>
                 </div>
                 
-                {/* Add Summary section right after the document header, before Similar Documents */}
-                <div className="border-b bg-gradient-to-r from-blue-50 to-transparent">
-                  <Collapsible defaultOpen={false} className="w-full">
-                    <div className="px-6 py-3 flex items-center justify-between cursor-pointer">
-                      <CollapsibleTrigger className="flex items-center gap-2 w-full justify-between hover:opacity-80 transition-opacity">
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1.5">
-                            <FileText className="h-4 w-4 text-blue-500" />
-                            <h3 className="text-sm font-medium">Summary</h3>
+                <div className="flex-grow overflow-auto p-6">
+                  <div className="animate-in scale-in duration-300 h-full">
+                    {renderFilePreview()}
                           </div>
-                          <span className="text-xs bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-medium">
-                            Powered by Tap Agent
-                          </span>
-                        </div>
-                        <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform ui-open:rotate-180" />
-                      </CollapsibleTrigger>
-                    </div>
-                    <CollapsibleContent>
-                      <div className="px-6 py-3 pt-0">
-                        {selectedNote?.summary ? (
-                          <div className="p-3 bg-white rounded-md border border-blue-100 shadow-sm">
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedNote.summary}</p>
-                          </div>
-                        ) : (
-                          <div className="p-3 bg-white rounded-md border border-gray-200 text-muted-foreground text-sm italic text-center">
-                            No summary available for this document
-                          </div>
-                    )}
-                  </div>
-                    </CollapsibleContent>
-                  </Collapsible>
                 </div>
                 
                 {/* Add Similar Documents section */}
-                {selectedNote && (loadingRelated || relatedNotes.length > 0) && (
-                  <div className="border-b">
-                    <div className="px-6 py-2 flex items-center justify-between">
-                      <h3 className="text-xs font-medium flex items-center gap-1.5">
-                        <Share2 className="h-3 w-3 text-muted-foreground" />
+                {selectedNote && relatedNotes.length > 0 && (
+                  <div className="px-6 py-3 border-t">
+                    <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-1.5">
+                      <ArrowRight className="h-3.5 w-3.5 text-blue-500" />
                         Similar Documents
                       </h3>
-                      
-                      {loadingRelated && (
-                        <div className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          <span>Finding similar...</span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="px-4 pb-2">
-                      {relatedError ? (
-                        <div className="text-xs text-muted-foreground py-1 px-2">
-                          {relatedError}
-                        </div>
-                      ) : loadingRelated ? (
-                        <div className="flex gap-2 overflow-x-auto py-1 px-2 scrollbar-thin">
-                          {[1, 2, 3].map(i => (
-                            <Skeleton key={i} className="h-7 w-40 flex-shrink-0" />
-                          ))}
-                        </div>
-                      ) : relatedNotes.length > 0 && (
-                        <div className="flex flex-wrap gap-2 py-1">
+                    <div className="flex flex-wrap gap-2">
                           {relatedNotes.map(note => (
                             <TooltipProvider key={note.id}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                            <div 
-                                    className="h-7 flex items-center bg-white border border-gray-100 rounded-full px-2 py-1 hover:border-blue-200 hover:bg-blue-50/30 cursor-pointer transition-colors shadow-sm group"
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                className="h-8 text-xs rounded-md bg-gray-50 border-gray-200 flex items-center gap-1"
                               onClick={() => {
                                 const fullNote = notes.find(n => n.id === note.id);
                                 if (fullNote) {
-                                  setSelectedNote(fullNote);
+                                    handleNoteSelection(fullNote);
                                 }
                               }}
                             >
                                 {note.type === 'pdf' ? (
-                                      <FileIcon className="h-3 w-3 text-red-500 flex-shrink-0 mr-1.5" />
+                                  <FileIcon className="h-3.5 w-3.5 text-red-500" />
                                 ) : note.type === 'image' ? (
-                                      <ImageIcon className="h-3 w-3 text-blue-500 flex-shrink-0 mr-1.5" />
+                                  <ImageIcon className="h-3.5 w-3.5 text-blue-500" />
                                 ) : note.type === 'invoice' ? (
-                                      <FileText className="h-3 w-3 text-green-500 flex-shrink-0 mr-1.5" />
-                                    ) : (
-                                      <FileText className="h-3 w-3 text-gray-500 flex-shrink-0 mr-1.5" />
-                                    )}
-                                    <span className="text-xs font-medium truncate min-w-[120px] max-w-[180px]">{note.title}</span>
-                                    <Badge className="ml-1.5 text-[8px] py-0 h-3 px-1 rounded-md bg-blue-50 text-blue-600 border-blue-100">
-                                      {Math.round(note.score * 100)}%
-                                </Badge>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                      className="h-4 w-4 ml-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        const fullNote = notes.find(n => n.id === note.id);
-                                        if (fullNote && fullNote.fileUrl) {
-                                          window.open(fullNote.fileUrl, '_blank');
-                                        }
-                                      }}
-                                    >
-                                      <ExternalLink className="h-2 w-2 text-gray-400" />
+                                  <FileText className="h-3.5 w-3.5 text-green-500" />
+                                ) : (
+                                  <FileText className="h-3.5 w-3.5 text-gray-500" />
+                                )}
+                                <span className="truncate max-w-[150px]">{note.title}</span>
                                 </Button>
-                              </div>
                                 </TooltipTrigger>
-                                <TooltipContent side="bottom" className="max-w-[280px] p-3">
-                                  <div className="space-y-1.5">
-                                    <div className="flex items-center gap-1.5">
-                                      <h4 className="text-sm font-medium">{note.title}</h4>
-                                      <Badge className="text-[8px] py-0 h-3 px-1 rounded-md bg-primary/10 text-primary border-primary/20">
+                            <TooltipContent side="top" className="p-3 max-w-xs">
+                              <div className="space-y-1">
+                                <p className="font-medium text-sm">{note.title}</p>
+                                <p className="text-xs text-gray-500">{note.summary || "No description available"}</p>
+                                <div className="flex justify-between items-center pt-1">
+                                  <Badge className="bg-blue-50 text-blue-600 border-blue-100">
                                         {Math.round(note.score * 100)}% Match
                                       </Badge>
-                            </div>
-                                    <p className="text-xs text-muted-foreground">
-                                      {note.summary || "No summary available for this document"}
-                                    </p>
-                                    <div className="flex justify-end pt-1">
-                                      <Button 
-                                        variant="link" 
-                                        size="sm" 
-                                        className="h-5 p-0 text-xs text-blue-500"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          const fullNote = notes.find(n => n.id === note.id);
-                                          if (fullNote) {
-                                            setSelectedNote(fullNote);
-                                          }
-                                        }}
-                                      >
-                                        View Document <ArrowRight className="h-3 w-3 ml-1" />
-                                      </Button>
                         </div>
                                   </div>
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                           ))}
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}
                 
-                <div className="px-6 py-6 flex-grow overflow-y-auto">
-                  {selectedNote.fileUrl ? (
-                    renderFileViewer()
-                  ) : (
-                    <div className="prose prose-sm max-w-none">
-                      <div className="bg-muted/50 rounded-md p-4 mb-4">
-                        <p className="whitespace-pre-wrap">{selectedNote.rawText}</p>
+                {selectedNote.summary && (
+                  <div className="px-6 py-4 border-t bg-gray-50">
+                    <div className="text-sm text-gray-700">
+                      <h4 className="font-medium mb-1 text-gray-900">Summary</h4>
+                      <p>{selectedNote.summary}</p>
             </div>
-                      
-                      {selectedNote.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-4">
-                          {selectedNote.tags.map((tag, i) => (
-                            <Badge key={i} variant="secondary" className="text-xs">
-                              {tag}
-                            </Badge>
-          ))}
         </div>
       )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : showKnowledgeChatResponse ? (
-              <div className="flex flex-col h-full">
-                <div className="px-6 py-4 border-b flex items-center justify-between flex-shrink-0 bg-gray-50">
-                  <div className="flex items-center gap-2">
-                    <Search className="h-4 w-4 text-muted-foreground" />
-                    <h3 className="font-medium">Vault Search Results</h3>
-                    <span className="text-sm bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-medium ml-2">
-                      Powered By Tap Agent
-                    </span>
-                  </div>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 rounded-md" 
-                    onClick={() => setShowKnowledgeChatResponse(false)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto p-5 pt-0">
-                  {isLoadingKnowledgeChat ? (
-                    <div className="h-60 flex flex-col items-center justify-center">
-                      {/* Updated loading indicator with thinking box from tap-agent-sheet */}
-                      <div className="bg-white border border-gray-200 shadow-sm rounded-md p-6 mb-4 w-full max-w-xl animate-slowFadeIn">
-                        <div className="flex items-center gap-3 mb-2">
-                          <Search className="h-5 w-5 text-blue-500" />
-                          <div className="flex items-center gap-1">
-                            <h3 className="text-sm font-medium text-gray-900">Vault search in progress...</h3>
-                            <div className="w-4 h-4 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
-                        </div>
-                      </div>
-                        <div className="mt-1 flex flex-col items-start text-left py-2 pl-8">
-                          <p className="text-xs animate-fade-in-out bg-gradient-to-r from-gray-400 to-gray-700 bg-clip-text text-transparent font-medium w-full text-left">
-                            {getKnowledgeBaseProcessingMessage()}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ) : knowledgeChatResponse ? (
-                    <div 
-                      className={cn(
-                        "knowledge-response transition-opacity duration-700 ease-in-out",
-                        isKnowledgeResponseVisible ? "opacity-100" : "opacity-0"
-                      )}
-                    >
-                      <div 
-                        className="markdown-content rounded-md"
-                      >
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            h1: ({node, ...props}) => <h1 className="text-2xl font-bold mt-6 mb-3 text-gray-900 border-b pb-1" {...props} />,
-                            h2: ({node, ...props}) => <h2 className="text-xl font-semibold mt-6 mb-3 text-gray-900 border-b pb-1" {...props} />,
-                            h3: ({node, ...props}) => <h3 className="text-lg font-medium mt-5 mb-2 text-gray-900 border-b pb-1" {...props} />,
-                            p: ({node, ...props}) => <p className="text-gray-800 mb-3" {...props} />,
-                            ul: ({node, ...props}) => <ul className="my-3 pl-5 list-disc text-gray-800 space-y-1" {...props} />,
-                            ol: ({node, ...props}) => <ol className="my-3 pl-5 list-decimal text-gray-800 space-y-1" {...props} />,
-                            li: ({node, ...props}) => <li className="text-gray-800" {...props} />,
-                            blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 pl-4 py-1 my-3 text-gray-700 italic" {...props} />,
-                            hr: ({node, ...props}) => <hr className="my-4 border-t border-gray-300" {...props} />,
-                            strong: ({node, ...props}) => <strong className="font-semibold text-gray-900" {...props} />,
-                            em: ({node, ...props}) => <em className="text-gray-700" {...props} />,
-                            code: ({node, inline, className, children, ...props}: any) => {
-                              const match = /language-(\w+)/.exec(className || '')
-                              return !inline && match ? (
-                                <pre className="bg-gray-100 p-3 rounded-md my-3 overflow-x-auto">
-                                  <code className={className} {...props}>
-                                    {String(children).replace(/\n$/, '')}
-                                  </code>
-                                </pre>
-                              ) : (
-                                <code className="bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded-sm text-sm font-mono" {...props}>
-                                  {children}
-                                </code>
-                              )
-                            },
-                            a: ({node, ...props}) => <a className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
-                          }}
-                        >
-                          {knowledgeChatResponse?.answer}
-                        </ReactMarkdown>
-                      </div>
-                      
-                      {knowledgeChatResponse?.sources && knowledgeChatResponse.sources.length > 0 && (
-                        <div className="mt-6 pt-4 border-t">
-                          <h4 className="text-sm font-medium mb-3">Sources:</h4>
-                          <ul className="space-y-2">
-                            {knowledgeChatResponse.sources.map((source, i) => (
-                              <li key={i} className="flex gap-2 items-start bg-gray-50 p-2 rounded-md border border-gray-200">
-                                <div className="bg-primary/10 p-1.5 rounded-md">
-                                  <File className="h-4 w-4 text-primary" />
-                                </div>
-                                <span className="text-sm">{source}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      
-                      <div className="mt-6 pt-4 border-t text-xs text-muted-foreground">
-                        <p>Query: "{knowledgeChatResponse?.metadata?.query || semanticSearchQuery}"</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="h-40 flex items-center justify-center">
-                      <div className="text-center">
-                        <FileQuestion className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                        <p className="text-muted-foreground">No results found</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="px-6 py-3 border-t bg-gray-50 flex justify-between">
-                  <div className="text-xs text-muted-foreground">
-                    Powered by AI
-                  </div>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    className="h-8 text-sm rounded-md"
-                    onClick={() => setShowKnowledgeChatResponse(false)}
-                  >
-                    Close
-                  </Button>
-                </div>
               </div>
             ) : (
               <div className="h-full flex items-center justify-center p-8">
-                <div className="text-center">
-                  <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-medium mb-2">No document selected</h3>
-                  <p className="text-muted-foreground">
-                    Select a document from the list to view its contents or create a new document
+                <div className="text-center max-w-md fade-in">
+                  <FileText className="h-12 w-12 mx-auto text-gray-200 mb-6" />
+                  <h3 className="text-xl font-medium mb-3">Select a document</h3>
+                  <p className="text-gray-500 mb-6">
+                    Choose a document from the list to view its contents, or create a new document to get started.
                   </p>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   <Button 
-                    className="mt-4 gap-2"
+                      variant="outline"
+                      className="gap-2"
                     onClick={handleNewDocument}
                   >
                     <Plus className="h-4 w-4" />
-                    New Document
+                      <span>Create Document</span>
+                    </Button>
+                    <Button 
+                      className="gap-2"
+                      onClick={() => setUploadDialogOpen(true)}
+                    >
+                      <FileUp className="h-4 w-4" />
+                      <span>Upload Document</span>
                   </Button>
+                  </div>
                 </div>
               </div>
             )}
@@ -3205,16 +1651,16 @@ export default function NotesPage() {
         </div>
       </div>
       
-      {/* Upload Document Dialog */}
+      {/* Upload Dialog */}
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Upload Document</DialogTitle>
             <DialogDescription>
-              Upload a document to add it to your notes.
+              Add a document to your collection.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-4">
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="file">File</Label>
               <div className="flex items-center gap-2">
@@ -3228,7 +1674,7 @@ export default function NotesPage() {
       />
     </div>
               {uploadFile && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-gray-500">
                   Selected: {uploadFile.name} ({(uploadFile.size / 1024).toFixed(1)} KB)
                 </p>
               )}
@@ -3245,14 +1691,14 @@ export default function NotesPage() {
             </div>
             
             <div className="grid w-full items-center gap-1.5">
-              <Label htmlFor="summary">Summary (optional)</Label>
+              <Label htmlFor="summary">Description (optional)</Label>
               <Textarea
                 id="summary"
                 value={uploadSummary}
                 onChange={(e) => setUploadSummary(e.target.value)}
                 placeholder="Brief description of the document"
                 className="resize-none"
-                rows={3}
+                rows={2}
       />
     </div>
             
@@ -3262,22 +1708,19 @@ export default function NotesPage() {
                 id="tags"
                 value={uploadTags}
                 onChange={(e) => setUploadTags(e.target.value)}
-                placeholder="Comma-separated tags"
+                placeholder="Separate tags with commas"
               />
-              <p className="text-xs text-muted-foreground">
-                Separate tags with commas (e.g., invoice, receipt, important)
-              </p>
             </div>
             
             {uploadProgress > 0 && (
               <div className="w-full">
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-primary" 
+                    className="h-full bg-blue-500 transition-all duration-300" 
                     style={{ width: `${uploadProgress}%` }}
                   ></div>
                 </div>
-                <p className="text-xs text-center mt-1 text-muted-foreground">
+                <p className="text-xs text-center mt-1 text-gray-500">
                   {uploadProgress < 100 ? 'Uploading...' : 'Upload complete!'}
                 </p>
               </div>
@@ -3301,7 +1744,7 @@ export default function NotesPage() {
             >
               {uploading ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   <span>Uploading...</span>
                 </>
               ) : (
@@ -3319,9 +1762,9 @@ export default function NotesPage() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete file</AlertDialogTitle>
+            <AlertDialogTitle>Delete Document</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this file? This action cannot be undone.
+              Are you sure you want to delete "{selectedNote?.title}"? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -3332,15 +1775,18 @@ export default function NotesPage() {
                 handleDeleteFile();
               }}
               disabled={deletingFile}
-              className="bg-red-500 text-white hover:bg-red-600"
+              className="bg-red-500 text-white hover:bg-red-600 gap-2"
             >
               {deletingFile ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   <span>Deleting...</span>
                 </>
               ) : (
-                'Delete file'
+                <>
+                  <Trash2 className="h-4 w-4" />
+                  <span>Delete</span>
+                </>
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

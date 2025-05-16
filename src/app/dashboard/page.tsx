@@ -2316,7 +2316,7 @@ export default function DashboardPage() {
   return (
     <PageTransition>
       <style dangerouslySetInnerHTML={{ __html: customAnimationStyles }} />
-      <div className="p-6 py-4">
+      <div className="p-6 py-4 max-w-full overflow-x-hidden">
         <div className="space-y-6">
           {/* Welcome Section with Timeframe Tabs */}
           <div>
@@ -3046,7 +3046,7 @@ export default function DashboardPage() {
           </Tabs>
 
           {/* Activity Overview and Recent Activity in a side-by-side layout */}
-          <div className="grid grid-cols-12 gap-6">
+          <div className="grid grid-cols-12 gap-6 overflow-hidden">
             {/* Activity Overview Graph - Takes slightly less width */}
             <Card className="col-span-7 rounded-lg border border-gray-200 overflow-hidden">
               <CardHeader className="py-3 px-6 bg-gray-50 border-b border-gray-100 flex flex-row justify-between items-center rounded-t-lg">
@@ -3238,7 +3238,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Top Viewing Customers and Popular Rewards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 overflow-hidden">
             {/* Top Viewing Customers card */}
             <Card className="rounded-lg border border-gray-200 overflow-hidden shadow-sm">
               <CardHeader className="py-4 px-6 bg-gradient-to-r from-indigo-50 to-white border-b border-gray-100 flex flex-row justify-between items-center">

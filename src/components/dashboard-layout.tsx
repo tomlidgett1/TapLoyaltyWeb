@@ -25,7 +25,7 @@ import { CreateRewardSheet } from "@/components/create-reward-sheet"
 import { CreatePointsRuleSheet } from "@/components/create-points-rule-sheet"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, query, where, getDocs, Timestamp, orderBy, limit, getDoc, doc } from "firebase/firestore"
+import { collection, query, where, getDocs, Timestamp, orderBy, limit, getDoc, doc, onSnapshot } from "firebase/firestore"
 import {
   Tooltip,
   TooltipContent,
@@ -61,6 +61,15 @@ const scrollbarStyles = `
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background-color: rgba(0, 0, 0, 0.2);
+  }
+  
+  /* Agent Notification Gradient Text */
+  .agent-notification-gradient {
+    background: linear-gradient(to right, #3b82f6, #f97316);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-weight: 600;
   }
 `;
 
@@ -413,6 +422,86 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     }
   }, [user?.uid, isOnboarding])
 
+  // Add listener for agent inbox notifications
+  useEffect(() => {
+    if (!user?.uid || isOnboarding) return
+
+    // Track if this is the initial snapshot to avoid showing notifications for existing documents
+    let isInitialSnapshot = true
+
+    // Set up real-time listener for agent inbox
+    const agentInboxRef = collection(db, 'merchants', user.uid, 'agentinbox')
+    const agentInboxQuery = query(
+      agentInboxRef,
+      orderBy('createdAt', 'desc'),
+      limit(10)
+    )
+
+    const unsubscribe = onSnapshot(agentInboxQuery, (snapshot) => {
+      // Check for added documents
+      const addedDocs = snapshot.docChanges().filter(change => change.type === 'added')
+      
+      if (addedDocs.length > 0 && !isInitialSnapshot) {
+        // Only process if not the initial load
+        // Create a notification for each new agent inbox item
+        addedDocs.forEach(change => {
+          const docData = change.doc.data()
+          const actionType = docData.type || 'task'
+          let actionDescription = 'new task'
+          
+          if (docData.type === 'csemail') {
+            actionDescription = 'email response'
+          } else if (docData.type === 'offer') {
+            actionDescription = 'discount offer'
+          } else if (docData.type === 'program') {
+            actionDescription = 'program recommendation'
+          }
+          
+          // Show toast notification with blue-orange gradient title
+          toast({
+            title: "Agent Notification",
+            description: `New ${actionDescription} requires your approval`,
+            variant: "default",
+            action: (
+              <Button 
+                onClick={() => router.push('/dashboard/agent-inbox')}
+                variant="outline" 
+                className="h-8 gap-1.5 rounded-md"
+                size="sm"
+              >
+                View
+              </Button>
+            )
+          })
+          
+          // Add to notifications array with proper styling
+          const newNotification: Notification = {
+            id: change.doc.id,
+            message: `New ${actionDescription} requires your approval`,
+            type: "AGENT_ACTION",
+            timestamp: docData.createdAt?.toDate() || new Date(),
+            read: false
+          }
+          
+          setNotifications(prev => [newNotification, ...prev])
+        })
+        
+        // Update unread count
+        setUnreadCount(prev => prev + addedDocs.length)
+      }
+      
+      // After first snapshot, set flag to false so future changes show notifications
+      if (isInitialSnapshot) {
+        isInitialSnapshot = false
+      }
+    }, (error) => {
+      console.error('Error listening to agent inbox updates:', error)
+    })
+
+    // Clean up listener on unmount
+    return () => unsubscribe()
+  }, [user?.uid, isOnboarding, toast, router])
+
   const markAsRead = async (id: string) => {
     // Update the notification in Firestore
     try {
@@ -476,6 +565,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         return <X className="h-4 w-4 text-red-500" />
       case "MEMBERSHIP_TIER_UPGRADE":
         return <Award className="h-4 w-4 text-purple-500" />
+      case "AGENT_ACTION":
+        return (
+          <div className="h-4 w-4 flex items-center justify-center">
+            <Bot className="h-4 w-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-orange-500" />
+          </div>
+        )
       default:
         return <Bell className="h-4 w-4 text-blue-500" />
     }
@@ -927,7 +1022,18 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-start">
-                              <p className="text-sm font-medium">{notification.message}</p>
+                              <p className="text-sm font-medium">
+                                {notification.type === "AGENT_ACTION" ? (
+                                  <>
+                                    <span className="agent-notification-gradient">
+                                      Agent Notification:
+                                    </span>{' '}
+                                    {notification.message}
+                                  </>
+                                ) : (
+                                  notification.message
+                                )}
+                              </p>
                               <p className="text-xs text-muted-foreground">
                                 {formatTimeAgo(notification.dateCreated || notification.timestamp)}
                               </p>

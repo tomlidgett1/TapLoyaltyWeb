@@ -16,10 +16,24 @@ export function Toaster() {
   return (
     <ToastProvider>
       {toasts.map(({ id, title, description, action, ...props }) => {
+        // Check if this is an Agent Notification toast
+        const isAgentNotification = 
+          typeof title === 'string' && title === 'Agent Notification';
+        
         return (
           <Toast key={id} {...props}>
             <div className="grid gap-1">
-              {title && <ToastTitle>{title}</ToastTitle>}
+              {title && (
+                <ToastTitle>
+                  {isAgentNotification ? (
+                    <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-semibold">
+                      Agent Notification
+                    </span>
+                  ) : (
+                    title
+                  )}
+                </ToastTitle>
+              )}
               {description && (
                 <ToastDescription>{description}</ToastDescription>
               )}

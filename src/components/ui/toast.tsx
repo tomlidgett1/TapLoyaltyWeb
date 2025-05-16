@@ -91,13 +91,35 @@ ToastClose.displayName = ToastPrimitives.Close.displayName
 const ToastTitle = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Title>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Title>
->(({ className, ...props }, ref) => (
+>(({ className, ...props }, ref) => {
+  // Create a ref to check for parent class
+  const titleRef = React.useRef<HTMLDivElement>(null);
+  
+  // Use effect to apply gradient styling if parent has agent-notification-toast class
+  React.useEffect(() => {
+    if (titleRef.current) {
+      // Find toast container parent
+      const toastContainer = titleRef.current.closest('[role="status"]');
+      if (toastContainer && toastContainer.classList.contains('agent-notification-toast')) {
+        // Apply gradient styling to this title
+        titleRef.current.classList.add('agent-notification-gradient');
+      }
+    }
+  }, []);
+  
+  return (
   <ToastPrimitives.Title
-    ref={ref}
+      ref={(node) => {
+        // Handle both the forwarded ref and our local ref
+        if (typeof ref === 'function') ref(node);
+        else if (ref) ref.current = node;
+        titleRef.current = node;
+      }}
     className={cn("text-sm font-semibold", className)}
     {...props}
   />
-))
+  );
+})
 ToastTitle.displayName = ToastPrimitives.Title.displayName
 
 const ToastDescription = React.forwardRef<

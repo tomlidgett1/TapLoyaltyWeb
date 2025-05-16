@@ -2,14 +2,14 @@
 
 import { useEffect, useState, useRef } from "react"
 import { db } from "@/lib/firebase"
-import { collection, query, orderBy, getDocs, Timestamp, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, onSnapshot } from "firebase/firestore"
+import { collection, query, orderBy, getDocs, Timestamp, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, onSnapshot, getDoc, setDoc } from "firebase/firestore"
 import { getStorage, ref, getDownloadURL, uploadBytesResumable } from "firebase/storage"
 import { v4 as uuidv4 } from "uuid"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, Calendar, Tag, Clock, FileText, Filter, ChevronDown, Eye, ArrowRight, LayoutGrid, MessageSquare, Gift, Plus, FileUp, Inbox, FileImage, FilePlus, FileQuestion, Check, Loader2, Image as ImageIcon, File as FileIcon, ChevronLeft, ChevronRight as ChevronRightIcon, ZoomIn, ZoomOut, Download, CornerDownLeft, File, ChevronRight, MoreVertical, PlusCircle, PlusIcon, Upload, X, Share2, ExternalLink } from "lucide-react"
+import { Search, Calendar, Tag, Clock, FileText, Filter, ChevronDown, Eye, ArrowRight, LayoutGrid, MessageSquare, Gift, Plus, FileUp, Inbox, FileImage, FilePlus, FileQuestion, Check, Loader2, Image as ImageIcon, File as FileIcon, ChevronLeft, ChevronRight as ChevronRightIcon, ZoomIn, ZoomOut, Download, CornerDownLeft, File, ChevronRight, MoreVertical, PlusCircle, PlusIcon, Upload, X, Share2, ExternalLink, Check as CheckIcon } from "lucide-react"
 import { format, isValid, formatRelative } from "date-fns"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -64,6 +64,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import { Bold, Italic, Underline, List, ListOrdered, AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, Heading3, Quote, Link2, Type, Text } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
 
 // Add custom animation styles
 const customAnimationStyles = `
@@ -109,6 +111,58 @@ const customAnimationStyles = `
 `;
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
+// Add custom editor styles
+const editorStyles = `
+  #document-editor-content {
+    min-height: 100%;
+    padding: 2rem;
+    outline: none;
+    line-height: 1.5;
+    color: #333;
+  }
+  
+  #document-editor-content h1 {
+    font-size: 2.25rem;
+    font-weight: 700;
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    color: #111;
+  }
+  
+  #document-editor-content h2 {
+    font-size: 1.8rem;
+    font-weight: 600;
+    margin-top: 1.2rem;
+    margin-bottom: 0.8rem;
+    color: #111;
+  }
+  
+  #document-editor-content h3 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-top: 1rem;
+    margin-bottom: 0.6rem;
+    color: #111;
+  }
+  
+  #document-editor-content p {
+    margin-bottom: 0.75rem;
+  }
+  
+  #document-editor-content ul, #document-editor-content ol {
+    margin-left: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  #document-editor-content blockquote {
+    border-left: 3px solid #e2e8f0;
+    padding-left: 1rem;
+    font-style: italic;
+    color: #4a5568;
+    margin: 1rem 0;
+  }
+`;
 
 // Define the Note interface
 interface Note {
@@ -214,12 +268,14 @@ export default function NotesPage() {
   const [showKnowledgeChatResponse, setShowKnowledgeChatResponse] = useState(false);
   const [isKnowledgeResponseVisible, setIsKnowledgeResponseVisible] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [isQuestionMode, setIsQuestionMode] = useState(false); // Add state for question mode
   
   // Title editing state
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
   const listTitleInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null); // Add ref for search input
   
   // Upload dialog state
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -264,11 +320,11 @@ export default function NotesPage() {
       return () => {};
     }
     
-    try {
-      setLoading(true);
+      try {
+        setLoading(true);
       const notesRef = collection(db, `merchants/${user.uid}/files`);
-      const notesQuery = query(notesRef, orderBy("createdAt", "desc"));
-      
+        const notesQuery = query(notesRef, orderBy("createdAt", "desc"));
+        
       // Setup real-time listener for notes collection
       const unsubscribe = onSnapshot(notesQuery, (querySnapshot) => {
         const notesData: Note[] = [];
@@ -299,82 +355,82 @@ export default function NotesPage() {
             }
           }
         
-          // Assign a type based on some criteria (for demo purposes)
-          // In a real app, this would come from the data
-          let noteType = data.type || "other";
-          const fileName = data.fileName || "";
-          const fileTypeFromData = data.fileType || fileName.split('.').pop()?.toLowerCase() || '';
+        // Assign a type based on some criteria (for demo purposes)
+        // In a real app, this would come from the data
+        let noteType = data.type || "other";
+        const fileName = data.fileName || "";
+        const fileTypeFromData = data.fileType || fileName.split('.').pop()?.toLowerCase() || '';
 
-          if (!data.type) { // Only override if type isn't explicitly set
-            if (fileTypeFromData === 'pdf') {
-              noteType = fileName.toLowerCase().includes('invoice') ? "invoice" : "pdf";
-            } else if (['jpg', 'jpeg', 'png', 'gif'].includes(fileTypeFromData)) {
-              noteType = "image";
-            } else if (['doc', 'docx', 'txt', 'md'].includes(fileTypeFromData)) {
-              noteType = "note";
-            } else if (fileName) { // If there is a filename but type is unknown
-               noteType = "other"; // or a more generic 'file' type
-              }
+        if (!data.type) { // Only override if type isn't explicitly set
+          if (fileTypeFromData === 'pdf') {
+            noteType = fileName.toLowerCase().includes('invoice') ? "invoice" : "pdf";
+          } else if (['jpg', 'jpeg', 'png', 'gif'].includes(fileTypeFromData)) {
+            noteType = "image";
+          } else if (['doc', 'docx', 'txt', 'md'].includes(fileTypeFromData)) {
+            noteType = "note";
+          } else if (fileName) { // If there is a filename but type is unknown
+             noteType = "other"; // or a more generic 'file' type
             }
-            
-            const note: Note = {
-              id: doc.id,
-              title: data.title || "Untitled",
-              summary: data.summary || "",
-              rawText: data.rawText || "",
-              tags: data.tags || [],
-              areaId: data.areaId || "",
-              areaTitle: data.areaTitle || "Uncategorized",
-              categoryId: data.categoryId || "",
-              categoryTitle: data.categoryTitle || "General",
-              createdAt,
-              reminderTime,
-              reminderSent: data.reminderSent || false,
-              type: noteType as Note['type'],
-              fileUrl: data.fileUrl || "",
-              fileType: fileTypeFromData,
-              fileName: fileName,
-              originalFileName: data.originalFileName || "",
-              fileId: data.fileId || "",
-              contentType: data.contentType || "",
-              inKnowledgeBase: data.inKnowledgeBase === true,
-              // Set pending status for documents with files that don't yet have inKnowledgeBase=true
-              // Documents older than 10 minutes won't show the spinner
-              pendingKnowledgeBase: !data.inKnowledgeBase && !!fileName && 
+          }
+          
+          const note: Note = {
+            id: doc.id,
+            title: data.title || "Untitled",
+            summary: data.summary || "",
+            rawText: data.rawText || "",
+            tags: data.tags || [],
+            areaId: data.areaId || "",
+            areaTitle: data.areaTitle || "Uncategorized",
+            categoryId: data.categoryId || "",
+            categoryTitle: data.categoryTitle || "General",
+            createdAt,
+            reminderTime,
+            reminderSent: data.reminderSent || false,
+            type: noteType as Note['type'],
+            fileUrl: data.fileUrl || "",
+            fileType: fileTypeFromData,
+            fileName: fileName,
+            originalFileName: data.originalFileName || "",
+            fileId: data.fileId || "",
+            contentType: data.contentType || "",
+            inKnowledgeBase: data.inKnowledgeBase === true,
+            // Set pending status for documents with files that don't yet have inKnowledgeBase=true
+            // Documents older than 10 minutes won't show the spinner
+            pendingKnowledgeBase: !data.inKnowledgeBase && !!fileName && 
                 createdAt && ((new Date().getTime() - createdAt.getTime()) < 10 * 60 * 1000),
               origin: data.origin || "" // Capture the origin field
-            };
-            
-            if (fileName) {
-              fileNames.push(fileName);
-            }
-            
-            notesData.push(note);
-            
-            // Collect unique areas
-            if (data.areaId && data.areaTitle) {
-              areasMap.set(data.areaId, data.areaTitle);
-            }
-          });
+          };
           
-          // Convert areas map to array
-          const areasArray = Array.from(areasMap).map(([id, title]) => ({ id, title }));
+          if (fileName) {
+            fileNames.push(fileName);
+          }
           
-          setNotes(notesData);
-          setAreas(areasArray);
-          setLoading(false);
+          notesData.push(note);
+          
+          // Collect unique areas
+          if (data.areaId && data.areaTitle) {
+            areasMap.set(data.areaId, data.areaTitle);
+          }
+        });
         
-          // Set the first note as selected by default if available
-          if (notesData.length > 0 && !selectedNote) {
-            setSelectedNote(notesData[0]);
-          } else if (notesData.length === 0) {
-            setSelectedNote(null);
-          }
-          
-          // Check knowledge base status for all notes with filenames
-          if (notesData.length > 0 && user && user.uid) {
-            checkKnowledgeBaseStatus(notesData, user.uid);
-          }
+        // Convert areas map to array
+        const areasArray = Array.from(areasMap).map(([id, title]) => ({ id, title }));
+        
+        setNotes(notesData);
+        setAreas(areasArray);
+          setLoading(false);
+      
+      // Set the first note as selected by default if available
+      if (notesData.length > 0 && !selectedNote) {
+        setSelectedNote(notesData[0]);
+      } else if (notesData.length === 0) {
+        setSelectedNote(null);
+      }
+      
+      // Check knowledge base status for all notes with filenames
+      if (notesData.length > 0 && user && user.uid) {
+        checkKnowledgeBaseStatus(notesData, user.uid);
+      }
         }, (error) => {
           console.error("Error listening to notes collection:", error);
           toast({
@@ -389,11 +445,11 @@ export default function NotesPage() {
         return unsubscribe;
       } catch (error) {
         console.error("Error setting up notes listener:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load notes. Please try again.",
-          variant: "destructive"
-        });
+      toast({
+        title: "Error",
+        description: "Failed to load notes. Please try again.",
+        variant: "destructive"
+      });
         setLoading(false);
         return () => {}; // Return empty function if setup fails
       }
@@ -596,6 +652,15 @@ export default function NotesPage() {
     };
   }, [selectedNote, currentPdfUrl]);
 
+  // Add this state below the other PDF-related states
+  const [iframeError, setIframeError] = useState(false);
+  
+  // Add this effect at the top level of the component
+  useEffect(() => {
+    // Reset iframe error state when changing notes
+    setIframeError(false);
+  }, [selectedNote]);
+
   // Now update the renderFileViewer function without the useEffect inside it
   const renderFileViewer = () => {
     if (!selectedNote?.fileUrl) return null;
@@ -618,18 +683,13 @@ export default function NotesPage() {
             </div>
           ) : (
             <div className="pdf-container w-full h-full min-h-[500px] relative">
-              {/* Try iframe first as it handles CORS better in many cases */}
+              {!iframeError ? (
               <iframe 
                 src={fileUrl} 
                 className="w-full h-full rounded-md"
-                style={{ display: 'block' }}
-                onError={(e) => {
-                  // If iframe fails, the fallback object tag will be shown
-                  (e.target as HTMLIFrameElement).style.display = 'none';
-                }}
-              />
-              
-              {/* Fallback to object tag which sometimes works better */}
+                  onError={() => setIframeError(true)}
+                />
+              ) : (
               <object 
                 data={fileUrl} 
                 type="application/pdf" 
@@ -649,7 +709,7 @@ export default function NotesPage() {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="gap-2"
+                        className="gap-2 rounded-md"
                       onClick={handleDownload}
                     >
                       <Download className="h-4 w-4" />
@@ -658,7 +718,7 @@ export default function NotesPage() {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="gap-2"
+                        className="gap-2 rounded-md"
                       onClick={() => window.open(fileUrl, '_blank')}
                     >
                       <Eye className="h-4 w-4" />
@@ -673,6 +733,7 @@ export default function NotesPage() {
                   </div>
                 </div>
               </object>
+              )}
             </div>
           )}
         </div>
@@ -1328,6 +1389,195 @@ export default function NotesPage() {
     }
   };
 
+  // Function to call the knowledgeChat Firebase function directly without updating semanticSearchQuery
+  const callKnowledgeChatFunctionDirect = async (query: string) => {
+    if (!query.trim() || !user?.uid) return;
+    
+    try {
+      setIsLoadingKnowledgeChat(true);
+      setShowKnowledgeChatResponse(true);
+      setIsKnowledgeResponseVisible(false); // Reset visibility for fade-in effect
+      
+      // Add to recent searches
+      setRecentSearches(prev => {
+        const newSearches = [query, ...prev.filter(s => s !== query)].slice(0, 5);
+        localStorage.setItem('recentSearches', JSON.stringify(newSearches));
+        return newSearches;
+      });
+      
+      // Log request details for debugging
+      console.log('🔍 Knowledge Base Request:', {
+        url: 'https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/knowledgeBase',
+        userId: user.uid,
+        prompt: query
+      });
+      
+      // Make API call directly to knowledgeBase function - same approach as tap-agent-sheet.tsx
+      const response = await fetch(
+        'https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/knowledgeBase', 
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            merchantId: user.uid,
+            prompt: query
+          }),
+        }
+      );
+      
+      console.log('📥 Response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`Error ${response.status}: ${errorText || response.statusText}`);
+      }
+      
+      // Clone the response so we can log it and still use it
+      const clonedResponse = response.clone();
+      const responseText = await clonedResponse.text();
+      console.log('📥 Response body:', responseText);
+      
+      // Parse the original response
+      try {
+        const data = JSON.parse(responseText);
+        console.log('✅ Parsed response data:', data);
+        
+        // Check for multiple possible response formats like in tap-agent-sheet.tsx
+        if (data?.answer) {
+          // Make sure we have a sources array even if it doesn't exist in the response
+          setKnowledgeChatResponse({
+            ...data,
+            sources: data.sources || [],
+            metadata: data.metadata || { 
+              contextCount: 0, 
+              query: query 
+            }
+          });
+          
+          toast({
+            title: "Vault Search Complete",
+            description: "Your vault search has been processed successfully",
+          variant: "default"
+        });
+        } else if (data?.success && data?.summary) {
+          setKnowledgeChatResponse({ 
+            answer: data.summary,
+            sources: [],
+            metadata: { contextCount: 0, query: query }
+          });
+          
+          toast({
+            title: "Vault Search Complete",
+            description: "Your vault search has been processed successfully",
+            variant: "default"
+          });
+        } else if (data?.success && data?.answer) {
+          setKnowledgeChatResponse({ 
+            ...data,
+            answer: data.answer,
+            sources: data.sources || [],
+            metadata: data.metadata || { contextCount: 0, query: query }
+          });
+          
+          toast({
+            title: "Vault Search Complete",
+            description: "Your vault search has been processed successfully",
+            variant: "default"
+          });
+        } else if (data?.result?.summary) {
+          setKnowledgeChatResponse({ 
+            answer: data.result.summary,
+            sources: [],
+            metadata: { contextCount: 0, query: query } 
+          });
+          
+          toast({
+            title: "Vault Search Complete",
+            description: "Your vault search has been processed successfully",
+            variant: "default"
+          });
+        } else if (data?.summary) {
+          setKnowledgeChatResponse({ 
+            answer: data.summary,
+            sources: [],
+            metadata: { contextCount: 0, query: query }
+          });
+          
+          toast({
+            title: "Vault Search Complete",
+            description: "Your vault search has been processed successfully",
+            variant: "default"
+          });
+        } else if (data?.error) {
+          toast({
+            title: "Vault Search Error",
+            description: data.error,
+            variant: "destructive"
+          });
+          throw new Error(data.error);
+        } else {
+          // Fallback for any other format
+          console.error("Unrecognized response format:", data);
+          setKnowledgeChatResponse({ 
+            answer: `I couldn't process the documents properly. The response format was unexpected.\n\nPlease try a different search query or contact support if this issue persists.`,
+            sources: [],
+            metadata: { contextCount: 0, query: query }
+          });
+          
+          toast({
+            title: "Unexpected Response Format",
+            description: "The response format wasn't recognized, but I've tried to display what I found",
+            variant: "destructive"
+          });
+        }
+        
+      } catch (parseError) {
+        console.error('❌ JSON parse error:', parseError);
+        console.error('❌ Failed to parse response text:', responseText);
+        setKnowledgeChatResponse({ 
+          answer: "I encountered an error while processing your search results. The response couldn't be parsed properly.",
+          sources: [],
+          metadata: { contextCount: 0, query: query }
+        });
+        
+        toast({
+          title: "Error Processing Response",
+          description: "Could not process the vault search response",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('❌ Knowledge chat error:', error);
+      if (error instanceof Error) {
+        console.error('❌ Error details:', {
+          message: error.message,
+          stack: error.stack
+        });
+      }
+      
+      setKnowledgeChatResponse({ 
+        answer: `I encountered an error while searching your vault: ${error instanceof Error ? error.message : "Unknown error"}.\n\nPlease try again with a different search query.`,
+        sources: [],
+        metadata: { contextCount: 0, query: query }
+      });
+      
+      toast({
+        title: "Vault Search Failed",
+        description: error instanceof Error ? error.message : "Failed to search documents. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingKnowledgeChat(false);
+    }
+  };
+
   // Load recent searches from localStorage on component mount
   useEffect(() => {
     const savedSearches = localStorage.getItem('recentSearches');
@@ -1631,10 +1881,217 @@ export default function NotesPage() {
     }
   };
   
+  // Add state for Gmail sync setting
+  const [gmailSyncEnabled, setGmailSyncEnabled] = useState(false);
+  const [updatingGmailSync, setUpdatingGmailSync] = useState(false);
+  
+  // Add new effect to handle the Gmail sync toggle functionality
+  useEffect(() => {
+    const fetchGmailSyncSetting = async () => {
+      if (!user || !user.uid) return;
+      
+      try {
+        const agentDocRef = doc(db, `agents/${user.uid}`);
+        const agentDocSnap = await getDoc(agentDocRef);
+        
+        if (agentDocSnap.exists()) {
+          const data = agentDocSnap.data();
+          setGmailSyncEnabled(data.gmailfilesync === true);
+        }
+      } catch (error) {
+        console.error("Error fetching Gmail sync setting:", error);
+      }
+    };
+    
+    fetchGmailSyncSetting();
+  }, [user]);
+  
+  // Add function to toggle Gmail file sync
+  const toggleGmailFileSync = async () => {
+    if (!user || !user.uid || updatingGmailSync) return;
+    
+    try {
+      setUpdatingGmailSync(true);
+      
+      // Reference to the agent document
+      const agentDocRef = doc(db, `agents/${user.uid}`);
+      
+      // Get current state
+      const newState = !gmailSyncEnabled;
+      
+      // Artificially delay for 3.5 seconds to show the spinner
+      await new Promise(resolve => setTimeout(resolve, 3500));
+      
+      // Update Firestore
+      await setDoc(agentDocRef, {
+        gmailfilesync: newState
+      }, { merge: true });
+      
+      // Update local state
+      setGmailSyncEnabled(newState);
+      
+      toast({
+        title: newState ? "Gmail Sync Activated" : "Gmail Sync Deactivated",
+        description: newState 
+          ? "Your Gmail attachments will now be automatically synced to your vault" 
+          : "Gmail attachment sync has been turned off",
+        variant: "default"
+      });
+      
+    } catch (error) {
+      console.error("Error toggling Gmail sync:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update Gmail sync setting. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setUpdatingGmailSync(false);
+    }
+  };
+  
+  // Add state for the document editor
+  const [showDocumentEditor, setShowDocumentEditor] = useState(false);
+  const [documentTitle, setDocumentTitle] = useState("Untitled Document");
+  const [isEditingDocumentTitle, setIsEditingDocumentTitle] = useState(false);
+  const documentTitleRef = useRef<HTMLInputElement>(null);
+  
+  // Add state to track if we're creating a new document
+  const [unsavedChanges, setUnsavedChanges] = useState(false);
+  
+  // Function to handle creating a new document
+  const handleNewDocument = () => {
+    setSelectedNote(null);
+    setShowKnowledgeChatResponse(false);
+    setShowDocumentEditor(true);
+    setDocumentTitle("Untitled Document");
+    setUnsavedChanges(false);
+    
+    // Initialize with a paragraph after rendering
+    setTimeout(() => {
+      const editorElement = document.getElementById('document-editor-content');
+      if (editorElement && !editorElement.innerHTML.trim()) {
+        editorElement.innerHTML = '<p><br></p>';
+      }
+    }, 100);
+  };
+  
+  // Function to save the document to Firestore
+  const saveDocument = async (content: string) => {
+    if (!user || !user.uid) {
+      toast({
+        title: "Authentication Error",
+        description: "You must be logged in to save documents.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    try {
+      const notesRef = collection(db, `merchants/${user.uid}/files`);
+      
+      // Get the content from the contentEditable div
+      const editorElement = document.getElementById('document-editor-content');
+      const documentContent = editorElement ? editorElement.innerHTML : '';
+      
+      // Extract plain text for search
+      const plainText = editorElement ? editorElement.innerText : '';
+      
+      // Create a new note document
+      const noteData = {
+        title: documentTitle,
+        summary: plainText.slice(0, 150) + (plainText.length > 150 ? '...' : ''),
+        rawText: plainText,
+        tags: [],
+        areaId: "documents",
+        areaTitle: "Documents",
+        categoryId: "notes",
+        categoryTitle: "Notes",
+        createdAt: serverTimestamp(),
+        type: "note",
+        content: documentContent, // Store the HTML content
+      };
+      
+      await addDoc(notesRef, noteData);
+      
+      toast({
+        title: "Document Saved",
+        description: "Your document has been saved successfully.",
+      });
+      
+      // Refresh the document list
+      fetchNotes();
+      
+      // Clear unsaved changes flag
+      setUnsavedChanges(false);
+      
+      // Close the editor
+      setShowDocumentEditor(false);
+      
+    } catch (error) {
+      console.error("Error saving document:", error);
+      toast({
+        title: "Save Error",
+        description: "Failed to save your document. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Function for formatting commands
+  const execFormatCommand = (command: string, value: string | undefined = undefined) => {
+    document.execCommand(command, false, value);
+    const editorElement = document.getElementById('document-editor-content');
+    if (editorElement) {
+      editorElement.focus();
+      setUnsavedChanges(true);
+    }
+  };
+  
+  // Apply heading formats properly
+  const applyHeadingFormat = (level: number) => {
+    // First clear any existing format
+    execFormatCommand('formatBlock', 'div');
+    
+    // Then apply the heading
+    const headingTag = level === 0 ? 'p' : `h${level}`;
+    execFormatCommand('formatBlock', `<${headingTag}>`);
+    
+    // Focus back on the editor
+    const editorElement = document.getElementById('document-editor-content');
+    if (editorElement) {
+      editorElement.focus();
+    }
+  };
+  
+  // Apply font size
+  const applyFontSize = (size: string) => {
+    execFormatCommand('fontSize', size);
+    
+    // Focus back on the editor
+    const editorElement = document.getElementById('document-editor-content');
+    if (editorElement) {
+      editorElement.focus();
+    }
+  };
+  
+  // Apply font family
+  const applyFontFamily = (fontFamily: string) => {
+    // Apply to current selection
+    document.execCommand('fontName', false, fontFamily);
+    
+    // Focus back on the editor
+    const editorElement = document.getElementById('document-editor-content');
+    if (editorElement) {
+      editorElement.focus();
+      setUnsavedChanges(true);
+    }
+  };
+  
   return (
     <DashboardLayout>
       {/* Add custom animation styles */}
-      <style dangerouslySetInnerHTML={{ __html: customAnimationStyles }} />
+      <style dangerouslySetInnerHTML={{ __html: customAnimationStyles + editorStyles }} />
       <div className="flex flex-col h-full">
         {/* Custom header without margin */}
         <div className="px-6 py-4">
@@ -1647,7 +2104,19 @@ export default function NotesPage() {
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="outline" className="h-8 gap-2 rounded-md bg-white hover:bg-gray-50 border-gray-200">
+                    <Button 
+                      variant="outline"
+                      className="h-8 gap-2 rounded-md bg-white hover:bg-gray-50 border-gray-200"
+                      onClick={toggleGmailFileSync}
+                      disabled={updatingGmailSync}
+                    >
+                      {updatingGmailSync ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span className="text-sm">{gmailSyncEnabled ? "Disconnecting..." : "Connecting..."}</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
                       <Image 
                         src="/gmail.png" 
                         alt="Gmail" 
@@ -1655,21 +2124,36 @@ export default function NotesPage() {
                         height={12} 
                         className="flex-shrink-0" 
                       />
-                      <span className="text-sm">Auto Sync Gmail</span>
+                          <span className="text-sm">{gmailSyncEnabled ? "File Syncing Connected" : "Auto Sync Gmail"}</span>
+                          {gmailSyncEnabled && <CheckIcon className="h-3.5 w-3.5 text-green-400 ml-1" />}
+                        </div>
+                      )}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs p-4 bg-white shadow-lg rounded-md border border-gray-200">
                     <div className="space-y-2">
                       <h4 className="font-semibold text-sm text-black">Gmail Auto Sync</h4>
                       <p className="text-xs text-black">
-                        Automatically extract all files from your Gmail account and upload them directly to your Vault for easy reference and searching.
+                        {gmailSyncEnabled 
+                          ? "Currently active: Automatically extracting all files from your Gmail account and uploading them directly to your Vault."
+                          : "Automatically extract all files from your Gmail account and upload them directly to your Vault for easy reference and searching."}
                       </p>
+                      {gmailSyncEnabled && (
+                        <div className="bg-blue-50 p-2 rounded-md text-xs text-blue-700 mt-2">
+                          <CheckIcon className="h-3 w-3 inline-block mr-1" />
+                          Gmail sync is currently active
+                        </div>
+                      )}
                     </div>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
               
-              <Button variant="outline" className="h-8 gap-2 rounded-md">
+              <Button 
+                variant="outline" 
+                className="h-8 gap-2 rounded-md"
+                onClick={handleNewDocument}
+              >
                 <Plus className="h-4 w-4" />
                 New Document
               </Button>
@@ -1688,47 +2172,134 @@ export default function NotesPage() {
           {/* Left Column - Notes List */}
           <div className="lg:col-span-1 border-r flex flex-col h-full overflow-hidden">
             <div className="p-4 border-b flex-shrink-0">
-              {/* Replace unified search with two separate search boxes */}
-              <div className="flex gap-2 mb-4">
-                {/* Filter search box */}
+              {/* Replace unified search with dropdown search options */}
+              <div className="relative mb-4">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
                     id="filter-search-input"
-                    placeholder="Search your Vault..."
-                    className="pl-10 h-9 rounded-md w-full"
+                    ref={searchInputRef}
+                    placeholder={isQuestionMode ? "Ask me anything" : "Search your Vault..."}
+                    className="pl-10 h-9 rounded-md w-full pr-10"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        setShowSearchResults(false);
+                        if (isQuestionMode && searchQuery.trim() !== '') {
+                          // In question mode, run knowledge chat directly
+                          setSelectedNote(null);
+                          // Instead of setting semanticSearchQuery which would trigger the secondary input
+                          // Use the searchQuery directly with the knowledge chat function
+                          callKnowledgeChatFunctionDirect(searchQuery);
+                        }
+                      }
+                    }}
                   />
-                </div>
-
-                {/* AI Search Button */}
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
+                    {isQuestionMode ? (
+                      <Badge 
+                        className="h-5 text-xs bg-primary/10 text-primary border-primary/20 cursor-pointer hover:bg-primary/20 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowSearchResults(true);
+                          // Keep focus on the input
+                          if (searchInputRef.current) {
+                            searchInputRef.current.focus();
+                          }
+                        }}
+                      >
+                        Question Mode
+                      </Badge>
+                    ) : (
                       <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-9 w-9 rounded-md bg-white hover:bg-gray-50 border-gray-200"
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 px-2 text-xs rounded-md hover:bg-muted"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowSearchResults(true);
+                          // Keep focus on the input
+                          if (searchInputRef.current) {
+                            searchInputRef.current.focus();
+                          }
+                        }}
+                      >
+                        Filter Mode
+                      </Button>
+                    )}
+                    <ChevronDown 
+                      className="h-4 w-4 text-muted-foreground cursor-pointer" 
                         onClick={() => {
                           setShowSearchResults(true);
-                          // Focus a hidden input for keyboard entry
-                          const hiddenInput = document.getElementById('semantic-search-hidden-input');
-                          if (hiddenInput) {
-                            (hiddenInput as HTMLInputElement).focus();
+                        // Keep focus on the input
+                        if (searchInputRef.current) {
+                          searchInputRef.current.focus();
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Search Options Dropdown */}
+                {showSearchResults && (
+                  <div className="absolute mt-1 w-full bg-white rounded-md border border-gray-200 shadow-lg z-10 semantic-search-container">
+                    <div className="p-2">
+                      <div 
+                        className="flex items-center gap-2 p-2 hover:bg-muted cursor-pointer rounded-md"
+                        onClick={() => {
+                          setShowSearchResults(false);
+                          // Keep current search mode as filter
+                          setIsQuestionMode(false);
+                          setSearchMode("filter");
+                          // Focus back on the input after selection
+                          setTimeout(() => {
+                            if (searchInputRef.current) {
+                              searchInputRef.current.focus();
+                            }
+                          }, 10);
+                        }}
+                      >
+                        <Search className="h-4 w-4 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium">Search files</p>
+                          <p className="text-xs text-muted-foreground">Find documents by keyword</p>
+                        </div>
+                      </div>
+                      
+                      <div 
+                        className="flex items-center gap-2 p-2 hover:bg-muted cursor-pointer rounded-md mt-1"
+                        onClick={() => {
+                          setShowSearchResults(false);
+                          // Set question mode
+                          setIsQuestionMode(true);
+                          
+                          // If there's a search query, immediately trigger the knowledge base search directly
+                          if (searchQuery.trim() !== '') {
+                            setSelectedNote(null);
+                            callKnowledgeChatFunctionDirect(searchQuery);
+                          } else {
+                            // Focus back on the input after selection to continue typing
+                            setTimeout(() => {
+                              if (searchInputRef.current) {
+                                searchInputRef.current.focus();
+                              }
+                            }, 10);
                           }
                         }}
                       >
                         <AILogo />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent className="p-2 bg-white rounded-md border border-gray-200">
-                      <p className="text-xs text-black">Ask a question about your documents</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                
-                {/* Hidden input to capture keyboard entry when AI button clicked */}
+                        <div>
+                          <p className="text-sm font-medium">Ask a question</p>
+                          <p className="text-xs text-muted-foreground">Get answers from your documents</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Hidden input to capture keyboard entry */}
                 <input
                   id="semantic-search-hidden-input"
                   type="text"
@@ -1742,10 +2313,9 @@ export default function NotesPage() {
                     }
                   }}
                 />
-              </div>
 
               {/* AI Search Dialog instead of dropdown */}
-              {showSearchResults && (
+              {semanticSearchQuery.length > 0 && (
                 <div className="absolute mt-1 right-4 w-full max-w-md bg-white rounded-md border border-gray-200 shadow-lg z-10 semantic-search-container">
                   <div className="p-3 border-b flex items-center gap-2">
                     <AILogo />
@@ -1761,6 +2331,7 @@ export default function NotesPage() {
                           setSelectedNote(null);
                         } else if (e.key === 'Escape') {
                           setShowSearchResults(false);
+                          setSemanticSearchQuery("");
                         }
                       }}
                     />
@@ -1768,7 +2339,10 @@ export default function NotesPage() {
                       size="icon" 
                       variant="ghost" 
                       className="h-8 w-8 rounded-md" 
-                      onClick={() => setShowSearchResults(false)}
+                      onClick={() => {
+                        setShowSearchResults(false);
+                        setSemanticSearchQuery("");
+                      }}
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -1781,7 +2355,7 @@ export default function NotesPage() {
                       </div>
                       {recentSearches.map((search, index) => (
                         <div
-                          key={index}
+                          key={`recent-search-${index}`}
                           className="px-3 py-1.5 hover:bg-muted cursor-pointer flex items-center gap-2"
                           onClick={() => {
                             setSemanticSearchQuery(search);
@@ -1845,8 +2419,8 @@ export default function NotesPage() {
                         </>
                       ) : (
                         <>
-                          <Search className="h-3.5 w-3.5" />
-                          <span>Search Vault</span>
+                      <Search className="h-3.5 w-3.5" />
+                      <span>Search Vault</span>
                         </>
                       )}
                     </Button>
@@ -1921,8 +2495,8 @@ export default function NotesPage() {
                     key={note.id}
                       className={cn(
                         "p-4 cursor-pointer hover:bg-muted/50 transition-colors",
-                        selectedNote?.id === note.id && "bg-muted",
-                        note.inKnowledgeBase && "border-l-4 border-l-primary bg-gradient-to-r from-primary/5 to-transparent" // Enhanced highlight for KB docs
+                        selectedNote?.id === note.id && "bg-muted"
+                        // Removed highlighting for knowledge base files
                       )}
                       onClick={() => {
                         // Stop editing title if selecting a different note
@@ -2004,9 +2578,175 @@ export default function NotesPage() {
                         </div>
                       </div>
                       
-          {/* Right Column - Note Detail */}
+          {/* Right Column - Note Detail or Document Editor */}
           <div className="lg:col-span-2 flex flex-col min-h-0 p-0">
-            {selectedNote ? (
+            {showDocumentEditor ? (
+              <div className="flex flex-col h-full">
+                <div className="px-6 py-4 border-b flex items-center justify-between flex-shrink-0 bg-white">
+                  <div className="flex-1">
+                    {isEditingDocumentTitle ? (
+                      <input
+                        ref={documentTitleRef}
+                        type="text"
+                        value={documentTitle}
+                        onChange={(e) => setDocumentTitle(e.target.value)}
+                        onBlur={() => setIsEditingDocumentTitle(false)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            setIsEditingDocumentTitle(false);
+                          }
+                        }}
+                        className="text-lg font-medium border-none outline-none focus:ring-1 focus:ring-blue-200 rounded-md px-1 w-full"
+                        autoFocus
+                      />
+                    ) : (
+                      <h2 
+                        className="text-lg font-medium cursor-text" 
+                        onClick={() => {
+                          setIsEditingDocumentTitle(true);
+                          setTimeout(() => documentTitleRef.current?.focus(), 0);
+                        }}
+                      >
+                        {documentTitle}
+                      </h2>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8 rounded-md"
+                      onClick={() => setShowDocumentEditor(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      className="h-8 rounded-md"
+                      onClick={() => saveDocument('')}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </div>
+                
+                {/* Toolbar */}
+                <div className="border-b px-4 py-2 flex flex-wrap items-center gap-1 bg-gray-50">
+                  {/* Text formatting */}
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 rounded-md" 
+                    onClick={() => execFormatCommand('bold')}
+                    title="Bold"
+                  >
+                    <Bold className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 rounded-md" 
+                    onClick={() => execFormatCommand('italic')}
+                    title="Italic"
+                  >
+                    <Italic className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 rounded-md" 
+                    onClick={() => execFormatCommand('underline')}
+                    title="Underline"
+                  >
+                    <Underline className="h-4 w-4" />
+                  </Button>
+                  
+                  <Separator orientation="vertical" className="mx-1 h-6" />
+                  
+                  {/* Font Family Dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 px-2 gap-1 rounded-md">
+                        <Text className="h-4 w-4" />
+                        <span className="text-xs">Font</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuLabel className="text-xs">Font Family</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => applyFontFamily("Arial, sans-serif")}>
+                        <span style={{ fontFamily: "Arial, sans-serif" }}>Arial</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => applyFontFamily("Helvetica, sans-serif")}>
+                        <span style={{ fontFamily: "Helvetica, sans-serif" }}>Helvetica</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => applyFontFamily("Georgia, serif")}>
+                        <span style={{ fontFamily: "Georgia, serif" }}>Georgia</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => applyFontFamily("Times New Roman, serif")}>
+                        <span style={{ fontFamily: "Times New Roman, serif" }}>Times New Roman</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => applyFontFamily("Courier New, monospace")}>
+                        <span style={{ fontFamily: "Courier New, monospace" }}>Courier New</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => applyFontFamily("Verdana, sans-serif")}>
+                        <span style={{ fontFamily: "Verdana, sans-serif" }}>Verdana</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  
+                  {/* Font Size Dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 px-2 gap-1 rounded-md">
+                        <Type className="h-4 w-4" />
+                        <span className="text-xs">Size</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuLabel className="text-xs">Font Size</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => applyFontSize("1")}>
+                        <span className="text-xs">Small</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => applyFontSize("3")}>
+                        <span className="text-sm">Normal</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => applyFontSize("4")}>
+                        <span className="text-base">Large</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => applyFontSize("5")}>
+                        <span className="text-lg">Extra Large</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => applyFontSize("7")}>
+                        <span className="text-xl">Huge</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                
+                {/* Editor Content */}
+                <div className="flex-grow overflow-y-auto p-0">
+                  <div 
+                    id="document-editor-content"
+                    className="h-full outline-none"
+                    contentEditable={true}
+                    onInput={() => setUnsavedChanges(true)}
+                    suppressContentEditableWarning={true}
+                    onClick={(e) => {
+                      const target = e.target as HTMLElement;
+                      if (target.id === 'document-editor-content') {
+                        // If clicking on the empty editor, make sure it has a paragraph to start
+                        if (!target.innerHTML.trim()) {
+                          target.innerHTML = '<p><br></p>';
+                        }
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            ) : selectedNote ? (
+              // Existing note display
               <div className="flex flex-col h-full">
                 <div className="px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
                   <div>
@@ -2043,32 +2783,51 @@ export default function NotesPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <ConnectionButton
-                      initialText="Add to CS agent"
-                      connectedText="Connected to CS agent"
-                      isConnected={csAgentSelected}
-                      onToggle={(connected) => {
-                        setCsAgentSelected(connected);
+                    {/* Combined agent dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-8 gap-1 rounded-md">
+                          <span>Add to </span>
+                          <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-medium">
+                            Agent
+                          </span>
+                          {(csAgentSelected || rewardAgentSelected) && (
+                            <Badge className="ml-1 h-5 px-1.5 text-xs bg-primary/10 text-primary border-primary/20 rounded-md">
+                              {csAgentSelected && rewardAgentSelected ? '2' : '1'}
+                            </Badge>
+                          )}
+                          <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-70" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56">
+                        <DropdownMenuLabel className="text-xs">Connect to agents</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="flex items-center justify-between cursor-pointer"
+                          onClick={() => {
+                            setCsAgentSelected(!csAgentSelected);
                         setAnimatingCs(true);
                         setTimeout(() => setAnimatingCs(false), 500);
                       }}
-                      type="cs"
-                    />
-                    
-                    <ConnectionButton
-                      initialText="Add to reward agent"
-                      connectedText="Connected to reward agent"
-                      isConnected={rewardAgentSelected}
-                      onToggle={(connected) => {
-                        setRewardAgentSelected(connected);
+                        >
+                          <span>Customer Service Agent</span>
+                          {csAgentSelected && <Check className="h-4 w-4" />}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="flex items-center justify-between cursor-pointer"
+                          onClick={() => {
+                            setRewardAgentSelected(!rewardAgentSelected);
                         setAnimatingReward(true);
                         setTimeout(() => setAnimatingReward(false), 500);
                       }}
-                      type="reward"
-                    />
+                        >
+                          <span>Reward Agent</span>
+                          {rewardAgentSelected && <Check className="h-4 w-4" />}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     
                     {selectedNote.fileUrl && (
-                      <>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm" className="h-8 gap-1 rounded-md">
@@ -2117,6 +2876,7 @@ export default function NotesPage() {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                    )}
                         
                         <Button 
                           variant="outline"
@@ -2127,14 +2887,12 @@ export default function NotesPage() {
                           <X className="h-4 w-4" />
                           <span>Delete</span>
                         </Button>
-                      </>
-                    )}
                   </div>
                 </div>
                 
                 {/* Add Summary section right after the document header, before Similar Documents */}
                 <div className="border-b bg-gradient-to-r from-blue-50 to-transparent">
-                  <Collapsible defaultOpen={true} className="w-full">
+                  <Collapsible defaultOpen={false} className="w-full">
                     <div className="px-6 py-3 flex items-center justify-between cursor-pointer">
                       <CollapsibleTrigger className="flex items-center gap-2 w-full justify-between hover:opacity-80 transition-opacity">
                         <div className="flex items-center gap-2">
@@ -2159,14 +2917,14 @@ export default function NotesPage() {
                           <div className="p-3 bg-white rounded-md border border-gray-200 text-muted-foreground text-sm italic text-center">
                             No summary available for this document
                           </div>
-                        )}
-                      </div>
+                    )}
+                  </div>
                     </CollapsibleContent>
                   </Collapsible>
                 </div>
                 
                 {/* Add Similar Documents section */}
-                {selectedNote && (
+                {selectedNote && (loadingRelated || relatedNotes.length > 0) && (
                   <div className="border-b">
                     <div className="px-6 py-2 flex items-center justify-between">
                       <h3 className="text-xs font-medium flex items-center gap-1.5">
@@ -2193,26 +2951,26 @@ export default function NotesPage() {
                             <Skeleton key={i} className="h-7 w-40 flex-shrink-0" />
                           ))}
                         </div>
-                      ) : relatedNotes.length > 0 ? (
+                      ) : relatedNotes.length > 0 && (
                         <div className="flex flex-wrap gap-2 py-1">
                           {relatedNotes.map(note => (
                             <TooltipProvider key={note.id}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <div 
+                            <div 
                                     className="h-7 flex items-center bg-white border border-gray-100 rounded-full px-2 py-1 hover:border-blue-200 hover:bg-blue-50/30 cursor-pointer transition-colors shadow-sm group"
-                                    onClick={() => {
-                                      const fullNote = notes.find(n => n.id === note.id);
-                                      if (fullNote) {
-                                        setSelectedNote(fullNote);
-                                      }
-                                    }}
-                                  >
-                                    {note.type === 'pdf' ? (
+                              onClick={() => {
+                                const fullNote = notes.find(n => n.id === note.id);
+                                if (fullNote) {
+                                  setSelectedNote(fullNote);
+                                }
+                              }}
+                            >
+                                {note.type === 'pdf' ? (
                                       <FileIcon className="h-3 w-3 text-red-500 flex-shrink-0 mr-1.5" />
-                                    ) : note.type === 'image' ? (
+                                ) : note.type === 'image' ? (
                                       <ImageIcon className="h-3 w-3 text-blue-500 flex-shrink-0 mr-1.5" />
-                                    ) : note.type === 'invoice' ? (
+                                ) : note.type === 'invoice' ? (
                                       <FileText className="h-3 w-3 text-green-500 flex-shrink-0 mr-1.5" />
                                     ) : (
                                       <FileText className="h-3 w-3 text-gray-500 flex-shrink-0 mr-1.5" />
@@ -2220,10 +2978,10 @@ export default function NotesPage() {
                                     <span className="text-xs font-medium truncate min-w-[120px] max-w-[180px]">{note.title}</span>
                                     <Badge className="ml-1.5 text-[8px] py-0 h-3 px-1 rounded-md bg-blue-50 text-blue-600 border-blue-100">
                                       {Math.round(note.score * 100)}%
-                                    </Badge>
-                                    <Button 
-                                      variant="ghost" 
-                                      size="icon" 
+                                </Badge>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
                                       className="h-4 w-4 ml-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -2234,8 +2992,8 @@ export default function NotesPage() {
                                       }}
                                     >
                                       <ExternalLink className="h-2 w-2 text-gray-400" />
-                                    </Button>
-                                  </div>
+                                </Button>
+                              </div>
                                 </TooltipTrigger>
                                 <TooltipContent side="bottom" className="max-w-[280px] p-3">
                                   <div className="space-y-1.5">
@@ -2244,7 +3002,7 @@ export default function NotesPage() {
                                       <Badge className="text-[8px] py-0 h-3 px-1 rounded-md bg-primary/10 text-primary border-primary/20">
                                         {Math.round(note.score * 100)}% Match
                                       </Badge>
-                                    </div>
+                            </div>
                                     <p className="text-xs text-muted-foreground">
                                       {note.summary || "No summary available for this document"}
                                     </p>
@@ -2263,16 +3021,12 @@ export default function NotesPage() {
                                       >
                                         View Document <ArrowRight className="h-3 w-3 ml-1" />
                                       </Button>
-                                    </div>
+                        </div>
                                   </div>
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                           ))}
-                        </div>
-                      ) : (
-                        <div className="text-xs text-center text-muted-foreground py-1">
-                          No similar documents found
                         </div>
                       )}
                     </div>
@@ -2321,7 +3075,7 @@ export default function NotesPage() {
                   </Button>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto p-5">
+                <div className="flex-1 overflow-y-auto p-5 pt-0">
                   {isLoadingKnowledgeChat ? (
                     <div className="h-60 flex flex-col items-center justify-center">
                       {/* Updated loading indicator with thinking box from tap-agent-sheet */}
@@ -2331,8 +3085,8 @@ export default function NotesPage() {
                           <div className="flex items-center gap-1">
                             <h3 className="text-sm font-medium text-gray-900">Vault search in progress...</h3>
                             <div className="w-4 h-4 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
-                          </div>
                         </div>
+                      </div>
                         <div className="mt-1 flex flex-col items-start text-left py-2 pl-8">
                           <p className="text-xs animate-fade-in-out bg-gradient-to-r from-gray-400 to-gray-700 bg-clip-text text-transparent font-medium w-full text-left">
                             {getKnowledgeBaseProcessingMessage()}
@@ -2435,8 +3189,15 @@ export default function NotesPage() {
                   <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                   <h3 className="text-lg font-medium mb-2">No document selected</h3>
                   <p className="text-muted-foreground">
-                    Select a document from the list to view its contents or search to see results here
+                    Select a document from the list to view its contents or create a new document
                   </p>
+                  <Button 
+                    className="mt-4 gap-2"
+                    onClick={handleNewDocument}
+                  >
+                    <Plus className="h-4 w-4" />
+                    New Document
+                  </Button>
                 </div>
               </div>
             )}

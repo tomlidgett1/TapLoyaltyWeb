@@ -1601,7 +1601,7 @@ function CohortBadge({ cohort }: { cohort?: string }) {
   const getColor = () => {
     const lowerCohort = cohort.toLowerCase()
     if (lowerCohort.includes('loyal') || lowerCohort.includes('regular')) return 'bg-green-50 text-green-700 border-green-200'
-    if (lowerCohort.includes('new')) return 'bg-blue-50 text-blue-700 border-blue-200'
+    if (lowerCohort.includes('new')) return 'bg-gray-50 text-gray-700 border-gray-200'
     if (lowerCohort.includes('risk') || lowerCohort.includes('churn')) return 'bg-orange-50 text-orange-700 border-orange-200'
     if (lowerCohort.includes('lost') || lowerCohort.includes('inactive')) return 'bg-red-50 text-red-700 border-red-200'
     if (lowerCohort.includes('vip') || lowerCohort.includes('premium')) return 'bg-purple-50 text-purple-700 border-purple-200'
@@ -1864,7 +1864,7 @@ function AgentTab({ customer, weeklyAgentActivities, loading }: AgentTabProps) {
                   onClick={() => handleWeekChange(week.weekId)}
                   className={`whitespace-nowrap text-xs h-7 px-2.5 ${
                     activeWeekTab === week.weekId
-                      ? "bg-blue-600 hover:bg-blue-700"
+                      ? "bg-gray-700 hover:bg-gray-800"
                       : "hover:bg-gray-100"
                   }`}
                 >
@@ -1929,7 +1929,7 @@ function AgentTab({ customer, weeklyAgentActivities, loading }: AgentTabProps) {
                               <Badge className="bg-green-100 text-green-800 text-[10px] px-1.5 py-0">Redeemed</Badge>
                             )}
                           </div>
-                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-normal text-xs">
+                          <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 font-normal text-xs">
                             {reward.pointsCost} points
                           </Badge>
                         </div>
@@ -1948,7 +1948,7 @@ function AgentTab({ customer, weeklyAgentActivities, loading }: AgentTabProps) {
                           <div className="mt-1.5 text-xs">
                             <button 
                               onClick={() => toggleReasoning(rewardId)}
-                              className="flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-800 transition-colors"
+                              className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-gray-800 transition-colors"
                             >
                               {expandedReasonings[rewardId] ? (
                                 <>
@@ -1964,7 +1964,7 @@ function AgentTab({ customer, weeklyAgentActivities, loading }: AgentTabProps) {
                             </button>
                             
                             {expandedReasonings[rewardId] && (
-                              <div className="mt-1.5 pl-2 border-l-2 border-blue-100 text-gray-500 text-[11px]">
+                              <div className="mt-1.5 pl-2 border-l-2 border-gray-200 text-gray-500 text-[11px]">
                                 {reward.reasoning}
                               </div>
                             )}

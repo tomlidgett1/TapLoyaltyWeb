@@ -2,7 +2,7 @@
 
 import { SideNav } from "@/components/side-nav"
 import { usePathname } from "next/navigation"
-import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic } from "lucide-react"
+import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic, Menu, Pencil, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useState, useEffect, useRef } from "react"
@@ -25,7 +25,7 @@ import { CreateRewardSheet } from "@/components/create-reward-sheet"
 import { CreatePointsRuleSheet } from "@/components/create-points-rule-sheet"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, query, where, getDocs, Timestamp, orderBy, limit, getDoc, doc, onSnapshot } from "firebase/firestore"
+import { collection, query, where, getDocs, Timestamp, orderBy, limit, getDoc, doc, onSnapshot, addDoc, updateDoc, serverTimestamp } from "firebase/firestore"
 import {
   Tooltip,
   TooltipContent,
@@ -46,6 +46,8 @@ import { IntroductoryRewardSheet } from "@/components/introductory-reward-sheet"
 import { TapAgentSheet } from "@/components/tap-agent-sheet"
 import { getFunctions, httpsCallable } from "firebase/functions"
 import { useToast } from "@/components/ui/use-toast"
+import { Textarea } from "@/components/ui/textarea"
+import { TypeAnimation } from 'react-type-animation'
 
 // Custom scrollbar styles
 const scrollbarStyles = `
@@ -176,7 +178,48 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const audioChunksRef = useRef<Blob[]>([])
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null)
   
+  // Add state for quick note dropdown and input
+  const [quickNoteOpen, setQuickNoteOpen] = useState(false)
+  const [showQuickNoteInput, setShowQuickNoteInput] = useState(false)
+  const [quickNoteText, setQuickNoteText] = useState("")
+  const [isSavingQuickNote, setIsSavingQuickNote] = useState(false)
+  const quickNoteInputRef = useRef<HTMLTextAreaElement | null>(null)
+  const quickNoteContainerRef = useRef<HTMLDivElement | null>(null)
+  
   const { toast } = useToast()
+  
+  // Add state for mobile navigation
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  
+  // Add search placeholder rotations
+  const searchPlaceholders = [
+    "Tell me about my sales over the last 24 hours?",
+    "Create me a reward for new customers only",
+    "Analyse my top-performing products this month",
+    "How many new customers signed up yesterday?",
+    "What's my best-selling coffee this week?",
+    "Show me customer retention stats for loyalty members",
+    "Draft an email campaign for inactive customers",
+    "Compare sales to this time last month"
+  ]
+  
+  // Add state to track search box focus
+  const [isSearchFocused, setIsSearchFocused] = useState(false)
+  // Add state to track if animation should be shown (initially true)
+  const [showAnimation, setShowAnimation] = useState(true)
+  
+  // Add effect to stop animation after 60 seconds
+  useEffect(() => {
+    // Only set up timer if animation is showing
+    if (showAnimation) {
+      const timer = setTimeout(() => {
+        setShowAnimation(false);
+      }, 60000); // 60 seconds
+      
+      // Clean up timer on unmount
+      return () => clearTimeout(timer);
+    }
+  }, [showAnimation]);
   
   useEffect(() => {
     // Check if current path is onboarding
@@ -771,6 +814,131 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     }
   }, [recording]);
 
+  useEffect(() => {
+    // Focus quick note input when it appears
+    if (showQuickNoteInput && quickNoteInputRef.current) {
+      quickNoteInputRef.current.focus()
+      
+      // Set up auto-resize functionality
+      const autoResizeTextarea = () => {
+        const textarea = quickNoteInputRef.current
+        if (!textarea) return
+        
+        // Reset height to auto so it can shrink if needed
+        textarea.style.height = 'auto'
+        
+        // Set to scrollHeight to fit content, but enforce min/max height
+        const newHeight = Math.min(Math.max(80, textarea.scrollHeight), 200)
+        textarea.style.height = `${newHeight}px`
+      }
+      
+      // Initial resize
+      autoResizeTextarea()
+      
+      // Set up event listener
+      const handleInput = () => autoResizeTextarea()
+      quickNoteInputRef.current.addEventListener('input', handleInput)
+      
+      // Clean up event listener
+      return () => {
+        if (quickNoteInputRef.current) {
+          quickNoteInputRef.current.removeEventListener('input', handleInput)
+        }
+      }
+    }
+    
+    // Add click outside handler for quick note input
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        quickNoteContainerRef.current && 
+        !quickNoteContainerRef.current.contains(event.target as Node) &&
+        showQuickNoteInput
+      ) {
+        // Close the quick note input if clicking outside
+        setShowQuickNoteInput(false)
+        setQuickNoteText("")
+      }
+    }
+    
+    // Add event listener
+    document.addEventListener("mousedown", handleClickOutside)
+    
+    // Clean up
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [showQuickNoteInput])
+  
+  // Add a function to save quick notes to Firestore
+  const saveQuickNote = async () => {
+    if (!quickNoteText.trim() || !user?.uid || quickNoteText.length > 500) {
+      setShowQuickNoteInput(false)
+      setQuickNoteText("")
+      return
+    }
+    
+    setIsSavingQuickNote(true)
+    
+    try {
+      // Create note data
+      const noteData = {
+        title: quickNoteText.trim().slice(0, 40) + (quickNoteText.length > 40 ? '...' : ''),
+        summary: quickNoteText,
+        rawText: quickNoteText,
+        content: `<p>${quickNoteText}</p>`,
+        tags: [],
+        areaId: "documents", 
+        areaTitle: "Documents", 
+        categoryId: "notes", 
+        categoryTitle: "Notes",
+        createdAt: serverTimestamp(), 
+        type: "note" as const,
+        origin: "quick_note",
+        fileType: "txt",
+        contentType: "text/html",
+        pinned: false
+      }
+      
+      // Save to Firestore
+      const docRef = await addDoc(collection(db, `merchants/${user.uid}/files`), noteData)
+      
+      // Update with document ID
+      await updateDoc(docRef, {
+        fileName: docRef.id,
+        fileId: docRef.id
+      })
+      
+      toast({
+        title: "Quick note saved",
+        description: "Your note has been saved to Documents"
+      })
+      
+      // Reset the form
+      setQuickNoteText("")
+      setShowQuickNoteInput(false)
+    } catch (error) {
+      console.error('Error saving quick note:', error)
+      toast({
+        title: "Error",
+        description: "Failed to save your note",
+        variant: "destructive"
+      })
+    } finally {
+      setIsSavingQuickNote(false)
+    }
+  }
+  
+  // Handle quick note input key presses (Enter to save, Escape to cancel)
+  const handleQuickNoteKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      saveQuickNote()
+    } else if (e.key === 'Escape') {
+      setShowQuickNoteInput(false)
+      setQuickNoteText("")
+    }
+  }
+  
   if (!pathname) {
     return null; // or a loading state
   }
@@ -862,20 +1030,44 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   // Regular layout for non-onboarding pages
   return (
     <div className="flex h-screen overflow-hidden">
-      <SideNav />
+      {/* Mobile menu button - only visible on small screens */}
+      <button
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-md bg-white shadow-md border border-gray-200"
+        onClick={() => setMobileNavOpen(!mobileNavOpen)}
+      >
+        {mobileNavOpen ? (
+          <X className="h-5 w-5 text-gray-600" />
+        ) : (
+          <Menu className="h-5 w-5 text-gray-600" />
+        )}
+      </button>
+      
+      {/* SideNav - hidden on mobile until menu button is clicked */}
+      <div className={`${mobileNavOpen ? 'fixed inset-0 z-40 block' : 'hidden'} lg:relative lg:block lg:z-auto`}>
+        {/* Backdrop for mobile menu */}
+        <div 
+          className={`fixed inset-0 bg-gray-600 bg-opacity-50 lg:hidden ${mobileNavOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'} transition-opacity duration-300`}
+          onClick={() => setMobileNavOpen(false)}
+        ></div>
+        {/* Side navigation */}
+        <div className={`relative h-full z-50 ${mobileNavOpen ? 'block' : 'hidden'} lg:block w-64 max-w-[80vw] lg:w-auto`}>
+          <SideNav />
+        </div>
+      </div>
+      
       <div className="flex-1 flex flex-col overflow-hidden bg-[#F5F5F5]">
         {/* Apply custom scrollbar styles */}
         <style jsx global>{scrollbarStyles}</style>
         
         {/* Top Header */}
         <header className="h-16 flex items-center justify-between px-2">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-grow mr-4">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button 
                   variant="default"
                   size="sm"
-                  className="h-9 gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white"
+                  className="h-9 gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white shrink-0"
                 >
                   <PlusCircle className="h-4 w-4" />
                   Create
@@ -909,40 +1101,207 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            
+            {/* Add animated search bar - substantially wider */}
+            <div className="relative flex-1 min-w-[500px] max-w-[200px] w-full">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                <Search className="h-4 w-4 text-gray-400" />
+              </div>
+              <Input
+                type="text"
+                className="h-9 pl-10 pr-4 w-full rounded-md border border-gray-300 bg-white text-sm"
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setIsSearchFocused(false)}
+              />
+              {!isSearchFocused && showAnimation && (
+                <div className="absolute inset-y-0 left-10 flex items-center pointer-events-none overflow-hidden">
+                  <span className="text-sm text-gray-400 ml-0.5">
+                    <TypeAnimation
+                      sequence={[
+                        searchPlaceholders[0],
+                        2000,
+                        '',
+                        500,
+                        searchPlaceholders[1],
+                        2000,
+                        '',
+                        500,
+                        searchPlaceholders[2],
+                        2000,
+                        '',
+                        500,
+                        searchPlaceholders[3],
+                        2000,
+                        '',
+                        500,
+                        searchPlaceholders[4],
+                        2000,
+                        '',
+                        500,
+                        searchPlaceholders[5],
+                        2000,
+                        '',
+                        500,
+                        searchPlaceholders[6],
+                        2000,
+                        '',
+                        500,
+                        searchPlaceholders[7],
+                        2000,
+                        '',
+                        500,
+                      ]}
+                      speed={70}
+                      deletionSpeed={60}
+                      repeat={Infinity}
+                      style={{
+                        display: 'inline-block',
+                      }}
+                    />
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 shrink-0">
             <div className="flex items-center gap-2">
-              {/* Voice Note button */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 gap-2 bg-white hover:bg-gray-50 border-transparent"
-                onClick={handleVoiceNoteClick}
-                disabled={audioProcessing}
-              >
-                {audioProcessing ? (
-                  <>
-                    <span className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mr-1.5"></span>
-                    Processing...
-                  </>
-                ) : recording ? (
-                  <>
-                    <Mic className="h-4 w-4 text-red-500 mr-1.5 animate-pulse" />
-                    {formatDuration(recordingDuration)}
-                  </>
-                ) : (
-                  <>
-                    <Mic className="h-4 w-4 text-blue-500 mr-1.5" />
-                    Voice Note
-                  </>
+              {/* Quick Note button with dropdown (replaces Voice Note) */}
+              <div className="relative">
+                <DropdownMenu open={quickNoteOpen} onOpenChange={setQuickNoteOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 gap-2 bg-white hover:bg-gray-50 border-transparent rounded-md"
+                      disabled={isSavingQuickNote || audioProcessing || recording || showQuickNoteInput}
+                    >
+                      {isSavingQuickNote ? (
+                        <>
+                          <span className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mr-1.5"></span>
+                          Saving...
+                        </>
+                      ) : audioProcessing ? (
+                        <>
+                          <span className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mr-1.5"></span>
+                          Processing...
+                        </>
+                      ) : recording ? (
+                        <>
+                          <Mic className="h-4 w-4 text-red-500 mr-1.5 animate-pulse" />
+                          {formatDuration(recordingDuration)}
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="h-4 w-4 text-blue-500 mr-1.5" />
+                          Quick Note
+                        </>
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  {/* Dropdown content */}
+                  <DropdownMenuContent align="start" className="w-56 rounded-md">
+                    <DropdownMenuItem 
+                      onClick={() => {
+                        setQuickNoteOpen(false);
+                        handleVoiceNoteClick();
+                      }}
+                      disabled={recording || audioProcessing}
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
+                      <Mic className="h-4 w-4 text-gray-500" />
+                      <span>Voice Note</span>
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuItem 
+                      onClick={() => {
+                        setQuickNoteOpen(false);
+                        setShowQuickNoteInput(true);
+                      }}
+                      disabled={showQuickNoteInput}
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
+                      <Pencil className="h-4 w-4 text-gray-500" />
+                      <span>Standard Note</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                
+                {/* Quick Note Input Popup */}
+                {showQuickNoteInput && (
+                  <div 
+                    ref={quickNoteContainerRef}
+                    className="absolute top-full mt-1 left-0 z-50 w-80 max-w-[90vw] bg-white shadow-lg rounded-md border border-gray-200 overflow-hidden"
+                  >
+                    <div className="p-3 flex flex-col">
+                      <div className="flex justify-between items-center mb-2">
+                        <h3 className="text-sm font-medium">Quick Note</h3>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setShowQuickNoteInput(false);
+                            setQuickNoteText("");
+                          }}
+                          className="h-6 w-6 p-0 rounded-full"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <Textarea
+                        ref={quickNoteInputRef}
+                        value={quickNoteText}
+                        onChange={(e) => {
+                          setQuickNoteText(e.target.value);
+                          // Auto-resize is handled by the event listener
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            saveQuickNote();
+                          } else if (e.key === 'Escape') {
+                            setShowQuickNoteInput(false);
+                            setQuickNoteText("");
+                          }
+                        }}
+                        placeholder="Type a quick note and press Enter..."
+                        className="w-full min-h-[80px] max-h-[200px] rounded-md resize-none text-sm"
+                        disabled={isSavingQuickNote}
+                      />
+                      <div className="flex justify-between items-center mt-2.5">
+                        <div className="text-xs text-gray-500 flex items-center">
+                          <span className={`${quickNoteText.length > 300 ? 'text-amber-500 font-medium' : ''}`}>
+                            {quickNoteText.length}
+                          </span>
+                          <span className="mx-1">/</span>
+                          <span>500 characters</span>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={saveQuickNote}
+                          disabled={!quickNoteText.trim() || isSavingQuickNote || quickNoteText.length > 500}
+                          className="h-8 text-xs rounded-md px-3"
+                        >
+                          {isSavingQuickNote ? (
+                            <>
+                              <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                              Saving
+                            </>
+                          ) : (
+                            <>Save Note</>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 )}
-              </Button>
+              </div>
+              
               {/* Tap Agent button */}
               <Button
                 variant="outline"
                 size="sm"
-                className="h-9 gap-2 bg-white hover:bg-gray-50 border-transparent"
+                className="h-9 gap-2 bg-white hover:bg-gray-50 border-transparent rounded-md"
                 onClick={() => setShowTapAgentSheet(true)}
               >
                 <Bot className="h-4 w-4 text-blue-500 mr-1.5" />

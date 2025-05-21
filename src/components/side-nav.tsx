@@ -35,7 +35,8 @@ import {
   Mail,
   FileText,
   LayoutDashboard,
-  Bot
+  Bot,
+  Rocket
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -54,9 +55,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { TapAiButton } from "@/components/tap-ai-button"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/use-toast"
-import { collection, getDocs, query, where, limit } from "firebase/firestore"
+import { collection, getDocs, query, where, limit, onSnapshot } from "firebase/firestore"
 import { Input } from "@/components/ui/input"
 import { CreateSheet } from "@/components/create-sheet"
+import { Badge } from "@/components/ui/badge"
 
 // Get auth instance
 const auth = getAuth();
@@ -134,9 +136,19 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   {
+    title: "Get Started",
+    href: "/setup",
+    icon: Rocket
+  },
+  {
     title: "Dashboard",
     href: "/dashboard",
     icon: Home
+  },
+  {
+    title: "Insights",
+    href: "/insights",
+    icon: BarChart
   },
   {
     title: "Agent Inbox",
@@ -144,15 +156,20 @@ const navItems: NavItem[] = [
     icon: Bot,
   },
   {
-    title: "Tap Agent",
-    href: "/tap-agent/intro",
-    icon: Sparkles,
+    title: "Documents",
+    href: "/notes",
+    icon: FileText
   },
   {
     title: "My Store",
     href: "/store",
     icon: Store,
     subItems: [
+      {
+        title: "Tap Agent",
+        href: "/tap-agent/intro",
+        icon: Sparkles,
+      },
       {
         title: "Store Overview",
         href: "/store/overview",
@@ -165,15 +182,11 @@ const navItems: NavItem[] = [
           }
         ]
       },
+      
       {
         title: "Activity",
         href: "/store/activity",
         icon: Clock
-      },
-      {
-        title: "Notes",
-        href: "/notes",
-        icon: FileText
       },
       {
         title: "Rewards",
@@ -269,7 +282,7 @@ interface SectionState {
   [key: string]: boolean;
 }
 
-export function SideNav() {
+export function SideNav({ className = "" }: { className?: string }) {
   const pathname = usePathname() || ""
   const router = useRouter()
   const { user } = useAuth()
@@ -294,6 +307,7 @@ export function SideNav() {
   })
   const [searchQuery, setSearchQuery] = useState("")
   const [createSheetOpen, setCreateSheetOpen] = useState(false)
+  const [pendingInboxCount, setPendingInboxCount] = useState(0)
 
   // Reset logo states when merchantData changes
   useEffect(() => {
@@ -442,6 +456,24 @@ export function SideNav() {
     checkOnboardingStatus();
   }, [user?.uid]);
 
+  // Add a useEffect to fetch pending inbox items count
+  useEffect(() => {
+    if (!user?.uid) return;
+    
+    // Create a listener for agent inbox documents with status "new"
+    const agentInboxRef = collection(db, `merchants/${user.uid}/agentinbox`);
+    const q = query(agentInboxRef, where("status", "==", "new"));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setPendingInboxCount(snapshot.size);
+    }, (error) => {
+      console.error("Error fetching agent inbox count:", error);
+      setPendingInboxCount(0);
+    });
+    
+    return () => unsubscribe();
+  }, [user?.uid]);
+
   const handleLogout = async () => {
     try {
       await signOut(auth)
@@ -464,7 +496,7 @@ export function SideNav() {
   }
 
   return (
-    <div className="w-48 h-screen flex-shrink-0 bg-[#F5F5F5] flex flex-col">
+    <div className={`w-full md:w-48 h-screen flex-shrink-0 bg-[#F5F5F5] flex flex-col ${className}`}>
       {/* Apply custom scrollbar styles */}
       <style jsx global>{scrollbarStyles}</style>
       
@@ -519,7 +551,7 @@ export function SideNav() {
             .filter(item => item.title !== "Tap Agent" && item.title !== "Onboarding Wizard" && item.title !== "Create" && item.title !== "Financials" && item.title !== "Rewards Library")
             .map((item) => {
               const isActive = item.title === "Dashboard" 
-                ? (pathname === item.href || pathname.match(/^\/dashboard\/(?!settings).*$/)) 
+                ? (pathname === item.href || pathname.match(/^\/dashboard\/(?!settings|agent-inbox).*$/)) 
                 : (pathname === item.href || pathname.startsWith(`${item.href}/`))
               
               return (
@@ -561,6 +593,13 @@ export function SideNav() {
                       <span className={isActive ? "text-[#007AFF]" : "group-hover:text-[#007AFF]"}>
                         {item.title}
                       </span>
+                      {item.title === "Agent Inbox" && pendingInboxCount > 0 && (
+                        <Badge 
+                          className="ml-auto bg-blue-50 text-blue-600 border-blue-200 rounded-md px-1.5 py-0 h-5 min-w-[20px] flex items-center justify-center"
+                        >
+                          {pendingInboxCount}
+                        </Badge>
+                      )}
                     </Link>
                   )}
                 </li>

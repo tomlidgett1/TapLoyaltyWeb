@@ -33,7 +33,8 @@ import {
   AlertCircle,
   ChevronRight,
   Zap,
-  Trash2
+  Trash2,
+  X
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
@@ -55,6 +56,8 @@ import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import React from "react"
+import { cn } from "@/lib/utils"
+import { motion, AnimatePresence } from "framer-motion"
 
 // Define types for Square Catalog objects
 interface SquareCatalogObject {
@@ -129,6 +132,71 @@ interface POSInventoryItem {
   type: string;
 }
 
+// Add interface for Lightspeed inventory items
+interface LightspeedItem {
+  itemID: string;
+  systemSku: string;
+  defaultCost: string;
+  avgCost: string;
+  discountable: string;
+  tax: string;
+  archived: string;
+  itemType: string;
+  serialized: string;
+  description: string;
+  modelYear: string;
+  upc: string;
+  ean: string;
+  customSku: string;
+  manufacturerSku: string;
+  createTime: string;
+  timeStamp: string;
+  publishToEcom: string;
+  categoryID: string;
+  taxClassID: string;
+  departmentID: string;
+  itemMatrixID: string;
+  manufacturerID: string;
+  seasonID: string;
+  defaultVendorID: string;
+  Prices?: {
+    ItemPrice: Array<{
+      amount: string;
+      useTypeID: string;
+      useType: string;
+    }> | {
+      amount: string;
+      useTypeID: string;
+      useType: string;
+    }
+  }
+  ItemShops?: {
+    ItemShop: Array<{
+      itemShopID: string;
+      shopID: string;
+      itemID: string;
+      qoh: string; // Quantity on hand
+      reorderPoint: string;
+      reorderLevel: string;
+      timeStamp: string;
+    }> | {
+      itemShopID: string;
+      shopID: string;
+      itemID: string;
+      qoh: string; // Quantity on hand
+      reorderPoint: string;
+      reorderLevel: string;
+      timeStamp: string;
+    }
+  }
+}
+
+// Add interface for Lightspeed Account
+interface LightspeedAccount {
+  accountID: string;
+  name: string;
+}
+
 // Add a gradient text component for Tap Agent branding
 const GradientText = ({ children }: { children: React.ReactNode }) => {
   return (
@@ -167,6 +235,50 @@ export default function InventoryPage() {
   const [loadingExistingItems, setLoadingExistingItems] = useState(false)
   // Add state for all items sheet
   const [isAllItemsSheetOpen, setIsAllItemsSheetOpen] = useState(false)
+
+  // Add state for Lightspeed inventory
+  const [lightspeedItems, setLightspeedItems] = useState<LightspeedItem[]>([]);
+  const [loadingLightspeedItems, setLoadingLightspeedItems] = useState(false);
+  const [lightspeedItemsError, setLightspeedItemsError] = useState<string | null>(null);
+  const [lightspeedAccountInfo, setLightspeedAccountInfo] = useState<LightspeedAccount | null>(null);
+  const [activeInventoryTab, setActiveInventoryTab] = useState<string>("square");
+  const [selectedLightspeedItem, setSelectedLightspeedItem] = useState<LightspeedItem | null>(null);
+  const [isLightspeedItemSheetOpen, setIsLightspeedItemSheetOpen] = useState(false);
+  
+  // Add pagination state for Lightspeed inventory
+  const [nextPageUrl, setNextPageUrl] = useState<string | null>(null);
+  const [previousPageUrl, setPreviousPageUrl] = useState<string | null>(null);
+  const [currentLightspeedPage, setCurrentLightspeedPage] = useState(1);
+  const [loadingMoreItems, setLoadingMoreItems] = useState(false);
+  
+  // Add search state for Lightspeed inventory
+  const [lightspeedSearchQuery, setLightspeedSearchQuery] = useState('');
+
+  // Add the animation state variables
+  const [tabAnimation, setTabAnimation] = useState<"fadeIn" | "fadeOut">("fadeIn");
+  const [prevTab, setPrevTab] = useState<string>("square");
+
+  // Add effect to handle tab animations
+  useEffect(() => {
+    if (activeInventoryTab !== prevTab) {
+      // Start the fade out animation
+      setTabAnimation("fadeOut");
+      
+      // After a short delay, update the tab and start fade in
+      const timer = setTimeout(() => {
+        setPrevTab(activeInventoryTab);
+        setTabAnimation("fadeIn");
+      }, 100); // Duration of fadeOut
+      
+      return () => clearTimeout(timer);
+    }
+  }, [activeInventoryTab, prevTab]);
+
+  // Updated tab animation classes
+  const tabAnimationClasses = {
+    fadeIn: "animate-fadeIn",
+    fadeOut: "animate-fadeOut",
+  };
 
   // Fetch inventory data from Square
   useEffect(() => {
@@ -881,6 +993,224 @@ export default function InventoryPage() {
     }
   };
 
+  // Add function to fetch Lightspeed account info and inventory
+  const fetchLightspeedInventory = async (pageUrl?: string) => {
+    if (!user?.uid) return;
+    
+    try {
+      if (pageUrl) {
+        setLoadingMoreItems(true);
+      } else {
+        setLoadingLightspeedItems(true);
+        setLightspeedItemsError(null);
+      }
+      
+      // Fetch account info first if we don't have it yet
+      if (!lightspeedAccountInfo && !pageUrl) {
+        console.log('Fetching Lightspeed account info first...');
+        try {
+          const accountResponse = await fetch(`/api/lightspeed/account?merchantId=${user.uid}`);
+          const accountData = await accountResponse.json();
+          
+          if (!accountResponse.ok) {
+            throw new Error(accountData.error || 'Failed to fetch Lightspeed account information');
+          }
+          
+          if (accountData.success && accountData.account) {
+            setLightspeedAccountInfo(accountData.account);
+            // Now that we have the account info, we need to wait for state to update
+            // So we'll exit early and let the useEffect call this function again
+            setLoadingLightspeedItems(false);
+            return;
+          } else {
+            throw new Error('No Lightspeed account found or API returned no data');
+          }
+        } catch (error) {
+          console.error('Error fetching Lightspeed account:', error);
+          throw error; // Re-throw to be caught by the outer try/catch
+        }
+      }
+      
+      // Make sure we have the account ID before proceeding
+      const accountId = lightspeedAccountInfo?.accountID;
+      if (!accountId && !pageUrl) {
+        throw new Error('Lightspeed Account ID is required');
+      }
+      
+      // Now fetch inventory items
+      let apiUrl: string;
+      
+      if (pageUrl) {
+        // If it's already a proxy URL (our own API), use it as is
+        if (pageUrl.startsWith('/api/')) {
+          apiUrl = pageUrl;
+        } else {
+          // Otherwise, parse the URL to extract parameters
+          try {
+            const url = new URL(pageUrl);
+            // Start with the base URL
+            apiUrl = `/api/lightspeed/inventory?merchantId=${user.uid}&accountId=${accountId}&limit=100`;
+            
+            // Copy all parameters from the original URL
+            url.searchParams.forEach((value, key) => {
+              if (key !== 'merchantId' && key !== 'accountId' && key !== 'limit') {
+                apiUrl += `&${key}=${value}`;
+              }
+            });
+          } catch (error) {
+            console.error('Error parsing URL:', error);
+            apiUrl = `/api/lightspeed/inventory?merchantId=${user.uid}&accountId=${accountId}&limit=100`;
+          }
+        }
+      } else {
+        apiUrl = `/api/lightspeed/inventory?merchantId=${user.uid}&accountId=${accountId}&limit=100`;
+      }
+      
+      // Log the API URL we're using
+      console.log('Fetching inventory with URL:', apiUrl);
+      
+      const itemsResponse = await fetch(apiUrl);
+      const itemsData = await itemsResponse.json();
+      
+      // Add detailed logging for debugging
+      console.log('API Response status:', itemsResponse.status);
+      console.log('API Response data:', itemsData);
+      
+      if (!itemsResponse.ok) {
+        throw new Error(itemsData.error || 'Failed to fetch Lightspeed inventory data');
+      }
+      
+      if (itemsData.success && Array.isArray(itemsData.items)) {
+        console.log(`Found ${itemsData.items.length} items in search results`);
+        // Sort items by stock quantity (highest to lowest)
+        const sortedItems = itemsData.items.sort((a: LightspeedItem, b: LightspeedItem) => {
+          // Extract quantity on hand for item A
+          let qohA = 0;
+          if (a.ItemShops && a.ItemShops.ItemShop) {
+            const itemShopsA = Array.isArray(a.ItemShops.ItemShop) 
+              ? a.ItemShops.ItemShop 
+              : [a.ItemShops.ItemShop];
+            
+            const totalShopA = itemShopsA.find((shop: { shopID: string; qoh: string }) => shop.shopID === "0");
+            if (totalShopA) {
+              qohA = parseInt(totalShopA.qoh) || 0;
+            } else if (itemShopsA.length > 0) {
+              qohA = parseInt(itemShopsA[0].qoh) || 0;
+            }
+          }
+          
+          // Extract quantity on hand for item B
+          let qohB = 0;
+          if (b.ItemShops && b.ItemShops.ItemShop) {
+            const itemShopsB = Array.isArray(b.ItemShops.ItemShop) 
+              ? b.ItemShops.ItemShop 
+              : [b.ItemShops.ItemShop];
+            
+            const totalShopB = itemShopsB.find((shop: { shopID: string; qoh: string }) => shop.shopID === "0");
+            if (totalShopB) {
+              qohB = parseInt(totalShopB.qoh) || 0;
+            } else if (itemShopsB.length > 0) {
+              qohB = parseInt(itemShopsB[0].qoh) || 0;
+            }
+          }
+          
+          // Sort by stock quantity, descending (highest first)
+          return qohB - qohA;
+        });
+        
+        // If this is a pagination request, update the page number
+        if (pageUrl) {
+          setCurrentLightspeedPage(prev => {
+            // If it's a next page request, increment
+            if (pageUrl.includes('after=')) {
+              return prev + 1;
+            }
+            // If it's a previous page request, decrement
+            else if (pageUrl.includes('before=')) {
+              return Math.max(1, prev - 1);
+            }
+            return prev;
+          });
+        } else {
+          // Reset to page 1 for a fresh request
+          setCurrentLightspeedPage(1);
+        }
+        
+        // Set the items
+        setLightspeedItems(sortedItems);
+        
+        // Set pagination URLs directly from the API response
+        setNextPageUrl(itemsData.pagination?.nextUrl || null);
+        setPreviousPageUrl(itemsData.pagination?.previousUrl || null);
+      } else {
+        console.log('No items found or invalid response format:', itemsData);
+        setLightspeedItems([]);
+        setNextPageUrl(null);
+        setPreviousPageUrl(null);
+      }
+    } catch (error) {
+      console.error('Error fetching Lightspeed inventory:', error);
+      setLightspeedItemsError(error instanceof Error ? error.message : 'An unknown error occurred');
+    } finally {
+      if (pageUrl) {
+        setLoadingMoreItems(false);
+      } else {
+        setLoadingLightspeedItems(false);
+      }
+    }
+  };
+
+  // Add effect to fetch Lightspeed inventory when tab changes
+  useEffect(() => {
+    if (activeInventoryTab === 'lightspeed' && user?.uid) {
+      fetchLightspeedInventory();
+    }
+  }, [activeInventoryTab, user?.uid, lightspeedAccountInfo?.accountID]);
+
+  // Add function to handle Lightspeed item click
+  const handleLightspeedItemClick = (item: LightspeedItem) => {
+    setSelectedLightspeedItem(item);
+    setIsLightspeedItemSheetOpen(true);
+  };
+
+  // Add function to retry loading Lightspeed inventory
+  const handleTryAgain = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    fetchLightspeedInventory();
+  };
+
+  // Add function to handle search submission
+  const handleLightspeedSearch = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    if (!user?.uid || !lightspeedAccountInfo?.accountID) return;
+    
+    let searchUrl = `/api/lightspeed/inventory?merchantId=${user.uid}&accountId=${lightspeedAccountInfo.accountID}&limit=100`;
+    
+    if (lightspeedSearchQuery) {
+      // Use 'like' operator (~) for text search on description with wildcards
+      searchUrl += `&description=~,${encodeURIComponent(`%${lightspeedSearchQuery}%`)}`;
+    }
+    
+    // Reset pagination state
+    setCurrentLightspeedPage(1);
+    
+    // Fetch with search parameters
+    fetchLightspeedInventory(searchUrl);
+  };
+  
+  // Add handler to clear search
+  const handleClearSearch = () => {
+    setLightspeedSearchQuery('');
+    
+    if (user?.uid && lightspeedAccountInfo?.accountID) {
+      fetchLightspeedInventory(`/api/lightspeed/inventory?merchantId=${user.uid}&accountId=${lightspeedAccountInfo.accountID}&limit=100`);
+    }
+  };
+
+  // Add this CSS class between the existing Square and Lightspeed tab conditionals
+  const tabContentClass = "transition-opacity duration-200";
+
   return (
     <PageTransition>
       <div className="p-6 py-4">
@@ -929,8 +1259,49 @@ export default function InventoryPage() {
           </div>
         </PageHeader>
 
+        {/* GitHub-inspired tabs (without slider animation) */}
+        <div className="mb-6">
+          <div className="flex items-center bg-gray-100 p-1 rounded-md inline-flex">
+            <button
+              onClick={() => setActiveInventoryTab("square")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                activeInventoryTab === "square"
+                  ? "bg-white text-gray-800 shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+            >
+              <Package className="h-4 w-4" />
+              <span>Square</span>
+            </button>
+            <button
+              onClick={() => setActiveInventoryTab("lightspeed")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 ml-1 text-sm font-medium rounded-md transition-colors",
+                activeInventoryTab === "lightspeed"
+                  ? "bg-white text-gray-800 shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+            >
+              <Tag className="h-4 w-4" />
+              <span>Lightspeed</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Conditional rendering with AnimatePresence for transitions */}
+        <AnimatePresence mode="wait">
+          {activeInventoryTab === "square" ? (
+            <motion.div
+              key="square"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {/* Square tab content */}
         {!isSquareConnected && !loading && (
-          <div className="bg-muted p-6 rounded-lg text-center">
+                <div className="bg-muted p-6 rounded-md text-center">
             <h3 className="text-lg font-medium mb-2">Square Integration Required</h3>
             <p className="text-muted-foreground mb-4">
               To view and manage your inventory, you need to connect your Square account.
@@ -947,7 +1318,7 @@ export default function InventoryPage() {
             <span className="ml-2 text-lg">Loading inventory...</span>
           </div>
         ) : error ? (
-          <div className="bg-destructive/10 p-6 rounded-lg text-center">
+                <div className="bg-destructive/10 p-6 rounded-md text-center">
             <h3 className="text-lg font-medium mb-2 text-destructive">Error Loading Inventory</h3>
             <p className="text-muted-foreground mb-4">{error}</p>
             <Button variant="outline" onClick={handleRefresh}>
@@ -1116,6 +1487,220 @@ export default function InventoryPage() {
             </Card>
           </>
         )}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="lightspeed"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {/* Lightspeed tab content */}
+              {loadingLightspeedItems ? (
+                <div className="flex justify-center items-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <span className="ml-2 text-lg">Loading Lightspeed inventory...</span>
+                </div>
+              ) : lightspeedItemsError ? (
+                <div className="bg-destructive/10 p-6 rounded-md text-center">
+                  <h3 className="text-lg font-medium mb-2 text-destructive">Error Loading Lightspeed Inventory</h3>
+                  <p className="text-muted-foreground mb-4">{lightspeedItemsError}</p>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleTryAgain}
+                  >
+                    Try Again
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  {lightspeedAccountInfo && (
+                    <div className="mb-4 p-3 bg-blue-50 rounded-md border border-blue-200">
+                      <p className="text-sm text-blue-700">
+                        <span className="font-medium">Account:</span> {lightspeedAccountInfo.name} 
+                        <span className="ml-3 font-medium">ID:</span> {lightspeedAccountInfo.accountID}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Lightspeed Search Box */}
+                  <div className="mb-4">
+                    <form onSubmit={handleLightspeedSearch} className="flex gap-2">
+                      <div className="relative flex-1 max-w-sm">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          type="search"
+                          placeholder="Search inventory..."
+                          className="pl-8 rounded-md"
+                          value={lightspeedSearchQuery}
+                          onChange={(e) => setLightspeedSearchQuery(e.target.value)}
+                        />
+                        {lightspeedSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={handleClearSearch}
+                            className="absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground hover:text-foreground"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                      <Button type="submit" className="rounded-md">
+                        Search
+                      </Button>
+                    </form>
+                  </div>
+                  
+                  {/* Lightspeed Inventory Table */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle>Lightspeed Inventory Items</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[250px]">Description</TableHead>
+                            <TableHead>SKU</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>UPC/EAN</TableHead>
+                            <TableHead className="text-right">Cost</TableHead>
+                            <TableHead className="text-right">Price</TableHead>
+                            <TableHead className="text-right">Stock</TableHead>
+                            <TableHead className="w-[50px]"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {lightspeedItems.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={8} className="h-24 text-center">
+                                No Lightspeed inventory items found.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            lightspeedItems.map((item) => {
+                              // Get quantity on hand from ItemShops relation
+                              let qoh = "N/A";
+                              if (item.ItemShops && item.ItemShops.ItemShop) {
+                                const itemShops = Array.isArray(item.ItemShops.ItemShop) 
+                                  ? item.ItemShops.ItemShop 
+                                  : [item.ItemShops.ItemShop];
+                                
+                                // Try to find total inventory (shopID = 0)
+                                const totalShop = itemShops.find(shop => shop.shopID === "0");
+                                if (totalShop) {
+                                  qoh = totalShop.qoh;
+                                } else if (itemShops.length > 0) {
+                                  // If no total, but we have shops, use the first one
+                                  qoh = itemShops[0].qoh;
+                                }
+                              }
+                              
+                              return (
+                                <TableRow key={item.itemID} className="cursor-pointer hover:bg-gray-50" onClick={() => handleLightspeedItemClick(item)}>
+                                  <TableCell className="font-medium">
+                                    {item.description}
+                                    <p className="text-xs text-muted-foreground truncate max-w-xs">
+                                      Created: {new Date(item.createTime).toLocaleDateString()}
+                                    </p>
+                                  </TableCell>
+                                  <TableCell>
+                                    {item.customSku || item.systemSku}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 rounded-md">
+                                      {item.itemType || 'default'}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    {item.upc || item.ean || 'N/A'}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    ${parseFloat(item.avgCost || item.defaultCost || '0').toFixed(2)}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    {item.Prices?.ItemPrice && (
+                                      Array.isArray(item.Prices.ItemPrice)
+                                        ? (item.Prices.ItemPrice.length > 0 
+                                          ? `$${parseFloat(item.Prices.ItemPrice[0].amount || '0').toFixed(2)}`
+                                          : 'N/A')
+                                        : `$${parseFloat(item.Prices.ItemPrice.amount || '0').toFixed(2)}`
+                                    ) || 'N/A'}
+                                  </TableCell>
+                                  <TableCell className="text-right font-medium">
+                                    <span className={qoh === "0" ? "text-red-600" : ""}>
+                                      {qoh}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                      <ChevronRight className="h-4 w-4" />
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })
+                          )}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                  
+                  {/* Pagination Controls */}
+                  {(nextPageUrl || previousPageUrl) && (
+                    <div className="flex items-center justify-between mt-4">
+                      <div className="text-sm text-muted-foreground">
+                        Page {currentLightspeedPage}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (previousPageUrl) fetchLightspeedInventory(previousPageUrl);
+                          }}
+                          disabled={!previousPageUrl || loadingMoreItems}
+                          className="h-8 rounded-md"
+                        >
+                          {loadingMoreItems && previousPageUrl && (
+                            <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                          )}
+                          Previous Page
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (nextPageUrl) fetchLightspeedInventory(nextPageUrl);
+                          }}
+                          disabled={!nextPageUrl || loadingMoreItems}
+                          className="h-8 rounded-md"
+                        >
+                          Next Page
+                          {loadingMoreItems && nextPageUrl && (
+                            <Loader2 className="h-3 w-3 ml-2 animate-spin" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {loadingMoreItems && !previousPageUrl && !nextPageUrl && (
+                    <div className="flex justify-center mt-4">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading more items...
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
         
         {/* Add global style to prevent double backdrop when both sheets are open */}
         {isAllItemsSheetOpen && isTapAgentSheetOpen && (
@@ -1371,6 +1956,156 @@ export default function InventoryPage() {
                 Close
               </Button>
             </div>
+          </SheetContent>
+        </Sheet>
+
+        {/* Side panel for Lightspeed item details */}
+        <Sheet open={isLightspeedItemSheetOpen} onOpenChange={setIsLightspeedItemSheetOpen}>
+          <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+            <SheetHeader className="pb-4">
+              <SheetTitle>
+                {selectedLightspeedItem?.description || 'Item Details'}
+              </SheetTitle>
+              <SheetDescription>
+                Lightspeed inventory information
+              </SheetDescription>
+            </SheetHeader>
+            <Separator />
+            <ScrollArea className="h-[calc(100vh-8rem)] py-4">
+              {selectedLightspeedItem && (
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-medium">Item Details</h3>
+                    <p className="text-sm text-muted-foreground">View detailed information about this item.</p>
+                  </div>
+                  
+                  <div className="grid gap-4">
+                    <div>
+                      <h4 className="text-sm font-medium mb-1">Description</h4>
+                      <p className="text-sm">{selectedLightspeedItem.description}</p>
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-sm font-medium mb-1">System SKU</h4>
+                      <p className="text-sm">{selectedLightspeedItem.systemSku}</p>
+                    </div>
+                    
+                    {selectedLightspeedItem.customSku && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">Custom SKU</h4>
+                        <p className="text-sm">{selectedLightspeedItem.customSku}</p>
+                      </div>
+                    )}
+                    
+                    <div>
+                      <h4 className="text-sm font-medium mb-1">Type</h4>
+                      <p className="text-sm">{selectedLightspeedItem.itemType || 'default'}</p>
+                    </div>
+                    
+                    <div className="flex justify-between">
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">Default Cost</h4>
+                        <p className="text-sm">${parseFloat(selectedLightspeedItem.defaultCost || '0').toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">Average Cost</h4>
+                        <p className="text-sm">${parseFloat(selectedLightspeedItem.avgCost || '0').toFixed(2)}</p>
+                      </div>
+                    </div>
+                    
+                    {selectedLightspeedItem.Prices && selectedLightspeedItem.Prices.ItemPrice && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">Prices</h4>
+                        <div className="space-y-2">
+                          {Array.isArray(selectedLightspeedItem.Prices.ItemPrice) ? (
+                            // Handle array case
+                            selectedLightspeedItem.Prices.ItemPrice.map((price, index) => (
+                              <div key={index} className="bg-gray-50 p-2 rounded-md flex justify-between">
+                                <span className="text-sm">{price.useType}</span>
+                                <span className="text-sm font-medium">${parseFloat(price.amount || '0').toFixed(2)}</span>
+                              </div>
+                            ))
+                          ) : (
+                            // Handle single object case
+                            <div className="bg-gray-50 p-2 rounded-md flex justify-between">
+                              <span className="text-sm">{selectedLightspeedItem.Prices.ItemPrice.useType}</span>
+                              <span className="text-sm font-medium">${parseFloat(selectedLightspeedItem.Prices.ItemPrice.amount || '0').toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {selectedLightspeedItem.ItemShops && selectedLightspeedItem.ItemShops.ItemShop && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">Inventory Levels</h4>
+                        <div className="space-y-2">
+                          {Array.isArray(selectedLightspeedItem.ItemShops.ItemShop) 
+                            ? selectedLightspeedItem.ItemShops.ItemShop.map((shop, index) => (
+                                <div key={index} className="bg-gray-50 p-2 rounded-md flex justify-between items-center">
+                                  <span className="text-sm">
+                                    Shop ID: {shop.shopID === "0" ? "All Shops (Total)" : shop.shopID}
+                                  </span>
+                                  <span className="text-sm font-medium">
+                                    <Badge className={parseInt(shop.qoh) <= 0 ? "bg-red-100 text-red-800 hover:bg-red-100" : "bg-green-100 text-green-800 hover:bg-green-100"}>
+                                      {shop.qoh} in stock
+                                    </Badge>
+                                  </span>
+                                </div>
+                              ))
+                            : (
+                                <div className="bg-gray-50 p-2 rounded-md flex justify-between items-center">
+                                  <span className="text-sm">
+                                    Shop ID: {selectedLightspeedItem.ItemShops.ItemShop.shopID === "0" ? "All Shops (Total)" : selectedLightspeedItem.ItemShops.ItemShop.shopID}
+                                  </span>
+                                  <span className="text-sm font-medium">
+                                    <Badge className={parseInt(selectedLightspeedItem.ItemShops.ItemShop.qoh) <= 0 ? "bg-red-100 text-red-800 hover:bg-red-100" : "bg-green-100 text-green-800 hover:bg-green-100"}>
+                                      {selectedLightspeedItem.ItemShops.ItemShop.qoh} in stock
+                                    </Badge>
+                                  </span>
+                                </div>
+                              )
+                          }
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">UPC</h4>
+                        <p className="text-sm">{selectedLightspeedItem.upc || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">EAN</h4>
+                        <p className="text-sm">{selectedLightspeedItem.ean || 'N/A'}</p>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-sm font-medium mb-1">Item ID</h4>
+                      <p className="text-sm font-mono text-xs bg-gray-50 p-1 rounded-md">{selectedLightspeedItem.itemID}</p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">Created</h4>
+                        <p className="text-sm">{new Date(selectedLightspeedItem.createTime).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">Updated</h4>
+                        <p className="text-sm">{new Date(selectedLightspeedItem.timeStamp).toLocaleString()}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-4">
+                    <Button variant="outline" className="w-full rounded-md" onClick={() => setIsLightspeedItemSheetOpen(false)}>
+                      Close
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </ScrollArea>
           </SheetContent>
         </Sheet>
       </div>

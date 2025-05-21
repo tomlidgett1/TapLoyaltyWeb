@@ -1026,8 +1026,6 @@ export default function ActivityPage() {
           <div className="flex items-center gap-2">
             <Button 
               variant="outline" 
-              size="sm" 
-              className="h-8"
               onClick={handleExportPDF}
             >
               <Download className="h-4 w-4 mr-2" />
@@ -1035,8 +1033,6 @@ export default function ActivityPage() {
             </Button>
             <Button 
               variant="outline" 
-              size="sm" 
-              className="h-8"
               onClick={() => setShowFilters(!showFilters)}
             >
               <Filter className="h-4 w-4 mr-2" />

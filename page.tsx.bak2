@@ -1,0 +1,2380 @@
+"use client"
+
+import { useState, useEffect, useRef, useMemo, memo } from "react"
+import { db } from "@/lib/firebase"
+import { collection, query, orderBy, getDocs, Timestamp, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, onSnapshot, getDoc, setDoc } from "firebase/firestore"
+import { getStorage, ref, getDownloadURL, uploadBytesResumable } from "firebase/storage"
+import { v4 as uuidv4 } from "uuid"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Search, Plus, FileUp, X, DownloadCloud, ExternalLink, MoreHorizontal, Edit, Trash2, Check, FileText, File as FileIcon, Image as ImageIcon, Calendar, Filter, User, ArrowRight, Loader2, PlusCircle, Pencil, Info, Users, Database, Network, GitBranch, Share2, GitMerge, Share, Workflow, Split, RectangleHorizontal, PanelRight, LayoutGrid, LayoutList, ChevronsRight } from "lucide-react"
+import { format, isValid } from "date-fns"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { DashboardLayout } from "@/components/dashboard-layout"
+import { cn } from "@/lib/utils"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { toast } from "@/components/ui/use-toast"
+import { useAuth } from "@/contexts/auth-context"
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle
+} from "@/components/ui/alert-dialog"
+
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import Image from "next/image"
+import { getFunctions, httpsCallable } from "firebase/functions"
+import ReactMarkdown from "react-markdown"
+
+// Define types we need
+interface Note {
+  id: string;
+  title: string;
+  summary: string;
+  rawText: string;
+  tags: string[];
+  areaId: string;
+  areaTitle: string;
+  categoryId: string;
+  categoryTitle: string;
+  createdAt: Date;
+  type: "note" | "invoice" | "other" | "pdf" | "image";
+  fileUrl?: string;
+  fileType?: string;
+  fileName?: string;
+  originalFileName?: string;
+  fileId?: string;
+  contentType?: string;
+  inKnowledgeBase?: boolean;
+  pendingKnowledgeBase?: boolean;
+  knowledgeBaseStatus?: "added" | "processing" | "deleted" | "removing" | null; // Track detailed status
+  origin?: string;
+  content?: string;
+  sharedWithAgentId?: string;
+  sharedWithAgentAt?: Timestamp;
+}
+
+// Add Knowledge chat response interface after the Note interface
+interface KnowledgeChatResponse {
+  answer: string;
+  sources: string[];
+  metadata: {
+    contextCount: number;
+    query: string;
+  };
+}
+
+// Add the RelatedNote interface after the KnowledgeChatResponse interface
+interface RelatedNote {
+  id: string;
+  title: string; 
+  summary: string;
+  type: "note" | "invoice" | "other" | "pdf" | "image";
+  fileUrl?: string;
+  fileName?: string;
+  score: number;
+}
+
+// Apple-like smooth transition styles
+const transitionStyles = `
+  .smooth-appear {
+    animation: smoothAppear 0.3s ease-out forwards;
+  }
+  
+  @keyframes smoothAppear {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  .scale-in {
+    animation: scaleIn 0.3s ease-out forwards;
+  }
+  
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  
+  .document-container {
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    will-change: background-color, border-color, transform, box-shadow;
+    border-width: 1px;
+    margin-bottom: 6px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+  
+  .document-container:hover {
+    background-color: rgba(246, 246, 246, 0.9);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  }
+  
+  .document-container.selected {
+    background-color: rgba(239, 246, 255, 0.8);
+    border-color: rgba(191, 219, 254, 1);
+    box-shadow: 0 2px 4px rgba(191, 219, 254, 0.3);
+  }
+  
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(203, 213, 225, 0.3) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(203, 213, 225, 0.3);
+    border-radius: 20px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(203, 213, 225, 0.5);
+  }
+  
+  /* Pulse animation for processing documents */
+  @keyframes pulseGlow {
+    0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.1); }
+    70% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+  }
+  
+  .processing-pulse {
+    animation: pulseGlow 1.5s infinite cubic-bezier(0.66, 0, 0, 1);
+  }
+  
+  /* Enhanced Markdown Styles */
+  .markdown-content {
+    color: #333;
+    line-height: 1.6;
+  }
+  
+  .markdown-content h1 {
+    font-size: 1.8rem;
+    font-weight: 600;
+    margin-top: 0.5rem; /* Reduced from 1.5rem */
+    margin-bottom: 1rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid rgba(230, 230, 230, 0.8);
+  }
+  
+  .markdown-content h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-top: 1.4rem;
+    margin-bottom: 0.8rem;
+  }
+  
+  .markdown-content h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-top: 1.2rem;
+    margin-bottom: 0.6rem;
+  }
+  
+  .markdown-content h4 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+  }
+  
+  .markdown-content p {
+    margin-bottom: 1rem;
+  }
+  
+  .markdown-content ul, .markdown-content ol {
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+  }
+  
+  .markdown-content li {
+    margin-bottom: 0.25rem;
+  }
+  
+  .markdown-content blockquote {
+    border-left: 3px solid #e2e8f0;
+    padding-left: 1rem;
+    color: #64748b;
+    font-style: italic;
+    margin: 1rem 0;
+  }
+  
+  .markdown-content code {
+    font-family: monospace;
+    background-color: rgba(0, 0, 0, 0.05);
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  
+  .markdown-content pre {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 0.375rem;
+    overflow-x: auto;
+    margin: 1rem 0;
+  }
+  
+  .markdown-content pre code {
+    background-color: transparent;
+    padding: 0;
+    font-size: 0.9rem;
+    color: #333;
+  }
+  
+  .markdown-content a {
+    color: #3b82f6;
+    text-decoration: none;
+  }
+  
+  .markdown-content a:hover {
+    text-decoration: underline;
+  }
+  
+  .markdown-content img {
+    max-width: 100%;
+    border-radius: 0.375rem;
+    margin: 1rem 0;
+  }
+  
+  .markdown-content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+  }
+  
+  .markdown-content table th,
+  .markdown-content table td {
+    border: 1px solid #e2e8f0;
+    padding: 0.5rem;
+    text-align: left;
+  }
+  
+  .markdown-content table th {
+    background-color: #f8fafc;
+  }
+  
+  /* Editor styles */
+  .document-editor {
+    width: 100%;
+    height: 100%;
+    outline: none;
+    padding: 1.5rem;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: #333;
+    min-height: 300px;
+  }
+  
+  .document-editor:empty:before {
+    content: "Start typing your document...";
+    color: #9ca3af;
+    position: absolute;
+    pointer-events: none;
+  }
+  
+  /* Smooth transitions between document selection */
+  .detail-view-container {
+    will-change: opacity;
+    transition: opacity 0.2s ease-out;
+  }
+  
+  .detail-view-container.fade-out {
+    opacity: 0;
+  }
+  
+  .detail-view-container.fade-in {
+    opacity: 1;
+  }
+  
+  /* Optimize renders by using contain */
+  .document-list-container {
+    contain: content;
+  }
+  
+  /* AI response styles */
+  .ai-response-container {
+    animation: fadeIn 0.3s ease-out;
+  }
+  
+  /* Custom dialog height */
+  .custom-height-dialog {
+    max-height: 98vh;
+    overflow-y: auto;
+  }
+  
+  /* Custom tooltip styles */
+  .custom-tooltip {
+    background-color: white;
+    color: #333;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+  
+  /* Right-side drawer animation for Vault Info */
+  .vault-info-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 500px;
+    background-color: white;
+    box-shadow: -4px 0 15px rgba(0, 0, 0, 0.1);
+    z-index: 50;
+    transform: translateX(100%);
+    transition: transform 0.3s ease-in-out;
+    overflow-y: auto;
+  }
+  
+  .vault-info-drawer.open {
+    transform: translateX(0);
+  }
+  
+  .vault-info-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.4);
+    z-index: 49;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out;
+  }
+  
+  .vault-info-backdrop.open {
+    opacity: 1;
+    pointer-events: all;
+  }
+`;
+
+// Add the AI Logo component after interfaces
+const AILogo = () => (
+  <svg 
+    width="16" 
+    height="16" 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    xmlns="http://www.w3.org/2000/svg"
+    className="flex-shrink-0"
+  >
+    <defs>
+      <linearGradient id="aiLogoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#4285F4" /> {/* Blue */}
+        <stop offset="100%" stopColor="#EA4335" /> {/* Orange-red */}
+      </linearGradient>
+    </defs>
+    <path 
+      d="M12 1.999c-5.523 0-10 4.477-10 10s4.477 10 10 10 10-4.477 10-10-4.477-10-10-10zm4.709 15.096a1 1 0 01-1.414 0L12 13.414l-3.292 3.293a1 1 0 11-1.414-1.414l3.293-3.293-3.29-3.292a1 1 0 011.414-1.414L12 10.586l3.295-3.294a1 1 0 011.414 1.414l-3.293 3.293 3.293 3.295a1 1 0 010 1.414zM7.404 6.126a1 1 0 00-.819 1.819A5.99 5.99 0 0112 18a1 1 0 100-2 4 4 0 01-3.538-6.066 1 1 0 00-.858-1.809zm9.195.016a1 1 0 10-.817 1.826A5.98 5.98 0 0118 12a6.003 6.003 0 01-6 6 1 1 0 100 2c4.411 0 8-3.589 8-8 0-2.129-.835-4.15-2.346-5.655a1 1 0 00-.055-.204z"
+      fill="url(#aiLogoGradient)"
+    />
+  </svg>
+);
+
+// Safe date formatting function moved outside the component for stable reference
+const safeFormatDate = (date: Date | null, formatString: string): string => {
+  if (!date || !isValid(date)) {
+    return "Invalid date";
+  }
+  try {
+    return format(date, formatString);
+  } catch (error) {
+    console.error("Error formatting date:", error);
+    return "Invalid date";
+  }
+};
+
+// Add memoized DocumentItem component
+const DocumentItem = memo(({ 
+  note, 
+  isSelected, 
+  onSelect, 
+  formatDateFunction
+}: { 
+  note: Note; 
+  isSelected: boolean; 
+  onSelect: (note: Note) => void;
+  formatDateFunction: (date: Date | null, format: string) => string;
+}) => {
+  return (
+    <div 
+      className={cn(
+        "p-3 cursor-pointer border bg-white rounded-md document-container transition-colors",
+        isSelected ? "selected border-blue-300 shadow-sm" : "border-gray-200",
+        note.type === 'invoice' ? "border-l-4 border-l-green-400" :
+        note.type === 'pdf' ? "border-l-4 border-l-red-400" :
+        note.type === 'image' ? "border-l-4 border-l-blue-400" :
+        note.type === 'note' ? "border-l-4 border-l-yellow-400" : "",
+        note.pendingKnowledgeBase ? "processing-pulse" : ""
+      )}
+      onClick={() => onSelect(note)}
+    >
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5">
+          {note.type === 'pdf' || (note.fileUrl && note.fileName?.toLowerCase().endsWith('.pdf')) ? (
+            <FileIcon className="h-4 w-4 text-red-500 flex-shrink-0" />
+          ) : note.type === 'image' || (note.fileUrl && ['jpg', 'jpeg', 'png', 'gif'].some(ext => note.fileName?.toLowerCase().endsWith(ext))) ? (
+            <ImageIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
+          ) : note.type === 'invoice' ? (
+            <FileText className="h-4 w-4 text-green-500 flex-shrink-0" />
+          ) : note.type === 'note' ? (
+            <FileText className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+          ) : (
+            <FileIcon className="h-4 w-4 text-gray-500 flex-shrink-0" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-medium text-sm truncate">{note.title}</h3>
+          <p className="text-xs text-gray-500 truncate mt-0.5">
+            {note.summary || (note.fileName ? note.fileName : 'No description')}
+          </p>
+          <div className="flex items-center gap-1.5 mt-2">
+            <Badge 
+              variant="outline" 
+              className="text-[10px] px-1.5 py-0 h-4 rounded-full bg-gray-50 border-gray-200"
+            >
+              {note.type}
+            </Badge>
+            <span className="text-[10px] text-gray-400">
+              {formatDateFunction(note.createdAt, "MMM d, yyyy")}
+            </span>
+            {note.origin === "gmail" && (
+              <span className="flex items-center" title="Imported from Gmail">
+                <Image 
+                  src="/gmail.png" 
+                  alt="Gmail" 
+                  width={12} 
+                  height={9}
+                  className="object-contain ml-1" 
+                />
+              </span>
+            )}
+            {/* Status badges with priority order */}
+            {note.pendingKnowledgeBase && (
+              <Badge 
+                className="flex items-center gap-0.5 text-[10px] h-4 px-1.5 py-0 bg-amber-50 text-amber-600 border-amber-100 rounded-full"
+              >
+                <span className="h-2 w-2 bg-amber-500 rounded-full animate-pulse mr-0.5"></span> Processing
+              </Badge>
+            )}
+            {!note.pendingKnowledgeBase && note.knowledgeBaseStatus === "removing" && (
+              <Badge 
+                className="flex items-center gap-0.5 text-[10px] h-4 px-1.5 py-0 bg-red-50 text-red-600 border-red-100 rounded-full"
+              >
+                <Loader2 className="h-2 w-2 animate-spin" /> Removing
+              </Badge>
+            )}
+            {!note.pendingKnowledgeBase && !note.inKnowledgeBase && note.knowledgeBaseStatus === "deleted" && (
+              <Badge 
+                className="flex items-center gap-0.5 text-[10px] h-4 px-1.5 py-0 bg-gray-100 text-gray-600 border-gray-200 rounded-full"
+              >
+                <X className="h-2 w-2" /> Removed
+              </Badge>
+            )}
+            {!note.pendingKnowledgeBase && note.inKnowledgeBase && note.knowledgeBaseStatus !== "removing" && (
+              <Badge 
+                className="flex items-center gap-0.5 text-[10px] h-4 px-1.5 py-0 bg-blue-50 text-blue-600 border-blue-100 rounded-full"
+              >
+                <Check className="h-2 w-2" /> Vault
+              </Badge>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+DocumentItem.displayName = "DocumentItem";
+
+export default function NotesPage() {
+  const { user } = useAuth();
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
+  const [loading, setLoading] = useState(true);
+  const initialLoadComplete = useRef(false);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("all");
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState("");
+  
+  // Add Knowledge Vault management states
+  const [isAddingToVault, setIsAddingToVault] = useState(false);
+  const [isRemovingFromVault, setIsRemovingFromVault] = useState(false);
+  
+  // Add Gmail sync state
+  const [gmailSyncEnabled, setGmailSyncEnabled] = useState(false);
+  const [isSyncingGmail, setIsSyncingGmail] = useState(false);
+  
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadSummary, setUploadSummary] = useState("");
+  const [uploadTags, setUploadTags] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingFile, setDeletingFile] = useState(false);
+  
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  
+  const [searchMode, setSearchMode] = useState<"filter" | "semantic">("filter");
+  const [semanticSearchQuery, setSemanticSearchQuery] = useState("");
+  const [isLoadingKnowledgeChat, setIsLoadingKnowledgeChat] = useState(false);
+  const [knowledgeChatResponse, setKnowledgeChatResponse] = useState<KnowledgeChatResponse | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+   
+  const [relatedNotes, setRelatedNotes] = useState<RelatedNote[]>([]);
+  const [loadingRelated, setLoadingRelated] = useState(false);
+  
+  const [showDocumentEditor, setShowDocumentEditor] = useState(false);
+  const [documentTitle, setDocumentTitle] = useState("Untitled Document");
+  const [documentContent, setDocumentContent] = useState(""); 
+  const [isSavingDocument, setIsSavingDocument] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
+  
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [showAiResponseInContent, setShowAiResponseInContent] = useState(false);
+
+  // Add new state for showing summary
+  const [showSummary, setShowSummary] = useState(false);
+  const [showInlineSummary, setShowInlineSummary] = useState(false);
+
+  // Add state for showing vault info
+  const [showVaultInfo, setShowVaultInfo] = useState(false);
+
+  // Add state for sending to CS Vault - add this with the other state declarations
+  const [isSendingToCSVault, setIsSendingToCSVault] = useState(false);
+
+  // Fetch notes from Firestore - depends only on user
+  useEffect(() => {
+    if (!user || !user.uid) {
+      setNotes([]);
+      setLoading(false);
+      initialLoadComplete.current = false;
+      return;
+    }
+    
+    if (!initialLoadComplete.current) {
+        setLoading(true);
+    }
+
+      const notesRef = collection(db, `merchants/${user.uid}/files`);
+        const notesQuery = query(notesRef, orderBy("createdAt", "desc"));
+        
+      const unsubscribe = onSnapshot(notesQuery, (querySnapshot) => {
+      const notesData: Note[] = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+        const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+        let noteType = data.type || "other";
+        const fileName = data.fileName || "";
+        const fileTypeFromData = data.fileType || fileName.split('.').pop()?.toLowerCase() || '';
+        if (!data.type) {
+          if (fileTypeFromData === 'pdf') noteType = fileName.toLowerCase().includes('invoice') ? "invoice" : "pdf";
+          else if (['jpg', 'jpeg', 'png', 'gif'].includes(fileTypeFromData)) noteType = "image";
+          else if (['doc', 'docx', 'txt', 'md'].includes(fileTypeFromData)) noteType = "note";
+        }
+        return {
+            id: doc.id,
+            title: data.title || "Untitled",
+            summary: data.summary || "",
+            rawText: data.rawText || "",
+            tags: data.tags || [],
+            areaId: data.areaId || "",
+            areaTitle: data.areaTitle || "Uncategorized",
+            categoryId: data.categoryId || "",
+            categoryTitle: data.categoryTitle || "General",
+            createdAt,
+            type: noteType as Note['type'],
+            fileUrl: data.fileUrl || "",
+            fileType: fileTypeFromData,
+            fileName: fileName,
+            originalFileName: data.originalFileName || "",
+            fileId: data.fileId || "",
+            contentType: data.contentType || "",
+            inKnowledgeBase: data.inKnowledgeBase === true,
+          pendingKnowledgeBase: data.pendingKnowledgeBase === true,
+          knowledgeBaseStatus: data.knowledgeBaseStatus,
+          origin: data.origin || "",
+          content: data.content || "",
+          sharedWithAgentId: data.sharedWithAgentId || "",
+          sharedWithAgentAt: data.sharedWithAgentAt || serverTimestamp(),
+        } as Note;
+      });
+        setNotes(notesData);
+      checkKnowledgeBaseStatus(notesData);
+
+      if (!initialLoadComplete.current) {
+        setLoading(false);
+        initialLoadComplete.current = true;
+      }
+        }, (error) => {
+          console.error("Error listening to notes collection:", error);
+      toast({ title: "Error", description: "Failed to load documents.", variant: "destructive" });
+      if (!initialLoadComplete.current) {
+          setLoading(false);
+        initialLoadComplete.current = true;
+      }
+    });
+    return () => unsubscribe();
+  }, [user]);
+
+  // Manage selectedNote based on notes list changes
+  useEffect(() => {
+    if (selectedNote) {
+      const isSelectedNoteStillPresent = notes.some(note => note.id === selectedNote.id);
+      if (!isSelectedNoteStillPresent) {
+        setSelectedNote(notes.length > 0 ? notes[0] : null);
+      }
+    } else {
+      if (notes.length > 0) {
+        setSelectedNote(notes[0]);
+      }
+    }
+  }, [notes, selectedNote, setSelectedNote]);
+
+  const filteredNotes = useMemo(() => {
+    return notes.filter(note => {
+      const matchesSearch = searchQuery === "" || 
+        note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        note.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        note.rawText.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        note.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+      
+      const matchesTab = 
+        activeTab === "all" || 
+        (activeTab === "invoices" && note.type === "invoice") ||
+        (activeTab === "notes" && note.type === "note") ||
+        (activeTab === "gmail" && note.origin === "gmail") ||
+        (activeTab === "other" && (note.type === "other" || note.type === "pdf" || note.type === "image")) ||
+        // Only vault filter
+        (activeTab === "vault" && (note.inKnowledgeBase || note.pendingKnowledgeBase));
+      
+      return matchesSearch && matchesTab;
+    });
+  }, [notes, searchQuery, activeTab]);
+
+  // Function to handle document selection with vault processing indicator
+  const handleNoteSelection = (note: Note) => {
+    if (selectedNote?.id === note.id) {
+      if (selectedNote !== note) setSelectedNote(note);
+      return;
+    }
+    
+    // Hide summary when changing documents
+    setShowSummary(false);
+    
+    if (showAiResponseInContent) setShowAiResponseInContent(false);
+    setIsTransitioning(true);
+    setSelectedNote(note);
+    
+    requestAnimationFrame(() => {
+      setTimeout(() => setIsTransitioning(false), 100);
+    });
+  };
+
+  const checkKnowledgeBaseStatus = async (notesData: Note[]) => {
+    if (!user?.uid) return;
+    try {
+      const results = await Promise.all(notesData
+        .filter(note => note.fileName || note.originalFileName)
+        .map(async (note) => {
+          // Preserve deleted status - don't reprocess these
+          if (note.knowledgeBaseStatus === "deleted") {
+            return { 
+              noteId: note.id, 
+              isInKnowledgeBase: false, 
+              isPending: false,
+              knowledgeBaseStatus: "deleted" as const
+            };
+          }
+          
+          if (note.inKnowledgeBase) return { 
+            noteId: note.id, 
+            isInKnowledgeBase: true, 
+            isPending: false,
+            knowledgeBaseStatus: "added" as const
+          };
+          
+          const kbRef = collection(db, `merchants/${user.uid}/knowledgebase`);
+          const kbQuery = query(kbRef, orderBy("createTime", "desc")); 
+          const kbSnapshot = await getDocs(kbQuery);
+          let isInKnowledgeBase = false;
+          let isPending = note.pendingKnowledgeBase || false;
+          let status: Note['knowledgeBaseStatus'] = null;
+          
+          for (const docSnap of kbSnapshot.docs) {
+            const kbData = docSnap.data();
+            const isMatch = (note.fileId && kbData.fileId === note.fileId) ||
+              ((note.fileName && (kbData.source?.includes(note.fileName) || kbData.fileName === note.fileName)) ||
+              (note.originalFileName && (kbData.source?.includes(note.originalFileName) || kbData.fileName === note.originalFileName)));
+                
+            if (isMatch) {
+              // If this was previously deleted but is now being reprocessed, make sure we clear the deleted status
+              if (String(note.knowledgeBaseStatus) === "deleted" && note.pendingKnowledgeBase) {
+                const noteRef = doc(db, `merchants/${user.uid}/files`, note.id);
+                updateDoc(noteRef, { 
+                  knowledgeBaseStatus: "processing"
+                }).catch(error => {
+                  console.error("Error updating document status from deleted to processing:", error);
+                });
+                
+                // If this is the currently selected note, update it immediately in the UI
+                if (selectedNote && selectedNote.id === note.id) {
+                  setSelectedNote(prev => {
+                    if (!prev) return null;
+                    return {
+                      ...prev, 
+                      knowledgeBaseStatus: "processing"
+                    };
+                  });
+                }
+              }
+              
+              // If status is success, update the document
+              if (kbData.status === "success") {
+                isInKnowledgeBase = true;
+                isPending = false;
+                status = "added";
+                
+                // If the document's Firestore status doesn't match the actual status, update it
+                if ((note.pendingKnowledgeBase || false) || !(note.inKnowledgeBase || false)) {
+                  const noteRef = doc(db, `merchants/${user.uid}/files`, note.id);
+                  updateDoc(noteRef, { 
+                    pendingKnowledgeBase: false,
+                    inKnowledgeBase: true,
+                    knowledgeBaseStatus: "added"
+                  }).catch(error => {
+                    console.error("Error updating document status:", error);
+                  });
+                }
+                
+                break; 
+              }
+              if (kbData.status === "pending" || kbData.status === "processing") {
+                isPending = true;
+                status = "processing";
+              }
+              if (kbData.status === "deleted") {
+                isInKnowledgeBase = false;
+              isPending = false;
+                status = "deleted";
+                
+                // Update the document in Firestore if needed
+                if ((note.pendingKnowledgeBase || false) || (note.inKnowledgeBase || false)) {
+                  const noteRef = doc(db, `merchants/${user.uid}/files`, note.id);
+                  updateDoc(noteRef, { 
+                    pendingKnowledgeBase: false,
+                    inKnowledgeBase: false,
+                    knowledgeBaseStatus: "deleted"
+                  }).catch(error => {
+                    console.error("Error updating document deletion status:", error);
+                  });
+                }
+              }
+            }
+          }
+          return { 
+            noteId: note.id, 
+            isInKnowledgeBase, 
+            isPending,
+            knowledgeBaseStatus: status
+          };
+        }));
+        
+      setNotes(prevNotes => {
+        let changed = false;
+        const updatedNotes = prevNotes.map(currentNote => {
+          const result = results.find(r => r.noteId === currentNote.id);
+          if (result && (
+            // Don't override the deleted status
+            currentNote.knowledgeBaseStatus !== "deleted" && (
+              currentNote.inKnowledgeBase !== result.isInKnowledgeBase || 
+              currentNote.pendingKnowledgeBase !== result.isPending ||
+              currentNote.knowledgeBaseStatus !== result.knowledgeBaseStatus
+            )
+          )) {
+            changed = true;
+            return { ...currentNote, 
+              inKnowledgeBase: result.isInKnowledgeBase,
+              pendingKnowledgeBase: result.isPending,
+              knowledgeBaseStatus: result.knowledgeBaseStatus
+            };
+          }
+          return currentNote;
+        });
+        return changed ? updatedNotes : prevNotes;
+      });
+    } catch (error) {
+      console.error("Error checking knowledge base status:", error);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setUploadFile(file);
+      setUploadTitle(file.name.split('.').slice(0, -1).join('.'));
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!uploadFile || !user?.uid) {
+      toast({ title: "Error", description: !uploadFile ? "No file selected." : "Authentication Error.", variant: "destructive" });
+      return;
+    }
+      setUploading(true);
+      setUploadProgress(0);
+      
+    try {
+      // Determine the file type
+      const fileExtension = uploadFile.name.split('.').pop()?.toLowerCase() || '';
+      let noteType: Note['type'] = "other";
+      if (fileExtension === 'pdf') {
+        noteType = uploadFile.name.toLowerCase().includes('invoice') ? "invoice" : "pdf";
+      } else if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExtension)) {
+        noteType = "image";
+      } else if (['doc', 'docx', 'txt', 'md'].includes(fileExtension)) {
+        noteType = "note";
+      }
+      
+      // Set content type
+      const contentType = uploadFile.type || 'application/octet-stream';
+      
+      // Generate fileId 
+      const fileId = uuidv4();
+      
+      // Upload to Firebase Storage using the fileId
+      const storageRef = ref(getStorage(), `merchants/${user.uid}/files/${fileId}`);
+      const uploadTask = uploadBytesResumable(storageRef, uploadFile, { contentType });
+      
+      await new Promise<void>((resolve, reject) => {
+        uploadTask.on('state_changed',
+          (snapshot) => {
+            // Handle progress
+            setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+          },
+          (error) => {
+            // Handle error
+            toast({ title: "Upload Error", description: error.message, variant: "destructive" });
+            reject(error);
+          },
+          async () => {
+            try {
+              // Get download URL after successful upload
+              const downloadURL = await getDownloadURL(storageRef);
+              
+              // Create document in Firestore
+              const notesRef = collection(db, `merchants/${user.uid}/files`);
+              
+              // Prepare document data
+              const noteData = {
+                title: uploadTitle || uploadFile.name,
+                summary: uploadSummary,
+                rawText: "", 
+                tags: uploadTags.split(',').map(t => t.trim()).filter(Boolean),
+                areaId: "uploads",
+                areaTitle: "Uploaded Documents",
+                categoryId: "documents",
+                categoryTitle: "Documents",
+                createdAt: serverTimestamp(),
+                type: noteType,
+                fileUrl: downloadURL,
+                fileType: fileExtension,
+                fileName: fileId, // Set fileName to be the same as fileId
+                originalFileName: uploadFile.name, // Keep the original file name here
+                // Store the UUID as the fileId to match the Storage path
+                fileId: fileId,
+                contentType,
+                content: ""
+              };
+              
+              // Save document to Firestore with a custom ID matching the Storage fileId
+              await setDoc(doc(db, `merchants/${user.uid}/files`, fileId), noteData);
+              
+              // Reset form and show success message
+              resetUploadForm();
+              setUploadDialogOpen(false);
+              toast({ title: "Document uploaded" });
+              resolve();
+            } catch (e) {
+              toast({ title: "Firestore Error", variant: "destructive" });
+              reject(e);
+            }
+          }
+        );
+      });
+    } catch (e) {
+      toast({ title: "Upload Failed", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+  
+  const resetUploadForm = () => {
+    setUploadFile(null); setUploadTitle(""); setUploadSummary(""); setUploadTags("");
+    setUploadProgress(0); if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleDeleteFile = async () => {
+    if (!selectedNote || !user?.uid) return;
+      setDeletingFile(true);
+    try {
+      await deleteDoc(doc(db, `merchants/${user.uid}/files`, selectedNote.id));
+      toast({ title: "Document deleted" });
+      setDeleteDialogOpen(false);
+      // selectedNote will be updated by useEffect due to notes change
+    } catch (e) { toast({ title: "Delete failed", variant: "destructive" }); }
+    finally { setDeletingFile(false); }
+  };
+
+  const updateDocumentTitle = async () => {
+    if (!selectedNote || !editedTitle.trim() || !user?.uid) return;
+    setIsEditingTitle(false);
+    try {
+      const noteRef = doc(db, `merchants/${user.uid}/files`, selectedNote.id);
+      await updateDoc(noteRef, { title: editedTitle });
+      // Optimistic update for selectedNote, main list updates via snapshot
+      setSelectedNote(prev => prev ? { ...prev, title: editedTitle } : null);
+      toast({ title: "Title updated" });
+    } catch (e) { toast({ title: "Update failed", variant: "destructive" }); }
+  };
+  
+  const handleDownload = () => {
+    if (!selectedNote?.fileUrl) return;
+    const link = document.createElement('a');
+    link.href = selectedNote.fileUrl;
+    link.download = selectedNote.fileName || selectedNote.title;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+  
+  const handleOpenInNewTab = () => {
+    if (!selectedNote?.fileUrl) return;
+    window.open(selectedNote.fileUrl, '_blank');
+  };
+
+  const handleStartTitleEdit = () => {
+    if (!selectedNote) return;
+    setEditedTitle(selectedNote.title);
+    setIsEditingTitle(true);
+    setTimeout(() => titleInputRef.current?.focus(), 0); // Focus after render
+  };
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') updateDocumentTitle();
+    else if (e.key === 'Escape') setIsEditingTitle(false);
+  };
+  
+  const renderFilePreview = () => {
+    if (!selectedNote) return <div className="p-8 text-center">No document selected.</div>;
+    
+    const { fileUrl, type, fileType, title, content, rawText, summary } = selectedNote;
+    
+    // Render document content
+    const renderDocumentContent = () => {
+      // For notes with content but no file URL (like created notes)
+      if (type === 'note' && (content || rawText) && !fileUrl) {
+        return (
+          <div className="w-full h-full bg-white rounded-md shadow-sm p-6 relative">
+            <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: content || `<p>${rawText}</p>` }} />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="absolute top-4 right-4 gap-1.5 rounded-md"
+              onClick={editExistingNote}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              <span>Edit</span>
+            </Button>
+          </div>
+        );
+      }
+      
+      if (!fileUrl) return (
+        <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-md h-full bg-gray-50">
+          <FileIcon className="h-12 w-12 text-gray-300 mb-4" />
+          <p className="text-center text-gray-500">Preview not available (no file URL).</p>
+        </div>
+      );
+
+      const isPdf = type === 'pdf' || type === 'invoice' || fileUrl.toLowerCase().endsWith('.pdf');
+      const isImage = type === 'image' || ['jpg', 'jpeg', 'png', 'gif'].some(ext => fileType?.toLowerCase() === ext || fileUrl.toLowerCase().endsWith(`.${ext}`));
+
+      if (isPdf) return <iframe src={fileUrl} className="w-full h-full rounded-md" />;
+      if (isImage) return <img src={fileUrl} alt={title} className="max-w-full max-h-full object-contain rounded-md shadow-sm" />;
+
+      return (
+        <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-md h-full bg-gray-50">
+          <FileIcon className="h-12 w-12 text-gray-300 mb-4" />
+          <p className="text-center text-gray-500 mb-4">Preview not available for this file type.</p>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={handleDownload} className="gap-2 rounded-md"><DownloadCloud size={16}/>Download</Button>
+            <Button variant="outline" size="sm" onClick={handleOpenInNewTab} className="gap-2 rounded-md"><ExternalLink size={16}/>Open</Button>
+          </div>
+        </div>
+      );
+    };
+    
+    // Return content with summary section if enabled
+    return (
+      <div className="flex flex-col h-full">
+        {showInlineSummary && summary && (
+          <div className="mb-4 bg-white rounded-md border shadow-sm overflow-hidden">
+            <div className="bg-blue-50 px-4 py-2 border-b border-blue-100 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-blue-500" />
+                <h3 className="text-sm font-medium text-blue-700">Document Summary</h3>
+              </div>
+              <Button 
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 rounded-full"
+                onClick={toggleSummaryDisplay}
+              >
+                <X className="h-3.5 w-3.5 text-blue-500" />
+              </Button>
+            </div>
+            <div className="p-4">
+              <div className="flex items-center gap-1.5 mb-2">
+                {selectedNote.type === 'pdf' || (selectedNote.fileUrl && selectedNote.fileName?.toLowerCase().endsWith('.pdf')) ? (
+                  <FileIcon className="h-4 w-4 text-red-500 flex-shrink-0" />
+                ) : selectedNote.type === 'image' || (selectedNote.fileUrl && ['jpg', 'jpeg', 'png', 'gif'].some(ext => selectedNote.fileName?.toLowerCase().endsWith(ext))) ? (
+                  <ImageIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                ) : selectedNote.type === 'invoice' ? (
+                  <FileText className="h-4 w-4 text-green-500 flex-shrink-0" />
+                ) : selectedNote.type === 'note' ? (
+                  <FileText className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+                ) : (
+                  <FileIcon className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                )}
+                <span className="font-medium text-sm">{selectedNote.title}</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                <Badge variant="outline" className="text-xs rounded-md">
+                  {selectedNote.type}
+                </Badge>
+                <Badge className="bg-gray-100 text-gray-600 border-gray-200 text-xs rounded-md">
+                  {safeFormatDate(selectedNote.createdAt, "MMM d, yyyy")}
+                </Badge>
+                {selectedNote.origin === "gmail" && (
+                  <Badge className="bg-red-50 text-red-600 border-red-100 text-xs rounded-md">
+                    Gmail
+                  </Badge>
+                )}
+                {selectedNote.inKnowledgeBase && (
+                  <Badge className="bg-blue-50 text-blue-600 border-blue-100 text-xs rounded-md">
+                    Vault
+                  </Badge>
+                )}
+              </div>
+              
+              {selectedNote.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-3">
+                  {selectedNote.tags.map(tag => (
+                    <Badge key={tag} variant="secondary" className="text-[10px] rounded-md">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              
+              <div className="text-sm text-gray-700 whitespace-pre-line bg-gray-50 p-3 rounded-md border border-gray.100">
+                {summary}
+              </div>
+            </div>
+          </div>
+        )}
+        <div className={`flex-grow ${showInlineSummary ? 'h-[calc(100%-12rem)]' : 'h-full'}`}>
+          {renderDocumentContent()}
+        </div>
+      </div>
+    );
+  };
+
+  const callKnowledgeChatFunction = async () => {
+    if (!semanticSearchQuery.trim() || !user?.uid) return;
+    setSelectedNote(null); setShowDocumentEditor(false); 
+    setShowAiResponseInContent(true); setIsLoadingKnowledgeChat(true);
+    try {
+      const response = await fetch('https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/knowledgeBase', 
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ merchantId: user.uid, prompt: semanticSearchQuery }) });
+      if (!response.ok) throw new Error(await response.text() || response.statusText);
+      const data = await response.json(); // Assume JSON response now
+      if (data?.answer) setKnowledgeChatResponse({ answer: data.answer, sources: data.sources || [], metadata: data.metadata || { contextCount:0, query: semanticSearchQuery }});
+      else if (data?.summary) setKnowledgeChatResponse({ answer: data.summary, sources: [], metadata: { contextCount:0, query: semanticSearchQuery }});
+      else throw new Error("Unexpected AI response format");
+      toast({ title: "Search Complete" });
+    } catch (e: any) { 
+      setKnowledgeChatResponse({ answer: `Error: ${e.message}`, sources:[], metadata: {contextCount:0, query: semanticSearchQuery}});
+      toast({ title: "Search Failed", description: e.message, variant: "destructive" });
+    }
+    finally { setIsLoadingKnowledgeChat(false); }
+  };
+
+  const fetchRelatedNotes = async (noteId: string) => {
+    if (!user?.uid) return;
+    setLoadingRelated(true);
+    try {
+      const getRelatedNotesFunction = httpsCallable(getFunctions(), 'getRelatedNotes');
+      const result = await getRelatedNotesFunction({ merchantId: user.uid, noteId, limit: 3, minScore: 0.7 });
+      setRelatedNotes((result.data as { related: RelatedNote[] })?.related || []);
+    } catch (e) { console.error('Error fetching related notes:', e); setRelatedNotes([]); }
+    finally { setLoadingRelated(false); }
+  };
+
+  useEffect(() => {
+    if (selectedNote && !isTransitioning) fetchRelatedNotes(selectedNote.id);
+    else if (!selectedNote) setRelatedNotes([]);
+  }, [selectedNote, isTransitioning, user]); // Added user
+
+  const handleNewDocument = () => {
+    setSelectedNote(null); setShowAiResponseInContent(false);
+    setDocumentTitle("Untitled Document"); setDocumentContent("");
+    if (editorRef.current) editorRef.current.innerHTML = ""; // Clear editor content
+    setShowDocumentEditor(true);
+  };
+
+  const saveDocument = async () => {
+    if (!user?.uid) { toast({ title: "Auth Error", variant:"destructive"}); return; }
+    setIsSavingDocument(true);
+    try {
+      const content = editorRef.current?.innerHTML || "";
+      const text = editorRef.current?.textContent || "";
+      const noteData = {
+        title: documentTitle, 
+        summary: text.slice(0,150)+(text.length > 150 ? '...':''), 
+        rawText: text,
+        content: content, // Make sure content is saved
+        tags: [], 
+        areaId: "documents", 
+        areaTitle: "Documents", 
+        categoryId: "notes", 
+        categoryTitle: "Notes",
+        createdAt: serverTimestamp(), 
+        type: "note" as Note['type']
+      };
+      await addDoc(collection(db, `merchants/${user.uid}/files`), noteData);
+      toast({ title: "Document Saved" });
+      setShowDocumentEditor(false);
+    } catch (e) { toast({ title: "Save Error", variant: "destructive" }); }
+    finally { setIsSavingDocument(false); }
+  };
+
+  // Add a function to start editing an existing note
+  const editExistingNote = () => {
+    if (!selectedNote) return;
+    
+    setDocumentTitle(selectedNote.title);
+    setDocumentContent(selectedNote.content || selectedNote.rawText || "");
+    setShowDocumentEditor(true);
+  };
+
+  // Add function to update an existing note
+  const updateExistingDocument = async () => {
+    if (!user?.uid || !selectedNote) { 
+      toast({ title: "Error", description: "Missing note or authentication", variant:"destructive"}); 
+      return; 
+    }
+    
+    setIsSavingDocument(true);
+    try {
+      const content = editorRef.current?.innerHTML || "";
+      const text = editorRef.current?.textContent || "";
+      
+      const noteRef = doc(db, `merchants/${user.uid}/files`, selectedNote.id);
+      await updateDoc(noteRef, { 
+        title: documentTitle,
+        content: content,
+        rawText: text,
+        summary: text.slice(0,150)+(text.length > 150 ? '...':'')
+      });
+      
+      // Optimistic update for selectedNote
+                setSelectedNote(prev => prev ? {
+                  ...prev,
+        title: documentTitle,
+        content: content,
+        rawText: text,
+        summary: text.slice(0,150)+(text.length > 150 ? '...':'')
+                } : null);
+      
+      toast({ title: "Document Updated" });
+      setShowDocumentEditor(false);
+    } catch (e) { 
+      console.error("Error updating document:", e);
+      toast({ title: "Update Failed", variant: "destructive" }); 
+    } finally {
+      setIsSavingDocument(false); 
+    }
+  };
+
+  // Add helper function for toggling summary display
+  const toggleSummaryDisplay = () => {
+    setShowInlineSummary(!showInlineSummary);
+  };
+
+  // Gmail sync function
+  const toggleGmailSync = async () => {
+    if (!user?.uid) return;
+    
+    try {
+      setIsSyncingGmail(true);
+      
+      // Get reference to agent document in the agents collection
+      const agentDocRef = doc(db, `agents/${user.uid}`);
+      
+      // Toggle the gmailfilesync field in the agent document (lowercase)
+      await updateDoc(agentDocRef, {
+        gmailfilesync: !gmailSyncEnabled
+      });
+      
+      // Update local state
+      setGmailSyncEnabled(!gmailSyncEnabled);
+        
+        toast({
+        title: !gmailSyncEnabled ? "Gmail sync enabled" : "Gmail sync disabled",
+        description: !gmailSyncEnabled 
+          ? "Your Gmail documents will now automatically sync" 
+          : "Your Gmail documents will no longer sync",
+      });
+    } catch (error) {
+      console.error('Error toggling Gmail sync:', error);
+      toast({
+        title: "Sync Error",
+        description: "Failed to toggle Gmail sync. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSyncingGmail(false);
+    }
+  };
+  
+  // Add a useEffect to show vault processing animation for newly added documents
+  useEffect(() => {
+    const checkNewDocumentVaultStatus = () => {
+      // Find documents that are newly added but not yet marked as pending for KB
+      // Skip documents that have been deleted from the vault
+      const newlyAddedDocs = notes.filter(note => 
+        !note.inKnowledgeBase && 
+        !note.pendingKnowledgeBase && 
+        note.knowledgeBaseStatus !== "deleted" && // Skip deleted docs
+        note.knowledgeBaseStatus !== "removing" && // Skip removing docs
+        // Consider a document "new" if added in the last minute
+        note.createdAt && ((new Date().getTime() - note.createdAt.getTime()) < 60000)
+      );
+      
+      if (newlyAddedDocs.length > 0) {
+        // Mark these documents as pending for knowledge base
+        setNotes(prevNotes => 
+          prevNotes.map(note => 
+            newlyAddedDocs.some(newDoc => newDoc.id === note.id)
+              ? { ...note, pendingKnowledgeBase: true }
+              : note
+          )
+        );
+        
+        // If one of these is the selected note, update it too
+        if (selectedNote && newlyAddedDocs.some(newDoc => newDoc.id === selectedNote.id)) {
+          setSelectedNote(prev => prev ? { ...prev, pendingKnowledgeBase: true } : null);
+        }
+      }
+    };
+    
+    // Run the check when notes change
+    checkNewDocumentVaultStatus();
+  }, [notes, selectedNote]);
+
+  // Restore Gmail sync status check
+  useEffect(() => {
+    const checkGmailSyncStatus = async () => {
+      if (!user?.uid) return;
+      
+      try {
+        // Get agent document from the agents collection
+        const agentDocRef = doc(db, `agents/${user.uid}`);
+        const agentDoc = await getDoc(agentDocRef);
+        
+        if (agentDoc.exists()) {
+          // Check the lowercase gmailfilesync field
+          const syncEnabled = agentDoc.data().gmailfilesync === true;
+          setGmailSyncEnabled(syncEnabled);
+        } else {
+          setGmailSyncEnabled(false);
+        }
+      } catch (error) {
+        console.error('Error checking Gmail sync status:', error);
+        setGmailSyncEnabled(false);
+      }
+    };
+    
+    checkGmailSyncStatus();
+  }, [user]);
+
+  // Add functions to manage Knowledge Vault
+
+  const addToKnowledgeVault = async () => {
+    if (!selectedNote || !user?.uid) {
+      toast({ 
+        title: "Error", 
+        description: "Cannot add document to vault", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    setIsAddingToVault(true);
+    try {
+      // Update the note to mark it as pendingKnowledgeBase
+      const noteRef = doc(db, `merchants/${user.uid}/files`, selectedNote.id);
+      await updateDoc(noteRef, { 
+        pendingKnowledgeBase: true,
+        // Clear any previous deletion status
+        knowledgeBaseStatus: "processing"
+      });
+      
+      // Optimistic update
+                setSelectedNote(prev => prev ? {
+                  ...prev,
+        pendingKnowledgeBase: true,
+        // Clear any previous deletion status in the UI
+        knowledgeBaseStatus: "processing"
+                } : null);
+      
+      // Call the knowledge base processing function
+      const functions = getFunctions();
+      const processDocumentFunction = httpsCallable(functions, 'addToKnowledgeBase');
+      
+      // Send BOTH documentId AND fileId to ensure proper file reference
+      await processDocumentFunction({
+        merchantId: user.uid,
+        documentId: selectedNote.id,
+        fileId: selectedNote.id // Use document ID as the fileId to match our new structure
+      });
+      
+      toast({
+        title: "Processing document", 
+        description: "Document is being added to knowledge vault" 
+      });
+    } catch (error) {
+      console.error('Error adding to knowledge vault:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add document to knowledge vault",
+        variant: "destructive"
+      });
+      
+      // Revert optimistic update on error
+    if (selectedNote) {
+        const noteRef = doc(db, `merchants/${user.uid}/files`, selectedNote.id);
+        await updateDoc(noteRef, { pendingKnowledgeBase: false });
+        setSelectedNote(prev => prev ? { ...prev, pendingKnowledgeBase: false } : null);
+      }
+    } finally {
+      setIsAddingToVault(false);
+    }
+  };
+  
+  const removeFromKnowledgeVault = async () => {
+    if (!selectedNote || !user?.uid || !selectedNote.inKnowledgeBase) {
+      toast({
+        title: "Error", 
+        description: "Cannot remove document from vault", 
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsRemovingFromVault(true);
+    try {
+      // Update the note to mark it as being removed
+      const noteRef = doc(db, `merchants/${user.uid}/files`, selectedNote.id);
+      await updateDoc(noteRef, { 
+        knowledgeBaseStatus: "removing", // Set status to removing
+        pendingKnowledgeBase: false // Clear the pending flag
+      });
+      
+      // Optimistic update for UI
+      setSelectedNote(prev => prev ? { 
+        ...prev, 
+        knowledgeBaseStatus: "removing", // Show removing status
+        pendingKnowledgeBase: false 
+      } : null);
+      
+      // Call the knowledge base removal function
+      const functions = getFunctions();
+      const removeDocumentFunction = httpsCallable(functions, 'removeDocumentFromKnowledgeBase');
+      
+      await removeDocumentFunction({
+        merchantId: user.uid,
+        fileId: selectedNote.id // Use document ID as fileId
+      });
+      
+      // Only update status to deleted after API confirms
+      await updateDoc(noteRef, { 
+        inKnowledgeBase: false,
+        knowledgeBaseStatus: "deleted"
+      });
+      
+      // Update the UI with deleted status
+      setSelectedNote(prev => prev ? { 
+        ...prev, 
+        inKnowledgeBase: false,
+        knowledgeBaseStatus: "deleted"
+      } : null);
+      
+      toast({
+        title: "Document removed", 
+        description: "Document has been removed from knowledge vault" 
+      });
+    } catch (error) {
+      console.error('Error removing from knowledge vault:', error);
+      toast({
+        title: "Error",
+        description: "Failed to remove document from knowledge vault",
+        variant: "destructive"
+      });
+      
+      // Revert optimistic update on error
+      if (selectedNote) {
+        const noteRef = doc(db, `merchants/${user.uid}/files`, selectedNote.id);
+        await updateDoc(noteRef, { 
+          inKnowledgeBase: true,
+          pendingKnowledgeBase: false,
+          knowledgeBaseStatus: "added" // Reset to added state
+        });
+        setSelectedNote(prev => prev ? { 
+          ...prev, 
+          inKnowledgeBase: true,
+          pendingKnowledgeBase: false,
+          knowledgeBaseStatus: "added"
+        } : null);
+      }
+    } finally {
+      setIsRemovingFromVault(false);
+    }
+  };
+
+  // Add a listener for knowledge base updates for pending documents
+  useEffect(() => {
+    if (!user?.uid) return;
+    
+    // Only monitor the knowledge base if we have pending documents
+    const pendingDocuments = notes.filter(note => note.pendingKnowledgeBase);
+    if (pendingDocuments.length === 0) return;
+    
+    const kbRef = collection(db, `merchants/${user.uid}/knowledgebase`);
+    const kbQuery = query(kbRef, orderBy("createTime", "desc"));
+    
+    const unsubscribe = onSnapshot(kbQuery, (snapshot) => {
+      const changedDocs = snapshot.docChanges();
+      
+      // Look for added or modified documents
+      changedDocs.forEach(change => {
+        if (change.type === "added" || change.type === "modified") {
+          const kbData = change.doc.data();
+          
+          // Find any matching pending documents
+          pendingDocuments.forEach(note => {
+            const isMatch = (note.fileId && kbData.fileId === note.fileId) ||
+              ((note.fileName && (kbData.source?.includes(note.fileName) || kbData.fileName === note.fileName)) ||
+              (note.originalFileName && (kbData.source?.includes(note.originalFileName) || kbData.fileName === note.originalFileName)));
+              
+            if (isMatch && note.pendingKnowledgeBase) {
+              // If status is success, update the document
+              if (kbData.status === "success") {
+                const noteRef = doc(db, `merchants/${user.uid}/files`, note.id);
+                updateDoc(noteRef, { 
+                  pendingKnowledgeBase: false,
+                  inKnowledgeBase: true,
+                  knowledgeBaseStatus: "added"
+                }).catch(error => {
+                  console.error("Error updating document status from listener:", error);
+                });
+                
+                // If this is the currently selected note, update it immediately in the UI
+                if (selectedNote && selectedNote.id === note.id) {
+                  setSelectedNote(prev => {
+                    if (!prev) return null;
+                    return {
+                      ...prev,
+                      pendingKnowledgeBase: false,
+                      inKnowledgeBase: true,
+                      knowledgeBaseStatus: "added"
+                    };
+                  });
+                  
+      toast({
+                    title: "Document processed",
+                    description: "Document has been added to the knowledge vault"
+                  });
+                }
+              }
+            }
+          });
+        }
+      });
+    });
+    
+    return () => unsubscribe();
+  }, [notes, selectedNote, user]);
+
+  // Add a real-time listener for the selected document's knowledge base status
+  useEffect(() => {
+    if (!selectedNote || !user?.uid) return;
+    
+    // Only set up the listener if the document is currently processing
+    if (!selectedNote.pendingKnowledgeBase) return;
+    
+    const noteRef = doc(db, `merchants/${user.uid}/files`, selectedNote.id);
+    
+    // Listen for changes to the document
+    const unsubscribe = onSnapshot(noteRef, (docSnapshot) => {
+      if (!docSnapshot.exists()) return;
+      
+      const data = docSnapshot.data();
+      // If the document status has changed from 'processing' to something else
+      if (selectedNote.pendingKnowledgeBase && !data.pendingKnowledgeBase) {
+        // Update the UI
+        setSelectedNote(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            pendingKnowledgeBase: false,
+            inKnowledgeBase: data.inKnowledgeBase || false,
+            knowledgeBaseStatus: data.knowledgeBaseStatus || null
+          };
+        });
+        
+        // Show a toast message
+        if (data.inKnowledgeBase) {
+          toast({
+            title: "Document processed",
+            description: "Document has been added to the knowledge vault",
+          });
+        }
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [selectedNote, user]);
+
+  // Add sendToCSVault function - add this near the addToKnowledgeVault function
+  const sendToCSVault = async () => {
+    if (!selectedNote || !user?.uid) {
+      toast({ 
+        title: "Error", 
+        description: "Cannot send document to CS Vault", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    setIsSendingToCSVault(true);
+    try {
+      // Update the note to mark it as being sent to CS Vault
+      const noteRef = doc(db, `merchants/${user.uid}/files`, selectedNote.id);
+      await updateDoc(noteRef, { 
+        sharedWithAgentId: 'cs-vault',
+        sharedWithAgentAt: serverTimestamp()
+      });
+      
+      // Optimistic update - fix type issues with serverTimestamp
+      setSelectedNote(prev => {
+        if (!prev) return null;
+        // Use current date for the optimistic update instead of serverTimestamp
+        return {
+          ...prev,
+          sharedWithAgentId: 'cs-vault',
+          sharedWithAgentAt: Timestamp.fromDate(new Date())
+        };
+      });
+      
+      // Call the csvault function
+      const functions = getFunctions();
+      const sendToCSVaultFunction = httpsCallable(functions, 'csvault');
+      
+      // Send document details to the function
+      await sendToCSVaultFunction({
+        merchantId: user.uid,
+        documentId: selectedNote.id,
+        fileId: selectedNote.id, // Use document ID as the fileId to match structure
+        title: selectedNote.title,
+        type: selectedNote.type
+      });
+      
+      toast({
+        title: "Document sent", 
+        description: "Document has been sent to CS Vault" 
+      });
+    } catch (error) {
+      console.error('Error sending to CS Vault:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send document to CS Vault",
+        variant: "destructive"
+      });
+      
+      // Revert optimistic update on error - fix type issues
+      if (selectedNote) {
+        const noteRef = doc(db, `merchants/${user.uid}/files`, selectedNote.id);
+        await updateDoc(noteRef, { 
+          sharedWithAgentId: '',
+          sharedWithAgentAt: null
+        });
+        setSelectedNote(prev => {
+          if (!prev) return null;
+          return { 
+            ...prev, 
+            sharedWithAgentId: '',
+            sharedWithAgentAt: undefined
+          };
+        });
+      }
+    } finally {
+      setIsSendingToCSVault(false);
+    }
+  };
+
+  // --- JSX Structure --- 
+  return (
+    <DashboardLayout>
+      <style dangerouslySetInnerHTML={{ __html: transitionStyles }} />
+      <div className="flex flex-col h-full max-w-full">
+        {/* Header Section - ensure all rounded-md */}
+        <div className="px-6 py-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold tracking-tight">Documents</h1>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 rounded-md flex items-center justify-center relative -mt-0.5"
+                      onClick={() => setShowVaultInfo(true)}
+                    >
+                      <Info className="h-4 w-4 text-gray-500" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent className="custom-tooltip" side="bottom">
+                    <span className="text-gray-800">How this works</span>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative w-96">
+                <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                  {searchMode === 'filter' ? 
+                    <Search className="h-4 w-4 text-muted-foreground" /> : 
+                    <div className="flex items-center justify-center h-4 w-4">
+                      {isLoadingKnowledgeChat ? 
+                        <div className="h-3 w-3 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"/> : 
+                        <AILogo />
+                      }
+          </div>
+                  }
+        </div>
+                  <Input 
+                    ref={searchInputRef}
+                  placeholder={searchMode === 'filter' ? "Search..." : "Ask AI about your documents..."} 
+                  className={cn(
+                    "pl-10 h-9 rounded-md w-full pr-24 transition-all duration-300",
+                    searchMode === 'semantic' && "border-blue-200 shadow-sm"
+                  )} 
+                  value={searchMode === 'filter' ? searchQuery : semanticSearchQuery} 
+                  onChange={e => searchMode === 'filter' ? setSearchQuery(e.target.value) : setSemanticSearchQuery(e.target.value)} 
+                  onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                      if (searchMode === 'semantic') {
+                        e.preventDefault();
+                        callKnowledgeChatFunction();
+                        }
+                      }
+                    }}
+                  />
+                <div className="absolute right-1 top-1/2 transform -translate-y-1/2 flex gap-1">
+                  {searchMode === 'semantic' && semanticSearchQuery.trim() !== '' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                      className="h-7 px-2 text-xs rounded-md" 
+                      onClick={() => setSemanticSearchQuery('')}
+                      disabled={isLoadingKnowledgeChat}
+                    >
+                      <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                    <Button 
+                      variant="ghost" 
+                    size="sm" 
+                    className={cn(
+                      "h-7 px-3 text-xs rounded-md transition-colors",
+                      searchMode === 'semantic' ? "bg-blue-50 text-blue-600" : "bg-gray-50 text-gray-600"
+                    )} 
+                      onClick={() => {
+                      setSearchMode(p => {
+                        const newMode = p === 'filter' ? 'semantic' : 'filter';
+                        // Clear appropriate search field when switching modes
+                        if (newMode === 'filter') setSemanticSearchQuery('');
+                        else setSearchQuery('');
+                        return newMode;
+                      });
+                      setTimeout(() => searchInputRef.current?.focus(), 0);
+                    }}
+                  >
+                    {searchMode === 'filter' ? "Ask AI" : "Filter"}
+                    </Button>
+                  </div>
+                      </div>
+              
+              {/* Gmail Sync Button */}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="icon"
+                      className={cn(
+                        "h-9 w-9 rounded-md flex items-center justify-center relative transition-all duration-200",
+                        gmailSyncEnabled 
+                          ? "text-blue-500 border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-300" 
+                          : "text-gray-500 border-gray-200 bg-white hover:bg-gray-100"
+                      )}
+                      onClick={toggleGmailSync}
+                      disabled={isSyncingGmail}
+                    >
+                      {isSyncingGmail ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Image 
+                            src="/gmail.png" 
+                            alt="Gmail Sync" 
+                            width={20} 
+                            height={16}
+                            className={cn(
+                              "object-contain transition-opacity",
+                              !gmailSyncEnabled && "opacity-70"
+                            )} 
+                          />
+                          {gmailSyncEnabled && (
+                            <div className="absolute -bottom-0.5 -right-0.5 flex items-center justify-center">
+                              <span className="relative flex h-2.5 w-2.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-30"></span>
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500 border border-white"></span>
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="custom-tooltip p-2">
+                    {gmailSyncEnabled 
+                      ? (
+                        <div className="flex flex-col gap-1">
+                          <p className="font-medium flex items-center gap-1 text-gray-800">
+                            <span className="h-2 w-2 bg-green-500 rounded-full"></span>
+                            Gmail auto-sync is active
+                          </p>
+                          <p className="text-gray-600">New Gmail attachments will be automatically imported</p>
+                  </div>
+                      ) 
+                      : <span className="text-gray-800">Connect Gmail auto-sync</span>
+                    }
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              
+              <Button variant="outline" className="h-9 gap-2 rounded-md" onClick={handleNewDocument}><Plus size={16}/>New</Button>
+              <Button className="h-9 gap-2 rounded-md" onClick={() => setUploadDialogOpen(true)}><FileUp size={16}/>Upload</Button>
+                </div>
+              </div>
+            </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 border-t flex-1 min-h-0 h-[calc(100vh-9rem)]">
+          {/* Left Column: Document List */}
+          <div className="lg:col-span-1 border-r flex flex-col h-full overflow-hidden bg-gray-50/50">
+            <div className="p-4 border-b flex-shrink-0">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid grid-cols-5 w-full"> 
+                  <TabsTrigger value="all">All</TabsTrigger>
+                  <TabsTrigger value="invoices">Invoices</TabsTrigger>
+                  <TabsTrigger value="notes">Notes</TabsTrigger> 
+                  <TabsTrigger value="other">Other</TabsTrigger>
+                  <TabsTrigger value="vault">Vault</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+            <div className="flex-grow overflow-y-auto h-[calc(100%-4rem)] min-h-0 scrollbar-thin p-1 document-list-container">
+      {loading ? (
+                <div className="p-4 space-y-3">{[...Array(4)].map((_,i) => <div key={i} className="border bg-white rounded-md p-3"><Skeleton className="h-5 w-1/2 mb-2"/><Skeleton className="h-4 w-full mb-1"/><Skeleton className="h-4 w-3/4"/></div>)}</div>
+      ) : filteredNotes.length === 0 ? (
+                <div className="p-8 text-center"><FileText className="h-10 w-10 mx-auto text-gray-300 mb-3"/><h3 className="font-medium">No documents</h3><p className="text-sm text-gray-500">Upload or create one.</p></div>
+              ) : (
+                <div className="space-y-2 p-2">
+                  {filteredNotes.map(note => <DocumentItem key={note.id} note={note} isSelected={selectedNote?.id === note.id} onSelect={handleNoteSelection} formatDateFunction={safeFormatDate} />)}
+              </div>
+              )}
+            </div>
+        </div>
+                      
+          {/* Right Column: Detail View */}
+          <div className="lg:col-span-2 flex flex-col min-h-0 p-0 overflow-hidden">
+            {showAiResponseInContent ? (
+              <div className="flex flex-col h-full ai-response-container">
+                <div className="px-6 py-4 border-b flex items-center justify-between"><div className="flex items-center gap-2"><AILogo/><h2 className="text-lg font-medium">AI Results</h2></div><Button variant="outline" size="sm" className="h-8 rounded-md" onClick={()=>setShowAiResponseInContent(false)}><X size={16}/>Close</Button></div>
+                <div className="flex-grow overflow-auto p-6">
+                  {isLoadingKnowledgeChat ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
+                        <p className="text-sm text-gray-500">Analysing your documents...</p>
+        </div>
+                          </div>
+                  ) : knowledgeChatResponse ? (
+                    <div className="markdown-content">
+                      <ReactMarkdown>{knowledgeChatResponse.answer}</ReactMarkdown>
+                      {knowledgeChatResponse.sources.length > 0 && (
+                        <div className="mt-6 p-4 bg-gray-50 rounded-md border border-gray-100">
+                          <h4 className="font-medium mb-2">Sources:</h4>
+                          <ul className="list-disc pl-5">
+                            {knowledgeChatResponse.sources.map((source, index) => (
+                              <li key={index} className="text-sm text-gray-700 mb-1">{source}</li>
+                            ))}
+                          </ul>
+                </div>
+              )}
+                        </div>
+                            ) : (
+                    <p>No AI result.</p>
+                  )}
+                          </div>
+                        </div>
+            ) : showDocumentEditor ? (
+              <div className="flex flex-col h-full">
+                <div className="px-6 py-4 border-b flex items-center justify-between"><Input value={documentTitle} onChange={e=>setDocumentTitle(e.target.value)} className="text-lg font-medium h-9 rounded-md" placeholder="Title"/><div className="flex gap-2"><Button variant="outline" className="h-9 rounded-md" onClick={()=>setShowDocumentEditor(false)}>Cancel</Button><Button className="h-9 rounded-md" onClick={selectedNote ? updateExistingDocument : saveDocument} disabled={isSavingDocument}>{isSavingDocument ? <><Loader2 className="h-4 w-4 mr-2 animate-spin"/>Saving</> : "Save"}</Button></div></div>
+                <div className="flex-grow overflow-auto"><div ref={editorRef} className="document-editor" contentEditable={true} suppressContentEditableWarning={true} dangerouslySetInnerHTML={{__html:documentContent}}/></div>
+                </div>
+            ) : selectedNote ? (
+              <div className={`flex flex-col h-full detail-view-container ${isTransitioning ? 'fade-out' : 'fade-in'}`} style={{transitionDuration:isTransitioning?'150ms':'250ms', willChange:'opacity'}}>
+                <div className="px-6 py-4 border-b flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    {isEditingTitle ? <Input ref={titleInputRef} value={editedTitle} onChange={e=>setEditedTitle(e.target.value)} onKeyDown={handleTitleKeyDown} onBlur={updateDocumentTitle} className="text-lg font-medium h-9 rounded-md"/> : <h2 className="text-lg font-medium truncate cursor-text" onDoubleClick={handleStartTitleEdit}>{selectedNote.title}</h2>}
+                    <div className="flex items-center mt-1 gap-3 text-sm text-gray-500">
+                      <Calendar size={14}/>{safeFormatDate(selectedNote.createdAt, "MMMM d, yyyy")} 
+                      {selectedNote.origin==='gmail' && <TooltipProvider><Tooltip><TooltipTrigger><Image src="/gmail.png" alt="Gmail" width={14} height={10}/></TooltipTrigger><TooltipContent>Gmail</TooltipContent></Tooltip></TooltipProvider>} 
+                      {/* Status badges with priority: processing > removing > deleted > in vault */}
+                      {selectedNote.pendingKnowledgeBase && (
+                        <Badge 
+                          className="flex items-center gap-0.5 text-[10px] h-4 px-1.5 py-0 bg-amber-50 text-amber-600 border-amber-100 rounded-full"
+                        >
+                          <span className="h-2 w-2 bg-amber-500 rounded-full animate-pulse mr-0.5"></span> Processing
+                            </Badge>
+                      )}
+                      {!selectedNote.pendingKnowledgeBase && selectedNote.knowledgeBaseStatus === "removing" && (
+                        <Badge 
+                          className="flex items-center gap-0.5 text-[10px] h-4 px-1.5 py-0 bg-red-50 text-red-600 border-red-100 rounded-full"
+                        >
+                          <Loader2 className="h-2 w-2 animate-spin" /> Removing
+                              </Badge>
+                      )}
+                      {!selectedNote.pendingKnowledgeBase && !selectedNote.inKnowledgeBase && selectedNote.knowledgeBaseStatus === "deleted" && (
+                        <Badge 
+                          className="flex items-center gap-0.5 text-[10px] h-4 px-1.5 py-0 bg-gray-100 text-gray-600 border-gray-200 rounded-full"
+                        >
+                          <X className="h-2 w-2" /> Removed
+                              </Badge>
+                      )}
+                      {!selectedNote.pendingKnowledgeBase && selectedNote.inKnowledgeBase && selectedNote.knowledgeBaseStatus !== "removing" && (
+                        <Badge 
+                          className="flex items-center gap-0.5 text-[10px] h-4 px-1.5 py-0 bg-blue-50 text-blue-600 border-blue-100 rounded-full"
+                        >
+                          <Check className="h-2 w-2" /> Vault
+                        </Badge>
+                      )}
+                </div>
+                    {selectedNote.tags.length > 0 && <div className="flex gap-1 mt-1">{selectedNote.tags.slice(0,2).map(t=><Badge key={t} variant="secondary" className="rounded-full">{t}</Badge>)}{selectedNote.tags.length > 2 && <Badge variant="outline" className="rounded-full">+{selectedNote.tags.length-2}</Badge>}</div>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedNote?.summary && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                              size="icon"
+                              className="h-9 w-9 rounded-md text-gray-500"
+                              onClick={toggleSummaryDisplay}
+                            >
+                              <FileText className="h-4 w-4" />
+                    </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>View Summary</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                    
+                    {/* Add CS Vault Button */}
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="icon"
+                            className={cn(
+                              "h-9 w-9 rounded-md",
+                              isSendingToCSVault 
+                                ? "text-purple-500 border-purple-200 bg-purple-50" 
+                                : selectedNote && selectedNote.sharedWithAgentId === 'cs-vault'
+                                  ? "text-purple-500 border-purple-200 bg-purple-50"
+                                  : "text-gray-500"
+                            )}
+                            onClick={sendToCSVault}
+                            disabled={isSendingToCSVault}
+                          >
+                            {isSendingToCSVault ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Users className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {selectedNote && selectedNote.sharedWithAgentId === 'cs-vault' 
+                            ? "Already in CS Vault" 
+                            : "Send to CS Vault"}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    
+                    {/* Knowledge Base Management Button */}
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                  <Button 
+                                variant="outline" 
+                    size="icon" 
+                                className={cn(
+                                  "h-9 w-9 rounded-md transition-colors",
+                                  selectedNote?.inKnowledgeBase 
+                                    ? "text-blue-500 border-blue-200 bg-blue-50 hover:bg-blue-100" 
+                                    : (selectedNote?.pendingKnowledgeBase 
+                                      ? "text-amber-500 border-amber-200 bg-amber-50 hover:bg-amber-100" 
+                                      : "text-gray-500")
+                                )}
+                              >
+                                {selectedNote?.inKnowledgeBase ? (
+                                  <Database className="h-4 w-4" />
+                                ) : selectedNote?.pendingKnowledgeBase ? (
+                                  <div className="relative">
+                                    <Database className="h-4 w-4" />
+                                    <span className="absolute -top-1 -right-1 h-2 w-2 bg-amber-500 rounded-full animate-pulse"></span>
+                                  </div>
+                                ) : (
+                                  <Database className="h-4 w-4" />
+                                )}
+                      </Button>
+                    </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              {/* Show Add to Vault only if not already in vault or processing */}
+                              {!selectedNote?.inKnowledgeBase && !selectedNote?.pendingKnowledgeBase && (
+                                <DropdownMenuItem 
+                                  className="gap-2 cursor-pointer text-blue-600"
+                                  onClick={addToKnowledgeVault}
+                                  disabled={isAddingToVault}
+                                >
+                                  {isAddingToVault ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <PlusCircle className="h-4 w-4" />
+                                  )}
+                                  <span>
+                                    {isAddingToVault ? "Adding..." : "Add to Vault"}
+                                  </span>
+                      </DropdownMenuItem>
+                              )}
+                              
+                              {/* Show Remove from Vault only if already in vault */}
+                              {selectedNote?.inKnowledgeBase && (
+                                <DropdownMenuItem 
+                                  className="gap-2 cursor-pointer text-red-500"
+                                  onClick={removeFromKnowledgeVault}
+                                  disabled={isRemovingFromVault}
+                                >
+                                  {isRemovingFromVault ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <X className="h-4 w-4" />
+                                  )}
+                                  <span>
+                                    {isRemovingFromVault ? "Removing..." : "Remove from Vault"}
+                        </span>
+                                </DropdownMenuItem>
+                              )}
+                              
+                              {selectedNote?.pendingKnowledgeBase && (
+                                <DropdownMenuItem 
+                                  className="gap-2 cursor-pointer text-amber-500"
+                                  disabled={true}
+                                >
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  <span>Processing...</span>
+                                </DropdownMenuItem>
+                              )}
+                              
+                              {/* Add the CS Vault button here */}
+                              <DropdownMenuItem 
+                                className="gap-2 cursor-pointer text-purple-600"
+                                onClick={sendToCSVault}
+                                disabled={isSendingToCSVault}
+                              >
+                                <Users className="h-4 w-4" />
+                                <span>
+                                  {isSendingToCSVault ? "Sending..." : "Send to CS Vault"}
+                                </span>
+                              </DropdownMenuItem>
+                              
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                        </TooltipTrigger>
+                        <TooltipContent>Knowledge Base Options</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    
+                    {selectedNote.fileUrl && (
+                      <>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                  <Button 
+                                variant="outline"
+                    size="icon" 
+                                className="h-9 w-9 rounded-md text-gray-500"
+                                onClick={handleDownload}
+                  >
+                                <DownloadCloud className="h-4 w-4" />
+                  </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Download</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                  <Button 
+                                variant="outline"
+                    size="icon" 
+                                className="h-9 w-9 rounded-md text-gray-500"
+                                onClick={handleOpenInNewTab}
+                  >
+                                <ExternalLink className="h-4 w-4" />
+                  </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Open in new tab</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </>
+                    )}
+                    
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9 rounded-md text-gray-500"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem 
+                          className="gap-2 cursor-pointer"
+                          onClick={handleStartTitleEdit}
+                            >
+                          <Edit className="h-4 w-4" />
+                          <span>Rename</span>
+                            </DropdownMenuItem>
+                        {selectedNote?.type === 'note' && (
+                            <DropdownMenuItem 
+                            className="gap-2 cursor-pointer"
+                            onClick={editExistingNote}
+                            >
+                            <Pencil className="h-4 w-4" />
+                            <span>Edit Content</span>
+                            </DropdownMenuItem>
+                        )}
+                            <DropdownMenuItem 
+                          className="gap-2 cursor-pointer"
+                          onClick={toggleSummaryDisplay}
+                            >
+                          <FileText className="h-4 w-4" />
+                          <span>View Summary</span>
+                            </DropdownMenuItem>
+                            {/* Knowledge Base and CS Agent options moved to dedicated Knowledge Base dropdown */}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                          className="gap-2 cursor-pointer text-red-500 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => setDeleteDialogOpen(true)}
+                            >
+                          <Trash2 className="h-4 w-4" />
+                          <span>Delete</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                  </div>
+                </div>
+                <div className="flex-grow overflow-auto p-6 bg-gray-50/50 rounded-md"><div className="h-full">{renderFilePreview()}</div></div>
+                {relatedNotes.length > 0 && (
+                  <div className="px-6 py-2 border-t">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-1">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex h-6 items-center text-gray-500">
+                                <Share2 className="h-3.5 w-3.5 text-blue-500" />
+                          </div>
+                            </TooltipTrigger>
+                            <TooltipContent className="custom-tooltip">
+                              <span className="text-gray-800">Similar Documents</span>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <div className="flex flex-wrap gap-1.5">
+                          {relatedNotes.map(rn => (
+                            <TooltipProvider key={rn.id}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button 
+                                    key={rn.id} 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-7 px-2 rounded-md flex items-center gap-1"
+                              onClick={() => {
+                                      const fullNote = notes.find(n => n.id === rn.id);
+                                      if (fullNote) handleNoteSelection(fullNote);
+                                    }}
+                                  >
+                                    {rn.type === 'pdf' ? (
+                                      <FileIcon className="h-3 w-3 text-red-500 flex-shrink-0" />
+                                    ) : rn.type === 'image' ? (
+                                      <ImageIcon className="h-3 w-3 text-blue-500 flex-shrink-0" />
+                                    ) : rn.type === 'invoice' ? (
+                                      <FileText className="h-3 w-3 text-green-500 flex-shrink-0" />
+                                    ) : rn.type === 'note' ? (
+                                      <FileText className="h-3 w-3 text-yellow-500 flex-shrink-0" />
+                                    ) : (
+                                      <FileIcon className="h-3 w-3 text-gray-500 flex-shrink-0" />
+                                    )}
+                                    <span className="truncate max-w-[120px]">{rn.title}</span>
+                                </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="custom-tooltip p-2 text-xs max-w-xs">
+                                  <div className="flex flex-col">
+                                    <p className="font-medium text-gray-800">{rn.title}</p>
+                                    <p className="text-gray-600 mt-1 text-xs">{rn.summary || "No description"}</p>
+                                    <div className="mt-1.5">
+                                      <Badge className="text-[10px] px-1.5 py-0 h-3.5 bg-blue-50 text-blue-500 border-blue-100 rounded-full">
+                                        {Math.round(rn.score * 100)}% match
+                                      </Badge>
+                        </div>
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ))}
+                        </div>
+                    </div>
+                      {relatedNotes.length > 3 && (
+                        <Button variant="ghost" size="sm" className="h-6 text-xs">
+                          View all
+                  </Button>
+                      )}
+                      </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+              <div className="h-full flex items-center justify-center p-8"><div className="text-center"><FileText className="h-12 w-12 mx-auto text-gray-300 mb-4"/><h3 className="text-xl font-medium mb-2">Select or Create a Document</h3><p className="text-gray-500 mb-4">Choose from the list or start a new one.</p><div className="flex gap-3 justify-center"><Button variant="outline" className="rounded-md" onClick={handleNewDocument}><Plus size={16}/>Create</Button><Button className="rounded-md" onClick={()=>setUploadDialogOpen(true)}><FileUp size={16}/>Upload</Button></div></div></div>
+                  )}
+                </div>
+        </div>
+      </div>
+      
+      {/* Upload Dialog - ensure all rounded-md */}
+      <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+        <DialogContent className="sm:max-w-md rounded-md">
+          <DialogHeader><DialogTitle>Upload Document</DialogTitle><DialogDescription>Add a new file to your collection.</DialogDescription></DialogHeader>
+          <div className="space-y-4 py-3">
+            <div><Label htmlFor="file-upload">File</Label><Input id="file-upload" type="file" ref={fileInputRef} onChange={handleFileChange} className="rounded-md" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png"/>{uploadFile && <p className="text-xs text-gray-500 mt-1">{uploadFile.name}</p>}</div>
+            <div><Label htmlFor="file-title">Title</Label><Input id="file-title" value={uploadTitle} onChange={e=>setUploadTitle(e.target.value)} placeholder="Document title" className="rounded-md"/></div>
+            <div><Label htmlFor="file-summary">Description (Optional)</Label><Textarea id="file-summary" value={uploadSummary} onChange={e=>setUploadSummary(e.target.value)} placeholder="Brief summary..." rows={2} className="rounded-md resize-none"/></div>
+            <div><Label htmlFor="file-tags">Tags (Optional, comma-separated)</Label><Input id="file-tags" value={uploadTags} onChange={e=>setUploadTags(e.target.value)} placeholder="e.g., work, important" className="rounded-md"/></div>
+            {uploading && <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden"><div className="h-full bg-blue-500 transition-all" style={{width: `${uploadProgress}%`}}></div></div>}
+          </div>
+          <DialogFooter><Button variant="outline" className="rounded-md" onClick={()=>{resetUploadForm();setUploadDialogOpen(false);}} disabled={uploading}>Cancel</Button><Button className="rounded-md" onClick={handleUpload} disabled={!uploadFile || uploading}>{uploading ? <><Loader2 className="h-4 w-4 animate-spin mr-2"/>Uploading...</> : <><FileUp size={16} className="mr-2"/>Upload</>}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog - ensure all rounded-md */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="rounded-md">
+          <AlertDialogHeader><AlertDialogTitle>Delete Document</AlertDialogTitle><AlertDialogDescription>Are you sure you want to delete "{selectedNote?.title}"? This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel className="rounded-md" disabled={deletingFile}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-red-500 hover:bg-red-600 rounded-md" onClick={handleDeleteFile} disabled={deletingFile}>{deletingFile ? <><Loader2 className="h-4 w-4 animate-spin mr-2"/>Deleting...</> : <><Trash2 size={16} className="mr-2"/>Delete</>}</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      {/* Vault Info Drawer - replacing the dialog above */}
+      <div 
+        className={`vault-info-backdrop ${showVaultInfo ? 'open' : ''}`} 
+        onClick={() => setShowVaultInfo(false)}
+      />
+      <div className={`vault-info-drawer ${showVaultInfo ? 'open' : ''}`}>
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="bg-blue-100 text-blue-600 h-8 w-8 rounded-md flex items-center justify-center">
+                <FileText className="h-4 w-4" />
+              </div>
+              <div>
+                <h2 className="text-lg font-medium">Document Vault</h2>
+                <p className="text-sm text-gray-500">Understanding the Knowledge Management System</p>
+              </div>
+            </div>
+                <Button 
+                  variant="ghost" 
+              size="icon" 
+              className="h-8 w-8 rounded-md"
+              onClick={() => setShowVaultInfo(false)}
+            >
+              <X className="h-4 w-4" />
+                </Button>
+              </div>
+          
+          <div className="space-y-5 mt-4">
+            <div>
+              <h3 className="text-sm font-medium mb-1">What is the Document Vault?</h3>
+              <p className="text-sm text-gray-600">
+                The Document Vault is a centralised knowledge database that stores and indexes all your documents, making them searchable and accessible for AI interactions.
+              </p>
+            </div>
+            
+            <div>
+              <h3 className="text-sm font-medium mb-1">How it Works</h3>
+              <ol className="text-sm text-gray-600 space-y-2 list-decimal pl-5">
+                <li>
+                  <span className="font-medium">Document Upload:</span> When you upload or create documents, they are stored in your vault.
+                </li>
+                <li>
+                  <span className="font-medium">Automatic Processing:</span> Documents are processed, indexed, and made searchable.
+                </li>
+                <li>
+                  <span className="font-medium">AI Integration:</span> The knowledge from your documents becomes available to AI assistants.
+                </li>
+                <li>
+                  <span className="font-medium">Semantic Search:</span> Ask questions about your documents using natural language.
+                </li>
+              </ol>
+            </div>
+            
+            <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
+              <h3 className="text-sm font-medium mb-1 text-blue-700">Benefits</h3>
+              <ul className="text-sm text-gray-600 space-y-1 list-disc pl-5">
+                <li>Centralised document storage with smart organisation</li>
+                <li>Ask questions about your documents using natural language</li>
+                <li>Share knowledge with customer service agents</li>
+                <li>
+                  <div className="flex items-center gap-1.5">
+                    <span>Automatic Gmail integration for emails and attachments</span>
+                    <Image 
+                      src="/gmail.png" 
+                      alt="Gmail" 
+                      width={14} 
+                      height={10}
+                      className="object-contain" 
+                    />
+                    </div>
+                </li>
+                <li>Intelligent connections between related documents</li>
+              </ul>
+                </div>
+            
+            <div>
+              <h3 className="text-sm font-medium mb-1">Document Status Indicators</h3>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Badge className="flex items-center gap-0.5 text-[10px] h-4 px-1.5 py-0 bg-blue-50 text-blue-600 border-blue-100 rounded-full">
+                    <Check className="h-2 w-2" /> Vault
+                  </Badge>
+                  <span className="text-sm text-gray-600">Document is processed and available in the knowledge base</span>
+            </div>
+                <div className="flex items-center gap-2">
+                  <Badge className="flex items-center gap-0.5 text-[10px] h-4 px-1.5 py-0 bg-amber-50 text-amber-600 border-amber-100 rounded-full">
+                    <span className="h-2 w-2 bg-amber-500 rounded-full animate-pulse mr-0.5"></span> Processing
+                  </Badge>
+                  <span className="text-sm text-gray-600">Document is being added to the knowledge base</span>
+          </div>
+                {/* Remove the CS Agent badge block below this */}
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-8 flex justify-end">
+            <Button className="rounded-md" onClick={() => setShowVaultInfo(false)}>
+              Got it
+            </Button>
+          </div>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+} 

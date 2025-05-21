@@ -1,0 +1,25 @@
+# python-functions/agents.py
+
+import asyncio
+
+# Decorator placeholder
+def function_tool(fn):
+    return fn
+
+# Tool and runner placeholders
+class Agent:
+    def __init__(self, name, instructions, tools):
+        self.name = name
+        self.instructions = instructions
+        self.tools = tools
+
+class Runner:
+    @staticmethod
+    async def run(agent, prompt, max_turns=1):
+        # You’d wire your actual agent logic here; for now, just echo
+        class Result: final_output = "[]"
+        return Result()
+
+class WebSearchTool:
+    def __init__(self):
+        pass

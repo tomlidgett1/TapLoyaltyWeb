@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
+import { doc, getDoc, setDoc, serverTimestamp, getDocs, query, where, collection } from "firebase/firestore"
 import { AgentConfig } from "@/types/agent-config"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -109,8 +109,10 @@ import {
   Maximize2,
   Minimize2,
   Clock as Clock3,
-  RefreshCcw
+  RefreshCcw,
+  FileText
 } from "lucide-react"
+import Image from "next/image"
 
 // Define the structure for the business knowledge data
 interface BusinessKnowledge {
@@ -246,6 +248,21 @@ const defaultAgentConfig: AgentConfig = {
   }
 }
 
+// Add type definition for CS Vault file
+interface CSVaultFile {
+  id: string;
+  title: string;
+  summary?: string;
+  type: string;
+  createdAt: any;
+  addedAt: any;
+  inCsVault: boolean;
+  rawText?: string;
+  content?: string;
+  fileUrl?: string;
+  fileType?: string;
+}
+
 export default function AgentSetup() {
   const { user } = useAuth()
   const [agentConfig, setAgentConfig] = useState<AgentConfig>({
@@ -263,7 +280,6 @@ export default function AgentSetup() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [mainTab, setMainTab] = useState("setup")
-  const [isExpanded, setIsExpanded] = useState(false)
   const [agentType, setAgentType] = useState("reward")
   const [customerServiceSheetOpen, setCustomerServiceSheetOpen] = useState(false)
   const [showBusinessContext, setShowBusinessContext] = useState(false)
@@ -286,6 +302,13 @@ export default function AgentSetup() {
   const [isRecording, setIsRecording] = useState(false)
   const [showManualInput, setShowManualInput] = useState(false)
   const [manualInput, setManualInput] = useState("")
+  // Add state for CS Vault files
+  const [csVaultFiles, setCSVaultFiles] = useState<CSVaultFile[]>([])
+  const [loadingCSVaultFiles, setLoadingCSVaultFiles] = useState(false)
+  // Add state for viewing file details
+  const [selectedFile, setSelectedFile] = useState<CSVaultFile | null>(null)
+  const [fileDetailsOpen, setFileDetailsOpen] = useState(false)
+  const [loadingFileDetails, setLoadingFileDetails] = useState(false)
 
   useEffect(() => {
     async function fetchAgentConfig() {
@@ -492,10 +515,6 @@ export default function AgentSetup() {
       ...prev,
       [section]: data
     }))
-  }
-
-  const toggleExpand = () => {
-    setIsExpanded(!isExpanded)
   }
 
   const addManualContextEntry = async (content: string) => {
@@ -767,6 +786,107 @@ export default function AgentSetup() {
         variant: "destructive"
       });
     }
+  };
+
+  // Add fetchCSVaultFiles function after extractBusinessInsights
+  const fetchCSVaultFiles = async () => {
+    if (!user?.uid) return;
+    
+    setLoadingCSVaultFiles(true);
+    try {
+      // Query files collection for documents that have inCsVault = true
+      const filesRef = collection(db, `merchants/${user.uid}/files`);
+      const q = query(filesRef, where("inCsVault", "==", true));
+      const querySnapshot = await getDocs(q);
+      
+      const files: CSVaultFile[] = [];
+      querySnapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        const file: CSVaultFile = {
+          id: doc.id,
+          title: data.title || "Untitled",
+          summary: data.summary || "",
+          type: data.type || "other",
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+          addedAt: data.sharedWithAgentAt?.toDate ? data.sharedWithAgentAt.toDate() : new Date(),
+          inCsVault: true,
+          rawText: data.rawText || "",
+          content: data.content || "",
+          fileUrl: data.fileUrl || "",
+          fileType: data.fileType || ""
+        };
+        files.push(file);
+      });
+      
+      setCSVaultFiles(files);
+    } catch (error) {
+      console.error("Error fetching CS Vault files:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load CS Vault files",
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingCSVaultFiles(false);
+    }
+  };
+
+  // Call fetchCSVaultFiles when customer service tab changes to "cs-vault"
+  useEffect(() => {
+    if (customerServiceActiveTab === "cs-vault") {
+      fetchCSVaultFiles();
+    }
+  }, [customerServiceActiveTab, user]);
+
+  // Add fetchFileDetails function after fetchCSVaultFiles
+  const fetchFileDetails = async (fileId: string) => {
+    if (!user?.uid) return;
+    
+    setLoadingFileDetails(true);
+    try {
+      const fileRef = doc(db, `merchants/${user.uid}/files`, fileId);
+      const fileDoc = await getDoc(fileRef);
+      
+      if (fileDoc.exists()) {
+        const data = fileDoc.data();
+        const fullFile: CSVaultFile = {
+          id: fileDoc.id,
+          title: data.title || "Untitled",
+          summary: data.summary || "",
+          type: data.type || "other",
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+          addedAt: data.sharedWithAgentAt?.toDate ? data.sharedWithAgentAt.toDate() : new Date(),
+          inCsVault: true,
+          rawText: data.rawText || "",
+          content: data.content || "",
+          fileUrl: data.fileUrl || "",
+          fileType: data.fileType || ""
+        };
+        
+        setSelectedFile(fullFile);
+        setFileDetailsOpen(true);
+      } else {
+        toast({
+          title: "Error",
+          description: "File not found",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching file details:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load file details",
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingFileDetails(false);
+    }
+  };
+
+  // Add function to view file details
+  const viewFileDetails = (file: CSVaultFile) => {
+    fetchFileDetails(file.id);
   };
 
   if (loading) {
@@ -1070,91 +1190,83 @@ export default function AgentSetup() {
   }
 
   return (
-    <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'fixed inset-0 z-50 bg-white overflow-auto' : 'w-full bg-white'}`}>
+    <div className="w-full bg-white">
       <div className="p-6 py-4">
         <PageHeader
           title={<><span className="bg-gradient-to-r from-[#0D6EFD] to-[#FF8C00] bg-clip-text text-transparent">Tap Agent</span> Setup</>}
-          subtitle="Your marketing, rewards, and customer engagement - on autopilot."
         >
-          <div className="flex items-center gap-2">
-            <Tabs 
-              defaultValue="setup" 
-              value={mainTab} 
-              onValueChange={handleMainTabChange} 
-              className="mr-2"
-            >
-              <TabsList className="hidden">
-                <TabsTrigger value="setup">Setup</TabsTrigger>
-                <TabsTrigger value="customers">Customers</TabsTrigger>
-              </TabsList>
+          <div className="flex items-center gap-4">
+            {/* Tabs on the left */}
+            <div className="flex space-x-2 mr-auto">
+              <Button
+                onClick={() => handleMainTabChange("setup")}
+                variant={mainTab === "setup" ? "default" : "outline"}
+                size="sm"
+                className={`rounded-md h-9 transition-all ${
+                  mainTab === "setup" 
+                    ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white border-none shadow-sm" 
+                    : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Wrench className="h-4 w-4" />
+                  <span>Setup</span>
+                </div>
+              </Button>
               
-              <div className="flex gap-3">
-                <Button
-                  onClick={() => handleMainTabChange("setup")}
-                  className={`flex items-center justify-center gap-2 px-5 py-3 text-sm transition-all border shadow-sm hover:bg-gray-50 rounded-md font-medium ${
-                    mainTab === "setup" 
-                      ? "bg-blue-50 border-blue-200" 
-                      : "bg-white text-gray-700"
-                  }`}
-                >
-                  <div className={`${
-                    mainTab === "setup" 
-                      ? "bg-blue-100 p-1.5 rounded-full" 
-                      : "text-gray-500"
-                  }`}>
-                    <Wrench className={`h-5 w-5 ${mainTab === "setup" ? "text-blue-600" : ""}`} />
-                  </div>
-                  <span className={mainTab === "setup" ? "bg-gradient-to-r from-[#0D6EFD] to-[#FF8C00] bg-clip-text text-transparent" : ""}>Setup</span>
-                </Button>
-                <Button
-                  onClick={() => handleMainTabChange("customers")}
-                  className={`flex items-center justify-center gap-2 px-5 py-3 text-sm transition-all border shadow-sm hover:bg-gray-50 rounded-md font-medium ${
-                    mainTab === "customers" 
-                      ? "bg-blue-50 border-blue-200" 
-                      : "bg-white text-gray-700"
-                  }`}
-                >
-                  <div className={`${
-                    mainTab === "customers" 
-                      ? "bg-blue-100 p-1.5 rounded-full" 
-                      : "text-gray-500"
-                  }`}>
-                    <Users className={`h-5 w-5 ${mainTab === "customers" ? "text-blue-600" : ""}`} />
-                  </div>
-                  <span className={mainTab === "customers" ? "bg-gradient-to-r from-[#0D6EFD] to-[#FF8C00] bg-clip-text text-transparent" : ""}>Customers</span>
-                </Button>
+              <Button
+                onClick={() => handleMainTabChange("customers")}
+                variant={mainTab === "customers" ? "default" : "outline"}
+                size="sm"
+                className={`rounded-md h-9 transition-all ${
+                  mainTab === "customers" 
+                    ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white border-none shadow-sm" 
+                    : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  <span>Customers</span>
+                </div>
+              </Button>
+            </div>
+            
+            {/* Integration logos on the right */}
+            <div className="hidden md:flex items-center">
+              <div className="flex -space-x-3 overflow-hidden">
+                <div className="z-30 relative w-8 h-8 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center p-1" title="Gmail Connected">
+                  <Image 
+                    src="/gmail.png" 
+                    alt="Gmail" 
+                    width={20} 
+                    height={16}
+                    className="object-contain"
+                  />
+                </div>
+                <div className="z-20 relative w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center overflow-hidden" title="Square Connected">
+                  <Image 
+                    src="/square.png" 
+                    alt="Square" 
+                    width={24} 
+                    height={24}
+                    className="rounded-full object-cover w-7 h-7"
+                  />
+                </div>
+                <div className="z-10 relative w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center overflow-hidden" title="Lightspeed Connected">
+                  <Image 
+                    src="/lslogo.png" 
+                    alt="Lightspeed" 
+                    width={24} 
+                    height={24}
+                    className="rounded-full object-cover w-7 h-7"
+                  />
+                </div>
               </div>
-            </Tabs>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              asChild 
-              className="h-9 gap-2 border-0 ring-1 ring-gray-200 bg-white text-gray-700 shadow-sm rounded-md"
-            >
-              <Link href="/tap-agent/intro">Learn More</Link>
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={toggleExpand}
-              className="h-9 gap-2 border-0 ring-1 ring-gray-200 bg-white text-gray-700 shadow-sm rounded-md flex items-center"
-            >
-              {isExpanded ? (
-                <>
-                  <Minimize2 className="h-4 w-4" />
-                  <span>Minimize</span>
-                </>
-              ) : (
-                <>
-                  <Maximize2 className="h-4 w-4" />
-                  <span>Expand</span>
-                </>
-              )}
-            </Button>
+            </div>
           </div>
         </PageHeader>
         
-        <Tabs defaultValue="setup" value={mainTab} onValueChange={handleMainTabChange} className="w-full">
+        <Tabs defaultValue="setup" value={mainTab} onValueChange={handleMainTabChange} className="w-full mt-6">
           <TabsContent value="setup">
             {/* Agent Type Selection */}
             <Tabs 
@@ -1215,7 +1327,12 @@ export default function AgentSetup() {
                     <div className="flex items-center justify-between border-b px-6 py-4">
                       <div className="flex items-center">
                         <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center mr-4">
-                          <Award className="h-6 w-6 text-blue-600" />
+                          <Image 
+                            src="/taplogo.png" 
+                            alt="Tap Logo" 
+                            width={28} 
+                            height={28} 
+                          />
                         </div>
                         <div>
                           <h2 className="text-xl font-medium">Reward Agent</h2>
@@ -1256,63 +1373,63 @@ export default function AgentSetup() {
                           
                           <Button 
                             onClick={() => handleRewardTabChange("brand")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "brand" ? "bg-white text-blue-600 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
+                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "brand" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
                           >
                             <Building2 className="h-4 w-4" />
                             <span>Brand</span>
                           </Button>
                           <Button 
                             onClick={() => handleRewardTabChange("tasks")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "tasks" ? "bg-white text-blue-600 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
+                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "tasks" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
                           >
                             <CheckCircle className="h-4 w-4" />
                             <span>Tasks</span>
                           </Button>
                           <Button 
                             onClick={() => handleRewardTabChange("hours")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "hours" ? "bg-white text-blue-600 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
+                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "hours" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
                           >
                             <Clock3 className="h-4 w-4" />
                             <span>Hours</span>
                           </Button>
                           <Button 
                             onClick={() => handleRewardTabChange("objectives")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "objectives" ? "bg-white text-blue-600 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
+                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "objectives" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
                           >
                             <Target className="h-4 w-4" />
                             <span>Objectives</span>
                           </Button>
                           <Button 
                             onClick={() => handleRewardTabChange("pricing")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "pricing" ? "bg-white text-blue-600 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
+                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "pricing" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
                           >
                             <TagsIcon className="h-4 w-4" />
                             <span>Pricing</span>
                           </Button>
                           <Button 
                             onClick={() => handleRewardTabChange("financials")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "financials" ? "bg-white text-blue-600 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
+                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "financials" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
                           >
                             <LineChart className="h-4 w-4" />
                             <span>Financials</span>
                           </Button>
                           <Button 
                             onClick={() => handleRewardTabChange("cohorts")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "cohorts" ? "bg-white text-blue-600 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
+                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "cohorts" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
                           >
                             <UsersRound className="h-4 w-4" />
                             <span>Cohorts</span>
                           </Button>
                           <Button 
                             onClick={() => handleRewardTabChange("rewards")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "rewards" ? "bg-white text-blue-600 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
+                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "rewards" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
                           >
                             <Gift className="h-4 w-4" />
                             <span>Rewards</span>
                           </Button>
                           <Button 
                             onClick={() => handleRewardTabChange("messaging")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "messaging" ? "bg-white text-blue-600 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
+                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "messaging" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
                           >
                             <MessageSquare className="h-4 w-4" />
                             <span>Messages</span>
@@ -1321,7 +1438,7 @@ export default function AgentSetup() {
                     </div>
                     
                       <div className="p-6">
-                        <ScrollArea className={`${isExpanded ? 'max-h-[calc(100vh-300px)]' : 'max-h-[600px]'} scrollable pr-4`}>
+                        <ScrollArea className="max-h-[600px] scrollable pr-4">
                           <TabsContent value="brand" className="pt-0 mt-0 data-[state=active]:block">
                             <div className="space-y-6">
                               {/* Business Information and Brand Voice side by side */}
@@ -1959,6 +2076,7 @@ export default function AgentSetup() {
                             <TabsList className="hidden">
                               <TabsTrigger value="settings">Settings</TabsTrigger>
                               <TabsTrigger value="business-context">Business Context</TabsTrigger>
+                              <TabsTrigger value="cs-vault">CS Vault</TabsTrigger>
                             </TabsList>
                             
                             <div className="flex gap-3">
@@ -1983,6 +2101,17 @@ export default function AgentSetup() {
                               >
                                 <BookText className="h-4 w-4" />
                                 <span>Business Context</span>
+                              </Button>
+                              <Button
+                                onClick={() => setCustomerServiceActiveTab("cs-vault")}
+                                className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${
+                                  customerServiceActiveTab === "cs-vault" ? 
+                                  "bg-white text-blue-600 shadow-sm" : 
+                                  "bg-transparent text-gray-700 hover:bg-gray-50"
+                                }`}
+                              >
+                                <FileText className="h-4 w-4" />
+                                <span>CS Vault Files</span>
                               </Button>
                             </div>
                           </div>
@@ -2339,7 +2468,7 @@ export default function AgentSetup() {
                                         className="mt-1 rounded-md"
                                         placeholder="Enter your business name"
                                       />
-                                </div>
+                                    </div>
                                     
                                     <div>
                                       <Label htmlFor="businessContext">Business Description</Label>
@@ -2609,6 +2738,140 @@ export default function AgentSetup() {
                           )}
                                 </Button>
                         </div>
+                            </div>
+                          </TabsContent>
+                          
+                          {/* Add CS Vault Files tab content */}
+                          <TabsContent value="cs-vault" className="p-6">
+                            <div className="space-y-6">
+                              <div className="flex justify-between items-center">
+                                <h3 className="font-medium flex items-center">
+                                  <FileText className="h-4 w-4 text-blue-600 mr-2" />
+                                  Customer Service Vault Files
+                                </h3>
+                                <Link href="/notes">
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    className="rounded-md gap-2"
+                                  >
+                                    <PlusCircle className="h-4 w-4" />
+                                    Add Files
+                                  </Button>
+                                </Link>
+                              </div>
+                              
+                              <div className="border rounded-md shadow-sm overflow-hidden">
+                                <div className="bg-gray-50 px-4 py-3 border-b">
+                                  <div className="flex items-center justify-between">
+                                    <h4 className="font-medium text-sm">Files Available to CS Agent</h4>
+                                    <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 rounded-md">
+                                      {csVaultFiles.length} files
+                                    </Badge>
+                                  </div>
+                                </div>
+                                
+                                <div className="divide-y">
+                                  {loadingCSVaultFiles ? (
+                                    <div className="py-8 text-center">
+                                      <Loader2 className="h-8 w-8 mx-auto mb-2 text-blue-500 animate-spin" />
+                                      <p className="text-sm text-gray-500">Loading CS Vault files...</p>
+                                    </div>
+                                  ) : csVaultFiles.length === 0 ? (
+                                    <div className="py-12 text-center">
+                                      <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                                      <h3 className="font-medium mb-2">No files in CS Vault</h3>
+                                      <p className="text-sm text-gray-500 mb-4">Files added to the CS Vault will appear here.</p>
+                                      <Link href="/notes">
+                                        <Button variant="outline" size="sm" className="rounded-md gap-2">
+                                          <PlusCircle className="h-4 w-4" />
+                                          Add files from Documents
+                                        </Button>
+                                      </Link>
+                                    </div>
+                                  ) : (
+                                    csVaultFiles.map((file) => (
+                                      <div 
+                                        key={file.id} 
+                                        className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                                        onClick={() => viewFileDetails(file)}
+                                      >
+                                        <div className="flex items-start gap-3">
+                                          <div className="mt-0.5">
+                                            {file.type === 'pdf' ? (
+                                              <FileText className="h-5 w-5 text-red-500 flex-shrink-0" />
+                                            ) : file.type === 'image' ? (
+                                              <FileText className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                                            ) : file.type === 'invoice' ? (
+                                              <FileText className="h-5 w-5 text-green-500 flex-shrink-0" />
+                                            ) : file.type === 'note' ? (
+                                              <FileText className="h-5 w-5 text-yellow-500 flex-shrink-0" />
+                                            ) : (
+                                              <FileText className="h-5 w-5 text-gray-500 flex-shrink-0" />
+                                            )}
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center justify-between">
+                                              <h3 className="font-medium text-sm truncate">{file.title}</h3>
+                                              <Badge className="ml-2 bg-purple-50 text-purple-700 border-purple-200 rounded-md">
+                                                CS Agent
+                                              </Badge>
+                                            </div>
+                                            <p className="text-xs text-gray-500 truncate mt-1">
+                                              {file.summary || "No description"}
+                                            </p>
+                                            <div className="flex items-center gap-1.5 mt-2">
+                                              <Badge 
+                                                variant="outline" 
+                                                className="text-[10px] px-1.5 py-0 h-4 rounded-full bg-gray-50 border-gray-200"
+                                              >
+                                                {file.type}
+                                              </Badge>
+                                              <span className="text-[10px] text-gray-400">
+                                                Added: {file.addedAt.toLocaleDateString()}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                                
+                                {csVaultFiles.length > 0 && (
+                                  <div className="p-4 bg-gray-50 border-t text-center">
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm"
+                                      className="gap-2 rounded-md"
+                                      onClick={fetchCSVaultFiles}
+                                      disabled={loadingCSVaultFiles}
+                                    >
+                                      {loadingCSVaultFiles ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <RefreshCcw className="h-4 w-4" />
+                                      )}
+                                      Refresh Files
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              <div className="bg-blue-50 p-4 rounded-md border border-blue-100 text-sm">
+                                <div className="flex items-start gap-3">
+                                  <Info className="h-5 w-5 text-blue-500 mt-0.5" />
+                                  <div>
+                                    <h4 className="font-medium mb-1">About CS Vault Files</h4>
+                                    <p className="text-muted-foreground">
+                                      Files in the CS Vault are accessible to your Customer Service Agent and will be used to provide accurate responses to customer inquiries.
+                                    </p>
+                                    <p className="text-muted-foreground mt-2">
+                                      To add or remove files from the CS Vault, visit the <Link href="/notes" className="text-blue-600 underline hover:text-blue-800">Documents</Link> section.
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           </TabsContent>
                         </Tabs>
@@ -2882,6 +3145,139 @@ export default function AgentSetup() {
           </SheetContent>
         </Sheet>
       )}
+      
+      {/* File Details Sheet */}
+      <Sheet open={fileDetailsOpen} onOpenChange={setFileDetailsOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md md:max-w-lg lg:max-w-xl p-0 flex flex-col rounded-md">
+          <div className="flex-1 overflow-y-auto">
+            {loadingFileDetails ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <Loader2 className="h-8 w-8 mx-auto mb-4 text-blue-500 animate-spin" />
+                  <p>Loading file details...</p>
+                </div>
+              </div>
+            ) : selectedFile ? (
+              <div className="h-full flex flex-col">
+                <div className="border-b p-4 bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {selectedFile.type === 'pdf' ? (
+                        <FileText className="h-6 w-6 text-red-500" />
+                      ) : selectedFile.type === 'image' ? (
+                        <FileText className="h-6 w-6 text-blue-500" />
+                      ) : selectedFile.type === 'invoice' ? (
+                        <FileText className="h-6 w-6 text-green-500" />
+                      ) : selectedFile.type === 'note' ? (
+                        <FileText className="h-6 w-6 text-yellow-500" />
+                      ) : (
+                        <FileText className="h-6 w-6 text-gray-500" />
+                      )}
+                      <div>
+                        <h3 className="font-medium">{selectedFile.title}</h3>
+                        <p className="text-xs text-gray-500">{selectedFile.type}</p>
+                      </div>
+                    </div>
+                    <Badge className="bg-purple-50 text-purple-700 border-purple-200 rounded-md">
+                      CS Agent
+                    </Badge>
+                  </div>
+                </div>
+                
+                <div className="p-6 flex-1 overflow-y-auto">
+                  {selectedFile.summary && (
+                    <div className="mb-4 bg-gray-50 p-3 rounded-md border">
+                      <h4 className="text-sm font-medium mb-1">Summary</h4>
+                      <p className="text-sm">{selectedFile.summary}</p>
+                    </div>
+                  )}
+                  
+                  {selectedFile.type === 'image' && selectedFile.fileUrl ? (
+                    <div className="border rounded-md overflow-hidden">
+                      <img 
+                        src={selectedFile.fileUrl} 
+                        alt={selectedFile.title} 
+                        className="w-full h-auto object-contain max-h-[500px]" 
+                      />
+                    </div>
+                  ) : selectedFile.type === 'pdf' && selectedFile.fileUrl ? (
+                    <div className="border rounded-md overflow-hidden p-4 bg-gray-50 flex flex-col">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-medium flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-red-500" />
+                          PDF Document
+                        </h4>
+                        <a 
+                          href={selectedFile.fileUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:text-blue-800"
+                        >
+                          Open in new tab
+                        </a>
+                      </div>
+                      <div className="w-full h-[500px] bg-white rounded-md overflow-hidden border">
+                        <embed
+                          src={selectedFile.fileUrl}
+                          type="application/pdf"
+                          width="100%"
+                          height="100%"
+                          className="rounded-md"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="border rounded-md p-4 overflow-auto bg-white">
+                      <h4 className="text-sm font-medium mb-2">Content</h4>
+                      {selectedFile.content ? (
+                        <div 
+                          className="prose prose-sm max-w-none"
+                          dangerouslySetInnerHTML={{ __html: selectedFile.content }}
+                        />
+                      ) : selectedFile.rawText ? (
+                        <p className="whitespace-pre-wrap text-sm">{selectedFile.rawText}</p>
+                      ) : (
+                        <p className="text-sm text-gray-500 italic">No content available</p>
+                      )}
+                    </div>
+                  )}
+                  
+                  <div className="mt-6 text-sm text-gray-500">
+                    <p className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      <span>Created: {selectedFile.createdAt.toLocaleDateString()}</span>
+                    </p>
+                    <p className="flex items-center gap-2 mt-1">
+                      <Clock className="h-4 w-4" />
+                      <span>Added to CS Vault: {selectedFile.addedAt.toLocaleDateString()}</span>
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="border-t p-4 bg-gray-50">
+                  <div className="flex justify-end">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setFileDetailsOpen(false)}
+                      className="gap-2 rounded-md"
+                    >
+                      <X className="h-4 w-4" />
+                      Close
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <p>No file selected</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 } 

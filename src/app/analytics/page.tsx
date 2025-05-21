@@ -360,16 +360,12 @@ export default function AnalyticsPage() {
           <div className="flex items-center gap-2">
             <Button 
               variant="outline" 
-              size="sm" 
-              className="h-9"
               onClick={() => {/* Export functionality */}}
             >
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
             <Button 
-              size="sm" 
-              className="h-9"
               onClick={() => setIsCreatingReport(true)}
             >
               <Plus className="h-4 w-4 mr-2" />

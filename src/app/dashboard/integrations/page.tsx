@@ -475,8 +475,6 @@ export default function IntegrationsPage() {
         >
           <Button 
             variant="outline" 
-            size="sm" 
-            className="h-8"
             onClick={refreshIntegrationStatus}
             disabled={refreshing}
           >

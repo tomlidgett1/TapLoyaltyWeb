@@ -1326,18 +1326,16 @@ export default function RewardsPage() {
         >
           <div className="flex items-center gap-2">
             <Button 
-              size="sm"
               variant="default" 
-              className="h-8 gap-2 rounded-md"
+              className="gap-2 rounded-md"
               onClick={() => router.push('/create')}
             >
               <Plus className="h-4 w-4" />
               Create Reward
             </Button>
             <Button 
-              size="sm"
               variant="outline" 
-              className="h-8 gap-2 rounded-md"
+              className="gap-2 rounded-md"
               onClick={handleExportPDF}
             >
               <Download className="h-4 w-4" />
@@ -1348,30 +1346,70 @@ export default function RewardsPage() {
 
         <Tabs defaultValue="all" onValueChange={(value) => setRewardCategory(value as RewardCategory)}>
           <div className="flex items-center justify-between mb-4">
-            <TabsList className="h-9 rounded-md">
-              <TabsTrigger value="all" className="flex items-center gap-2">
+            <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
+              <button
+                onClick={() => setRewardCategory("all")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  rewardCategory === "all"
+                    ? "text-gray-800 bg-white shadow-sm"
+                    : "text-gray-600 hover:bg-gray-200/70"
+                )}
+              >
                 <Package className="h-4 w-4" />
                 All Rewards
-              </TabsTrigger>
-              <TabsTrigger value="individual" className="flex items-center gap-2">
+              </button>
+              <button
+                onClick={() => setRewardCategory("individual")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  rewardCategory === "individual"
+                    ? "text-gray-800 bg-white shadow-sm"
+                    : "text-gray-600 hover:bg-gray-200/70"
+                )}
+              >
                 <Gift className="h-4 w-4" />
                 Individual
-              </TabsTrigger>
-              <TabsTrigger value="customer-specific" className="flex items-center gap-2">
+              </button>
+              <button
+                onClick={() => setRewardCategory("customer-specific")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  rewardCategory === "customer-specific"
+                    ? "text-gray-800 bg-white shadow-sm"
+                    : "text-gray-600 hover:bg-gray-200/70"
+                )}
+              >
                 <Users className="h-4 w-4" />
                 Customer-Specific
-              </TabsTrigger>
-              <TabsTrigger value="programs" className="flex items-center gap-2">
+              </button>
+              <button
+                onClick={() => setRewardCategory("programs")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  rewardCategory === "programs"
+                    ? "text-gray-800 bg-white shadow-sm"
+                    : "text-gray-600 hover:bg-gray-200/70"
+                )}
+              >
                 <Award className="h-4 w-4" />
                 Programs
-              </TabsTrigger>
-              <TabsTrigger value="agent" className="flex items-center gap-2">
+              </button>
+              <button
+                onClick={() => setRewardCategory("agent")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  rewardCategory === "agent"
+                    ? "text-gray-800 bg-white shadow-sm"
+                    : "text-gray-600 hover:bg-gray-200/70"
+                )}
+              >
                 <Sparkles className="h-4 w-4 text-blue-500" />
-                <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-orange-500 font-medium">
+                <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-orange-500">
                   Agent
                 </span>
-              </TabsTrigger>
-            </TabsList>
+              </button>
+            </div>
             
             <div className="flex items-center gap-2">
               <div className="relative">
@@ -1403,7 +1441,7 @@ export default function RewardsPage() {
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-96 p-4" align="end">
+                <PopoverContent align="end" className="w-96 p-4">
                   <div className="space-y-4">
                     <h4 className="font-medium">Filter Rewards</h4>
                     

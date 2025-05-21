@@ -650,8 +650,7 @@ export default function StoreOverviewPage() {
           title="Store Overview"
         >
           <Button 
-            size="sm"
-            className="h-8 gap-2 rounded-md"
+            className="gap-2 rounded-md"
             onClick={() => router.push('/create')}
           >
             <PlusCircle className="h-4 w-4" />

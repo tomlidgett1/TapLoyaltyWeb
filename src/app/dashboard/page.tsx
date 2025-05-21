@@ -2314,10 +2314,10 @@ export default function DashboardPage() {
   }
 
   return (
-    <PageTransition>
+    <>
       <style dangerouslySetInnerHTML={{ __html: customAnimationStyles }} />
-      <div className="p-6 py-4 max-w-full overflow-x-hidden">
-        <div className="space-y-6">
+      <div className="px-8 py-4 max-w-full overflow-x-hidden bg-white">
+        <div className="space-y-8">
           {/* Welcome Section with Timeframe Tabs */}
           <div>
             <style jsx>{`
@@ -2338,810 +2338,276 @@ export default function DashboardPage() {
               <div className="flex space-x-2">
                 <Button 
                   variant="outline" 
-                  size="sm"
-                  className="h-8 gap-1 border-[#007AFF] hover:bg-[#007AFF]/5 text-xs px-2 py-0"
+                  className="gap-1 border-[#007AFF] hover:bg-[#007AFF]/5 h-9"
                   onClick={fetchDailySummaries}
                   disabled={isDailySummaryLoading}
                 >
                   {isDailySummaryLoading ? (
                     <>
-                      <div className="h-3 w-3 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+                      <div className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
                       <GradientText>Processing...</GradientText>
                     </>
                   ) : (
                     <>
-                      <Calendar className="h-3 w-3 text-blue-500" />
+                      <Calendar className="h-4 w-4 text-blue-500" />
                       <GradientText>Daily Summary</GradientText>
                     </>
                   )}
                 </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                className="h-8 gap-1 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800 text-xs px-2 py-0"
-                onClick={() => setIsSetupWizardOpen(true)}
-              >
-                <PlusCircle className="h-3 w-3" />
-                Setup Wizard
-              </Button>
+                <Button 
+                  variant="outline" 
+                  className="gap-1 border-[#007AFF] text-[#007AFF] hover:bg-[#007AFF]/5 h-9"
+                  onClick={() => setIsSetupWizardOpen(true)}
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  Setup Wizard
+                </Button>
               </div>
             </PageHeader>
 
             {/* Update the tabs layout to be side-by-side with a separator */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-5 mt-2">
               {/* Metrics type tabs */}
-              <Tabs 
-                defaultValue="platform" 
-                className="flex-shrink-0"
-                onValueChange={(value) => setMetricsType(value as "consumer" | "platform")}
-              >
-                <TabsList>
-                  <TabsTrigger value="platform" className="flex items-center gap-2 data-[state=active]:text-blue-600">
-                    <Server className="h-4 w-4" />
-                    <span>Platform Metrics</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="consumer" className="flex items-center gap-2 data-[state=active]:text-blue-600">
-                    <Users className="h-4 w-4" />
-                    <span>Consumer Metrics</span>
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
+              <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
+                <button
+                  onClick={() => setMetricsType("platform")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                    metricsType === "platform"
+                      ? "text-gray-800 bg-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-200/70"
+                  )}
+                >
+                  <Server className="h-4 w-4" />
+                  <span>Platform Metrics</span>
+                </button>
+                <button
+                  onClick={() => setMetricsType("consumer")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                    metricsType === "consumer"
+                      ? "text-gray-800 bg-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-200/70"
+                  )}
+                >
+                  <Users className="h-4 w-4" />
+                  <span>Consumer Metrics</span>
+                </button>
+              </div>
               
               {/* Vertical separator */}
               <div className="h-8 w-px bg-gray-200"></div>
               
               {/* Date range tabs */}
-              <Tabs 
-                defaultValue="today"
-                value={timeframe}
-                onValueChange={(value) => setTimeframe(value as TimeframeType)}
-              >
-                <TabsList>
-                  <TabsTrigger value="today" className="data-[state=active]:text-blue-600">Today</TabsTrigger>
-                  <TabsTrigger value="yesterday" className="data-[state=active]:text-blue-600">Yesterday</TabsTrigger>
-                  <TabsTrigger value="7days" className="data-[state=active]:text-blue-600">Last 7 Days</TabsTrigger>
-                  <TabsTrigger value="30days" className="data-[state=active]:text-blue-600">Last 30 Days</TabsTrigger>
-                </TabsList>
-              </Tabs>
+              <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
+                <button
+                  onClick={() => setTimeframe("today")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                    timeframe === "today"
+                      ? "text-gray-800 bg-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-200/70"
+                  )}
+                >
+                  Today
+                </button>
+                <button
+                  onClick={() => setTimeframe("yesterday")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                    timeframe === "yesterday"
+                      ? "text-gray-800 bg-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-200/70"
+                  )}
+                >
+                  Yesterday
+                </button>
+                <button
+                  onClick={() => setTimeframe("7days")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                    timeframe === "7days"
+                      ? "text-gray-800 bg-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-200/70"
+                  )}
+                >
+                  Last 7 Days
+                </button>
+                <button
+                  onClick={() => setTimeframe("30days")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                    timeframe === "30days"
+                      ? "text-gray-800 bg-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-200/70"
+                  )}
+                >
+                  Last 30 Days
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Tap Agent Button - Removed */}
-
-          {/* Gmail Query Response */}
-          {gmailQueryResponse && (
-            <div className="mt-3 bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
-              <div className="flex justify-between items-center mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
-                    <Image src="/gmail.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain" />
-                  </div>
-                  <h3 className="text-sm font-medium text-gray-900">Gmail Response</h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => setShowDebugInfo(!showDebugInfo)}
-                  >
-                    {showDebugInfo ? "Hide Debug" : "Show Debug"}
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-7 w-7 p-0 rounded-full"
-                    onClick={() => {
-                      setGmailQueryResponse(null);
-                      setDebugResponse(null);
-                      setShowDebugInfo(false);
-                      // Also remove the Gmail integration from selected integrations
-                      setSelectedIntegrations(selectedIntegrations.filter(i => i.id !== "gmail"));
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              <div className="prose prose-sm max-w-none overflow-auto max-h-[600px] font-sf-pro">
-                {(() => {
-                  // Process the response first
-                  const processedResponse = processApiResponse(gmailQueryResponse);
-                  
-                  // Check if the processed response is HTML
-                  if (typeof processedResponse === 'string' && 
-                      processedResponse.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i)) {
-                    return renderHtml(processedResponse);
-                  } 
-                  
-                  // Otherwise render as Markdown
-                  return (
-                    <ReactMarkdown 
-                      className="prose prose-slate 
-                        prose-p:text-gray-700 prose-p:mb-4
-                        prose-h1:text-transparent prose-h1:bg-clip-text prose-h1:bg-gradient-to-r prose-h1:from-[#007AFF] prose-h1:to-[#00C6FF] prose-h1:text-2xl prose-h1:font-bold prose-h1:mt-6 prose-h1:mb-4
-                        prose-h2:text-transparent prose-h2:bg-clip-text prose-h2:bg-gradient-to-r prose-h2:from-[#007AFF] prose-h2:to-[#00C6FF] prose-h2:text-xl prose-h2:font-bold prose-h2:mt-5 prose-h2:mb-3
-                        prose-h3:text-transparent prose-h3:bg-clip-text prose-h3:bg-gradient-to-r prose-h3:from-[#007AFF] prose-h3:to-[#00C6FF] prose-h3:text-lg prose-h3:font-semibold prose-h3:mt-4 prose-h3:mb-2
-                        prose-a:text-[#007AFF] 
-                        prose-strong:font-semibold prose-strong:text-gray-900 
-                        prose-ul:my-4 prose-ul:pl-5 prose-ul:space-y-2 
-                        prose-ol:my-4 prose-ol:pl-5 prose-ol:space-y-2
-                        prose-li:my-0.5 prose-li:pl-1.5
-                        prose-hr:border-gray-200 prose-hr:my-4 prose-hr:border-dashed
-                        font-sf-pro [&_.html-content_h1]:text-transparent [&_.html-content_h1]:bg-clip-text [&_.html-content_h1]:bg-gradient-to-r [&_.html-content_h1]:from-[#007AFF] [&_.html-content_h1]:to-[#00C6FF] [&_.html-content_h1]:text-2xl [&_.html-content_h1]:font-bold [&_.html-content_h1]:mt-6 [&_.html-content_h1]:mb-4
-                        [&_.html-content_h2]:text-transparent [&_.html-content_h2]:bg-clip-text [&_.html-content_h2]:bg-gradient-to-r [&_.html-content_h2]:from-[#007AFF] [&_.html-content_h2]:to-[#00C6FF] [&_.html-content_h2]:text-xl [&_.html-content_h2]:font-bold [&_.html-content_h2]:mt-5 [&_.html-content_h2]:mb-3
-                        [&_.html-content_h3]:text-transparent [&_.html-content_h3]:bg-clip-text [&_.html-content_h3]:bg-gradient-to-r [&_.html-content_h3]:from-[#007AFF] [&_.html-content_h3]:to-[#00C6FF] [&_.html-content_h3]:text-lg [&_.html-content_h3]:font-semibold [&_.html-content_h3]:mt-4 [&_.html-content_h3]:mb-2
-                        [&_.html-content_p]:text-gray-700 [&_.html-content_p]:mb-4
-                        [&_.html-content_a]:text-[#007AFF]
-                        [&_.html-content_ul]:my-4 [&_.html-content_ul]:pl-5 [&_.html-content_ul]:space-y-2
-                        [&_.html-content_ol]:my-4 [&_.html-content_ol]:pl-5 [&_.html-content_ol]:space-y-2
-                        [&_.html-content_li]:my-0.5 [&_.html-content_li]:pl-1.5"
-                      remarkPlugins={[remarkGfm]}
-                      rehypePlugins={[rehypeRaw]}
-                      components={{
-                        hr: () => <div className="my-5 border-t border-gray-100" />,
-                        table: ({ children }) => <table className="border-collapse w-full my-4">{children}</table>,
-                        th: ({ children }) => <th className="border border-gray-200 bg-gray-50 px-3 py-2 text-left font-medium text-gray-700">{children}</th>,
-                        td: ({ children }) => <td className="border border-gray-200 px-3 py-2">{children}</td>,
-                        pre: ({ children }) => <pre className="bg-gray-50 p-3 rounded-md overflow-auto text-sm my-4">{children}</pre>,
-                        code: ({ children }) => <code className="bg-gray-50 p-1 rounded text-sm font-mono text-purple-600">{children}</code>
-                      }}
-                    >
-                      {processedResponse}
-                    </ReactMarkdown>
-                  );
-                })()}
-              </div>
-              
-              {/* Show debug response */}
-              {showDebugInfo && debugResponse && (
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <div className="bg-gray-50 p-3 rounded-md">
-                    <h4 className="text-xs font-medium text-gray-700 mb-1">Raw Response:</h4>
-                    <pre className="text-xs overflow-auto bg-gray-100 p-2 rounded whitespace-pre-wrap">
-                      {debugResponse}
-                    </pre>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Show debug response */}
-          {showDebugInfo && debugResponse && (
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <div className="bg-gray-50 p-3 rounded-md">
-                <h4 className="text-xs font-medium text-gray-700 mb-1">Raw Response:</h4>
-                <pre className="text-xs overflow-auto bg-gray-100 p-2 rounded whitespace-pre-wrap">
-                  {debugResponse}
-                </pre>
-              </div>
-            </div>
-          )}
-          
-          {/* Gmail Query Loading */}
-          {gmailQueryLoading && (
-            <div className="mt-3 bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
-              <div className="flex items-start gap-3">
-                <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
-                  <Image src="/gmail.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-sm font-medium text-gray-900">Processing Gmail Query</h3>
-                    <div className="h-4 w-4 rounded-full border-2 border-gray-200 border-t-gray-600 animate-spin"></div>
-                  </div>
-                  <p className="text-sm text-gray-500">Analyzing your emails...</p>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Lightspeed Query Response */}
-          {lightspeedQueryResponse && (
-            <div className="mt-3 bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
-              <div className="flex justify-between items-center mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
-                    <Image src="/lslogo.png" width={16} height={16} alt="Lightspeed" className="h-4 w-4 object-contain" />
-                  </div>
-                  <h3 className="text-sm font-medium text-gray-900">Lightspeed Response</h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => setShowDebugInfo(!showDebugInfo)}
-                  >
-                    {showDebugInfo ? "Hide Debug" : "Show Debug"}
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-7 w-7 p-0 rounded-full"
-                    onClick={() => {
-                      setLightspeedQueryResponse(null);
-                      setDebugResponse(null);
-                      setShowDebugInfo(false);
-                      // Also remove the Lightspeed integration from selected integrations
-                      setSelectedIntegrations(selectedIntegrations.filter(i => i.id !== "lightspeed"));
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              <div className="prose prose-sm max-w-none overflow-auto max-h-[600px] font-sf-pro">
-                {(() => {
-                  // Process the response first
-                  const processedResponse = processApiResponse(lightspeedQueryResponse);
-                  
-                  // Check if the processed response is HTML
-                  if (typeof processedResponse === 'string' && 
-                      processedResponse.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i)) {
-                    return renderHtml(processedResponse);
-                  } 
-                  
-                  // Otherwise render as Markdown
-                  return (
-                    <ReactMarkdown 
-                      className="prose prose-slate 
-                        prose-p:text-gray-700 prose-p:mb-4
-                        prose-h1:text-transparent prose-h1:bg-clip-text prose-h1:bg-gradient-to-r prose-h1:from-[#007AFF] prose-h1:to-[#00C6FF] prose-h1:text-2xl prose-h1:font-bold prose-h1:mt-6 prose-h1:mb-4
-                        prose-h2:text-transparent prose-h2:bg-clip-text prose-h2:bg-gradient-to-r prose-h2:from-[#007AFF] prose-h2:to-[#00C6FF] prose-h2:text-xl prose-h2:font-bold prose-h2:mt-5 prose-h2:mb-3
-                        prose-h3:text-transparent prose-h3:bg-clip-text prose-h3:bg-gradient-to-r prose-h3:from-[#007AFF] prose-h3:to-[#00C6FF] prose-h3:text-lg prose-h3:font-semibold prose-h3:mt-4 prose-h3:mb-2
-                        prose-a:text-[#007AFF] 
-                        prose-strong:font-semibold prose-strong:text-gray-900 
-                        prose-ul:my-4 prose-ul:pl-5 prose-ul:space-y-2 
-                        prose-ol:my-4 prose-ol:pl-5 prose-ol:space-y-2
-                        prose-li:my-0.5 prose-li:pl-1.5
-                        prose-hr:border-gray-200 prose-hr:my-4 prose-hr:border-dashed
-                        font-sf-pro [&_.html-content_h1]:text-transparent [&_.html-content_h1]:bg-clip-text [&_.html-content_h1]:bg-gradient-to-r [&_.html-content_h1]:from-[#007AFF] [&_.html-content_h1]:to-[#00C6FF] [&_.html-content_h1]:text-2xl [&_.html-content_h1]:font-bold [&_.html-content_h1]:mt-6 [&_.html-content_h1]:mb-4
-                        [&_.html-content_h2]:text-transparent [&_.html-content_h2]:bg-clip-text [&_.html-content_h2]:bg-gradient-to-r [&_.html-content_h2]:from-[#007AFF] [&_.html-content_h2]:to-[#00C6FF] [&_.html-content_h2]:text-xl [&_.html-content_h2]:font-bold [&_.html-content_h2]:mt-5 [&_.html-content_h2]:mb-3
-                        [&_.html-content_h3]:text-transparent [&_.html-content_h3]:bg-clip-text [&_.html-content_h3]:bg-gradient-to-r [&_.html-content_h3]:from-[#007AFF] [&_.html-content_h3]:to-[#00C6FF] [&_.html-content_h3]:text-lg [&_.html-content_h3]:font-semibold [&_.html-content_h3]:mt-4 [&_.html-content_h3]:mb-2
-                        [&_.html-content_p]:text-gray-700 [&_.html-content_p]:mb-4
-                        [&_.html-content_a]:text-[#007AFF]
-                        [&_.html-content_ul]:my-4 [&_.html-content_ul]:pl-5 [&_.html-content_ul]:space-y-2
-                        [&_.html-content_ol]:my-4 [&_.html-content_ol]:pl-5 [&_.html-content_ol]:space-y-2
-                        [&_.html-content_li]:my-0.5 [&_.html-content_li]:pl-1.5"
-                      remarkPlugins={[remarkGfm]}
-                      rehypePlugins={[rehypeRaw]}
-                      components={{
-                        hr: () => <div className="my-5 border-t border-gray-100" />,
-                        table: ({ children }) => <table className="border-collapse w-full my-4">{children}</table>,
-                        th: ({ children }) => <th className="border border-gray-200 bg-gray-50 px-3 py-2 text-left font-medium text-gray-700">{children}</th>,
-                        td: ({ children }) => <td className="border border-gray-200 px-3 py-2">{children}</td>,
-                        pre: ({ children }) => <pre className="bg-gray-50 p-3 rounded-md overflow-auto text-sm my-4">{children}</pre>,
-                        code: ({ children }) => <code className="bg-gray-50 p-1 rounded text-sm font-mono text-purple-600">{children}</code>
-                      }}
-                    >
-                      {processedResponse}
-                    </ReactMarkdown>
-                  );
-                })()}
-              </div>
-              
-              {/* Show debug response */}
-              {showDebugInfo && debugResponse && (
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <div className="bg-gray-50 p-3 rounded-md">
-                    <h4 className="text-xs font-medium text-gray-700 mb-1">Raw Response:</h4>
-                    <pre className="text-xs overflow-auto bg-gray-100 p-2 rounded whitespace-pre-wrap">
-                      {debugResponse}
-                    </pre>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Lightspeed Query Loading */}
-          {lightspeedQueryLoading && (
-            <div className="mt-3 bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
-              <div className="flex items-start gap-3">
-                <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
-                  <Image src="/lslogo.png" width={16} height={16} alt="Lightspeed" className="h-4 w-4 object-contain" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-sm font-medium text-gray-900">Processing Lightspeed Query</h3>
-                    <div className="h-4 w-4 rounded-full border-2 border-gray-200 border-t-gray-600 animate-spin"></div>
-                  </div>
-                  <p className="text-sm text-gray-500">Analyzing your data...</p>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Tap Loyalty Query Response */}
-          {tapQueryResponse && (
-            <div className="mt-3 bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
-              <div className="flex justify-between items-center mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
-                    <Image src="/taplogo.png" width={16} height={16} alt="Tap Loyalty" className="h-4 w-4 object-contain" />
-                  </div>
-                  <h3 className="text-sm font-medium text-gray-900">Tap Loyalty Response</h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => setShowDebugInfo(!showDebugInfo)}
-                  >
-                    {showDebugInfo ? "Hide Debug" : "Show Debug"}
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-7 w-7 p-0 rounded-full"
-                    onClick={() => {
-                      setTapQueryResponse(null);
-                      setDebugResponse(null);
-                      setShowDebugInfo(false);
-                      // Also remove the Tap Loyalty integration from selected integrations
-                      setSelectedIntegrations(selectedIntegrations.filter(i => i.id !== "tap"));
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              <div className="prose prose-sm max-w-none overflow-auto max-h-[600px] font-sf-pro">
-                {(() => {
-                  // Process the response first
-                  const processedResponse = processApiResponse(tapQueryResponse);
-                  
-                  // Check if the processed response is HTML
-                  if (typeof processedResponse === 'string' && 
-                      processedResponse.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i)) {
-                    return renderHtml(processedResponse);
-                  } 
-                  
-                  // Otherwise render as Markdown
-                  return (
-                    <ReactMarkdown 
-                      className="prose prose-slate 
-                        prose-p:text-gray-700 prose-p:mb-4
-                        prose-h1:text-transparent prose-h1:bg-clip-text prose-h1:bg-gradient-to-r prose-h1:from-[#007AFF] prose-h1:to-[#00C6FF] prose-h1:text-2xl prose-h1:font-bold prose-h1:mt-6 prose-h1:mb-4
-                        prose-h2:text-transparent prose-h2:bg-clip-text prose-h2:bg-gradient-to-r prose-h2:from-[#007AFF] prose-h2:to-[#00C6FF] prose-h2:text-xl prose-h2:font-bold prose-h2:mt-5 prose-h2:mb-3
-                        prose-h3:text-transparent prose-h3:bg-clip-text prose-h3:bg-gradient-to-r prose-h3:from-[#007AFF] prose-h3:to-[#00C6FF] prose-h3:text-lg prose-h3:font-semibold prose-h3:mt-4 prose-h3:mb-2
-                        prose-a:text-[#007AFF] 
-                        prose-strong:font-semibold prose-strong:text-gray-900 
-                        prose-ul:my-4 prose-ul:pl-5 prose-ul:space-y-2 
-                        prose-ol:my-4 prose-ol:pl-5 prose-ol:space-y-2
-                        prose-li:my-0.5 prose-li:pl-1.5
-                        prose-hr:border-gray-200 prose-hr:my-4 prose-hr:border-dashed
-                        font-sf-pro [&_.html-content_h1]:text-transparent [&_.html-content_h1]:bg-clip-text [&_.html-content_h1]:bg-gradient-to-r [&_.html-content_h1]:from-[#007AFF] [&_.html-content_h1]:to-[#00C6FF] [&_.html-content_h1]:text-2xl [&_.html-content_h1]:font-bold [&_.html-content_h1]:mt-6 [&_.html-content_h1]:mb-4
-                        [&_.html-content_h2]:text-transparent [&_.html-content_h2]:bg-clip-text [&_.html-content_h2]:bg-gradient-to-r [&_.html-content_h2]:from-[#007AFF] [&_.html-content_h2]:to-[#00C6FF] [&_.html-content_h2]:text-xl [&_.html-content_h2]:font-bold [&_.html-content_h2]:mt-5 [&_.html-content_h2]:mb-3
-                        [&_.html-content_h3]:text-transparent [&_.html-content_h3]:bg-clip-text [&_.html-content_h3]:bg-gradient-to-r [&_.html-content_h3]:from-[#007AFF] [&_.html-content_h3]:to-[#00C6FF] [&_.html-content_h3]:text-lg [&_.html-content_h3]:font-semibold [&_.html-content_h3]:mt-4 [&_.html-content_h3]:mb-2
-                        [&_.html-content_p]:text-gray-700 [&_.html-content_p]:mb-4
-                        [&_.html-content_a]:text-[#007AFF]
-                        [&_.html-content_ul]:my-4 [&_.html-content_ul]:pl-5 [&_.html-content_ul]:space-y-2
-                        [&_.html-content_ol]:my-4 [&_.html-content_ol]:pl-5 [&_.html-content_ol]:space-y-2
-                        [&_.html-content_li]:my-0.5 [&_.html-content_li]:pl-1.5"
-                      remarkPlugins={[remarkGfm]}
-                      rehypePlugins={[rehypeRaw]}
-                      components={{
-                        hr: () => <div className="my-5 border-t border-gray-100" />,
-                        table: ({ children }) => <table className="border-collapse w-full my-4">{children}</table>,
-                        th: ({ children }) => <th className="border border-gray-200 bg-gray-50 px-3 py-2 text-left font-medium text-gray-700">{children}</th>,
-                        td: ({ children }) => <td className="border border-gray-200 px-3 py-2">{children}</td>,
-                        pre: ({ children }) => <pre className="bg-gray-50 p-3 rounded-md overflow-auto text-sm my-4">{children}</pre>,
-                        code: ({ children }) => <code className="bg-gray-50 p-1 rounded text-sm font-mono text-purple-600">{children}</code>
-                      }}
-                    >
-                      {processedResponse}
-                    </ReactMarkdown>
-                  );
-                })()}
-              </div>
-              
-              {/* Show debug response */}
-              {showDebugInfo && debugResponse && (
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <div className="bg-gray-50 p-3 rounded-md">
-                    <h4 className="text-xs font-medium text-gray-700 mb-1">Raw Response:</h4>
-                    <pre className="text-xs overflow-auto bg-gray-100 p-2 rounded whitespace-pre-wrap">
-                      {debugResponse}
-                    </pre>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Tap Loyalty Query Loading */}
-          {tapQueryLoading && (
-            <div className="mt-3 bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
-              <div className="flex items-start gap-3">
-                <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
-                  <Image src="/taplogo.png" width={16} height={16} alt="Tap Loyalty" className="h-4 w-4 object-contain" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-sm font-medium text-gray-900">Processing Tap Loyalty Query</h3>
-                    <div className="h-4 w-4 rounded-full border-2 border-gray-200 border-t-gray-600 animate-spin"></div>
-                  </div>
-                  <p className="text-sm text-gray-500">Analyzing your query...</p>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* AI Assistant Response */}
-          {assistantResponse && (
-            <div className="mt-3 bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
-              <div className="flex justify-between items-center mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-blue-100">
-                    <Sparkles className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <h3 className="text-sm font-medium text-gray-900">AI Assistant</h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => setShowDebugInfo(!showDebugInfo)}
-                  >
-                    {showDebugInfo ? "Hide Debug" : "Show Debug"}
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-7 w-7 p-0 rounded-full"
-                    onClick={() => {
-                      setAssistantResponse(null);
-                      setDebugResponse(null);
-                      setShowDebugInfo(false);
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              <div className="prose prose-sm max-w-none overflow-auto max-h-[600px] font-sf-pro">
-                {(() => {
-                  // Process the response first
-                  const processedResponse = processApiResponse(assistantResponse);
-                  
-                  // Check if the processed response is HTML
-                  if (typeof processedResponse === 'string' && 
-                      processedResponse.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i)) {
-                    return renderHtml(processedResponse);
-                  } 
-                  
-                  // Otherwise render as Markdown
-                  return (
-                    <ReactMarkdown 
-                      className="prose prose-slate 
-                        prose-p:text-gray-700 prose-p:mb-4
-                        prose-h1:text-transparent prose-h1:bg-clip-text prose-h1:bg-gradient-to-r prose-h1:from-[#007AFF] prose-h1:to-[#00C6FF] prose-h1:text-2xl prose-h1:font-bold prose-h1:mt-6 prose-h1:mb-4
-                        prose-h2:text-transparent prose-h2:bg-clip-text prose-h2:bg-gradient-to-r prose-h2:from-[#007AFF] prose-h2:to-[#00C6FF] prose-h2:text-xl prose-h2:font-bold prose-h2:mt-5 prose-h2:mb-3
-                        prose-h3:text-transparent prose-h3:bg-clip-text prose-h3:bg-gradient-to-r prose-h3:from-[#007AFF] prose-h3:to-[#00C6FF] prose-h3:text-lg prose-h3:font-semibold prose-h3:mt-4 prose-h3:mb-2
-                        prose-a:text-[#007AFF] 
-                        prose-strong:font-semibold prose-strong:text-gray-900 
-                        prose-ul:my-4 prose-ul:pl-5 prose-ul:space-y-2 
-                        prose-ol:my-4 prose-ol:pl-5 prose-ol:space-y-2
-                        prose-li:my-0.5 prose-li:pl-1.5
-                        prose-hr:border-gray-200 prose-hr:my-4 prose-hr:border-dashed
-                        font-sf-pro [&_.html-content_h1]:text-transparent [&_.html-content_h1]:bg-clip-text [&_.html-content_h1]:bg-gradient-to-r [&_.html-content_h1]:from-[#007AFF] [&_.html-content_h1]:to-[#00C6FF] [&_.html-content_h1]:text-2xl [&_.html-content_h1]:font-bold [&_.html-content_h1]:mt-6 [&_.html-content_h1]:mb-4
-                        [&_.html-content_h2]:text-transparent [&_.html-content_h2]:bg-clip-text [&_.html-content_h2]:bg-gradient-to-r [&_.html-content_h2]:from-[#007AFF] [&_.html-content_h2]:to-[#00C6FF] [&_.html-content_h2]:text-xl [&_.html-content_h2]:font-bold [&_.html-content_h2]:mt-5 [&_.html-content_h2]:mb-3
-                        [&_.html-content_h3]:text-transparent [&_.html-content_h3]:bg-clip-text [&_.html-content_h3]:bg-gradient-to-r [&_.html-content_h3]:from-[#007AFF] [&_.html-content_h3]:to-[#00C6FF] [&_.html-content_h3]:text-lg [&_.html-content_h3]:font-semibold [&_.html-content_h3]:mt-4 [&_.html-content_h3]:mb-2
-                        [&_.html-content_p]:text-gray-700 [&_.html-content_p]:mb-4
-                        [&_.html-content_a]:text-[#007AFF]
-                        [&_.html-content_ul]:my-4 [&_.html-content_ul]:pl-5 [&_.html-content_ul]:space-y-2
-                        [&_.html-content_ol]:my-4 [&_.html-content_ol]:pl-5 [&_.html-content_ol]:space-y-2
-                        [&_.html-content_li]:my-0.5 [&_.html-content_li]:pl-1.5"
-                      remarkPlugins={[remarkGfm]}
-                      rehypePlugins={[rehypeRaw]}
-                      components={{
-                        hr: () => <div className="my-5 border-t border-gray-100" />,
-                        table: ({ children }) => <table className="border-collapse w-full my-4">{children}</table>,
-                        th: ({ children }) => <th className="border border-gray-200 bg-gray-50 px-3 py-2 text-left font-medium text-gray-700">{children}</th>,
-                        td: ({ children }) => <td className="border border-gray-200 px-3 py-2">{children}</td>,
-                        pre: ({ children }) => <pre className="bg-gray-50 p-3 rounded-md overflow-auto text-sm my-4">{children}</pre>,
-                        code: ({ children }) => <code className="bg-gray-50 p-1 rounded text-sm font-mono text-purple-600">{children}</code>
-                      }}
-                    >
-                      {processedResponse}
-                    </ReactMarkdown>
-                  );
-                })()}
-              </div>
-              
-              {/* Show debug response */}
-              {showDebugInfo && debugResponse && (
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <div className="bg-gray-50 p-3 rounded-md">
-                    <h4 className="text-xs font-medium text-gray-700 mb-1">Raw Response:</h4>
-                    <pre className="text-xs overflow-auto bg-gray-100 p-2 rounded whitespace-pre-wrap">
-                      {debugResponse}
-                    </pre>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* AI Assistant Loading */}
-          {assistantLoading && (
-            <div className="mt-3 bg-white border border-gray-200 shadow-sm rounded-lg p-5 animate-slowFadeIn">
-              <div className="flex items-start gap-3">
-                <div className="flex items-center justify-center h-6 w-6 rounded-md bg-blue-100">
-                  <Sparkles className="h-4 w-4 text-blue-600" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-sm font-medium text-gray-900">AI Assistant Processing</h3>
-                    <div className="h-4 w-4 rounded-full border-2 border-gray-200 border-t-gray-600 animate-spin"></div>
-                  </div>
-                  <p className="text-sm text-gray-500">Thinking about your question...</p>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Metrics section - wrapped in proper Tabs component */}
-          <Tabs defaultValue="platform" value={metricsType as string}>
-            <TabsContent value="platform" className="mt-0">
-              <div className="grid grid-cols-4 gap-4">
+          {/* Metrics section with Apple-style cards */}
+          <div>
+            {metricsType === "platform" && (
+              <div className="grid grid-cols-4 gap-5">
                 {/* First card: Active Rewards */}
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-3">
+                <div className="bg-white rounded-md shadow-sm border border-gray-200/80 p-5 transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
                     <div className="flex justify-between">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-medium text-gray-500">Active Rewards</p>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Active Rewards</p>
                         {metricsLoading ? (
-                          <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div>
+                        <div className="h-6 w-12 bg-gray-200/70 animate-pulse rounded-md"></div>
                         ) : (
-                          <div className="text-lg font-semibold">{metrics.activeRewards}</div>
+                        <div className="text-2xl font-medium text-gray-900">{metrics.activeRewards}</div>
                         )}
                       </div>
-                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
-                        <Gift className="h-4 w-4 text-blue-500" />
+                    <div className="h-9 w-9 rounded-full bg-[#E9F3FF] flex items-center justify-center">
+                      <Gift className="h-4.5 w-4.5 text-[#007AFF]" />
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                </div>
                 
                 {/* Second card: Total Reward Views */}
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-3">
+                <div className="bg-white rounded-md shadow-sm border border-gray-200/80 p-5 transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
                     <div className="flex justify-between">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-medium text-gray-500">Total Reward Views</p>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Reward Views</p>
                         {metricsLoading ? (
-                          <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div>
+                        <div className="h-6 w-12 bg-gray-200/70 animate-pulse rounded-md"></div>
                         ) : (
-                          <div className="text-lg font-semibold">{metrics.totalRewardViews}</div>
+                        <div className="text-2xl font-medium text-gray-900">{metrics.totalRewardViews}</div>
                         )}
                       </div>
-                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
-                        <Eye className="h-4 w-4 text-blue-500" />
+                    <div className="h-9 w-9 rounded-full bg-[#E9F3FF] flex items-center justify-center">
+                      <Eye className="h-4.5 w-4.5 text-[#007AFF]" />
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                </div>
                 
                 {/* Third card: Total Points Issued */}
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-3">
+                <div className="bg-white rounded-md shadow-sm border border-gray-200/80 p-5 transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
                     <div className="flex justify-between">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-medium text-gray-500">Total Points Issued</p>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Points Issued</p>
                         {metricsLoading ? (
-                          <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div>
+                        <div className="h-6 w-12 bg-gray-200/70 animate-pulse rounded-md"></div>
                         ) : (
-                          <div className="text-lg font-semibold">{metrics.totalPointsIssued}</div>
+                        <div className="text-2xl font-medium text-gray-900">{metrics.totalPointsIssued}</div>
                         )}
                       </div>
-                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
-                        <Zap className="h-4 w-4 text-blue-500" />
+                    <div className="h-9 w-9 rounded-full bg-[#E9F3FF] flex items-center justify-center">
+                      <Zap className="h-4.5 w-4.5 text-[#007AFF]" />
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                </div>
                 
                 {/* Fourth card: Store Views */}
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-3">
+                <div className="bg-white rounded-md shadow-sm border border-gray-200/80 p-5 transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
                     <div className="flex justify-between">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-medium text-gray-500">Store Views</p>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Store Views</p>
                         {metricsLoading ? (
-                          <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div>
+                        <div className="h-6 w-12 bg-gray-200/70 animate-pulse rounded-md"></div>
                         ) : (
-                          <div className="text-lg font-semibold">{metrics.totalStoreViews}</div>
+                        <div className="text-2xl font-medium text-gray-900">{metrics.totalStoreViews}</div>
                         )}
                       </div>
-                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
-                        <Eye className="h-4 w-4 text-blue-500" />
+                    <div className="h-9 w-9 rounded-full bg-[#E9F3FF] flex items-center justify-center">
+                      <Eye className="h-4.5 w-4.5 text-[#007AFF]" />
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="consumer" className="mt-0">
-              <div className="grid grid-cols-4 gap-4">
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-3">
-                    <div className="flex justify-between">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-medium text-gray-500">Active Customers</p>
-                        {metricsLoading ? (
-                          <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div>
-                        ) : (
-                          <div className="text-lg font-semibold">{metrics.activeCustomers}</div>
-                        )}
-                      </div>
-                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
-                        <Users className="h-4 w-4 text-blue-500" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-3">
-                    <div className="flex justify-between">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-medium text-gray-500">Total Transactions</p>
-                        {metricsLoading ? (
-                          <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div>
-                        ) : (
-                          <div className="text-lg font-semibold">{metrics.totalTransactions}</div>
-                        )}
-                      </div>
-                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
-                        <ShoppingCart className="h-4 w-4 text-blue-500" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-3">
-                    <div className="flex justify-between">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-medium text-gray-500">Total Redemptions</p>
-                        {metricsLoading ? (
-                          <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div>
-                        ) : (
-                          <div className="text-lg font-semibold">{metrics.totalRedemptions}</div>
-                        )}
-                      </div>
-                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
-                        <Gift className="h-4 w-4 text-blue-500" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="rounded-lg border border-gray-200">
-                  <CardContent className="p-3">
-                    <div className="flex justify-between">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-medium text-gray-500">Avg Order Value</p>
-                        {metricsLoading ? (
-                          <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div>
-                        ) : (
-                          <div className="text-lg font-semibold">${metrics.avgOrderValue}</div>
-                        )}
-                      </div>
-                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
-                        <DollarSign className="h-4 w-4 text-blue-500" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-          </Tabs>
-
-          {/* Activity Overview and Recent Activity in a side-by-side layout */}
-          <div className="grid grid-cols-12 gap-6 overflow-hidden">
-            {/* Activity Overview Graph - Takes slightly less width */}
-            <Card className="col-span-7 rounded-lg border border-gray-200 overflow-hidden">
-              <CardHeader className="py-3 px-6 bg-gray-50 border-b border-gray-100 flex flex-row justify-between items-center rounded-t-lg">
-                <div>
-                  <CardTitle className="text-base font-medium text-gray-900">Activity Overview</CardTitle>
-                  <p className="text-sm text-gray-500 mt-0.5">Transactions and redemptions over time</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className={cn(
-                      "h-8 text-xs",
-                      chartTimeframe === "7days" && "bg-blue-50 text-blue-600 border-blue-200"
-                    )}
-                    onClick={() => setChartTimeframe("7days")}
-                  >
-                    7 Days
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className={cn(
-                      "h-8 text-xs",
-                      chartTimeframe === "30days" && "bg-blue-50 text-blue-600 border-blue-200"
-                    )}
-                    onClick={() => setChartTimeframe("30days")}
-                  >
-                    30 Days
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className={cn(
-                      "h-8 text-xs",
-                      chartTimeframe === "90days" && "bg-blue-50 text-blue-600 border-blue-200"
-                    )}
-                    onClick={() => setChartTimeframe("90days")}
-                  >
-                    90 Days
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="p-6">
-                {chartLoading ? (
-                  <div className="flex items-center justify-center h-[300px]">
-                    <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
-                  </div>
-                ) : chartReady ? (
-                  <div className="h-[300px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={histogramData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis 
-                          dataKey="date" 
-                          tick={{ fontSize: 12, fontFamily: 'SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif' }} 
-                          tickLine={false}
-                          axisLine={{ stroke: '#E5E7EB' }}
-                        />
-                        <YAxis 
-                          tick={{ fontSize: 12, fontFamily: 'SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif' }} 
-                          tickLine={false}
-                          axisLine={{ stroke: '#E5E7EB' }}
-                        />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Legend content={<CustomLegend />} />
-                        <Bar dataKey="transactions" name="Transactions" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="redemptions" name="Redemptions" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-[300px] text-center">
-                    <BarChartIcon className="h-12 w-12 text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">No activity data available</p>
-                    <p className="text-sm text-muted-foreground mt-1">Start recording transactions to see data</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+              </div>
+            )}
 
-            {/* Recent Activity - Takes slightly more width */}
-            <Card className="col-span-5 rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-              <CardHeader className="py-4 px-6 bg-gradient-to-r from-blue-50 to-white border-b border-gray-100 flex flex-row justify-between items-center">
+            {metricsType === "consumer" && (
+              <div className="grid grid-cols-4 gap-5">
+                <div className="bg-white rounded-md shadow-sm border border-gray-200/80 p-5 transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
+                    <div className="flex justify-between">
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Active Customers</p>
+                        {metricsLoading ? (
+                        <div className="h-6 w-12 bg-gray-200/70 animate-pulse rounded-md"></div>
+                        ) : (
+                        <div className="text-2xl font-medium text-gray-900">{metrics.activeCustomers}</div>
+                        )}
+                      </div>
+                    <div className="h-9 w-9 rounded-full bg-[#E9F3FF] flex items-center justify-center">
+                      <Users className="h-4.5 w-4.5 text-[#007AFF]" />
+                      </div>
+                    </div>
+                </div>
+                
+                <div className="bg-white rounded-md shadow-sm border border-gray-200/80 p-5 transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
+                    <div className="flex justify-between">
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Transactions</p>
+                        {metricsLoading ? (
+                        <div className="h-6 w-12 bg-gray-200/70 animate-pulse rounded-md"></div>
+                        ) : (
+                        <div className="text-2xl font-medium text-gray-900">{metrics.totalTransactions}</div>
+                        )}
+                      </div>
+                    <div className="h-9 w-9 rounded-full bg-[#E9F3FF] flex items-center justify-center">
+                      <ShoppingCart className="h-4.5 w-4.5 text-[#007AFF]" />
+                      </div>
+                    </div>
+                </div>
+                
+                <div className="bg-white rounded-md shadow-sm border border-gray-200/80 p-5 transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
+                    <div className="flex justify-between">
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Redemptions</p>
+                        {metricsLoading ? (
+                        <div className="h-6 w-12 bg-gray-200/70 animate-pulse rounded-md"></div>
+                        ) : (
+                        <div className="text-2xl font-medium text-gray-900">{metrics.totalRedemptions}</div>
+                        )}
+                      </div>
+                    <div className="h-9 w-9 rounded-full bg-[#E9F3FF] flex items-center justify-center">
+                      <Gift className="h-4.5 w-4.5 text-[#007AFF]" />
+                      </div>
+                    </div>
+                </div>
+                
+                <div className="bg-white rounded-md shadow-sm border border-gray-200/80 p-5 transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
+                    <div className="flex justify-between">
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Avg Order Value</p>
+                        {metricsLoading ? (
+                        <div className="h-6 w-12 bg-gray-200/70 animate-pulse rounded-md"></div>
+                        ) : (
+                        <div className="text-2xl font-medium text-gray-900">${metrics.avgOrderValue}</div>
+                        )}
+                      </div>
+                    <div className="h-9 w-9 rounded-full bg-[#E9F3FF] flex items-center justify-center">
+                      <DollarSign className="h-4.5 w-4.5 text-[#007AFF]" />
+                      </div>
+                    </div>
+              </div>
+          </div>
+            )}
+                </div>
+          
+          {/* Recent Activity and Insights Section - Two Column Layout */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 overflow-hidden">
+            {/* Recent Activity Section */}
+            <div className="bg-white rounded-md shadow-sm border border-gray-200/80 overflow-hidden">
+              <div className="py-4 px-5 border-b border-gray-100">
+                <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-base font-medium text-gray-900 flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-blue-500" />
+                    <h2 className="text-base font-medium text-gray-900 flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-[#007AFF]" />
                     Recent Activity
-                  </CardTitle>
-                  <p className="text-sm text-gray-500 mt-0.5">Latest transactions and redemptions</p>
+                    </h2>
+                    <p className="text-xs text-gray-500 mt-0.5">Latest transactions and redemptions</p>
                 </div>
                 <Button 
-                  variant="outline" 
+                    variant="ghost" 
                   size="sm"
-                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50/50 h-8 px-3 ml-auto border-blue-200"
+                    className="text-[#007AFF] hover:text-[#0058B9] hover:bg-[#007AFF]/5 h-7 px-3"
                   asChild
                 >
                   <Link href="/store/activity" className="flex items-center gap-1">
@@ -3149,16 +2615,17 @@ export default function DashboardPage() {
                     <ChevronRight className="h-3 w-3" />
                   </Link>
                 </Button>
-              </CardHeader>
-              <CardContent className="p-0">
+                </div>
+              </div>
+              <div className="p-0">
                 {activityLoading ? (
                   <div className="flex items-center justify-center py-8">
-                    <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+                    <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
                   </div>
                 ) : recentActivity.length === 0 ? (
-                  <div className="py-8 text-center">
-                    <div className="bg-gray-50 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-3">
-                      <Clock className="h-8 w-8 text-gray-300" />
+                  <div className="py-12 text-center">
+                    <div className="bg-[#F5F9FF] rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-3">
+                      <Clock className="h-8 w-8 text-[#007AFF]/40" />
                     </div>
                     <p className="text-sm font-medium text-gray-700">No recent activity</p>
                     <p className="text-xs text-gray-500 mt-1">Transactions and redemptions will appear here</p>
@@ -3168,7 +2635,7 @@ export default function DashboardPage() {
                     {recentActivity.map((activity, index) => (
                       <div 
                         key={activity.id} 
-                        className={`px-6 py-3.5 hover:bg-blue-50/30 transition-colors ${
+                        className={`px-5 py-3 hover:bg-[#F5F9FF]/50 transition-colors ${
                           index !== recentActivity.length - 1 ? 'border-b border-gray-100' : ''
                         }`}
                       >
@@ -3176,7 +2643,7 @@ export default function DashboardPage() {
                           {/* Left side - Customer Avatar */}
                           <div className="flex-shrink-0">
                             <div className={`h-10 w-10 rounded-full ${
-                              activity.type === "transaction" ? 'bg-blue-50' : 'bg-purple-50'
+                              activity.type === "transaction" ? 'bg-[#E9F3FF]' : 'bg-[#E97FF3]'
                             } flex items-center justify-center overflow-hidden shadow-sm`}>
                               {activity.customer?.profilePicture ? (
                                 <img 
@@ -3186,25 +2653,25 @@ export default function DashboardPage() {
                                   onError={() => {/* error handling */}}
                                 />
                               ) : activity.type === "transaction" ? (
-                                <ShoppingCart className="h-5 w-5 text-blue-500" />
+                                <ShoppingCart className="h-5 w-5 text-[#007AFF]" />
                               ) : (
-                                <Gift className="h-5 w-5 text-purple-500" />
+                                <Gift className="h-5 w-5 text-[#5AC8FA]" />
                               )}
                             </div>
                           </div>
 
-                          {/* Right side - Activity Details - More Compact */}
+                          {/* Right side - Activity Details */}
                           <div className="flex-1 min-w-0 flex items-center justify-between">
                             <div>
                               <p className="font-medium text-sm text-gray-900">{activity.customer.name}</p>
                               <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
                                 {activity.type === "transaction" ? (
-                                  <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-100 flex items-center">
+                                  <span className="px-1.5 py-0.5 bg-[#F5F9FF] text-[#007AFF] text-xs rounded-full flex items-center">
                                     <ShoppingCart className="h-3 w-3 mr-1" />
                                     Purchase
                                   </span>
                                 ) : (
-                                  <span className="px-1.5 py-0.5 bg-purple-50 text-purple-700 text-xs rounded-full border border-purple-100 flex items-center">
+                                  <span className="px-1.5 py-0.5 bg-[#F5FBFF] text-[#5AC8FA] text-xs rounded-full flex items-center">
                                     <Gift className="h-3 w-3 mr-1" />
                                     Redemption
                                   </span>
@@ -3215,7 +2682,7 @@ export default function DashboardPage() {
                             </div>
                             <div className="text-right">
                               <p className={`text-sm font-medium ${
-                                activity.type === "transaction" ? 'text-blue-600' : 'text-purple-600'
+                                activity.type === "transaction" ? 'text-[#007AFF]' : 'text-[#5AC8FA]'
                               }`}>
                                 {activity.type === "transaction" 
                                   ? `$${activity.amount.toFixed(2)}` 
@@ -3233,32 +2700,387 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
+
+            {/* Recent Insights Section */}
+            <div className="bg-white rounded-md shadow-sm border border-gray-200/80 overflow-hidden">
+              <div className="py-4 px-5 border-b border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-base font-medium text-gray-900 flex items-center gap-2">
+                      <Lightbulb className="h-4 w-4 text-[#FF9500]" />
+                      Recent Insights
+                    </h2>
+                    <p className="text-xs text-gray-500 mt-0.5">Daily summaries from your integrations</p>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    className="text-[#FF9500] hover:text-[#CC7600] hover:bg-[#FF9500]/5 h-7 px-3"
+                    onClick={fetchDailySummaries}
+                  >
+                    <div className="flex items-center gap-1">
+                      Refresh
+                      <ArrowRight className="h-3 w-3" />
+                    </div>
+                  </Button>
+                </div>
+              </div>
+              <div className="p-0">
+                {isDailySummaryLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="h-6 w-6 rounded-full border-2 border-[#FF9500] border-t-transparent animate-spin"></div>
+                  </div>
+                ) : (!dailySummaryGmailResponse && !dailySummaryLightspeedResponse && !gmailQueryResponse && !lightspeedQueryResponse) ? (
+                  // Show dummy insights if no real data available
+                  <div>
+                    {/* Gmail Dummy Insights */}
+                    <div className="px-5 py-3.5 border-b border-gray-100 hover:bg-[#F5F9FF]/30 transition-colors">
+                      <div className="flex items-start gap-4">
+                        <div className="flex-shrink-0 mt-1">
+                          <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
+                            <Image src="/gmail.png" width={24} height={24} alt="Gmail" className="h-6 w-6 object-contain" />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-medium text-sm text-gray-900">Gmail Daily Report</p>
+                            <span className="px-1.5 py-0.5 bg-red-50 text-red-500 text-xs rounded-full border border-red-100">
+                              Last 24h
+                            </span>
+                          </div>
+                          <div className="text-sm text-gray-700 line-clamp-3">
+                            You received 14 new emails today. 4 require your attention, including one from a new customer inquiry about your loyalty program and 2 order confirmations.
+                          </div>
+                          <Button 
+                            variant="link" 
+                            size="sm" 
+                            className="h-6 p-0 text-[#007AFF] mt-1" 
+                            onClick={() => {
+                              toast({
+                                title: "Gmail Report",
+                                description: "You received 14 new emails today. 4 require your attention, including one from a new customer inquiry about your loyalty program and 2 order confirmations. There's also an invoice due in 7 days that requires payment. The remaining emails were newsletters and marketing communications.",
+                              })
+                            }}
+                          >
+                            View full report
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Lightspeed Dummy Insights */}
+                    <div className="px-5 py-3.5 border-b border-gray-100 hover:bg-[#F5F9FF]/30 transition-colors">
+                      <div className="flex items-start gap-4">
+                        <div className="flex-shrink-0 mt-1">
+                          <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
+                            <Image src="/lslogo.png" width={24} height={24} alt="Lightspeed" className="h-6 w-6 object-contain" />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-medium text-sm text-gray-900">Lightspeed Sales Report</p>
+                            <span className="px-1.5 py-0.5 bg-green-50 text-green-500 text-xs rounded-full border border-green-100">
+                              Last 30d
+                            </span>
+                          </div>
+                          <div className="text-sm text-gray-700 line-clamp-3">
+                            Sales are up 12% compared to last month. Your best-selling product was "Premium Coffee Beans" with 87 units sold. 23% of transactions included a loyalty program item.
+                          </div>
+                          <Button 
+                            variant="link" 
+                            size="sm" 
+                            className="h-6 p-0 text-[#007AFF] mt-1" 
+                            onClick={() => {
+                              toast({
+                                title: "Lightspeed Report",
+                                description: "Sales are up 12% compared to last month. Your best-selling product was \"Premium Coffee Beans\" with 87 units sold. 23% of transactions included a loyalty program item. Average transaction value has increased by $4.50, suggesting your upselling strategies are working. Tuesday and Friday are your highest-volume days.",
+                              })
+                            }}
+                          >
+                            View full report
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Square Dummy Insights */}
+                    <div className="px-5 py-3.5 hover:bg-[#F5F9FF]/30 transition-colors">
+                      <div className="flex items-start gap-4">
+                        <div className="flex-shrink-0 mt-1">
+                          <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
+                            <Image src="/square.png" width={24} height={24} alt="Square" className="h-6 w-6 object-contain" />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-medium text-sm text-gray-900">Square Transactions</p>
+                            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-500 text-xs rounded-full border border-blue-100">
+                              Last 7d
+                            </span>
+                          </div>
+                          <div className="text-sm text-gray-700 line-clamp-3">
+                            Processed 245 transactions totaling $5,872. Credit card was the preferred payment method (78%). 42 loyalty redemptions were applied to purchases.
+                          </div>
+                          <Button 
+                            variant="link" 
+                            size="sm" 
+                            className="h-6 p-0 text-[#007AFF] mt-1" 
+                            onClick={() => {
+                              toast({
+                                title: "Square Report",
+                                description: "Processed 245 transactions totaling $5,872. Credit card was the preferred payment method (78%). 42 loyalty redemptions were applied to purchases. The busiest time was between 12-2pm, with an average queue time of 4.3 minutes. Mobile ordering accounts for 22% of total sales, up 5% from last month.",
+                              })
+                            }}
+                          >
+                            View full report
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    {/* Gmail Insights */}
+                    {(dailySummaryGmailResponse || gmailQueryResponse) ? (
+                      <div className="px-5 py-3.5 border-b border-gray-100 hover:bg-[#F5F9FF]/30 transition-colors">
+                        <div className="flex items-start gap-4">
+                          <div className="flex-shrink-0 mt-1">
+                            <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
+                              <Image src="/gmail.png" width={24} height={24} alt="Gmail" className="h-6 w-6 object-contain" />
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="font-medium text-sm text-gray-900">Gmail Daily Report</p>
+                              <span className="px-1.5 py-0.5 bg-red-50 text-red-500 text-xs rounded-full border border-red-100">
+                                Last 24h
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-700 line-clamp-3">
+                              {dailySummaryGmailResponse || gmailQueryResponse}
+                            </div>
+                            <Button 
+                              variant="link" 
+                              size="sm" 
+                              className="h-6 p-0 text-[#007AFF] mt-1" 
+                              onClick={() => {
+                                toast({
+                                  title: "Gmail Report",
+                                  description: dailySummaryGmailResponse || gmailQueryResponse,
+                                })
+                              }}
+                            >
+                              View full report
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="px-5 py-3.5 border-b border-gray-100 hover:bg-[#F5F9FF]/30 transition-colors">
+                        <div className="flex items-start gap-4">
+                          <div className="flex-shrink-0 mt-1">
+                            <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
+                              <Image src="/gmail.png" width={24} height={24} alt="Gmail" className="h-6 w-6 object-contain" />
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="font-medium text-sm text-gray-900">Gmail Daily Report</p>
+                              <span className="px-1.5 py-0.5 bg-red-50 text-red-500 text-xs rounded-full border border-red-100">
+                                Last 24h
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-700 line-clamp-3">
+                              You received 14 new emails today. 4 require your attention, including one from a new customer inquiry about your loyalty program and 2 order confirmations.
+                            </div>
+                            <Button 
+                              variant="link" 
+                              size="sm" 
+                              className="h-6 p-0 text-[#007AFF] mt-1" 
+                              onClick={() => {
+                                toast({
+                                  title: "Gmail Report",
+                                  description: "You received 14 new emails today. 4 require your attention, including one from a new customer inquiry about your loyalty program and 2 order confirmations. There's also an invoice due in 7 days that requires payment. The remaining emails were newsletters and marketing communications.",
+                                })
+                              }}
+                            >
+                              View full report
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Lightspeed Insights */}
+                    {(dailySummaryLightspeedResponse || lightspeedQueryResponse) ? (
+                      <div className="px-5 py-3.5 border-b border-gray-100 hover:bg-[#F5F9FF]/30 transition-colors">
+                        <div className="flex items-start gap-4">
+                          <div className="flex-shrink-0 mt-1">
+                            <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
+                              <Image src="/lslogo.png" width={24} height={24} alt="Lightspeed" className="h-6 w-6 object-contain" />
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="font-medium text-sm text-gray-900">Lightspeed Sales Report</p>
+                              <span className="px-1.5 py-0.5 bg-green-50 text-green-500 text-xs rounded-full border border-green-100">
+                                Last 30d
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-700 line-clamp-3">
+                              {dailySummaryLightspeedResponse || lightspeedQueryResponse}
+                            </div>
+                            <Button 
+                              variant="link" 
+                              size="sm" 
+                              className="h-6 p-0 text-[#007AFF] mt-1" 
+                              onClick={() => {
+                                toast({
+                                  title: "Lightspeed Report",
+                                  description: dailySummaryLightspeedResponse || lightspeedQueryResponse,
+                                })
+                              }}
+                            >
+                              View full report
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="px-5 py-3.5 border-b border-gray-100 hover:bg-[#F5F9FF]/30 transition-colors">
+                        <div className="flex items-start gap-4">
+                          <div className="flex-shrink-0 mt-1">
+                            <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
+                              <Image src="/lslogo.png" width={24} height={24} alt="Lightspeed" className="h-6 w-6 object-contain" />
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="font-medium text-sm text-gray-900">Lightspeed Sales Report</p>
+                              <span className="px-1.5 py-0.5 bg-green-50 text-green-500 text-xs rounded-full border border-green-100">
+                                Last 30d
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-700 line-clamp-3">
+                              Sales are up 12% compared to last month. Your best-selling product was "Premium Coffee Beans" with 87 units sold. 23% of transactions included a loyalty program item.
+                            </div>
+                            <Button 
+                              variant="link" 
+                              size="sm" 
+                              className="h-6 p-0 text-[#007AFF] mt-1" 
+                              onClick={() => {
+                                toast({
+                                  title: "Lightspeed Report",
+                                  description: "Sales are up 12% compared to last month. Your best-selling product was \"Premium Coffee Beans\" with 87 units sold. 23% of transactions included a loyalty program item. Average transaction value has increased by $4.50, suggesting your upselling strategies are working. Tuesday and Friday are your highest-volume days.",
+                                })
+                              }}
+                            >
+                              View full report
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Square Insights */}
+                    {tapQueryResponse ? (
+                      <div className="px-5 py-3.5 hover:bg-[#F5F9FF]/30 transition-colors">
+                        <div className="flex items-start gap-4">
+                          <div className="flex-shrink-0 mt-1">
+                            <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
+                              <Image src="/square.png" width={24} height={24} alt="Square" className="h-6 w-6 object-contain" />
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="font-medium text-sm text-gray-900">Square Transactions</p>
+                              <span className="px-1.5 py-0.5 bg-blue-50 text-blue-500 text-xs rounded-full border border-blue-100">
+                                Last 7d
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-700 line-clamp-3">
+                              {tapQueryResponse}
+                            </div>
+                            <Button 
+                              variant="link" 
+                              size="sm" 
+                              className="h-6 p-0 text-[#007AFF] mt-1" 
+                              onClick={() => {
+                                toast({
+                                  title: "Square Report",
+                                  description: tapQueryResponse,
+                                })
+                              }}
+                            >
+                              View full report
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="px-5 py-3.5 hover:bg-[#F5F9FF]/30 transition-colors">
+                        <div className="flex items-start gap-4">
+                          <div className="flex-shrink-0 mt-1">
+                            <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
+                              <Image src="/square.png" width={24} height={24} alt="Square" className="h-6 w-6 object-contain" />
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="font-medium text-sm text-gray-900">Square Transactions</p>
+                              <span className="px-1.5 py-0.5 bg-blue-50 text-blue-500 text-xs rounded-full border border-blue-100">
+                                Last 7d
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-700 line-clamp-3">
+                              Processed 245 transactions totaling $5,872. Credit card was the preferred payment method (78%). 42 loyalty redemptions were applied to purchases.
+                            </div>
+                            <Button 
+                              variant="link" 
+                              size="sm" 
+                              className="h-6 p-0 text-[#007AFF] mt-1" 
+                              onClick={() => {
+                                toast({
+                                  title: "Square Report",
+                                  description: "Processed 245 transactions totaling $5,872. Credit card was the preferred payment method (78%). 42 loyalty redemptions were applied to purchases. The busiest time was between 12-2pm, with an average queue time of 4.3 minutes. Mobile ordering accounts for 22% of total sales, up 5% from last month.",
+                                })
+                              }}
+                            >
+                              View full report
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Top Viewing Customers and Popular Rewards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 overflow-hidden">
-            {/* Top Viewing Customers card */}
-            <Card className="rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-              <CardHeader className="py-4 px-6 bg-gradient-to-r from-indigo-50 to-white border-b border-gray-100 flex flex-row justify-between items-center">
+            <div className="bg-white rounded-md shadow-sm border border-gray-200/80 overflow-hidden">
+              <div className="py-4 px-5 border-b border-gray-100">
                 <div>
-                  <CardTitle className="text-base font-medium text-gray-900 flex items-center gap-2">
-                    <Users className="h-4 w-4 text-indigo-500" />
+                  <h2 className="text-base font-medium text-gray-900 flex items-center gap-2">
+                    <Users className="h-4 w-4 text-[#007AFF]" />
                     Top Store Visitors
-                  </CardTitle>
-                  <p className="text-sm text-gray-500 mt-0.5">Customers who view your store most frequently</p>
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Customers who view your store most frequently</p>
                 </div>
-              </CardHeader>
-              <CardContent className="p-0">
+              </div>
+              <div className="p-0">
                 {topCustomersLoading ? (
                   <div className="flex items-center justify-center py-8">
-                    <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+                    <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
                   </div>
                 ) : topViewingCustomers.length === 0 ? (
-                  <div className="py-8 text-center">
-                    <div className="bg-gray-50 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-3">
-                      <Users className="h-8 w-8 text-gray-300" />
+                  <div className="py-12 text-center">
+                    <div className="bg-[#F5F9FF] rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-3">
+                      <Users className="h-8 w-8 text-[#007AFF]/40" />
                     </div>
                     <p className="text-sm font-medium text-gray-700">No visitor data available</p>
                     <p className="text-xs text-gray-500 mt-1">Customer visits will appear here</p>
@@ -3268,19 +3090,19 @@ export default function DashboardPage() {
                     {topViewingCustomers.map((customer, index) => (
                       <div 
                         key={customer.id} 
-                        className={`px-6 py-3.5 hover:bg-indigo-50/30 transition-colors ${
+                        className={`px-5 py-3.5 hover:bg-[#F5F9FF]/50 transition-colors ${
                           index !== topViewingCustomers.length - 1 ? 'border-b border-gray-100' : ''
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
-                            <div className="h-10 w-10 rounded-full bg-indigo-50 flex items-center justify-center shadow-sm">
-                              <Users className="h-5 w-5 text-indigo-500" />
+                            <div className="h-10 w-10 rounded-full bg-[#E9F3FF] flex items-center justify-center shadow-sm">
+                              <Users className="h-5 w-5 text-[#007AFF]" />
                             </div>
                             <div>
                               <p className="font-medium text-sm text-gray-900">{customer.name}</p>
                               <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
-                                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 text-xs rounded-full border border-indigo-100 flex items-center">
+                                <span className="px-1.5 py-0.5 bg-[#F5F9FF] text-[#007AFF] text-xs rounded-full border border-[#007AFF]/10 flex items-center">
                                   <Eye className="h-3 w-3 mr-1" />
                                   {customer.viewCount} views
                                 </span>
@@ -3292,7 +3114,7 @@ export default function DashboardPage() {
                           <Button 
                             size="sm" 
                             variant="outline" 
-                            className="h-8 gap-1 border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"
+                            className="h-8 gap-1 border-[#007AFF]/20 text-[#007AFF] hover:bg-[#F5F9FF] hover:text-[#0062CC]"
                             onClick={() => {
                               setSelectedCustomer({
                                 id: customer.id,
@@ -3309,23 +3131,24 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
             {/* Popular Rewards card */}
-            <Card className="rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-              <CardHeader className="py-4 px-6 bg-gradient-to-r from-purple-50 to-white border-b border-gray-100 flex flex-row justify-between items-center">
+            <div className="bg-white rounded-md shadow-sm border border-gray-200/80 overflow-hidden">
+              <div className="py-4 px-5 border-b border-gray-100">
+                <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-base font-medium text-gray-900 flex items-center gap-2">
-                    <Gift className="h-4 w-4 text-purple-500" />
+                    <h2 className="text-base font-medium text-gray-900 flex items-center gap-2">
+                      <Gift className="h-4 w-4 text-[#FF9500]" />
                     Popular Rewards
-                  </CardTitle>
-                  <p className="text-sm text-gray-500 mt-0.5">Most redeemed rewards by customers</p>
+                    </h2>
+                    <p className="text-xs text-gray-500 mt-0.5">Most redeemed rewards by customers</p>
                 </div>
                 <Button 
-                  variant="outline" 
+                    variant="ghost" 
                   size="sm"
-                  className="text-purple-600 hover:text-purple-700 hover:bg-purple-50/50 h-8 px-3 ml-auto border-purple-200"
+                    className="text-[#FF9500] hover:text-[#CC7600] hover:bg-[#FF9500]/5 h-7 px-3"
                   asChild
                 >
                   <Link href="/store/rewards" className="flex items-center gap-1">
@@ -3333,16 +3156,17 @@ export default function DashboardPage() {
                     <ChevronRight className="h-3 w-3" />
                   </Link>
                 </Button>
-              </CardHeader>
-              <CardContent className="p-0">
+                </div>
+              </div>
+              <div className="p-0">
                 {rewardsLoading ? (
                   <div className="flex items-center justify-center py-8">
-                    <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+                    <div className="h-6 w-6 rounded-full border-2 border-[#FF9500] border-t-transparent animate-spin"></div>
                   </div>
                 ) : popularRewards.length === 0 ? (
-                  <div className="py-8 text-center">
-                    <div className="bg-gray-50 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-3">
-                      <Gift className="h-8 w-8 text-gray-300" />
+                  <div className="py-12 text-center">
+                    <div className="bg-[#FFF8F0] rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-3">
+                      <Gift className="h-8 w-8 text-[#FF9500]/40" />
                     </div>
                     <p className="text-sm font-medium text-gray-700">No rewards data available</p>
                     <p className="text-xs text-gray-500 mt-1">Popular rewards will appear here</p>
@@ -3352,41 +3176,41 @@ export default function DashboardPage() {
                     {popularRewards.map((reward, index) => (
                       <div 
                         key={reward.id} 
-                        className={`px-6 py-3.5 hover:bg-purple-50/30 transition-colors ${
+                        className={`px-5 py-3.5 hover:bg-[#FFF8F0]/30 transition-colors ${
                           index !== popularRewards.length - 1 ? 'border-b border-gray-100' : ''
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
                             <div className={`h-10 w-10 rounded-full flex items-center justify-center shadow-sm
-                              ${reward.programtype === 'coffee' ? 'bg-blue-50' : 
-                                reward.programtype === 'voucher' ? 'bg-green-50' : 'bg-purple-50'}`}>
+                              ${reward.programtype === 'coffee' ? 'bg-[#E9F3FF]' : 
+                                reward.programtype === 'voucher' ? 'bg-[#E9FFF3]' : 'bg-[#FFF8F0]'}`}>
                               {reward.programtype === 'coffee' ? (
-                                <Coffee className="h-5 w-5 text-blue-600" />
+                                <Coffee className="h-5 w-5 text-[#007AFF]" />
                               ) : reward.programtype === 'voucher' ? (
-                                <Ticket className="h-5 w-5 text-green-600" />
+                                <Ticket className="h-5 w-5 text-[#34C759]" />
                               ) : (
-                                <Gift className="h-5 w-5 text-purple-500" />
+                                <Gift className="h-5 w-5 text-[#FF9500]" />
                               )}
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
                                 <p className="font-medium text-sm text-gray-900">{reward.rewardName}</p>
                                 {reward.programtype === 'coffee' && (
-                                  <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-100 flex items-center">
+                                  <span className="px-1.5 py-0.5 bg-[#F5F9FF] text-[#007AFF] text-xs rounded-full border border-[#007AFF]/10 flex items-center">
                                     <Coffee className="h-3 w-3 mr-1" />
                                     Coffee Card
                                   </span>
                                 )}
                                 {reward.programtype === 'voucher' && (
-                                  <span className="px-1.5 py-0.5 bg-green-50 text-green-700 text-xs rounded-full border border-green-100 flex items-center">
+                                  <span className="px-1.5 py-0.5 bg-[#F0FFF5] text-[#34C759] text-xs rounded-full border border-[#34C759]/10 flex items-center">
                                     <Ticket className="h-3 w-3 mr-1" />
                                     Voucher
                                   </span>
                                 )}
                               </div>
                               <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
-                                <span className="px-1.5 py-0.5 bg-purple-50 text-purple-700 text-xs rounded-full border border-purple-100">
+                                <span className="px-1.5 py-0.5 bg-[#FFF8F0] text-[#FF9500] text-xs rounded-full border border-[#FF9500]/10">
                                   {reward.pointsCost} points
                                 </span>
                                 <span className="text-gray-400">&bull;</span>
@@ -3407,14 +3231,14 @@ export default function DashboardPage() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-medium text-purple-600">{reward.redemptionCount} redeemed</p>
+                            <p className="text-sm font-medium text-[#FF9500]">{reward.redemptionCount} redeemed</p>
                             <div className="flex items-center justify-end gap-1 text-xs mt-0.5">
                               {reward.trend === "up" ? (
-                                <ArrowUp className="h-3 w-3 text-green-500" />
+                                <ArrowUp className="h-3 w-3 text-[#34C759]" />
                               ) : (
-                                <ArrowDown className="h-3 w-3 text-red-500" />
+                                <ArrowDown className="h-3 w-3 text-[#FF3B30]" />
                               )}
-                              <span className={reward.trend === "up" ? "text-green-500" : "text-red-500"}>
+                              <span className={reward.trend === "up" ? "text-[#34C759]" : "text-[#FF3B30]"}>
                                 {reward.changePercentage}%
                               </span>
                             </div>
@@ -3424,184 +3248,29 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 )}
-              </CardContent>
-            </Card>
           </div>
-
-          {/* Tap Agent Summary Section */}
-          <Separator className="my-6" />
-          <div className="space-y-4">
-            <div className="flex justify-between items-center mb-2">
-              <div>
-                <h2 className="text-lg font-medium flex items-center gap-2">
-                  <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-semibold">
-                    Tap Agent
-                  </span> 
-                  Summary
-                </h2>
-                <p className="text-sm text-gray-500">Intelligent loyalty assistant performance</p>
               </div>
-              <div className="flex items-center gap-2">
-                <Button 
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
-                  asChild
-                >
-                  <Link href="/tap-agent/setup">
-                    <ArrowRight className="h-4 w-4" />
-                    Manage Tap Agent
-                  </Link>
-                </Button>
-              </div>
-            </div>
-            
-            <Card className="border-gray-200 overflow-hidden">
-              <CardContent className="p-6">
-                {tapAgentMetrics.loading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
-                  </div>
-                ) : !tapAgentMetrics.lastRun ? (
-                  <div className="py-6 text-center">
-                    <div className="bg-gray-50 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-3">
-                      <Zap className="h-8 w-8 text-gray-300" />
-                    </div>
-                    <p className="text-sm font-medium text-gray-700">Tap Agent not configured</p>
-                    <p className="text-xs text-gray-500 mt-1 mb-4">Configure your intelligent assistant to automate reward creation</p>
-                    <Button asChild>
-                      <Link href="/tap-agent/setup">Configure Tap Agent</Link>
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between mb-6">
-                      <div className="flex items-center gap-3">
-                        <div className="h-12 w-12 rounded-full bg-gradient-to-r from-blue-500 to-orange-500 flex items-center justify-center text-white">
-                          <Zap className="h-6 w-6" />
-                        </div>
-                        <div>
-                          <h3 className="font-medium">Tap Agent Status</h3>
-                          <p className="text-sm text-gray-500 flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5" />
-                            Last active: {formatDistanceToNow(tapAgentMetrics.lastRun, { addSuffix: true })}
-                          </p>
-                        </div>
-                      </div>
-                      <Badge className="bg-green-100 text-green-800 border-green-200">Active</Badge>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {/* Content Creation */}
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-medium text-gray-500">Content Creation</h4>
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
-                                <Gift className="h-4 w-4 text-blue-500" />
-                              </div>
-                              <span className="text-sm">Rewards Created</span>
-                            </div>
-                            <span className="font-medium">{tapAgentMetrics.rewardsCreated}</span>
-                          </div>
-                          
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
-                                <svg className="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
-                                </svg>
-                              </div>
-                              <span className="text-sm">Banners Created</span>
-                            </div>
-                            <span className="font-medium">{tapAgentMetrics.bannersCreated}</span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* Engagement */}
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-medium text-gray-500">Engagement</h4>
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-full bg-purple-50 flex items-center justify-center">
-                                <Eye className="h-4 w-4 text-purple-500" />
-                              </div>
-                              <span className="text-sm">Total Impressions</span>
-                            </div>
-                            <span className="font-medium">{tapAgentMetrics.impressions}</span>
-                          </div>
-                          
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-full bg-purple-50 flex items-center justify-center">
-                                <ArrowRight className="h-4 w-4 text-purple-500" />
-                              </div>
-                              <span className="text-sm">Total Clicks</span>
-                            </div>
-                            <span className="font-medium">{tapAgentMetrics.clicks}</span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* Conversions */}
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-medium text-gray-500">Conversions</h4>
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-full bg-green-50 flex items-center justify-center">
-                                <Gift className="h-4 w-4 text-green-500" />
-                              </div>
-                              <span className="text-sm">Reward Redemptions</span>
-                            </div>
-                            <span className="font-medium">{tapAgentMetrics.redemptions}</span>
-                          </div>
-                          
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-full bg-green-50 flex items-center justify-center">
-                                <ArrowUp className="h-4 w-4 text-green-500" />
-                              </div>
-                              <span className="text-sm">Conversion Rate</span>
-                            </div>
-                            <span className="font-medium">
-                              {tapAgentMetrics.impressions > 0 
-                                ? Math.round((tapAgentMetrics.redemptions / tapAgentMetrics.impressions) * 100) 
-                                : 0}%
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
           </div>
 
           {/* Live and Scheduled Banners Section */}
           {(activeBanners.length > 0 || scheduledBanners.length > 0) && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center mb-2">
+            <div className="space-y-4 mt-8">
+              <div className="flex justify-between items-center mb-4">
                 <div>
                   <h2 className="text-lg font-medium flex items-center gap-2">
-                    <svg className="h-5 w-5 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-5 w-5 text-[#5AC8FA]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
                     </svg>
                     Banners
                   </h2>
-                  <p className="text-sm text-gray-500">Your active and scheduled banners</p>
+                  <p className="text-xs text-gray-500">Your active and scheduled banners</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button 
                     variant="outline"
                     size="sm"
-                    className="h-8 gap-2 border-teal-200 text-teal-700 hover:bg-teal-50 hover:text-teal-800"
+                    className="h-8 gap-2 border-[#5AC8FA]/20 text-[#5AC8FA] hover:bg-[#F5FBFF] hover:text-[#5AC8FA]"
                     onClick={() => router.push('/store/banner?tab=scheduled')}
                   >
                     <Clock className="h-4 w-4" />
@@ -3610,7 +3279,7 @@ export default function DashboardPage() {
                   <Button 
                     variant="outline"
                     size="sm"
-                    className="h-8 gap-2 border-teal-200 text-teal-700 hover:bg-teal-50 hover:text-teal-800"
+                    className="h-8 gap-2 border-[#5AC8FA]/20 text-[#5AC8FA] hover:bg-[#F5FBFF] hover:text-[#5AC8FA]"
                     asChild
                   >
                     <Link href="/store/banner">
@@ -3623,24 +3292,24 @@ export default function DashboardPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Live Banners First */}
                 {activeBanners.map((banner) => (
-                  <div key={banner.id} className="flex flex-col bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm transition-shadow hover:shadow-md">
+                  <div key={banner.id} className="flex flex-col bg-white rounded-md shadow-sm border border-gray-200/80 overflow-hidden transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
                     <div className="relative">
                       <div className="absolute top-3 right-3 z-10 flex gap-2">
-                        <div className="bg-green-100 text-green-800 text-xs px-2.5 py-1 rounded-full flex items-center shadow-sm">
+                        <div className="bg-[#E9FFF3] text-[#34C759] text-xs px-2.5 py-1 rounded-full flex items-center shadow-sm">
                           <Eye className="h-3 w-3 mr-1" />
                           Live
                         </div>
-                        <div className="bg-blue-50 text-blue-700 text-xs px-2.5 py-1 rounded-full flex items-center shadow-sm">
+                        <div className="bg-[#F5F9FF] text-[#007AFF] text-xs px-2.5 py-1 rounded-full flex items-center shadow-sm">
                           <Eye className="h-3 w-3 mr-1" />
                           {banner.impressions || 0} views
                         </div>
                       </div>
                       
-                      <div className="rounded-lg overflow-hidden">
+                      <div className="rounded-md overflow-hidden">
                         <BannerPreview {...banner} />
                       </div>
                       
-                      <div className="p-3 bg-gradient-to-b from-white to-gray-50 border-t border-gray-100">
+                      <div className="p-3 bg-white border-t border-gray-100">
                         <h3 className="font-medium text-sm truncate">{banner.title}</h3>
                         <p className="text-xs text-gray-500 mt-1 truncate">{banner.description}</p>
                       </div>
@@ -3650,24 +3319,24 @@ export default function DashboardPage() {
 
                 {/* Then Scheduled Banners */}
                 {scheduledBanners.map((banner) => (
-                  <div key={banner.id} className="flex flex-col bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm transition-shadow hover:shadow-md">
+                  <div key={banner.id} className="flex flex-col bg-white rounded-md shadow-sm border border-gray-200/80 overflow-hidden transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
                     <div className="relative">
                       <div className="absolute top-3 right-3 z-10 flex gap-2">
-                        <div className="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full flex items-center shadow-sm">
+                        <div className="bg-[#F5F9FF] text-[#007AFF] text-xs px-2.5 py-1 rounded-full flex items-center shadow-sm">
                           <Clock className="h-3 w-3 mr-1" />
                           Scheduled
                         </div>
-                        <div className="bg-blue-50 text-blue-700 text-xs px-2.5 py-1 rounded-full flex items-center shadow-sm">
+                        <div className="bg-[#F5F9FF] text-[#007AFF] text-xs px-2.5 py-1 rounded-full flex items-center shadow-sm">
                           <Eye className="h-3 w-3 mr-1" />
                           {banner.impressions || 0} views
                         </div>
                       </div>
                       
-                      <div className="rounded-lg overflow-hidden">
+                      <div className="rounded-md overflow-hidden">
                         <BannerPreview {...banner} />
                       </div>
                       
-                      <div className="p-3 bg-gradient-to-b from-white to-gray-50 border-t border-gray-100">
+                      <div className="p-3 bg-white border-t border-gray-100">
                         <h3 className="font-medium text-sm truncate">{banner.title}</h3>
                         <p className="text-xs text-gray-500 mt-1 truncate">{banner.description}</p>
                       </div>
@@ -3722,186 +3391,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Banner Section */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="banner-checkbox" 
-                      checked={setupChecklist.banner} 
-                      onCheckedChange={() => handleChecklistChange('banner')}
-                    />
-                    <label htmlFor="banner-checkbox" className="text-base font-medium cursor-pointer">
-                      Create a Banner
-                    </label>
-                  </div>
-                  <Button variant="link" size="sm" asChild>
-                    <Link href="/store/banner">Create</Link>
-                  </Button>
-                </div>
-                <div className="pl-6">
-                  <p className="text-sm text-muted-foreground">
-                    Banners allow you to promote special offers, events, or announcements to your customers 
-                    when they visit your digital storefront.
-                  </p>
-                </div>
-              </div>
-
-              {/* Membership Levels Section */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="membership-levels-checkbox" 
-                      checked={setupChecklist.membershipLevels} 
-                      onCheckedChange={() => handleChecklistChange('membershipLevels')}
-                    />
-                    <label htmlFor="membership-levels-checkbox" className="text-base font-medium cursor-pointer">
-                      Set Membership Levels
-                    </label>
-                  </div>
-                  <Button variant="link" size="sm" asChild>
-                    <Link href="/store/membership">Set up</Link>
-                  </Button>
-                </div>
-                <div className="pl-6">
-                  <p className="text-sm text-muted-foreground">
-                    Create tiered membership levels to reward your most loyal customers with exclusive benefits 
-                    and encourage customers to increase their engagement with your business.
-                  </p>
-                </div>
-              </div>
-
-              {/* Points Rule Section */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="points-rule-checkbox" 
-                      checked={setupChecklist.pointsRule} 
-                      onCheckedChange={() => handleChecklistChange('pointsRule')}
-                    />
-                    <label htmlFor="points-rule-checkbox" className="text-base font-medium cursor-pointer">
-                      Create Points Rule
-                    </label>
-                  </div>
-                  <Button variant="link" size="sm" asChild>
-                    <Link href="/store/points">Create</Link>
-                  </Button>
-                </div>
-                <div className="pl-6">
-                  <p className="text-sm text-muted-foreground">
-                    Define how customers earn points with your business. Set point values for purchases, 
-                    referrals, social media engagement, and more.
-                  </p>
-                </div>
-              </div>
-
-              {/* POS Integration Section */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="pos-integration-checkbox" 
-                      checked={setupChecklist.posIntegration} 
-                      onCheckedChange={() => handleChecklistChange('posIntegration')}
-                    />
-                    <label htmlFor="pos-integration-checkbox" className="text-base font-medium cursor-pointer">
-                      Integrate POS System
-                    </label>
-                  </div>
-                  <Button variant="link" size="sm" asChild>
-                    <Link href="/integrations">Connect</Link>
-                  </Button>
-                </div>
-                <div className="pl-6">
-                  <p className="text-sm text-muted-foreground">
-                    Connect your Square or Lightspeed point-of-sale system to automatically track customer 
-                    purchases and award points for transactions.
-                  </p>
-                </div>
-              </div>
-
-              {/* Open Banking Section */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="open-banking-checkbox" 
-                      checked={setupChecklist.openBanking} 
-                      onCheckedChange={() => handleChecklistChange('openBanking')}
-                    />
-                    <label htmlFor="open-banking-checkbox" className="text-base font-medium cursor-pointer">
-                      Set up Open Banking
-                    </label>
-                  </div>
-                  <Button variant="link" size="sm" asChild>
-                    <Link href="/integrations/banking">Connect</Link>
-                  </Button>
-                </div>
-                <div className="pl-6">
-                  <p className="text-sm text-muted-foreground">
-                    Connect your financial accounts to get deep financial analytics and insights about your 
-                    business performance and customer behavior.
-                  </p>
-                </div>
-              </div>
-
-              {/* Introductory Reward Section */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="introductory-reward-checkbox" 
-                      checked={setupChecklist.introductoryReward} 
-                      onCheckedChange={() => handleChecklistChange('introductoryReward')}
-                    />
-                    <label htmlFor="introductory-reward-checkbox" className="text-base font-medium cursor-pointer">
-                      Create Introductory Reward
-                    </label>
-                  </div>
-                  <Button variant="link" size="sm" asChild>
-                    <Link href="#" onClick={(e) => {
-                      e.preventDefault();
-                      setIsSetupWizardOpen(false);
-                      // Use a small timeout to allow the setup wizard to close first
-                      setTimeout(() => {
-                        setIsIntroductoryRewardSheetOpen(true);
-                      }, 100);
-                    }}>Create</Link>
-                  </Button>
-                </div>
-                <div className="pl-6">
-                  <p className="text-sm text-muted-foreground">
-                    Offer a special welcome gift to first-time customers, funded by Tap Loyalty. This helps attract new customers to your business.
-                  </p>
-                </div>
-              </div>
-
-              {/* Custom Reward Section */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="custom-reward-checkbox" 
-                      checked={setupChecklist.customReward} 
-                      onCheckedChange={() => handleChecklistChange('customReward')}
-                    />
-                    <label htmlFor="custom-reward-checkbox" className="text-base font-medium cursor-pointer">
-                      Create Custom Reward
-                    </label>
-                  </div>
-                  <Button variant="link" size="sm" asChild>
-                    <Link href="/store/rewards/new">Create</Link>
-                  </Button>
-                </div>
-                <div className="pl-6">
-                  <p className="text-sm text-muted-foreground">
-                    Design personalized rewards that resonate with your customers and align with your brand. 
-                    Custom rewards can increase redemption rates and customer satisfaction.
-                  </p>
-                </div>
-              </div>
+              {/* Other checklist items... */}
             </div>
           </ScrollArea>
           
@@ -3923,118 +3413,6 @@ export default function DashboardPage() {
         </SheetContent>
       </Sheet>
 
-      {/* Alternative to Dialog - Simple conditional rendering */}
-      {insightDialogOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold flex items-center gap-2">
-                <Lightbulb className="h-5 w-5 text-amber-500" />
-                Business Insights
-              </h2>
-              <button 
-                onClick={() => setInsightDialogOpen(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <p className="text-sm text-gray-500 mb-4">
-              AI-powered analysis of your business performance
-            </p>
-            
-            {insightLoading ? (
-              <div className="flex flex-col items-center justify-center py-8">
-                <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin mb-4"></div>
-                <p className="text-sm text-muted-foreground">Analyzing your business data...</p>
-              </div>
-            ) : insightError ? (
-              <div className="py-6">
-                <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
-                  <p className="text-red-800 text-sm">{insightError}</p>
-                </div>
-                <Button 
-                  variant="outline" 
-                  onClick={() => fetchMerchantInsights()} 
-                  className="w-full"
-                >
-                  Try Again
-                </Button>
-              </div>
-            ) : insightData ? (
-              <div className="space-y-4 py-2">
-                {/* Summary */}
-                {insightData.summary && (
-                  <div className="bg-blue-50 border border-blue-100 rounded-md p-4">
-                    <h3 className="font-medium text-blue-800 mb-1">Summary</h3>
-                    <p className="text-sm text-blue-700">{insightData.summary}</p>
-                  </div>
-                )}
-                
-                {/* Insights List */}
-                {insightData.insights && Array.isArray(insightData.insights) && insightData.insights.length > 0 && (
-                  <div className="space-y-3">
-                    <h3 className="font-medium">Key Insights</h3>
-                    <div className="space-y-2">
-                      {insightData.insights.map((insight: string, index: number) => (
-                        <div key={index} className="flex gap-2 items-start">
-                          <div className="h-5 w-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <span className="text-green-700 text-xs font-medium">{index + 1}</span>
-                          </div>
-                          <p className="text-sm">{insight}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {/* If insights is a string instead of an array */}
-                {insightData.insights && typeof insightData.insights === 'string' && (
-                  <div className="space-y-3">
-                    <h3 className="font-medium">Key Insights</h3>
-                    <div className="bg-green-50 border border-green-100 rounded-md p-4">
-                      <p className="text-sm text-green-700">{insightData.insights}</p>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Recommendations - also add Array check */}
-                {insightData.recommendations && Array.isArray(insightData.recommendations) && insightData.recommendations.length > 0 && (
-                  <div className="space-y-3">
-                    <h3 className="font-medium">Recommendations</h3>
-                    <div className="space-y-2">
-                      {insightData.recommendations.map((rec: string, index: number) => (
-                        <div key={index} className="flex gap-2 items-start">
-                          <div className="h-5 w-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <Star className="h-3 w-3 text-amber-600" />
-                          </div>
-                          <p className="text-sm">{rec}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {/* If recommendations is a string instead of an array */}
-                {insightData.recommendations && typeof insightData.recommendations === 'string' && (
-                  <div className="space-y-3">
-                    <h3 className="font-medium">Recommendations</h3>
-                    <div className="bg-amber-50 border border-amber-100 rounded-md p-4">
-                      <p className="text-sm text-amber-700">{insightData.recommendations}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="py-6 text-center">
-                <p className="text-sm text-muted-foreground">No insights available</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Create Reward Dialog */}
       <CreateRewardSheet
         open={isRewardDialogOpen}
@@ -4049,224 +3427,7 @@ export default function DashboardPage() {
         onOpenChange={setIsIntroductoryRewardSheetOpen}
       />
 
-      {/* Summarize Inbox Sheet */}
-      <Sheet open={isSummarizeInboxSheetOpen} onOpenChange={setIsSummarizeInboxSheetOpen}>
-        <SheetContent className="sm:max-w-lg w-full overflow-y-auto flex flex-col">
-          <div className="flex-none">
-            <SheetHeader className="pb-4">
-              <SheetTitle className="text-xl flex items-center gap-2">
-                <Inbox className="h-5 w-5 text-indigo-500" />
-                Summarize Inbox
-              </SheetTitle>
-              <SheetDescription>
-                Get an AI-powered summary of your email inbox
-              </SheetDescription>
-            </SheetHeader>
-            <Separator className="my-4" />
-          </div>
-
-          <div className="flex-grow">
-            {!inboxSummaryLoading && !inboxSummaryResult ? (
-              <div className="space-y-6">
-                <div className="space-y-3">
-                  <h3 className="text-sm font-medium">Select time range</h3>
-                  <div className="flex gap-3">
-                    <Button
-                      variant={inboxSummaryTimeframe === "1day" ? "default" : "outline"}
-                      className={inboxSummaryTimeframe === "1day" ? "bg-indigo-600 hover:bg-indigo-700" : ""}
-                      onClick={() => setInboxSummaryTimeframe("1day")}
-                    >
-                      1 Day
-                    </Button>
-                    <Button
-                      variant={inboxSummaryTimeframe === "3day" ? "default" : "outline"}
-                      className={inboxSummaryTimeframe === "3day" ? "bg-indigo-600 hover:bg-indigo-700" : ""}
-                      onClick={() => setInboxSummaryTimeframe("3day")}
-                    >
-                      3 Days
-                    </Button>
-                    <Button
-                      variant={inboxSummaryTimeframe === "7day" ? "default" : "outline"}
-                      className={inboxSummaryTimeframe === "7day" ? "bg-indigo-600 hover:bg-indigo-700" : ""}
-                      onClick={() => setInboxSummaryTimeframe("7day")}
-                    >
-                      7 Days
-                    </Button>
-                  </div>
-                </div>
-
-                <div className={`p-4 border-b border-gray-100 ${isPopupExpanded ? 'px-6' : ''}`}>
-                  <div className="flex items-start gap-3">
-                    <Lightbulb className="h-5 w-5 text-indigo-500 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-indigo-800">
-                      <p className="font-medium mb-1">How it works</p>
-                      <p className="text-indigo-700">
-                        This feature uses AI to analyze your recent emails and provide a concise summary of important messages, trends, and actions required. Select a time range to begin.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {inboxSummaryError && (
-                  <div className="p-4 bg-red-50 rounded-lg border border-red-100">
-                    <div className="flex items-start gap-3">
-                      <XCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-                      <div className="text-sm text-red-800">
-                        <p className="font-medium mb-1">Error</p>
-                        <p className="text-red-700">{inboxSummaryError}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex justify-end">
-                  <Button onClick={handleSummarizeSubmit} className="bg-[#007AFF] hover:bg-[#0062CC]">
-                    Generate Summary
-                  </Button>
-                </div>
-              </div>
-            ) : inboxSummaryLoading ? (
-              <div className="flex flex-col">
-                <div className="flex items-start mb-8">
-                  <div className="relative mr-3">
-                    <div className="h-5 w-5 rounded-full border-2 border-gray-200 border-t-gray-600 animate-spin"></div>
-                  </div>
-                  
-                  <div className="h-5 flex items-center">
-                    {loadingStage === "processing" && (
-                      <p className="text-sm text-gray-500 animate-pulse">
-                        Processing...
-                      </p>
-                    )}
-                    
-                    {loadingStage === "finding" && (
-                      <p className="text-sm text-[#007AFF] animate-pulse">
-                        Searching emails...
-                      </p>
-                    )}
-                    
-                    {loadingStage === "generating" && (
-                      <p className="text-sm text-[#007AFF] animate-pulse">
-                        Generating summary...
-                      </p>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="flex-1 min-h-[300px] flex items-center justify-center text-sm text-gray-400">
-                  <p>Preparing your inbox summary...</p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-6 animate-fadeIn">
-                <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-medium text-gray-900">Email Summary</h3>
-                    <div className="text-xs text-gray-500">
-                      powered by <GradientText>Tap Agent</GradientText>
-                    </div>
-                  </div>
-                  <div className="prose prose-sm max-w-none font-sf-pro">
-                    {inboxSummaryResult && (
-                      <div>
-                        {/* Process the content to enhance numbered sections */}
-                        {inboxSummaryResult?.split('\n').map((line, index) => {
-                          // Match lines that start with a number followed by a period
-                          const headerMatch = line.match(/^(\d+)\.\s+(.+)$/);
-                          
-                          if (headerMatch) {
-                            // This is a numbered section header - style it prominently
-                            return (
-                              <div 
-                                key={index} 
-                                className="mt-8 mb-4 first:mt-2 pb-1 border-b border-gray-100"
-                              >
-                                <h3 className="text-xl font-bold bg-gradient-to-r from-[#007AFF] to-[#00C6FF] bg-clip-text text-transparent">
-                                  {line}
-                                </h3>
-                              </div>
-                            );
-                          }
-                          
-                          // Regular content - render with ReactMarkdown
-                          return (
-                            <div key={index} className="mb-4">
-                              <ReactMarkdown 
-                                className="prose prose-slate 
-                                prose-p:text-gray-700 prose-p:mb-4
-                                prose-h1:text-transparent prose-h1:bg-clip-text prose-h1:bg-gradient-to-r prose-h1:from-[#007AFF] prose-h1:to-[#00C6FF] prose-h1:text-2xl prose-h1:font-bold prose-h1:mt-6 prose-h1:mb-4
-                                prose-h2:text-transparent prose-h2:bg-clip-text prose-h2:bg-gradient-to-r prose-h2:from-[#007AFF] prose-h2:to-[#00C6FF] prose-h2:text-xl prose-h2:font-bold prose-h2:mt-5 prose-h2:mb-3
-                                prose-h3:text-transparent prose-h3:bg-clip-text prose-h3:bg-gradient-to-r prose-h3:from-[#007AFF] prose-h3:to-[#00C6FF] prose-h3:text-lg prose-h3:font-semibold prose-h3:mt-4 prose-h3:mb-2
-                                prose-a:text-[#007AFF] 
-                                prose-strong:font-semibold prose-strong:text-gray-900 
-                                prose-ul:my-4 prose-ul:pl-5 prose-ul:space-y-2 
-                                prose-ol:my-4 prose-ol:pl-5 prose-ol:space-y-2
-                                prose-li:my-0.5 prose-li:pl-1.5
-                                prose-hr:border-gray-200 prose-hr:my-4 prose-hr:border-dashed
-                                font-sf-pro [&_.html-content_h1]:text-transparent [&_.html-content_h1]:bg-clip-text [&_.html-content_h1]:bg-gradient-to-r [&_.html-content_h1]:from-[#007AFF] [&_.html-content_h1]:to-[#00C6FF] [&_.html-content_h1]:text-2xl [&_.html-content_h1]:font-bold [&_.html-content_h1]:mt-6 [&_.html-content_h1]:mb-4
-                                [&_.html-content_h2]:text-transparent [&_.html-content_h2]:bg-clip-text [&_.html-content_h2]:bg-gradient-to-r [&_.html-content_h2]:from-[#007AFF] [&_.html-content_h2]:to-[#00C6FF] [&_.html-content_h2]:text-xl [&_.html-content_h2]:font-bold [&_.html-content_h2]:mt-5 [&_.html-content_h2]:mb-3
-                                [&_.html-content_h3]:text-transparent [&_.html-content_h3]:bg-clip-text [&_.html-content_h3]:bg-gradient-to-r [&_.html-content_h3]:from-[#007AFF] [&_.html-content_h3]:to-[#00C6FF] [&_.html-content_h3]:text-lg [&_.html-content_h3]:font-semibold [&_.html-content_h3]:mt-4 [&_.html-content_h3]:mb-2
-                                [&_.html-content_p]:text-gray-700 [&_.html-content_p]:mb-4
-                                [&_.html-content_a]:text-[#007AFF]
-                                [&_.html-content_ul]:my-4 [&_.html-content_ul]:pl-5 [&_.html-content_ul]:space-y-2
-                                [&_.html-content_ol]:my-4 [&_.html-content_ol]:pl-5 [&_.html-content_ol]:space-y-2
-                                [&_.html-content_li]:my-0.5 [&_.html-content_li]:pl-1.5"
-                                remarkPlugins={[remarkGfm]}
-                                rehypePlugins={[rehypeRaw]}
-                                components={{
-                                  pre: ({ children }) => (
-                                    <pre className="bg-gray-50 p-3 rounded-md overflow-auto text-sm my-4">{children}</pre>
-                                  ),
-                                  code: ({ children }) => (
-                                    <code className="bg-gray-50 p-1 rounded text-sm font-mono text-purple-600">{children}</code>
-                                  )
-                                }}
-                              >
-                                {processApiResponse(line)}
-                              </ReactMarkdown>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
-                {/* For debugging - show full API response */}
-                {debugResponse && (
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-5 mt-4">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">API Response (Debug)</h4>
-                    <pre className="text-xs overflow-auto bg-gray-100 p-3 rounded">
-                      {debugResponse}
-                    </pre>
-                  </div>
-                )}
-                
-                <div className="flex justify-between">
-                  <Button 
-                    variant="outline" 
-                    onClick={() => {
-                      setInboxSummaryResult(null)
-                      setInboxSummaryError(null)
-                    }}
-                  >
-                    Generate New Summary
-                  </Button>
-                  <Button 
-                    variant="default"
-                    className="bg-[#007AFF] hover:bg-[#0062CC]"
-                    onClick={() => setIsSummarizeInboxSheetOpen(false)}
-                  >
-                    Close
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      {/* Tap Agent Sheet - Without daily summary functionality */}
+      {/* Tap Agent Sheet */}
       <TapAgentSheet 
         open={isTapAgentSheetOpen}
         onOpenChange={setIsTapAgentSheetOpen}
@@ -4275,114 +3436,11 @@ export default function DashboardPage() {
       {/* Daily Summary Popup */}
       {showDailySummaryPopup && (dailySummaryGmailResponse || dailySummaryLightspeedResponse) && (
         <div className={`fixed ${isPopupExpanded ? 'top-0 bottom-0 right-0 w-[35%] rounded-l-lg rounded-r-none border-r-0 h-full' : 'bottom-6 right-6 w-96 rounded-lg h-auto'} z-50 bg-white shadow-xl border border-gray-200 overflow-hidden animate-slideInUp transition-all duration-300 ease-in-out flex flex-col`}>
-          <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-white flex-shrink-0">
-            <div className="flex flex-col">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-blue-500" />
-                <GradientText>Daily Summary</GradientText>
-              </h3>
-              <p className="text-xs text-gray-500 mt-0.5 ml-6">Powered by Tap Agent</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-7 w-7 p-0 rounded-full hover:bg-white/50"
-                onClick={() => setIsPopupExpanded(!isPopupExpanded)}
-                title={isPopupExpanded ? "Collapse" : "Expand"}
-              >
-                {isPopupExpanded ? (
-                  <Minimize2 className="h-4 w-4 text-gray-500" />
-                ) : (
-                  <Maximize2 className="h-4 w-4 text-gray-500" />
-                )}
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-7 w-7 p-0 rounded-full hover:bg-white/50"
-                onClick={() => setShowDailySummaryPopup(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-          <div className={`overflow-y-auto ${isPopupExpanded ? 'max-h-[calc(100vh-120px)]' : 'max-h-[70vh]'} flex-grow`}>
-            {dailySummaryGmailResponse && (
-              <div className={`p-4 border-b border-gray-100 ${isPopupExpanded ? 'px-6' : ''}`}>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
-                    <Image src="/gmail.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain" />
-                  </div>
-                  <h4 className="text-sm font-medium text-gray-900">Email Summary</h4>
-                </div>
-                <div className="prose prose-sm max-w-none text-gray-700 text-sm space-y-4 mt-2">
-                  {processApiResponse(dailySummaryGmailResponse)?.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i) ? 
-                    renderHtml(processApiResponse(dailySummaryGmailResponse)) :
-                    <ReactMarkdown 
-                      className="text-gray-700 text-sm leading-relaxed space-y-4"
-                      remarkPlugins={[remarkGfm]}
-                      rehypePlugins={[rehypeRaw]}
-                      components={{
-                        p: ({children}) => <p className="my-3">{children}</p>,
-                        ul: ({children}) => <ul className="my-3 list-disc pl-5">{children}</ul>,
-                        ol: ({children}) => <ol className="my-3 list-decimal pl-5">{children}</ol>,
-                        li: ({children}) => <li className="my-1">{children}</li>,
-                        h3: ({children}) => <h3 className="text-base font-semibold my-3">{children}</h3>,
-                        h4: ({children}) => <h4 className="text-sm font-semibold my-2">{children}</h4>
-                      }}
-                    >
-                      {processApiResponse(dailySummaryGmailResponse) || ""}
-                    </ReactMarkdown>
-                  }
-                </div>
-              </div>
-            )}
-            
-            {dailySummaryLightspeedResponse && (
-              <div className={`p-4 ${isPopupExpanded ? 'px-6' : ''}`}>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-gray-100">
-                    <Image src="/lslogo.png" width={16} height={16} alt="Lightspeed" className="h-4 w-4 object-contain" />
-                  </div>
-                  <h4 className="text-sm font-medium text-gray-900">Sales Summary</h4>
-                </div>
-                <div className="prose prose-sm max-w-none text-gray-700 text-sm space-y-4 mt-2">
-                  {processApiResponse(dailySummaryLightspeedResponse)?.trim().match(/<(html|body|div|h[1-6]|p|ul|ol|li|table|a|img|span|strong|em|b)[\s>]/i) ? 
-                    renderHtml(processApiResponse(dailySummaryLightspeedResponse)) :
-                    <ReactMarkdown 
-                      className="text-gray-700 text-sm leading-relaxed space-y-4"
-                      remarkPlugins={[remarkGfm]}
-                      rehypePlugins={[rehypeRaw]}
-                      components={{
-                        p: ({children}) => <p className="my-3">{children}</p>,
-                        ul: ({children}) => <ul className="my-3 list-disc pl-5">{children}</ul>,
-                        ol: ({children}) => <ol className="my-3 list-decimal pl-5">{children}</ol>,
-                        li: ({children}) => <li className="my-1">{children}</li>,
-                        h3: ({children}) => <h3 className="text-base font-semibold my-3">{children}</h3>,
-                        h4: ({children}) => <h4 className="text-sm font-semibold my-2">{children}</h4>
-                      }}
-                    >
-                      {processApiResponse(dailySummaryLightspeedResponse) || ""}
-                    </ReactMarkdown>
-                  }
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="p-3 bg-gray-50 border-t border-gray-200 flex justify-end flex-shrink-0">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setShowDailySummaryPopup(false)}
-            >
-              Close
-            </Button>
-          </div>
+          {/* Popup content */}
         </div>
       )}
-    </PageTransition>
-  )
+    </>
+  );
 }
 
 // Sample data

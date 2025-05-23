@@ -113,6 +113,7 @@ import {
   FileText
 } from "lucide-react"
 import Image from "next/image"
+import { cn } from "@/lib/utils"
 
 // Define the structure for the business knowledge data
 interface BusinessKnowledge {
@@ -901,49 +902,35 @@ export default function AgentSetup() {
   const renderBusinessContextPage = () => {
     return (
       <>
-        <div className="flex items-center mb-6">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setShowBusinessContext(false)}
-            className="gap-1 mr-2 p-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h2 className="text-xl font-medium">Business Knowledge Base</h2>
-            <p className="text-sm text-muted-foreground">
-              Information the agent will use when responding to customer inquiries
-            </p>
+        <div className="flex items-center justify-between border-b py-4">
+          <div className="flex items-center">
+            <Image 
+              src="/taplogo.png" 
+              alt="Tap Logo" 
+              width={32} 
+              height={32}
+              className="mr-4 rounded-sm"
+            />
+            <div>
+              <h2 className="text-xl font-medium">Business Knowledge Base</h2>
+              <p className="text-sm text-muted-foreground">
+                Information the agent will use when responding to customer inquiries
+              </p>
+            </div>
           </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleVoiceRecord}
+            className={`gap-2 rounded-md ${isRecording ? 'bg-red-50 text-red-600 border-red-200' : ''}`}
+          >
+            <Mic className={`h-4 w-4 ${isRecording ? 'text-red-600 animate-pulse' : ''}`} />
+            {isRecording ? 'Recording...' : 'Add voice input'}
+          </Button>
         </div>
         
         <div className="space-y-6 mb-6">
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium">Business Context</h3>
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleVoiceRecord}
-                  className={`gap-2 rounded-md ${isRecording ? 'bg-red-50 text-red-600 border-red-200' : ''}`}
-                >
-                  <Mic className={`h-4 w-4 ${isRecording ? 'text-red-600 animate-pulse' : ''}`} />
-                  {isRecording ? 'Recording...' : 'Add voice input'}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setShowManualInput(!showManualInput)}
-                  className="gap-2 rounded-md"
-                >
-                  <PlusCircle className="h-4 w-4" />
-                  Add manual context
-                </Button>
-              </div>
-            </div>
-            
             {showManualInput && (
               <div className="mb-6 border p-4 rounded-md bg-gray-50 space-y-3">
                 <Textarea
@@ -1269,1657 +1256,909 @@ export default function AgentSetup() {
         <Tabs defaultValue="setup" value={mainTab} onValueChange={handleMainTabChange} className="w-full mt-6">
           <TabsContent value="setup">
             {/* Agent Type Selection */}
-            <Tabs 
-              defaultValue="reward" 
-              value={agentType} 
-              onValueChange={handleAgentTypeChange}
-              className="w-full mb-5"
-            >
-              {agentType !== "customer-service-setup" && (
-                <div className="flex justify-start mb-4">
-                  <TabsList className="hidden">
-                    <TabsTrigger value="reward">Reward Agent</TabsTrigger>
-                    <TabsTrigger value="customer-service">Customer Service</TabsTrigger>
-                  </TabsList>
-                  
-                  <div className="flex gap-3">
-                    <Button
-                      onClick={() => handleAgentTypeChange("reward")}
-                      className={`flex items-center justify-center gap-2 px-5 py-3 text-sm transition-all border shadow-sm hover:bg-gray-50 rounded-md font-medium ${
-                        agentType === "reward" 
-                          ? "bg-blue-50 border-blue-200" 
-                          : "bg-white text-gray-700"
-                      }`}
+            <div className="flex justify-start mb-4">
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => handleAgentTypeChange("reward")}
+                  className={`flex items-center justify-center gap-2 px-5 py-3 text-sm transition-all border shadow-sm hover:bg-gray-50 rounded-md font-medium ${
+                    agentType === "reward" 
+                      ? "bg-blue-50 border-blue-200" 
+                      : "bg-white text-gray-700"
+                  }`}
+                >
+                  <div className={`${
+                    agentType === "reward" 
+                      ? "bg-blue-100 p-1.5 rounded-full" 
+                      : "text-gray-500"
+                  }`}>
+                    <Award className={`h-5 w-5 ${agentType === "reward" ? "text-blue-600" : ""}`} />
+                  </div>
+                  <span className={agentType === "reward" ? "bg-gradient-to-r from-[#0D6EFD] to-[#FF8C00] bg-clip-text text-transparent" : ""}>Reward Agent</span>
+                </Button>
+                <Button
+                  onClick={() => handleAgentTypeChange("customer-service")}
+                  className={`flex items-center justify-center gap-2 px-5 py-3 text-sm transition-all border shadow-sm hover:bg-gray-50 rounded-md font-medium ${
+                    agentType === "customer-service" 
+                      ? "bg-blue-50 border-blue-200" 
+                      : "bg-white text-gray-700"
+                  }`}
+                >
+                  <div className={`${
+                    agentType === "customer-service" 
+                      ? "bg-blue-100 p-1.5 rounded-full" 
+                      : "text-gray-500"
+                  }`}>
+                    <Bot className={`h-5 w-5 ${agentType === "customer-service" ? "text-blue-600" : ""}`} />
+                  </div>
+                  <span className={agentType === "customer-service" ? "bg-gradient-to-r from-[#0D6EFD] to-[#FF8C00] bg-clip-text text-transparent" : ""}>Customer Service Agent</span>
+                </Button>
+              </div>
+            </div>
+            
+            {agentType === "reward" && (
+              <>
+                <div className="flex items-center justify-between border-b py-4">
+                  <div className="flex items-center">
+                    <Image 
+                      src="/taplogo.png" 
+                      alt="Tap Logo" 
+                      width={32} 
+                      height={32}
+                      className="mr-4 rounded-sm"
+                    />
+                    <div>
+                      <h2 className="text-xl font-medium">Reward Agent</h2>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        AI assistant configured to create personalized rewards for your customers
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`rounded-md border shadow-sm ${agentConfig.agentTasks.rewardsGeneration ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50'}`}
+                  >
+                    <div className={`h-2 w-2 rounded-full mr-2 ${agentConfig.agentTasks.rewardsGeneration ? 'bg-green-500' : 'bg-gray-400'}`} />
+                    {agentConfig.agentTasks.rewardsGeneration ? 'Active' : 'Inactive'}
+                  </Button>
+                </div>
+                
+                <div className="border-b py-4 px-0 bg-white overflow-x-auto">
+                  <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
+                    <button 
+                      onClick={() => handleRewardTabChange("brand")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        rewardActiveTab === "brand" 
+                          ? "text-gray-800 bg-white shadow-sm" 
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
                     >
-                      <div className={`${
-                        agentType === "reward" 
-                          ? "bg-blue-100 p-1.5 rounded-full" 
-                          : "text-gray-500"
-                      }`}>
-                        <Award className={`h-5 w-5 ${agentType === "reward" ? "text-blue-600" : ""}`} />
-                      </div>
-                      <span className={agentType === "reward" ? "bg-gradient-to-r from-[#0D6EFD] to-[#FF8C00] bg-clip-text text-transparent" : ""}>Reward Agent</span>
-                    </Button>
-                    <Button
-                      onClick={() => handleAgentTypeChange("customer-service")}
-                      className={`flex items-center justify-center gap-2 px-5 py-3 text-sm transition-all border shadow-sm hover:bg-gray-50 rounded-md font-medium ${
-                        agentType === "customer-service" 
-                          ? "bg-blue-50 border-blue-200" 
-                          : "bg-white text-gray-700"
-                      }`}
+                      <Building2 className="h-4 w-4" />
+                      <span>Brand</span>
+                    </button>
+                    <button 
+                      onClick={() => handleRewardTabChange("tasks")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        rewardActiveTab === "tasks" 
+                          ? "text-gray-800 bg-white shadow-sm" 
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
                     >
-                      <div className={`${
-                        agentType === "customer-service" 
-                          ? "bg-blue-100 p-1.5 rounded-full" 
-                          : "text-gray-500"
-                      }`}>
-                        <Bot className={`h-5 w-5 ${agentType === "customer-service" ? "text-blue-600" : ""}`} />
-                      </div>
-                      <span className={agentType === "customer-service" ? "bg-gradient-to-r from-[#0D6EFD] to-[#FF8C00] bg-clip-text text-transparent" : ""}>Customer Service Agent</span>
-                    </Button>
+                      <CheckCircle className="h-4 w-4" />
+                      <span>Tasks</span>
+                    </button>
+                    <button 
+                      onClick={() => handleRewardTabChange("hours")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        rewardActiveTab === "hours" 
+                          ? "text-gray-800 bg-white shadow-sm" 
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
+                    >
+                      <Clock3 className="h-4 w-4" />
+                      <span>Hours</span>
+                    </button>
+                    <button 
+                      onClick={() => handleRewardTabChange("objectives")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        rewardActiveTab === "objectives" 
+                          ? "text-gray-800 bg-white shadow-sm" 
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
+                    >
+                      <Target className="h-4 w-4" />
+                      <span>Objectives</span>
+                    </button>
+                    <button 
+                      onClick={() => handleRewardTabChange("pricing")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        rewardActiveTab === "pricing" 
+                          ? "text-gray-800 bg-white shadow-sm" 
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
+                    >
+                      <TagsIcon className="h-4 w-4" />
+                      <span>Pricing</span>
+                    </button>
+                    <button 
+                      onClick={() => handleRewardTabChange("financials")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        rewardActiveTab === "financials" 
+                          ? "text-gray-800 bg-white shadow-sm" 
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
+                    >
+                      <LineChart className="h-4 w-4" />
+                      <span>Financials</span>
+                    </button>
+                    <button 
+                      onClick={() => handleRewardTabChange("cohorts")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        rewardActiveTab === "cohorts" 
+                          ? "text-gray-800 bg-white shadow-sm" 
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
+                    >
+                      <UsersRound className="h-4 w-4" />
+                      <span>Cohorts</span>
+                    </button>
+                    <button 
+                      onClick={() => handleRewardTabChange("rewards")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        rewardActiveTab === "rewards" 
+                          ? "text-gray-800 bg-white shadow-sm" 
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
+                    >
+                      <Gift className="h-4 w-4" />
+                      <span>Rewards</span>
+                    </button>
+                    <button 
+                      onClick={() => handleRewardTabChange("messaging")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        rewardActiveTab === "messaging" 
+                          ? "text-gray-800 bg-white shadow-sm" 
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      <span>Messages</span>
+                    </button>
                   </div>
                 </div>
-              )}
-              
-              <TabsContent value="reward">
-                <div className="flex flex-col gap-4">
-                  <div className="w-full bg-white rounded-md border shadow-sm">
-                    <div className="flex items-center justify-between border-b px-6 py-4">
-                      <div className="flex items-center">
-                        <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center mr-4">
-                          <Image 
-                            src="/taplogo.png" 
-                            alt="Tap Logo" 
-                            width={28} 
-                            height={28} 
-                          />
+                
+                <div className="py-4 px-0">
+                  {rewardActiveTab === "brand" && (
+                    <div className="space-y-6">
+                      {/* Business Information and Brand Voice side by side */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Business Information */}
+                        <div className="border rounded-md p-5 space-y-4">
+                          <h3 className="font-medium flex items-center">
+                            <Store className="h-4 w-4 text-blue-600 mr-2" />
+                            Business Information
+                          </h3>
+                          
+                          <div className="space-y-4">
+                            <div>
+                              <Label htmlFor="businessName">Business Name</Label>
+                              <Input 
+                                id="businessName"
+                                value={agentConfig.businessBrand.businessName}
+                                onChange={(e) => updateSection("businessBrand", {
+                                  ...agentConfig.businessBrand,
+                                  businessName: e.target.value
+                                })}
+                                className="mt-1 rounded-md"
+                                placeholder="Enter your business name"
+                              />
+                            </div>
+                            
+                            <div>
+                              <Label htmlFor="businessContext">Business Description</Label>
+                              <Textarea
+                                id="businessContext"
+                                value={agentConfig.businessBrand.businessContext}
+                                onChange={(e) => updateSection("businessBrand", {
+                                  ...agentConfig.businessBrand,
+                                  businessContext: e.target.value
+                                })}
+                                className="mt-1 min-h-[100px] rounded-md"
+                                placeholder="Describe what your business does, your products/services, and your value proposition"
+                              />
+                            </div>
+                          </div>
                         </div>
+                        
+                        {/* Brand Voice */}
+                        <div className="border rounded-md p-5 space-y-4">
+                          <h3 className="font-medium flex items-center">
+                            <Layers className="h-4 w-4 text-blue-600 mr-2" />
+                            Brand Voice
+                          </h3>
+                          
+                          <div className="space-y-4">
+                            <p className="text-sm text-muted-foreground">
+                              Select the tone and style that best represents your brand's personality
+                            </p>
+                            
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {["friendly", "professional", "casual", "formal", "playful", "serious"].map(voice => (
+                                <Button
+                                  key={voice}
+                                  onClick={() => {
+                                    const updatedVoice = agentConfig.businessBrand.brandVoice.includes(voice)
+                                      ? agentConfig.businessBrand.brandVoice.filter(v => v !== voice)
+                                      : [...agentConfig.businessBrand.brandVoice, voice];
+                                    
+                                    updateSection("businessBrand", {
+                                      ...agentConfig.businessBrand,
+                                      brandVoice: updatedVoice
+                                    });
+                                  }}
+                                  variant="outline"
+                                  className={`h-10 capitalize rounded-md ${
+                                    agentConfig.businessBrand.brandVoice.includes(voice)
+                                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                                      : ""
+                                  }`}
+                                >
+                                  {voice}
+                                </Button>
+                              ))}
+                            </div>
+                            
+                            <div className="flex gap-2">
+                              <div className="flex-1">
+                                <Input
+                                  id="customVoice"
+                                  placeholder="Add custom tone"
+                                  className="rounded-md"
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && e.currentTarget.value.trim()) {
+                                      e.preventDefault();
+                                      const newVoice = e.currentTarget.value.trim();
+                                      if (!agentConfig.businessBrand.brandVoice.includes(newVoice)) {
+                                        updateSection("businessBrand", {
+                                          ...agentConfig.businessBrand,
+                                          brandVoice: [...agentConfig.businessBrand.brandVoice, newVoice]
+                                        });
+                                        e.currentTarget.value = "";
+                                      }
+                                    }
+                                  }}
+                                />
+                              </div>
+                              <Button 
+                                onClick={() => {
+                                  const input = document.getElementById('customVoice') as HTMLInputElement;
+                                  if (input && input.value.trim()) {
+                                    const newVoice = input.value.trim();
+                                    if (!agentConfig.businessBrand.brandVoice.includes(newVoice)) {
+                                      updateSection("businessBrand", {
+                                        ...agentConfig.businessBrand,
+                                        brandVoice: [...agentConfig.businessBrand.brandVoice, newVoice]
+                                      });
+                                      input.value = "";
+                                    }
+                                  }
+                                }}
+                                className="rounded-md"
+                              >
+                                Add
+                              </Button>
+                            </div>
+                            
+                            {agentConfig.businessBrand.brandVoice.length > 0 && (
+                              <div className="mt-2">
+                                <Label className="mb-2 block">Selected Brand Voice</Label>
+                                <div className="flex flex-wrap gap-2">
+                                  {agentConfig.businessBrand.brandVoice.map(voice => (
+                                    <Badge 
+                                      key={voice}
+                                      variant="outline"
+                                      className="px-2 py-1 rounded-md bg-blue-50 border-blue-200 text-blue-700 flex items-center gap-1"
+                                    >
+                                      {voice}
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => updateSection("businessBrand", {
+                                          ...agentConfig.businessBrand,
+                                          brandVoice: agentConfig.businessBrand.brandVoice.filter(v => v !== voice)
+                                        })}
+                                        className="h-4 w-4 rounded-full p-0 hover:bg-blue-100"
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </Button>
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Brand Colors */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="border rounded-md p-5 space-y-4">
+                          <h3 className="font-medium flex items-center">
+                            <div className="h-4 w-4 bg-gradient-to-r from-blue-500 to-orange-500 rounded-full mr-2"></div>
+                            Primary Color
+                          </h3>
+                          
+                          <div className="flex gap-3 items-center">
+                            <Input
+                              id="primaryColor"
+                              type="color"
+                              value={agentConfig.businessBrand.primaryColor}
+                              onChange={(e) => updateSection("businessBrand", {
+                                ...agentConfig.businessBrand,
+                                primaryColor: e.target.value
+                              })}
+                              className="w-16 h-16 p-1 cursor-pointer rounded-md"
+                            />
+                            <div className="flex-1">
+                              <Input
+                                type="text"
+                                value={agentConfig.businessBrand.primaryColor}
+                                onChange={(e) => updateSection("businessBrand", {
+                                  ...agentConfig.businessBrand,
+                                  primaryColor: e.target.value
+                                })}
+                                placeholder="#007AFF"
+                                className="rounded-md"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">
+                                This color will be used for primary elements in customer communications
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="border rounded-md p-5 space-y-4">
+                          <h3 className="font-medium flex items-center">
+                            <div className="h-4 w-4 bg-white border border-gray-200 rounded-full mr-2"></div>
+                            Secondary Color
+                          </h3>
+                          
+                          <div className="flex gap-3 items-center">
+                            <Input
+                              id="secondaryColor"
+                              type="color"
+                              value={agentConfig.businessBrand.secondaryColor}
+                              onChange={(e) => updateSection("businessBrand", {
+                                ...agentConfig.businessBrand,
+                                secondaryColor: e.target.value
+                              })}
+                              className="w-16 h-16 p-1 cursor-pointer rounded-md"
+                            />
+                            <div className="flex-1">
+                              <Input
+                                type="text"
+                                value={agentConfig.businessBrand.secondaryColor}
+                                onChange={(e) => updateSection("businessBrand", {
+                                  ...agentConfig.businessBrand,
+                                  secondaryColor: e.target.value
+                                })}
+                                placeholder="#FFFFFF"
+                                className="rounded-md"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">
+                                This color will be used for secondary elements and backgrounds
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {rewardActiveTab === "tasks" && (
+                    <AgentTasksForm 
+                      data={agentConfig.agentTasks} 
+                      onChange={(data) => updateSection("agentTasks", data)} 
+                    />
+                  )}
+                  
+                  {rewardActiveTab === "hours" && (
+                    <div className="space-y-6">
+                      {/* Hours content */}
+                      {/* ... existing code ... */}
+                    </div>
+                  )}
+                  
+                  {rewardActiveTab === "objectives" && (
+                    <ObjectivesForm 
+                      data={agentConfig.objectives} 
+                      onChange={(data) => updateSection("objectives", data)} 
+                    />
+                  )}
+                  
+                  {rewardActiveTab === "pricing" && (
+                    <ProductPricingForm 
+                      data={agentConfig.productPricing} 
+                      onChange={(data) => updateSection("productPricing", data)} 
+                    />
+                  )}
+                  
+                  {rewardActiveTab === "financials" && (
+                    <FinancialGuardrailsForm 
+                      data={agentConfig.financialGuardrails} 
+                      onChange={(data) => updateSection("financialGuardrails", data)} 
+                    />
+                  )}
+                  
+                  {rewardActiveTab === "cohorts" && (
+                    <CustomerCohortsForm 
+                      data={agentConfig.customerCohorts} 
+                      onChange={(data) => updateSection("customerCohorts", data)} 
+                    />
+                  )}
+                  
+                  {rewardActiveTab === "rewards" && (
+                    <RewardConstraintsForm 
+                      data={agentConfig.rewardConstraints} 
+                      onChange={(data) => updateSection("rewardConstraints", data)} 
+                    />
+                  )}
+                  
+                  {rewardActiveTab === "messaging" && (
+                    <MessagingConstraintsForm 
+                      data={agentConfig.messagingConstraints} 
+                      onChange={(data) => updateSection("messagingConstraints", data)} 
+                    />
+                  )}
+                </div>
+                
+                <div className="flex justify-between mt-6 pt-4 border-t py-4 px-0">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      // Reset section to default
+                      const sectionKey = rewardActiveTab === "brand" ? "businessBrand" :
+                                      rewardActiveTab === "tasks" ? "agentTasks" :
+                                      rewardActiveTab === "hours" ? "businessHours" :
+                                      rewardActiveTab === "objectives" ? "objectives" :
+                                      rewardActiveTab === "pricing" ? "productPricing" :
+                                      rewardActiveTab === "financials" ? "financialGuardrails" :
+                                      rewardActiveTab === "cohorts" ? "customerCohorts" :
+                                      rewardActiveTab === "rewards" ? "rewardConstraints" :
+                                      "messagingConstraints";
+                      
+                      setAgentConfig(prev => ({
+                        ...prev,
+                        [sectionKey]: defaultAgentConfig[sectionKey as keyof AgentConfig]
+                      }));
+                      
+                      toast({
+                        title: "Reset",
+                        description: "This section has been reset to default values.",
+                      })
+                    }}
+                    className="h-9 gap-2 border-0 ring-1 ring-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm rounded-md"
+                  >
+                    Reset Section
+                  </Button>
+                  
+                  <Button 
+                    onClick={() => saveAgentConfig()}
+                    disabled={saving}
+                    size="sm"
+                    className="rounded-md"
+                  >
+                    {saving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-4 w-4 mr-2" />
+                        Save Changes
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </>
+            )}
+            
+            {agentType === "customer-service" && (
+              <div>
+                {agentConfig.businessKnowledge.manualEntries.length > 0 || 
+                 agentConfig.businessBrand.businessName || 
+                 agentConfig.businessBrand.businessContext ? (
+                  <div>
+                    <div className="flex items-center justify-between border-b py-4">
+                      <div className="flex items-center">
+                        <Image 
+                          src="/botlogo.png" 
+                          alt="Bot Logo" 
+                          width={32} 
+                          height={32}
+                          className="mr-4 rounded-sm"
+                        />
                         <div>
-                          <h2 className="text-xl font-medium">Reward Agent</h2>
+                          <h2 className="text-xl font-medium">Customer Service Agent</h2>
                           <p className="text-sm text-muted-foreground mt-1">
-                            AI assistant configured to create personalized rewards for your customers
+                            AI assistant configured to help customers based on your business rules
                           </p>
                         </div>
                       </div>
-                      <Button
+                      <Button 
                         variant="outline"
                         size="sm"
-                        className={`rounded-md border shadow-sm ${agentConfig.agentTasks.rewardsGeneration ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50'}`}
+                        className={`rounded-md border shadow-sm ${agentConfig.emailSettings.automaticResponses ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50'}`}
                       >
-                        <div className={`h-2 w-2 rounded-full mr-2 ${agentConfig.agentTasks.rewardsGeneration ? 'bg-green-500' : 'bg-gray-400'}`} />
-                        {agentConfig.agentTasks.rewardsGeneration ? 'Active' : 'Inactive'}
+                        <div className={`h-2 w-2 rounded-full mr-2 ${agentConfig.emailSettings.automaticResponses ? 'bg-green-500' : 'bg-gray-400'}`} />
+                        {agentConfig.emailSettings.automaticResponses ? 'Active' : 'Inactive'}
                       </Button>
                     </div>
-                    
-                <Tabs 
-                  defaultValue="brand" 
-                  value={rewardActiveTab} 
-                  onValueChange={handleRewardTabChange}
-                  className="w-full"
-                >
-                      <div className="border-b px-6 py-2 bg-gray-50 overflow-x-auto">
-                        <div className="flex gap-1 min-w-max">
-                          <TabsList className="hidden">
-                            <TabsTrigger value="brand">Brand</TabsTrigger>
-                            <TabsTrigger value="tasks">Tasks</TabsTrigger>
-                            <TabsTrigger value="hours">Hours</TabsTrigger>
-                            <TabsTrigger value="objectives">Objectives</TabsTrigger>
-                            <TabsTrigger value="pricing">Pricing</TabsTrigger>
-                            <TabsTrigger value="financials">Financials</TabsTrigger>
-                            <TabsTrigger value="cohorts">Cohorts</TabsTrigger>
-                            <TabsTrigger value="rewards">Rewards</TabsTrigger>
-                            <TabsTrigger value="messaging">Messages</TabsTrigger>
-                          </TabsList>
-                          
-                          <Button 
-                            onClick={() => handleRewardTabChange("brand")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "brand" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
-                          >
-                            <Building2 className="h-4 w-4" />
-                            <span>Brand</span>
-                          </Button>
-                          <Button 
-                            onClick={() => handleRewardTabChange("tasks")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "tasks" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
-                          >
-                            <CheckCircle className="h-4 w-4" />
-                            <span>Tasks</span>
-                          </Button>
-                          <Button 
-                            onClick={() => handleRewardTabChange("hours")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "hours" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
-                          >
-                            <Clock3 className="h-4 w-4" />
-                            <span>Hours</span>
-                          </Button>
-                          <Button 
-                            onClick={() => handleRewardTabChange("objectives")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "objectives" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
-                          >
-                            <Target className="h-4 w-4" />
-                            <span>Objectives</span>
-                          </Button>
-                          <Button 
-                            onClick={() => handleRewardTabChange("pricing")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "pricing" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
-                          >
-                            <TagsIcon className="h-4 w-4" />
-                            <span>Pricing</span>
-                          </Button>
-                          <Button 
-                            onClick={() => handleRewardTabChange("financials")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "financials" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
-                          >
-                            <LineChart className="h-4 w-4" />
-                            <span>Financials</span>
-                          </Button>
-                          <Button 
-                            onClick={() => handleRewardTabChange("cohorts")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "cohorts" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
-                          >
-                            <UsersRound className="h-4 w-4" />
-                            <span>Cohorts</span>
-                          </Button>
-                          <Button 
-                            onClick={() => handleRewardTabChange("rewards")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "rewards" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
-                          >
-                            <Gift className="h-4 w-4" />
-                            <span>Rewards</span>
-                          </Button>
-                          <Button 
-                            onClick={() => handleRewardTabChange("messaging")}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${rewardActiveTab === "messaging" ? "bg-white text-gray-700 shadow-sm" : "bg-transparent text-gray-700 hover:bg-gray-50"}`}
-                          >
-                            <MessageSquare className="h-4 w-4" />
-                            <span>Messages</span>
-                          </Button>
+
+                    <div className="border-b py-4 px-0 bg-white overflow-x-auto">
+                      <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
+                        <button
+                          onClick={() => setCustomerServiceActiveTab("settings")}
+                          className={cn(
+                            "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                            customerServiceActiveTab === "settings" 
+                              ? "text-gray-800 bg-white shadow-sm" 
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                        >
+                          <Wrench className="h-4 w-4" />
+                          <span>Settings</span>
+                        </button>
+                        <button
+                          onClick={() => setCustomerServiceActiveTab("business-context")}
+                          className={cn(
+                            "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                            customerServiceActiveTab === "business-context" 
+                              ? "text-gray-800 bg-white shadow-sm" 
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                        >
+                          <BookText className="h-4 w-4" />
+                          <span>Business Context</span>
+                        </button>
+                        <button
+                          onClick={() => setCustomerServiceActiveTab("cs-vault")}
+                          className={cn(
+                            "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                            customerServiceActiveTab === "cs-vault" 
+                              ? "text-gray-800 bg-white shadow-sm" 
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                        >
+                          <FileText className="h-4 w-4" />
+                          <span>CS Vault Files</span>
+                        </button>
                       </div>
                     </div>
                     
-                      <div className="p-6">
-                        <ScrollArea className="max-h-[600px] scrollable pr-4">
-                          <TabsContent value="brand" className="pt-0 mt-0 data-[state=active]:block">
-                            <div className="space-y-6">
-                              {/* Business Information and Brand Voice side by side */}
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* Business Information */}
-                                <div className="border rounded-md p-5 space-y-4">
-                                  <h3 className="font-medium flex items-center">
-                                    <Store className="h-4 w-4 text-blue-600 mr-2" />
-                                    Business Information
-                                  </h3>
-                                  
-                                  <div className="space-y-4">
-                                    <div>
-                                      <Label htmlFor="businessName">Business Name</Label>
-                                      <Input 
-                                        id="businessName"
-                                        value={agentConfig.businessBrand.businessName}
-                                        onChange={(e) => updateSection("businessBrand", {
-                                          ...agentConfig.businessBrand,
-                                          businessName: e.target.value
-                                        })}
-                                        className="mt-1 rounded-md"
-                                        placeholder="Enter your business name"
-                                      />
-                                    </div>
-                                    
-                                    <div>
-                                      <Label htmlFor="businessContext">Business Description</Label>
-                                      <Textarea
-                                        id="businessContext"
-                                        value={agentConfig.businessBrand.businessContext}
-                                        onChange={(e) => updateSection("businessBrand", {
-                                          ...agentConfig.businessBrand,
-                                          businessContext: e.target.value
-                                        })}
-                                        className="mt-1 min-h-[100px] rounded-md"
-                                        placeholder="Describe what your business does, your products/services, and your value proposition"
-                                      />
-                                    </div>
+                    <div className="py-4 px-0">
+                      {customerServiceActiveTab === "settings" && (
+                        <div className="space-y-6">
+                          {/* Agent Settings */}
+                          <div>
+                            <h3 className="font-medium mb-4 flex items-center">
+                              <Bot className="h-4 w-4 text-blue-600 mr-2" />
+                              <span>Agent Configuration</span>
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border">
+                                <div className={`h-10 w-10 rounded-full flex items-center justify-center ${agentConfig.emailSettings.automaticResponses ? 'bg-green-100' : 'bg-gray-200'}`}>
+                                  <MessageSquare className={`h-5 w-5 ${agentConfig.emailSettings.automaticResponses ? 'text-green-600' : 'text-gray-500'}`} />
+                                </div>
+                                <div>
+                                  <div className="font-medium text-sm">Automatic Responses</div>
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    Agent will automatically respond to customer inquiries
                                   </div>
                                 </div>
-                                
-                                {/* Brand Voice */}
-                                <div className="border rounded-md p-5 space-y-4">
-                                  <h3 className="font-medium flex items-center">
-                                    <Layers className="h-4 w-4 text-blue-600 mr-2" />
-                                    Brand Voice
-                                  </h3>
-                                  
-                                  <div className="space-y-4">
-                                    <p className="text-sm text-muted-foreground">
-                                      Select the tone and style that best represents your brand's personality
-                                    </p>
-                                    
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                      {["friendly", "professional", "casual", "formal", "playful", "serious"].map(voice => (
-                                        <Button
-                                          key={voice}
-                                          onClick={() => {
-                                            const updatedVoice = agentConfig.businessBrand.brandVoice.includes(voice)
-                                              ? agentConfig.businessBrand.brandVoice.filter(v => v !== voice)
-                                              : [...agentConfig.businessBrand.brandVoice, voice];
-                                            
-                                            updateSection("businessBrand", {
-                                              ...agentConfig.businessBrand,
-                                              brandVoice: updatedVoice
-                                            });
-                                          }}
-                                          variant="outline"
-                                          className={`h-10 capitalize rounded-md ${
-                                            agentConfig.businessBrand.brandVoice.includes(voice)
-                                              ? "bg-blue-50 text-blue-700 border-blue-200"
-                                              : ""
-                                          }`}
-                                        >
-                                          {voice}
-                                        </Button>
-                                      ))}
-                                    </div>
-                                    
-                                    <div className="flex gap-2">
-                                      <div className="flex-1">
-                                        <Input
-                                          id="customVoice"
-                                          placeholder="Add custom tone"
-                                          className="rounded-md"
-                                          onKeyDown={(e) => {
-                                            if (e.key === "Enter" && e.currentTarget.value.trim()) {
-                                              e.preventDefault();
-                                              const newVoice = e.currentTarget.value.trim();
-                                              if (!agentConfig.businessBrand.brandVoice.includes(newVoice)) {
-                                                updateSection("businessBrand", {
-                                                  ...agentConfig.businessBrand,
-                                                  brandVoice: [...agentConfig.businessBrand.brandVoice, newVoice]
-                                                });
-                                                e.currentTarget.value = "";
-                                              }
-                                            }
-                                          }}
-                                        />
-                                      </div>
-                                      <Button 
-                                        onClick={() => {
-                                          const input = document.getElementById('customVoice') as HTMLInputElement;
-                                          if (input && input.value.trim()) {
-                                            const newVoice = input.value.trim();
-                                            if (!agentConfig.businessBrand.brandVoice.includes(newVoice)) {
-                                              updateSection("businessBrand", {
-                                                ...agentConfig.businessBrand,
-                                                brandVoice: [...agentConfig.businessBrand.brandVoice, newVoice]
-                                              });
-                                              input.value = "";
-                                            }
-                                          }
-                                        }}
-                                        className="rounded-md"
-                                      >
-                                        Add
-                                      </Button>
-                                    </div>
-                                    
-                                    {agentConfig.businessBrand.brandVoice.length > 0 && (
-                                      <div className="mt-2">
-                                        <Label className="mb-2 block">Selected Brand Voice</Label>
-                                        <div className="flex flex-wrap gap-2">
-                                          {agentConfig.businessBrand.brandVoice.map(voice => (
-                                            <Badge 
-                                              key={voice}
-                                              variant="outline"
-                                              className="px-2 py-1 rounded-md bg-blue-50 border-blue-200 text-blue-700 flex items-center gap-1"
-                                            >
-                                              {voice}
-                                              <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => updateSection("businessBrand", {
-                                                  ...agentConfig.businessBrand,
-                                                  brandVoice: agentConfig.businessBrand.brandVoice.filter(v => v !== voice)
-                                                })}
-                                                className="h-4 w-4 rounded-full p-0 hover:bg-blue-100"
-                                              >
-                                                <X className="h-3 w-3" />
-                                              </Button>
-                                            </Badge>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
+                                <Switch 
+                                  checked={agentConfig.emailSettings.automaticResponses}
+                                  onCheckedChange={(checked) => {
+                                    updateSection("emailSettings", {
+                                      ...agentConfig.emailSettings,
+                                      automaticResponses: checked
+                                    })
+                                  }}
+                                  className="ml-auto"
+                                />
                               </div>
-                              
-                              {/* Brand Colors */}
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="border rounded-md p-5 space-y-4">
-                                  <h3 className="font-medium flex items-center">
-                                    <div className="h-4 w-4 bg-gradient-to-r from-blue-500 to-orange-500 rounded-full mr-2"></div>
-                                    Primary Color
-                                  </h3>
-                                  
-                                  <div className="flex gap-3 items-center">
-                                    <Input
-                                      id="primaryColor"
-                                      type="color"
-                                      value={agentConfig.businessBrand.primaryColor}
-                                      onChange={(e) => updateSection("businessBrand", {
-                                        ...agentConfig.businessBrand,
-                                        primaryColor: e.target.value
-                                      })}
-                                      className="w-16 h-16 p-1 cursor-pointer rounded-md"
-                                    />
-                                    <div className="flex-1">
-                                      <Input
-                                        type="text"
-                                        value={agentConfig.businessBrand.primaryColor}
-                                        onChange={(e) => updateSection("businessBrand", {
-                                          ...agentConfig.businessBrand,
-                                          primaryColor: e.target.value
-                                        })}
-                                        placeholder="#007AFF"
-                                        className="rounded-md"
-                                      />
-                                      <p className="text-xs text-muted-foreground mt-1">
-                                        This color will be used for primary elements in customer communications
-                                      </p>
-                                    </div>
+                              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border">
+                                <div className={`h-10 w-10 rounded-full flex items-center justify-center ${agentConfig.emailSettings.notifyBeforeSend ? 'bg-blue-100' : 'bg-gray-200'}`}>
+                                  <Check className={`h-5 w-5 ${agentConfig.emailSettings.notifyBeforeSend ? 'text-blue-600' : 'text-gray-500'}`} />
+                                </div>
+                                <div>
+                                  <div className="font-medium text-sm">Human Review</div>
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    You'll review all responses before they're sent to customers
                                   </div>
                                 </div>
-                                
-                                <div className="border rounded-md p-5 space-y-4">
-                                  <h3 className="font-medium flex items-center">
-                                    <div className="h-4 w-4 bg-white border border-gray-200 rounded-full mr-2"></div>
-                                    Secondary Color
-                                  </h3>
-                                  
-                                  <div className="flex gap-3 items-center">
-                                    <Input
-                                      id="secondaryColor"
-                                      type="color"
-                                      value={agentConfig.businessBrand.secondaryColor}
-                                      onChange={(e) => updateSection("businessBrand", {
-                                        ...agentConfig.businessBrand,
-                                        secondaryColor: e.target.value
-                                      })}
-                                      className="w-16 h-16 p-1 cursor-pointer rounded-md"
-                                    />
-                                    <div className="flex-1">
-                                      <Input
-                                        type="text"
-                                        value={agentConfig.businessBrand.secondaryColor}
-                                        onChange={(e) => updateSection("businessBrand", {
-                                          ...agentConfig.businessBrand,
-                                          secondaryColor: e.target.value
-                                        })}
-                                        placeholder="#FFFFFF"
-                                        className="rounded-md"
-                                      />
-                                      <p className="text-xs text-muted-foreground mt-1">
-                                        This color will be used for secondary elements and backgrounds
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
+                                <Switch 
+                                  checked={agentConfig.emailSettings.notifyBeforeSend}
+                                  onCheckedChange={(checked) => {
+                                    updateSection("emailSettings", {
+                                      ...agentConfig.emailSettings,
+                                      notifyBeforeSend: checked
+                                    })
+                                  }}
+                                  className="ml-auto"
+                                />
                               </div>
                             </div>
-                          </TabsContent>
+                          </div>
                           
-                          <TabsContent value="tasks" className="pt-0 mt-0 data-[state=active]:block">
-                            <AgentTasksForm 
-                              data={agentConfig.agentTasks} 
-                              onChange={(data) => updateSection("agentTasks", data)} 
-                            />
-                          </TabsContent>
-                          
-                          <TabsContent value="hours" className="pt-0 mt-0 data-[state=active]:block">
-                            <div className="space-y-6">
-                              <div className="border rounded-md p-5 space-y-5">
-                                <h3 className="font-medium flex items-center">
-                                  <Clock3 className="h-4 w-4 text-blue-600 mr-2" />
-                                  Business Hours
-                                </h3>
-                                
-                                <p className="text-sm text-muted-foreground">
-                                  Configure your operating hours for each day of the week. These hours will be used to determine when rewards can be offered.
+                          {/* Communication Style and Email Sign-off in a grid */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Communication Style */}
+                            <div className="border rounded-md p-5 space-y-4">
+                              <h3 className="font-medium flex items-center">
+                                <Layers className="h-4 w-4 text-blue-600 mr-2" />
+                                Communication Style
+                              </h3>
+                              
+                              <div>
+                                <Label htmlFor="emailTone" className="mb-2 block">Agent Communication Style</Label>
+                                <Select 
+                                  value={agentConfig.emailSettings.emailTone}
+                                  onValueChange={(value) => {
+                                    updateSection("emailSettings", {
+                                      ...agentConfig.emailSettings,
+                                      emailTone: value
+                                    })
+                                  }}
+                                >
+                                  <SelectTrigger id="emailTone" className="rounded-md">
+                                    <SelectValue placeholder="Select a tone" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="professional">Professional</SelectItem>
+                                    <SelectItem value="friendly">Friendly</SelectItem>
+                                    <SelectItem value="casual">Casual</SelectItem>
+                                    <SelectItem value="formal">Formal</SelectItem>
+                                    <SelectItem value="enthusiastic">Enthusiastic</SelectItem>
+                                    <SelectItem value="empathetic">Empathetic</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                  This sets the overall tone for all customer communications
                                 </p>
-                                
-                                <div className="space-y-5">
-                                  {/* Weekday Group */}
-                                  <div className="border rounded-md p-4 bg-gray-50">
-                                    <h4 className="text-sm font-medium mb-3 flex items-center">
-                                      <Calendar className="h-4 w-4 text-blue-600 mr-2" />
-                                      Weekdays
-                                    </h4>
-                                    
-                                    {['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map((day) => (
-                                      <div key={day} className="mb-3 last:mb-0">
-                                        <div className="flex items-center justify-between">
-                                          <Label htmlFor={`${day}-switch`} className="font-medium capitalize">
-                                            {day}
-                                          </Label>
-                                          <Switch
-                                            id={`${day}-switch`}
-                                            checked={agentConfig.businessHours[day as keyof typeof agentConfig.businessHours].open}
-                                            onCheckedChange={() => {
-                                              const updatedHours = {
-                                                ...agentConfig.businessHours,
-                                                [day]: {
-                                                  ...agentConfig.businessHours[day as keyof typeof agentConfig.businessHours],
-                                                  open: !agentConfig.businessHours[day as keyof typeof agentConfig.businessHours].open
-                                                }
-                                              };
-                                              updateSection("businessHours", updatedHours);
-                                            }}
-                                          />
-                                        </div>
-                                        
-                                        {agentConfig.businessHours[day as keyof typeof agentConfig.businessHours].open && (
-                                          <div className="grid grid-cols-2 gap-4 mt-2">
-                                            <div>
-                                              <Label htmlFor={`${day}-start`} className="text-xs text-muted-foreground">
-                                                Open
-                                              </Label>
-                                              <Input
-                                                id={`${day}-start`}
-                                                type="time"
-                                                value={agentConfig.businessHours[day as keyof typeof agentConfig.businessHours].start}
-                                                onChange={(e) => {
-                                                  const updatedHours = {
-                                                    ...agentConfig.businessHours,
-                                                    [day]: {
-                                                      ...agentConfig.businessHours[day as keyof typeof agentConfig.businessHours],
-                                                      start: e.target.value
-                                                    }
-                                                  };
-                                                  updateSection("businessHours", updatedHours);
-                                                }}
-                                                className="mt-1 rounded-md"
-                                              />
-                                            </div>
-                                            <div>
-                                              <Label htmlFor={`${day}-end`} className="text-xs text-muted-foreground">
-                                                Close
-                                              </Label>
-                                              <Input
-                                                id={`${day}-end`}
-                                                type="time"
-                                                value={agentConfig.businessHours[day as keyof typeof agentConfig.businessHours].end}
-                                                onChange={(e) => {
-                                                  const updatedHours = {
-                                                    ...agentConfig.businessHours,
-                                                    [day]: {
-                                                      ...agentConfig.businessHours[day as keyof typeof agentConfig.businessHours],
-                                                      end: e.target.value
-                                                    }
-                                                  };
-                                                  updateSection("businessHours", updatedHours);
-                                                }}
-                                                className="mt-1 rounded-md"
-                                              />
-                                            </div>
-                                          </div>
+                              </div>
+                            </div>
+                            
+                            {/* Email Sign-off */}
+                            <div className="border rounded-md p-5 space-y-4">
+                              <h3 className="font-medium flex items-center">
+                                <Mail className="h-4 w-4 text-blue-600 mr-2" />
+                                Email Sign-off
+                              </h3>
+                              
+                              <div>
+                                <Label htmlFor="emailSignature" className="mb-2 block">Custom Email Signature</Label>
+                                <Textarea
+                                  id="emailSignature"
+                                  value={agentConfig.emailSettings.customSignature || ""}
+                                  onChange={(e) => updateSection("emailSettings", {
+                                    ...agentConfig.emailSettings,
+                                    customSignature: e.target.value
+                                  })}
+                                  className="mt-1 min-h-[100px] rounded-md"
+                                  placeholder="Kind regards,&#10;The [Business Name] Team"
+                                />
+                                <p className="text-xs text-muted-foreground mt-2">
+                                  This will appear at the end of all customer emails
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex justify-end mt-6 pt-4 border-t">
+                            <Button 
+                              onClick={() => saveAgentConfig()}
+                              disabled={saving}
+                              className="rounded-md"
+                            >
+                              {saving ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Saving...
+                                </>
+                              ) : (
+                                <>
+                                  <Check className="h-4 w-4 mr-2" />
+                                  Save Changes
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {customerServiceActiveTab === "business-context" && (
+                        <div className="space-y-6">
+                          <div className="flex justify-between items-center">
+                            <h3 className="font-medium flex items-center">
+                              <BookText className="h-4 w-4 text-blue-600 mr-2" />
+                              Business Knowledge Base
+                            </h3>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => {
+                                extractBusinessInsights();
+                                setShowBusinessContext(true);
+                                setCustomerServiceSheetOpen(true);
+                              }}
+                              className="rounded-md"
+                            >
+                              <PlusCircle className="h-4 w-4 mr-1" />
+                              Add Context
+                            </Button>
+                          </div>
+                          
+                          {agentConfig.businessKnowledge.manualEntries.length > 0 ? (
+                            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                              {agentConfig.businessKnowledge.manualEntries.map((entry) => (
+                                <div key={entry.id} className="p-3 bg-gray-50 rounded-md border">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <Badge variant={entry.source === 'voice' ? 'secondary' : 'outline'} className="rounded-md">
+                                      {entry.source === 'voice' ? 'Voice Input' : 'Manual Entry'}
+                                    </Badge>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-muted-foreground">
+                                        {new Date(entry.timestamp).toLocaleString()}
+                                      </span>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => deleteContextEntry(entry.id)}
+                                        className="h-6 w-6 rounded-md hover:bg-red-50 hover:text-red-600"
+                                        title="Delete entry"
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  <p className="text-sm">{entry.content}</p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-6 text-muted-foreground">
+                              <BookText className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                              <p>No business context entries yet.</p>
+                              <p className="text-sm">Add context using the button above.</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {customerServiceActiveTab === "cs-vault" && (
+                        <div className="space-y-6">
+                          <div className="flex justify-between items-center">
+                            <h3 className="font-medium flex items-center">
+                              <FileText className="h-4 w-4 text-blue-600 mr-2" />
+                              Customer Service Vault Files
+                            </h3>
+                            <Link href="/notes">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                className="rounded-md gap-2"
+                              >
+                                <PlusCircle className="h-4 w-4" />
+                                Add Files
+                              </Button>
+                            </Link>
+                          </div>
+                          
+                          <div className="border rounded-md shadow-sm overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-3 border-b">
+                              <div className="flex items-center justify-between">
+                                <h4 className="font-medium text-sm">Files Available to CS Agent</h4>
+                                <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 rounded-md">
+                                  {csVaultFiles.length} files
+                                </Badge>
+                              </div>
+                            </div>
+                            
+                            <div className="divide-y">
+                              {loadingCSVaultFiles ? (
+                                <div className="py-8 text-center">
+                                  <Loader2 className="h-8 w-8 mx-auto mb-2 text-blue-500 animate-spin" />
+                                  <p className="text-sm text-gray-500">Loading CS Vault files...</p>
+                                </div>
+                              ) : csVaultFiles.length === 0 ? (
+                                <div className="py-12 text-center">
+                                  <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                                  <h3 className="font-medium mb-2">No files in CS Vault</h3>
+                                  <p className="text-sm text-gray-500 mb-4">Files added to the CS Vault will appear here.</p>
+                                  <Link href="/notes">
+                                    <Button variant="outline" size="sm" className="rounded-md gap-2">
+                                      <PlusCircle className="h-4 w-4" />
+                                      Add files from Documents
+                                    </Button>
+                                  </Link>
+                                </div>
+                              ) : (
+                                csVaultFiles.map((file) => (
+                                  <div 
+                                    key={file.id} 
+                                    className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                                    onClick={() => viewFileDetails(file)}
+                                  >
+                                    <div className="flex items-start gap-3">
+                                      <div className="mt-0.5">
+                                        {file.type === 'pdf' ? (
+                                          <FileText className="h-5 w-5 text-red-500 flex-shrink-0" />
+                                        ) : file.type === 'image' ? (
+                                          <FileText className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                                        ) : file.type === 'invoice' ? (
+                                          <FileText className="h-5 w-5 text-green-500 flex-shrink-0" />
+                                        ) : file.type === 'note' ? (
+                                          <FileText className="h-5 w-5 text-yellow-500 flex-shrink-0" />
+                                        ) : (
+                                          <FileText className="h-5 w-5 text-gray-500 flex-shrink-0" />
                                         )}
                                       </div>
-                                    ))}
-                                  </div>
-                                  
-                                  {/* Weekend Group */}
-                                  <div className="border rounded-md p-4 bg-gray-50">
-                                    <h4 className="text-sm font-medium mb-3 flex items-center">
-                                      <Calendar className="h-4 w-4 text-blue-600 mr-2" />
-                                      Weekend
-                                    </h4>
-                                    
-                                    {['saturday', 'sunday'].map((day) => (
-                                      <div key={day} className="mb-3 last:mb-0">
+                                      <div className="flex-1 min-w-0">
                                         <div className="flex items-center justify-between">
-                                          <Label htmlFor={`${day}-switch`} className="font-medium capitalize">
-                                            {day}
-                                          </Label>
-                                          <Switch
-                                            id={`${day}-switch`}
-                                            checked={agentConfig.businessHours[day as keyof typeof agentConfig.businessHours].open}
-                                            onCheckedChange={() => {
-                                              const updatedHours = {
-                                                ...agentConfig.businessHours,
-                                                [day]: {
-                                                  ...agentConfig.businessHours[day as keyof typeof agentConfig.businessHours],
-                                                  open: !agentConfig.businessHours[day as keyof typeof agentConfig.businessHours].open
-                                                }
-                                              };
-                                              updateSection("businessHours", updatedHours);
-                                            }}
-                                          />
+                                          <h3 className="font-medium text-sm truncate">{file.title}</h3>
+                                          <Badge className="ml-2 bg-purple-50 text-purple-700 border-purple-200 rounded-md">
+                                            CS Agent
+                                          </Badge>
                                         </div>
-                                        
-                                        {agentConfig.businessHours[day as keyof typeof agentConfig.businessHours].open && (
-                                          <div className="grid grid-cols-2 gap-4 mt-2">
-                                            <div>
-                                              <Label htmlFor={`${day}-start`} className="text-xs text-muted-foreground">
-                                                Open
-                                              </Label>
-                                              <Input
-                                                id={`${day}-start`}
-                                                type="time"
-                                                value={agentConfig.businessHours[day as keyof typeof agentConfig.businessHours].start}
-                                                onChange={(e) => {
-                                                  const updatedHours = {
-                                                    ...agentConfig.businessHours,
-                                                    [day]: {
-                                                      ...agentConfig.businessHours[day as keyof typeof agentConfig.businessHours],
-                                                      start: e.target.value
-                                                    }
-                                                  };
-                                                  updateSection("businessHours", updatedHours);
-                                                }}
-                                                className="mt-1 rounded-md"
-                                              />
-                                            </div>
-                                            <div>
-                                              <Label htmlFor={`${day}-end`} className="text-xs text-muted-foreground">
-                                                Close
-                                              </Label>
-                                              <Input
-                                                id={`${day}-end`}
-                                                type="time"
-                                                value={agentConfig.businessHours[day as keyof typeof agentConfig.businessHours].end}
-                                                onChange={(e) => {
-                                                  const updatedHours = {
-                                                    ...agentConfig.businessHours,
-                                                    [day]: {
-                                                      ...agentConfig.businessHours[day as keyof typeof agentConfig.businessHours],
-                                                      end: e.target.value
-                                                    }
-                                                  };
-                                                  updateSection("businessHours", updatedHours);
-                                                }}
-                                                className="mt-1 rounded-md"
-                                              />
-                                            </div>
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                  
-                                  {/* Public Holidays */}
-                                  <div className="border rounded-md p-4">
-                                    <h4 className="text-sm font-medium mb-3 flex items-center">
-                                      <Calendar className="h-4 w-4 text-blue-600 mr-2" />
-                                      Public Holidays
-                                    </h4>
-                                    
-                                    <div className="space-y-4">
-                                      <div>
-                                        <Label htmlFor="publicHolidays">Holiday Schedule</Label>
-                                        <Textarea
-                                          id="publicHolidays"
-                                          value={agentConfig.businessKnowledge?.publicHolidays || ""}
-                                          onChange={(e) => {
-                                            const updatedKnowledge = {
-                                              ...agentConfig.businessKnowledge,
-                                              publicHolidays: e.target.value,
-                                              lastUpdated: Date.now()
-                                            };
-                                            updateSection("businessKnowledge", updatedKnowledge);
-                                          }}
-                                          className="mt-1 min-h-[100px] rounded-md"
-                                          placeholder="List your public holidays and special opening hours:&#10;&#10;New Year's Day (Jan 1) - Closed&#10;Australia Day (Jan 26) - 10am to 4pm&#10;Good Friday - Closed"
-                                        />
-                                        <p className="text-xs text-muted-foreground mt-2">
-                                          Enter one holiday per line with dates and opening hours
+                                        <p className="text-xs text-gray-500 truncate mt-1">
+                                          {file.summary || "No description"}
                                         </p>
                                       </div>
                                     </div>
                                   </div>
-                                  
-                                  {/* Quick Actions */}
-                                  <div className="flex flex-wrap gap-2">
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm"
-                                      onClick={() => {
-                                        const standardHours = {
-                                          monday: { open: true, start: "09:00", end: "17:00" },
-                                          tuesday: { open: true, start: "09:00", end: "17:00" },
-                                          wednesday: { open: true, start: "09:00", end: "17:00" },
-                                          thursday: { open: true, start: "09:00", end: "17:00" },
-                                          friday: { open: true, start: "09:00", end: "17:00" },
-                                          saturday: { open: false, start: "10:00", end: "16:00" },
-                                          sunday: { open: false, start: "10:00", end: "16:00" }
-                                        };
-                                        updateSection("businessHours", standardHours);
-                                      }}
-                                      className="rounded-md"
-                                    >
-                                      Set Standard Hours (9-5)
-                                    </Button>
-                                    
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm"
-                                      onClick={() => {
-                                        const allOpen = {
-                                          monday: { ...agentConfig.businessHours.monday, open: true },
-                                          tuesday: { ...agentConfig.businessHours.tuesday, open: true },
-                                          wednesday: { ...agentConfig.businessHours.wednesday, open: true },
-                                          thursday: { ...agentConfig.businessHours.thursday, open: true },
-                                          friday: { ...agentConfig.businessHours.friday, open: true },
-                                          saturday: { ...agentConfig.businessHours.saturday, open: true },
-                                          sunday: { ...agentConfig.businessHours.sunday, open: true }
-                                        };
-                                        updateSection("businessHours", allOpen);
-                                      }}
-                                      className="rounded-md"
-                                    >
-                                      Open All Days
-                                    </Button>
-                                    
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm"
-                                      onClick={() => {
-                                        const allClosed = {
-                                          monday: { ...agentConfig.businessHours.monday, open: false },
-                                          tuesday: { ...agentConfig.businessHours.tuesday, open: false },
-                                          wednesday: { ...agentConfig.businessHours.wednesday, open: false },
-                                          thursday: { ...agentConfig.businessHours.thursday, open: false },
-                                          friday: { ...agentConfig.businessHours.friday, open: false },
-                                          saturday: { ...agentConfig.businessHours.saturday, open: false },
-                                          sunday: { ...agentConfig.businessHours.sunday, open: false }
-                                        };
-                                        updateSection("businessHours", allClosed);
-                                      }}
-                                      className="rounded-md"
-                                    >
-                                      Close All Days
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
+                                ))
+                              )}
                             </div>
-                          </TabsContent>
-                          
-                          <TabsContent value="objectives" className="pt-0 mt-0 data-[state=active]:block">
-                            <ObjectivesForm 
-                              data={agentConfig.objectives} 
-                              onChange={(data) => updateSection("objectives", data)} 
-                            />
-                          </TabsContent>
-                          
-                          <TabsContent value="pricing" className="pt-0 mt-0 data-[state=active]:block">
-                            <ProductPricingForm 
-                              data={agentConfig.productPricing} 
-                              onChange={(data) => updateSection("productPricing", data)} 
-                            />
-                          </TabsContent>
-                          
-                          <TabsContent value="financials" className="pt-0 mt-0 data-[state=active]:block">
-                            <FinancialGuardrailsForm 
-                              data={agentConfig.financialGuardrails} 
-                              onChange={(data) => updateSection("financialGuardrails", data)} 
-                            />
-                          </TabsContent>
-                          
-                          <TabsContent value="cohorts" className="pt-0 mt-0 data-[state=active]:block">
-                            <CustomerCohortsForm 
-                              data={agentConfig.customerCohorts} 
-                              onChange={(data) => updateSection("customerCohorts", data)} 
-                            />
-                          </TabsContent>
-                          
-                          <TabsContent value="rewards" className="pt-0 mt-0 data-[state=active]:block">
-                            <RewardConstraintsForm 
-                              data={agentConfig.rewardConstraints} 
-                              onChange={(data) => updateSection("rewardConstraints", data)} 
-                            />
-                          </TabsContent>
-                          
-                          <TabsContent value="messaging" className="pt-0 mt-0 data-[state=active]:block">
-                            <MessagingConstraintsForm 
-                              data={agentConfig.messagingConstraints} 
-                              onChange={(data) => updateSection("messagingConstraints", data)} 
-                            />
-                          </TabsContent>
-                      </ScrollArea>
-                      
-                      <div className="flex justify-between mt-6 pt-4 border-t border-[#E2E4E8]">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => {
-                            // Reset section to default
-                            const sectionKey = rewardActiveTab === "brand" ? "businessBrand" :
-                                            rewardActiveTab === "tasks" ? "agentTasks" :
-                                            rewardActiveTab === "hours" ? "businessHours" :
-                                            rewardActiveTab === "objectives" ? "objectives" :
-                                            rewardActiveTab === "pricing" ? "productPricing" :
-                                            rewardActiveTab === "financials" ? "financialGuardrails" :
-                                            rewardActiveTab === "cohorts" ? "customerCohorts" :
-                                            rewardActiveTab === "rewards" ? "rewardConstraints" :
-                                            "messagingConstraints";
-                          
-                            setAgentConfig(prev => ({
-                              ...prev,
-                              [sectionKey]: defaultAgentConfig[sectionKey as keyof AgentConfig]
-                            }));
-                          
-                            toast({
-                              title: "Reset",
-                              description: "This section has been reset to default values.",
-                            })
-                          }}
-                          className="h-9 gap-2 border-0 ring-1 ring-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm rounded-md"
-                        >
-                          Reset Section
-                        </Button>
-                        
-                        <Button 
-                          onClick={() => saveAgentConfig()}
-                          disabled={saving}
-                          size="sm"
-                            className="rounded-md"
-                          >
-                            {saving ? (
-                              <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Saving...
-                              </>
-                            ) : (
-                              <>
-                                <Check className="h-4 w-4 mr-2" />
-                                Save Changes
-                              </>
-                            )}
-                        </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </Tabs>
+                ) : (
+                  <div className="max-w-2xl mx-auto text-center py-12">
+                    <div className="h-20 w-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <Bot className="h-10 w-10 text-blue-600" />
+                    </div>
+                    <h2 className="text-2xl font-medium mb-3">Set Up Customer Service Agent</h2>
+                    <p className="text-gray-600 mb-8 max-w-lg mx-auto">
+                      Let AI handle customer inquiries automatically, delivering timely and consistent 
+                      responses based on your specific business rules and preferences.
+                    </p>
+                    <Button 
+                      onClick={() => setCustomerServiceSheetOpen(true)}
+                      size="lg"
+                      className="bg-[#0D6EFD] hover:bg-[#0B5ED7] text-white gap-2 rounded-md px-6"
+                    >
+                      <Bot className="h-5 w-5" />
+                      Set up customer agent
+                    </Button>
                   </div>
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="customer-service">
-                <div className="flex flex-col gap-4">
-                  <div className="w-full bg-white rounded-md border shadow-sm">
-                    {agentConfig.businessKnowledge.manualEntries.length > 0 || 
-                     agentConfig.businessBrand.businessName || 
-                     agentConfig.businessBrand.businessContext ? (
-                      <div>
-                        <div className="flex items-center justify-between border-b px-6 py-4">
-                          <div className="flex items-center">
-                          <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center mr-4">
-                            <Bot className="h-6 w-6 text-blue-600" />
-                          </div>
-                          <div>
-                            <h2 className="text-xl font-medium">Customer Service Agent</h2>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                AI assistant configured to help customers based on your business rules
-                            </p>
-                            </div>
-                          </div>
-                          <Button 
-                            variant="outline"
-                            size="sm"
-                            className={`rounded-md border shadow-sm ${agentConfig.emailSettings.automaticResponses ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50'}`}
-                          >
-                            <div className={`h-2 w-2 rounded-full mr-2 ${agentConfig.emailSettings.automaticResponses ? 'bg-green-500' : 'bg-gray-400'}`} />
-                            {agentConfig.emailSettings.automaticResponses ? 'Active' : 'Inactive'}
-                          </Button>
-                        </div>
-                        
-                        <Tabs defaultValue="settings" value={customerServiceActiveTab} onValueChange={setCustomerServiceActiveTab} className="w-full">
-                          <div className="border-b px-6 py-2 bg-gray-50">
-                            <TabsList className="hidden">
-                              <TabsTrigger value="settings">Settings</TabsTrigger>
-                              <TabsTrigger value="business-context">Business Context</TabsTrigger>
-                              <TabsTrigger value="cs-vault">CS Vault</TabsTrigger>
-                            </TabsList>
-                            
-                            <div className="flex gap-3">
-                              <Button
-                                onClick={() => setCustomerServiceActiveTab("settings")}
-                                className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${
-                                  customerServiceActiveTab === "settings" ? 
-                                  "bg-white text-blue-600 shadow-sm" : 
-                                  "bg-transparent text-gray-700 hover:bg-gray-50"
-                                }`}
-                              >
-                                <Wrench className="h-4 w-4" />
-                                <span>Settings</span>
-                              </Button>
-                              <Button
-                                onClick={() => setCustomerServiceActiveTab("business-context")}
-                                className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${
-                                  customerServiceActiveTab === "business-context" ? 
-                                  "bg-white text-blue-600 shadow-sm" : 
-                                  "bg-transparent text-gray-700 hover:bg-gray-50"
-                                }`}
-                              >
-                                <BookText className="h-4 w-4" />
-                                <span>Business Context</span>
-                              </Button>
-                              <Button
-                                onClick={() => setCustomerServiceActiveTab("cs-vault")}
-                                className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-all ${
-                                  customerServiceActiveTab === "cs-vault" ? 
-                                  "bg-white text-blue-600 shadow-sm" : 
-                                  "bg-transparent text-gray-700 hover:bg-gray-50"
-                                }`}
-                              >
-                                <FileText className="h-4 w-4" />
-                                <span>CS Vault Files</span>
-                              </Button>
-                            </div>
-                          </div>
-                          
-                          <TabsContent value="settings" className="p-6">
-                            <div className="space-y-6">
-                              {/* Agent Settings */}
-                              <div>
-                                <h3 className="font-medium mb-4 flex items-center">
-                                  <Bot className="h-4 w-4 text-blue-600 mr-2" />
-                                  <span>Agent Configuration</span>
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border">
-                                    <div className={`h-10 w-10 rounded-full flex items-center justify-center ${agentConfig.emailSettings.automaticResponses ? 'bg-green-100' : 'bg-gray-200'}`}>
-                                      <MessageSquare className={`h-5 w-5 ${agentConfig.emailSettings.automaticResponses ? 'text-green-600' : 'text-gray-500'}`} />
-                                    </div>
-                                    <div>
-                                      <div className="font-medium text-sm">Automatic Responses</div>
-                                      <div className="text-xs text-muted-foreground mt-1">
-                                        Agent will automatically respond to customer inquiries
-                                      </div>
-                                    </div>
-                                    <Switch 
-                                      checked={agentConfig.emailSettings.automaticResponses}
-                                      onCheckedChange={(checked) => {
-                                        updateSection("emailSettings", {
-                                          ...agentConfig.emailSettings,
-                                          automaticResponses: checked
-                                        })
-                                      }}
-                                      className="ml-auto"
-                                    />
-                                  </div>
-                                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border">
-                                    <div className={`h-10 w-10 rounded-full flex items-center justify-center ${agentConfig.emailSettings.notifyBeforeSend ? 'bg-blue-100' : 'bg-gray-200'}`}>
-                                      <Check className={`h-5 w-5 ${agentConfig.emailSettings.notifyBeforeSend ? 'text-blue-600' : 'text-gray-500'}`} />
-                                    </div>
-                                    <div>
-                                      <div className="font-medium text-sm">Human Review</div>
-                                      <div className="text-xs text-muted-foreground mt-1">
-                                        You'll review all responses before they're sent to customers
-                                      </div>
-                                    </div>
-                                    <Switch 
-                                      checked={agentConfig.emailSettings.notifyBeforeSend}
-                                      onCheckedChange={(checked) => {
-                                        updateSection("emailSettings", {
-                                          ...agentConfig.emailSettings,
-                                          notifyBeforeSend: checked
-                                        })
-                                      }}
-                                      className="ml-auto"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              {/* Communication Style and Email Sign-off in a grid */}
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* Communication Style */}
-                                <div className="border rounded-md p-5 space-y-4">
-                                  <h3 className="font-medium flex items-center">
-                                    <Layers className="h-4 w-4 text-blue-600 mr-2" />
-                                    Communication Style
-                                  </h3>
-                                  
-                                  <div>
-                                    <Label htmlFor="emailTone" className="mb-2 block">Agent Communication Style</Label>
-                                    <Select 
-                                      value={agentConfig.emailSettings.emailTone}
-                                      onValueChange={(value) => {
-                                        updateSection("emailSettings", {
-                                          ...agentConfig.emailSettings,
-                                          emailTone: value
-                                        })
-                                      }}
-                                    >
-                                      <SelectTrigger id="emailTone" className="rounded-md">
-                                        <SelectValue placeholder="Select a tone" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="professional">Professional</SelectItem>
-                                        <SelectItem value="friendly">Friendly</SelectItem>
-                                        <SelectItem value="casual">Casual</SelectItem>
-                                        <SelectItem value="formal">Formal</SelectItem>
-                                        <SelectItem value="enthusiastic">Enthusiastic</SelectItem>
-                                        <SelectItem value="empathetic">Empathetic</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                    <p className="text-xs text-muted-foreground mt-2">
-                                      This sets the overall tone for all customer communications
-                                    </p>
-                                  </div>
-                                </div>
-                                
-                                {/* Email Sign-off */}
-                                <div className="border rounded-md p-5 space-y-4">
-                                  <h3 className="font-medium flex items-center">
-                                    <Mail className="h-4 w-4 text-blue-600 mr-2" />
-                                    Email Sign-off
-                                  </h3>
-                                  
-                                  <div>
-                                    <Label htmlFor="emailSignature" className="mb-2 block">Custom Email Signature</Label>
-                                    <Textarea
-                                      id="emailSignature"
-                                      value={agentConfig.emailSettings.customSignature || ""}
-                                      onChange={(e) => updateSection("emailSettings", {
-                                        ...agentConfig.emailSettings,
-                                        customSignature: e.target.value
-                                      })}
-                                      className="mt-1 min-h-[100px] rounded-md"
-                                      placeholder="Kind regards,&#10;The [Business Name] Team"
-                                    />
-                                    <p className="text-xs text-muted-foreground mt-2">
-                                      This will appear at the end of all customer emails
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              {/* Signature Templates */}
-                              <div className="border rounded-md p-5 space-y-4">
-                                <h3 className="font-medium flex items-center">
-                                  <BookText className="h-4 w-4 text-blue-600 mr-2" />
-                                  Signature Templates
-                                </h3>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                  <Button
-                                    variant="outline"
-                            size="sm"
-                                    onClick={() => updateSection("emailSettings", {
-                                      ...agentConfig.emailSettings,
-                                      customSignature: `Kind regards,\nThe ${agentConfig.businessBrand.businessName || "[Business Name]"} Team`
-                                    })}
-                                    className="h-auto py-2 px-3 text-left justify-start rounded-md"
-                                  >
-                                    <div>
-                                      <p className="font-medium text-sm">Professional</p>
-                                      <p className="text-xs text-muted-foreground mt-1">
-                                        Kind regards,<br />
-                                        The {agentConfig.businessBrand.businessName || "[Business Name]"} Team
-                                      </p>
-                                    </div>
-                                  </Button>
-                                  
-                                  <Button
-                            variant="outline"
-                                    size="sm"
-                                    onClick={() => updateSection("emailSettings", {
-                                      ...agentConfig.emailSettings,
-                                      customSignature: `Thanks,\nCustomer Support\n${agentConfig.businessBrand.businessName || "[Business Name]"}`
-                                    })}
-                                    className="h-auto py-2 px-3 text-left justify-start rounded-md"
-                          >
-                                    <div>
-                                      <p className="font-medium text-sm">Casual</p>
-                                      <p className="text-xs text-muted-foreground mt-1">
-                                        Thanks,<br />
-                                        Customer Support<br />
-                                        {agentConfig.businessBrand.businessName || "[Business Name]"}
-                                      </p>
-                                    </div>
-                          </Button>
-                                  
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => updateSection("emailSettings", {
-                                      ...agentConfig.emailSettings,
-                                      customSignature: `Best wishes,\n${agentConfig.businessBrand.businessName || "[Business Name]"} Support Team\nPhone: [Your Phone]\nEmail: [Your Email]`
-                                    })}
-                                    className="h-auto py-2 px-3 text-left justify-start rounded-md"
-                                  >
-                                    <div>
-                                      <p className="font-medium text-sm">Detailed</p>
-                                      <p className="text-xs text-muted-foreground mt-1">
-                                        Best wishes,<br />
-                                        {agentConfig.businessBrand.businessName || "[Business Name]"} Support Team<br />
-                                        Phone: [Your Phone]<br />
-                                        Email: [Your Email]
-                                      </p>
-                        </div>
-                                  </Button>
-                                  
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => updateSection("emailSettings", {
-                                      ...agentConfig.emailSettings,
-                                      customSignature: `Cheers,\nThe team at ${agentConfig.businessBrand.businessName || "[Business Name]"}`
-                                    })}
-                                    className="h-auto py-2 px-3 text-left justify-start rounded-md"
-                                  >
-                                    <div>
-                                      <p className="font-medium text-sm">Friendly</p>
-                                      <p className="text-xs text-muted-foreground mt-1">
-                                        Cheers,<br />
-                                        The team at {agentConfig.businessBrand.businessName || "[Business Name]"}
-                                      </p>
-                                    </div>
-                                  </Button>
-                                </div>
-                              </div>
-                              
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                          {/* Business Information Summary */}
-                                <div className="bg-blue-50 p-5 rounded-md border border-blue-100 h-full">
-                                  <h3 className="font-medium mb-3 flex items-center text-blue-800">
-                              <Store className="h-4 w-4 text-blue-600 mr-2" />
-                              Business Information
-                            </h3>
-                            {agentConfig.businessBrand.businessName && (
-                                    <p className="text-sm font-medium mb-2">{agentConfig.businessBrand.businessName}</p>
-                            )}
-                            {agentConfig.businessBrand.businessContext ? (
-                              <p className="text-sm text-muted-foreground">
-                                {agentConfig.businessBrand.businessContext}
-                              </p>
-                            ) : (
-                              <p className="text-sm text-muted-foreground italic">
-                                No business description provided
-                              </p>
-                            )}
-                          </div>
-                          
-                                {/* Hours & Contact */}
-                                <div className="bg-gray-50 p-5 rounded-md border h-full">
-                                  <h3 className="font-medium mb-3 flex items-center">
-                                <Clock3 className="h-4 w-4 text-blue-600 mr-2" />
-                                Business Hours
-                              </h3>
-                                  <div className="space-y-1">
-                                {Object.entries(agentConfig.businessHours)
-                                  .filter(([_, hours]) => hours.open)
-                                  .map(([day, hours]) => (
-                                        <div key={day} className="flex justify-between text-sm">
-                                          <span className="capitalize font-medium">{day}</span>
-                                          <span className="text-gray-600">{hours.start} - {hours.end}</span>
-                                        </div>
-                                  ))}
-                              {Object.values(agentConfig.businessHours).every(h => !h.open) && (
-                                <p className="text-sm text-muted-foreground italic">No business hours set</p>
-                              )}
-                                  </div>
-                            </div>
-                            
-                                {/* Communication Style */}
-                                <div className="bg-gray-50 p-5 rounded-md border h-full">
-                                  <h3 className="font-medium mb-3 flex items-center">
-                                <Layers className="h-4 w-4 text-blue-600 mr-2" />
-                                Communication Style
-                              </h3>
-                                  <div className="space-y-3">
-                                    <Badge className="rounded-md bg-blue-100 text-blue-800 hover:bg-blue-100 border-blue-200">
-                                  {agentConfig.emailSettings.emailTone.charAt(0).toUpperCase() + 
-                                   agentConfig.emailSettings.emailTone.slice(1)}
-                                </Badge>
-                                {businessInsights.brandVoice.length > 0 && (
-                                      <div>
-                                        <p className="text-xs font-medium mb-2">Brand Voice Traits:</p>
-                                    <div className="flex flex-wrap gap-1">
-                                      {businessInsights.brandVoice.map((trait, index) => (
-                                        <Badge key={index} variant="outline" className="text-xs bg-white rounded-md">
-                                          {trait}
-                                        </Badge>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                                  </div>
-                              </div>
-                            </div>
-                              
-                              <div className="flex justify-end mt-6 pt-4 border-t">
-                                <Button 
-                                  onClick={() => saveAgentConfig()}
-                                  disabled={saving}
-                                  className="rounded-md"
-                                >
-                                  {saving ? (
-                                    <>
-                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                      Saving...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Check className="h-4 w-4 mr-2" />
-                                      Save Changes
-                                    </>
-                                  )}
-                                </Button>
-                              </div>
-                            
-                              <div className="flex justify-end mt-4">
-                                <Button 
-                                  onClick={() => {
-                                    extractBusinessInsights();
-                                    setCustomerServiceSheetOpen(true);
-                                  }}
-                                  size="sm"
-                                  className="rounded-md"
-                                >
-                                  <Wrench className="h-4 w-4 mr-2" />
-                                  Edit Settings
-                                </Button>
-                              </div>
-                            </div>
-                          </TabsContent>
-                          
-                          <TabsContent value="business-context" className="p-6">
-                            <div className="space-y-6">
-                              <div className="flex justify-between items-center">
-                                <h3 className="font-medium flex items-center">
-                                  <BookText className="h-4 w-4 text-blue-600 mr-2" />
-                                  Business Knowledge Base
-                              </h3>
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  onClick={() => {
-                                    extractBusinessInsights();
-                                    setShowBusinessContext(true);
-                                    setCustomerServiceSheetOpen(true);
-                                  }}
-                                  className="rounded-md"
-                                >
-                                  <PlusCircle className="h-4 w-4 mr-1" />
-                                  Add Context
-                                </Button>
-                                </div>
-                              
-                              {/* First Row: Business Information and Business Hours */}
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* Business Information */}
-                                <div className="border rounded-md p-5 space-y-4">
-                                  <h3 className="font-medium flex items-center">
-                                    <Store className="h-4 w-4 text-blue-600 mr-2" />
-                                    Business Information
-                                  </h3>
-                                  
-                                  <div className="space-y-4">
-                                    <div>
-                                      <Label htmlFor="businessName">Business Name</Label>
-                                      <Input 
-                                        id="businessName"
-                                        value={agentConfig.businessBrand.businessName}
-                                        onChange={(e) => updateSection("businessBrand", {
-                                          ...agentConfig.businessBrand,
-                                          businessName: e.target.value
-                                        })}
-                                        className="mt-1 rounded-md"
-                                        placeholder="Enter your business name"
-                                      />
-                                    </div>
-                                    
-                                    <div>
-                                      <Label htmlFor="businessContext">Business Description</Label>
-                                      <Textarea
-                                        id="businessContext"
-                                        value={agentConfig.businessBrand.businessContext}
-                                        onChange={(e) => updateSection("businessBrand", {
-                                          ...agentConfig.businessBrand,
-                                          businessContext: e.target.value
-                                        })}
-                                        className="mt-1 min-h-[100px] rounded-md"
-                                        placeholder="Describe what your business does, your products/services, and your value proposition"
-                                      />
-                              </div>
-                            </div>
-                          </div>
-                          
-                                {/* Business Hours */}
-                                <div className="border rounded-md p-5 space-y-4">
-                                  <h3 className="font-medium flex items-center">
-                                    <Clock3 className="h-4 w-4 text-blue-600 mr-2" />
-                                    Business Hours
-                                  </h3>
-                                  
-                                  <div className="space-y-3">
-                                    {Object.entries(agentConfig.businessHours).map(([day, hours]: [string, any]) => (
-                                      <div key={day} className="flex items-center gap-3">
-                                        <div className="w-24">
-                                          <span className="capitalize">{day}</span>
-                                        </div>
-                                        <Switch
-                                          checked={hours.open}
-                                          onCheckedChange={(checked) => {
-                                            const updatedHours = {
-                                              ...agentConfig.businessHours,
-                                              [day]: {
-                                                ...hours,
-                                                open: checked
-                                              }
-                                            };
-                                            updateSection("businessHours", updatedHours);
-                                          }}
-                                        />
-                                        {hours.open && (
-                                          <div className="flex-1 flex items-center gap-2">
-                                            <Input
-                                              type="time"
-                                              value={hours.start}
-                                              onChange={(e) => {
-                                                const updatedHours = {
-                                                  ...agentConfig.businessHours,
-                                                  [day]: {
-                                                    ...hours,
-                                                    start: e.target.value
-                                                  }
-                                                };
-                                                updateSection("businessHours", updatedHours);
-                                              }}
-                                              className="w-28 rounded-md"
-                                            />
-                                            <span>to</span>
-                                            <Input
-                                              type="time"
-                                              value={hours.end}
-                                              onChange={(e) => {
-                                                const updatedHours = {
-                                                  ...agentConfig.businessHours,
-                                                  [day]: {
-                                                    ...hours,
-                                                    end: e.target.value
-                                                  }
-                                                };
-                                                updateSection("businessHours", updatedHours);
-                                              }}
-                                              className="w-28 rounded-md"
-                                            />
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              {/* Second Row: Public Holidays and Return Policy */}
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* Public Holidays */}
-                                <div className="border rounded-md p-5 space-y-4">
-                                  <h3 className="font-medium flex items-center">
-                                    <Calendar className="h-4 w-4 text-blue-600 mr-2" />
-                                    Public Holidays
-                                  </h3>
-                                  
-                                  <div className="space-y-4">
-                            <div>
-                                      <Label htmlFor="publicHolidays">Holiday Schedule</Label>
-                                      <Textarea
-                                        id="publicHolidays"
-                                        value={agentConfig.businessKnowledge?.publicHolidays || ""}
-                                        onChange={(e) => {
-                                          const updatedKnowledge = {
-                                            ...agentConfig.businessKnowledge,
-                                            publicHolidays: e.target.value,
-                                            lastUpdated: Date.now()
-                                          };
-                                          updateSection("businessKnowledge", updatedKnowledge);
-                                        }}
-                                        className="mt-1 min-h-[150px] rounded-md"
-                                        placeholder="List your public holidays and special opening hours:&#10;&#10;New Year's Day (Jan 1) - Closed&#10;Australia Day (Jan 26) - 10am to 4pm&#10;Good Friday - Closed"
-                                      />
-                                      <p className="text-xs text-muted-foreground mt-2">
-                                        Enter one holiday per line with dates and opening hours
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                                
-                                {/* Return Policy */}
-                                <div className="border rounded-md p-5 space-y-4">
-                                  <h3 className="font-medium flex items-center">
-                                    <RefreshCcw className="h-4 w-4 text-blue-600 mr-2" />
-                                    Return Policy
-                                  </h3>
-                                  
-                                  <div className="space-y-4">
-                                    <div>
-                                      <Label htmlFor="returnPolicy">Return & Refund Policy</Label>
-                                      <Textarea
-                                        id="returnPolicy"
-                                        value={agentConfig.businessKnowledge?.returnPolicy || ""}
-                                        onChange={(e) => {
-                                          const updatedKnowledge = {
-                                            ...agentConfig.businessKnowledge,
-                                            returnPolicy: e.target.value,
-                                            lastUpdated: Date.now()
-                                          };
-                                          updateSection("businessKnowledge", updatedKnowledge);
-                                        }}
-                                        className="mt-1 min-h-[150px] rounded-md"
-                                        placeholder="Describe your return and refund policy in detail:&#10;&#10;- Return period (e.g., 30 days)&#10;- Condition requirements&#10;- Refund process&#10;- Exceptions"
-                                      />
-                                      <p className="text-xs text-muted-foreground mt-2">
-                                        Provide clear details about your return and refund policies
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              {/* Business Context Entries */}
-                              <div className="border rounded-md p-5 space-y-4">
-                                <h3 className="font-medium flex items-center">
-                                <BookText className="h-4 w-4 text-blue-600 mr-2" />
-                                  Additional Business Context
-                                  {agentConfig.businessKnowledge.manualEntries.length > 0 && (
-                                    <Badge variant="outline" className="ml-2 rounded-md">
-                                      {agentConfig.businessKnowledge.manualEntries.length} {agentConfig.businessKnowledge.manualEntries.length === 1 ? 'entry' : 'entries'}
-                                    </Badge>
-                                  )}
-                              </h3>
-                                
-                                <div className="flex gap-2">
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    onClick={handleVoiceRecord}
-                                    className={`gap-2 rounded-md ${isRecording ? 'bg-red-50 text-red-600 border-red-200' : ''}`}
-                                  >
-                                    <Mic className={`h-4 w-4 ${isRecording ? 'text-red-600 animate-pulse' : ''}`} />
-                                    {isRecording ? 'Recording...' : 'Add voice input'}
-                                  </Button>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    onClick={() => setShowManualInput(!showManualInput)}
-                                    className="gap-2 rounded-md"
-                                  >
-                                    <PlusCircle className="h-4 w-4" />
-                                    Add manual context
-                                  </Button>
-                                </div>
-                                
-                                {showManualInput && (
-                                  <div className="border p-4 rounded-md bg-gray-50 space-y-3">
-                                    <Textarea
-                                      placeholder="Describe your business, products, services, policies, or any other relevant information..."
-                                      value={manualInput}
-                                      onChange={(e) => setManualInput(e.target.value)}
-                                      className="min-h-[100px] rounded-md"
-                                    />
-                                    <div className="flex justify-end gap-2">
-                                      <Button 
-                                        variant="outline" 
-                                        size="sm"
-                                        onClick={() => {
-                                          setManualInput("");
-                                          setShowManualInput(false);
-                                        }}
-                                        className="rounded-md"
-                                      >
-                                        Cancel
-                                      </Button>
-                                      <Button 
-                                        size="sm"
-                                        onClick={() => addManualContextEntry(manualInput)}
-                                        disabled={!manualInput.trim()}
-                                        className="rounded-md"
-                                      >
-                                        Save Context
-                                      </Button>
-                                    </div>
-                                  </div>
-                                )}
-                                
-                                {agentConfig.businessKnowledge.manualEntries.length > 0 ? (
-                                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-                                  {agentConfig.businessKnowledge.manualEntries.map((entry) => (
-                                      <div key={entry.id} className="p-3 bg-gray-50 rounded-md border">
-                                        <div className="flex items-center justify-between mb-2">
-                                          <Badge variant={entry.source === 'voice' ? 'secondary' : 'outline'} className="rounded-md">
-                                            {entry.source === 'voice' ? 'Voice Input' : 'Manual Entry'}
-                                        </Badge>
-                                          <div className="flex items-center gap-2">
-                                        <span className="text-xs text-muted-foreground">
-                                              {new Date(entry.timestamp).toLocaleString()}
-                                        </span>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              onClick={() => deleteContextEntry(entry.id)}
-                                              className="h-6 w-6 rounded-md hover:bg-red-50 hover:text-red-600"
-                                              title="Delete entry"
-                                            >
-                                              <X className="h-4 w-4" />
-                                            </Button>
-                                          </div>
-                                      </div>
-                                      <p className="text-sm">{entry.content}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                                ) : (
-                                  <div className="text-center py-6 text-muted-foreground">
-                                    <BookText className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                                    <p>No business context entries yet.</p>
-                                    <p className="text-sm">Add context using the buttons above.</p>
-                              </div>
-                                )}
-                            </div>
-                              
-                              <div className="flex justify-end pt-4">
-                                <Button 
-                                  onClick={() => saveAgentConfig()}
-                                  disabled={saving}
-                                  className="rounded-md"
-                                >
-                                  {saving ? (
-                                    <>
-                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                      Saving...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Check className="h-4 w-4 mr-2" />
-                                      Save Changes
-                                    </>
-                          )}
-                                </Button>
-                        </div>
-                            </div>
-                          </TabsContent>
-                          
-                          {/* Add CS Vault Files tab content */}
-                          <TabsContent value="cs-vault" className="p-6">
-                            <div className="space-y-6">
-                              <div className="flex justify-between items-center">
-                                <h3 className="font-medium flex items-center">
-                                  <FileText className="h-4 w-4 text-blue-600 mr-2" />
-                                  Customer Service Vault Files
-                                </h3>
-                                <Link href="/notes">
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    className="rounded-md gap-2"
-                                  >
-                                    <PlusCircle className="h-4 w-4" />
-                                    Add Files
-                                  </Button>
-                                </Link>
-                              </div>
-                              
-                              <div className="border rounded-md shadow-sm overflow-hidden">
-                                <div className="bg-gray-50 px-4 py-3 border-b">
-                                  <div className="flex items-center justify-between">
-                                    <h4 className="font-medium text-sm">Files Available to CS Agent</h4>
-                                    <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 rounded-md">
-                                      {csVaultFiles.length} files
-                                    </Badge>
-                                  </div>
-                                </div>
-                                
-                                <div className="divide-y">
-                                  {loadingCSVaultFiles ? (
-                                    <div className="py-8 text-center">
-                                      <Loader2 className="h-8 w-8 mx-auto mb-2 text-blue-500 animate-spin" />
-                                      <p className="text-sm text-gray-500">Loading CS Vault files...</p>
-                                    </div>
-                                  ) : csVaultFiles.length === 0 ? (
-                                    <div className="py-12 text-center">
-                                      <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                                      <h3 className="font-medium mb-2">No files in CS Vault</h3>
-                                      <p className="text-sm text-gray-500 mb-4">Files added to the CS Vault will appear here.</p>
-                                      <Link href="/notes">
-                                        <Button variant="outline" size="sm" className="rounded-md gap-2">
-                                          <PlusCircle className="h-4 w-4" />
-                                          Add files from Documents
-                                        </Button>
-                                      </Link>
-                                    </div>
-                                  ) : (
-                                    csVaultFiles.map((file) => (
-                                      <div 
-                                        key={file.id} 
-                                        className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
-                                        onClick={() => viewFileDetails(file)}
-                                      >
-                                        <div className="flex items-start gap-3">
-                                          <div className="mt-0.5">
-                                            {file.type === 'pdf' ? (
-                                              <FileText className="h-5 w-5 text-red-500 flex-shrink-0" />
-                                            ) : file.type === 'image' ? (
-                                              <FileText className="h-5 w-5 text-blue-500 flex-shrink-0" />
-                                            ) : file.type === 'invoice' ? (
-                                              <FileText className="h-5 w-5 text-green-500 flex-shrink-0" />
-                                            ) : file.type === 'note' ? (
-                                              <FileText className="h-5 w-5 text-yellow-500 flex-shrink-0" />
-                                            ) : (
-                                              <FileText className="h-5 w-5 text-gray-500 flex-shrink-0" />
-                                            )}
-                                          </div>
-                                          <div className="flex-1 min-w-0">
-                                            <div className="flex items-center justify-between">
-                                              <h3 className="font-medium text-sm truncate">{file.title}</h3>
-                                              <Badge className="ml-2 bg-purple-50 text-purple-700 border-purple-200 rounded-md">
-                                                CS Agent
-                                              </Badge>
-                                            </div>
-                                            <p className="text-xs text-gray-500 truncate mt-1">
-                                              {file.summary || "No description"}
-                                            </p>
-                                            <div className="flex items-center gap-1.5 mt-2">
-                                              <Badge 
-                                                variant="outline" 
-                                                className="text-[10px] px-1.5 py-0 h-4 rounded-full bg-gray-50 border-gray-200"
-                                              >
-                                                {file.type}
-                                              </Badge>
-                                              <span className="text-[10px] text-gray-400">
-                                                Added: {file.addedAt.toLocaleDateString()}
-                                              </span>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    ))
-                                  )}
-                                </div>
-                                
-                                {csVaultFiles.length > 0 && (
-                                  <div className="p-4 bg-gray-50 border-t text-center">
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm"
-                                      className="gap-2 rounded-md"
-                                      onClick={fetchCSVaultFiles}
-                                      disabled={loadingCSVaultFiles}
-                                    >
-                                      {loadingCSVaultFiles ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <RefreshCcw className="h-4 w-4" />
-                                      )}
-                                      Refresh Files
-                                    </Button>
-                                  </div>
-                                )}
-                              </div>
-                              
-                              <div className="bg-blue-50 p-4 rounded-md border border-blue-100 text-sm">
-                                <div className="flex items-start gap-3">
-                                  <Info className="h-5 w-5 text-blue-500 mt-0.5" />
-                                  <div>
-                                    <h4 className="font-medium mb-1">About CS Vault Files</h4>
-                                    <p className="text-muted-foreground">
-                                      Files in the CS Vault are accessible to your Customer Service Agent and will be used to provide accurate responses to customer inquiries.
-                                    </p>
-                                    <p className="text-muted-foreground mt-2">
-                                      To add or remove files from the CS Vault, visit the <Link href="/notes" className="text-blue-600 underline hover:text-blue-800">Documents</Link> section.
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </TabsContent>
-                        </Tabs>
-                      </div>
-                    ) : (
-                      <div className="max-w-2xl mx-auto text-center py-12">
-                        <div className="h-20 w-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                          <Bot className="h-10 w-10 text-blue-600" />
-                        </div>
-                        <h2 className="text-2xl font-medium mb-3">Set Up Customer Service Agent</h2>
-                        <p className="text-gray-600 mb-8 max-w-lg mx-auto">
-                          Let AI handle customer inquiries automatically, delivering timely and consistent 
-                          responses based on your specific business rules and preferences.
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 text-left max-w-2xl mx-auto mb-8">
-                          <div className="bg-gray-50 p-4 rounded-md border">
-                            <MessageSquare className="h-6 w-6 text-blue-600 mb-3" />
-                            <h3 className="font-medium mb-1">Auto-Response</h3>
-                            <p className="text-sm text-gray-600">Automatically reply to common customer questions</p>
-                          </div>
-                          <div className="bg-gray-50 p-4 rounded-md border">
-                            <Clock3 className="h-6 w-6 text-blue-600 mb-3" />
-                            <h3 className="font-medium mb-1">24/7 Support</h3>
-                            <p className="text-sm text-gray-600">Provide instant responses at any time</p>
-                          </div>
-                          <div className="bg-gray-50 p-4 rounded-md border">
-                            <Bot className="h-6 w-6 text-blue-600 mb-3" />
-                            <h3 className="font-medium mb-1">Smart Learning</h3>
-                            <p className="text-sm text-gray-600">Gets better as it learns your business</p>
-                          </div>
-                        </div>
-                        <Button 
-                          onClick={() => {
-                            // Navigate to detailed setup or open a modal
-                            setCustomerServiceSheetOpen(true)
-                          }}
-                          size="lg"
-                          className="bg-[#0D6EFD] hover:bg-[#0B5ED7] text-white gap-2 rounded-md px-6"
-                        >
-                          <Bot className="h-5 w-5" />
-                          Set up customer agent
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
+                )}
+              </div>
+            )}
           </TabsContent>
           
           <TabsContent value="customers">

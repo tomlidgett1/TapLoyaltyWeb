@@ -1,0 +1,1355 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { useAuth } from "@/contexts/auth-context"
+import { db } from "@/lib/firebase"
+import { doc, getDoc, setDoc, serverTimestamp, getDocs, query, where, collection } from "firebase/firestore"
+import { AgentConfig } from "@/types/agent-config"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { toast } from "@/components/ui/use-toast"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { BusinessBrandForm } from "./components/business-brand-form"
+import { AgentTasksForm } from "./components/agent-tasks-form"
+import { BusinessHoursForm } from "./components/business-hours-form"
+import { ObjectivesForm } from "./components/objectives-form"
+import { ProductPricingForm } from "./components/product-pricing-form"
+import { FinancialGuardrailsForm } from "./components/financial-guardrails-form"
+import { CustomerSegmentsForm } from "./components/customer-segments-form"
+import { CustomerCohortsForm } from "./components/customer-cohorts-form"
+import { RewardConstraintsForm } from "./components/reward-constraints-form"
+import { MessagingConstraintsForm } from "./components/messaging-constraints-form"
+import { EmailSetupForm } from "./components/email-setup-form"
+import { CustomersList } from "./components/customers-view"
+import { PageHeader } from "@/components/page-header"
+import { 
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+  SheetClose
+} from "@/components/ui/sheet"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
+import { 
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Slider } from "@/components/ui/slider"
+import { Badge } from "@/components/ui/badge"
+import Link from "next/link"
+import { 
+  Bot, 
+  Award, 
+  Check, 
+  ChevronRight, 
+  Loader2, 
+  Wrench,
+  MessageSquare,
+  Layers,
+  Mail,
+  Mic,
+  BookOpen,
+  PlusCircle,
+  ArrowLeft,
+  BookText,
+  Target,
+  Calendar,
+  Clock,
+  Store,
+  DollarSign,
+  Users,
+  UserCircle,
+  Gift,
+  Send,
+  Info,
+  Sparkles,
+  Zap,
+  BarChart,
+  Heart,
+  Gauge,
+  ShieldCheck,
+  Megaphone,
+  Star,
+  Hourglass,
+  CircleDollarSign,
+  Wallet,
+  Building2,
+  CheckCircle,
+  TagsIcon,
+  LineChart,
+  UsersRound,
+  X,
+  Maximize2,
+  Minimize2,
+  Clock as Clock3,
+  RefreshCcw,
+  FileText
+} from "lucide-react"
+import Image from "next/image"
+
+// Define the structure for the business knowledge data
+interface BusinessKnowledge {
+  generalInfo: string;
+  manualEntries: Array<{
+    id: string;
+    content: string;
+    timestamp: number;
+    source: 'manual' | 'voice';
+  }>;
+  lastUpdated: number;
+  publicHolidays?: string;
+  returnPolicy?: string;
+}
+
+// Default agent configuration
+const defaultAgentConfig: AgentConfig = {
+  businessBrand: {
+    businessName: "",
+    businessContext: "",
+    primaryColor: "#007AFF",
+    secondaryColor: "#FFFFFF",
+    brandVoice: []
+  },
+  agentTasks: {
+    rewardsGeneration: false,
+    reEngagement: false,
+    bannerCreation: false,
+    emailMarketing: false,
+    customerMessaging: false,
+    performanceAnalysis: false
+  },
+  businessHours: {
+    monday: { open: true, start: "09:00", end: "17:00" },
+    tuesday: { open: true, start: "09:00", end: "17:00" },
+    wednesday: { open: true, start: "09:00", end: "17:00" },
+    thursday: { open: true, start: "09:00", end: "17:00" },
+    friday: { open: true, start: "09:00", end: "17:00" },
+    saturday: { open: true, start: "09:00", end: "17:00" },
+    sunday: { open: false, start: "09:00", end: "17:00" }
+  },
+  objectives: {
+    businessObjectives: [
+      { id: "increase_revenue", label: "Increase overall revenue", priority: 10 }
+    ],
+    customerValuePriorities: {
+      personalization: 5,
+      valueForMoney: 5,
+      convenience: 5,
+      quality: 5,
+      exclusivity: 5,
+      novelty: 5
+    },
+    seasonalCampaigns: []
+  },
+  productPricing: {
+    averageBasketSize: 0,
+    products: [],
+    heroProducts: [],
+    lowVelocityProducts: []
+  },
+  financialGuardrails: {
+    rewardBudgetType: "fixed",
+    monthlyBudget: 1000,
+    targetGrossMargin: 30,
+    maxCostPerAcquisition: 25,
+    minRewardValue: 5,
+    maxRewardValue: 50
+  },
+  customerSegments: {
+    loyaltyTiers: [
+      {
+        name: "Bronze",
+        lifetimeTransactions: 0,
+        lifetimeSpend: 0,
+        redemptions: 0
+      }
+    ],
+    visitSpendingThresholds: {
+      frequentVisitor: { visits: 4, perDays: 30 },
+      highSpender: { amount: 100, perDays: 30 }
+    }
+  },
+  customerCohorts: {
+    new: {
+      firstVisitWithinDays: 30,
+      maxLifetimeVisits: 2
+    },
+    active: {
+      lastVisitWithinDays: 30
+    },
+    dormant: {
+      lastVisitBetween: [30, 90]
+    },
+    churned: {
+      lastVisitMoreThanDays: 180
+    },
+    resurrected: {
+      wasDormantOrChurned: true,
+      recentVisitWithinDays: 60
+    }
+  },
+  rewardConstraints: {
+    allowedTypes: {
+      freeItem: true,
+      percentageDiscount: true,
+      fixedAmount: true,
+      buyXGetY: true,
+      mysteryGift: false
+    },
+    concurrencyCeiling: 4
+  },
+  messagingConstraints: {
+    restrictedKeywords: []
+  },
+  emailSettings: {
+    isConnected: false,
+    connectedEmail: "",
+    automaticResponses: false,
+    analyzeEmailTone: false,
+    emailTone: "professional",
+    customTone: [],
+    excludedEmails: [],
+    notifyBeforeSend: true,
+    customSignature: ""
+  },
+  businessKnowledge: {
+    generalInfo: "",
+    manualEntries: [],
+    lastUpdated: Date.now(),
+    publicHolidays: "",
+    returnPolicy: ""
+  }
+}
+
+// Add type definition for CS Vault file
+interface CSVaultFile {
+  id: string;
+  title: string;
+  summary?: string;
+  type: string;
+  createdAt: any;
+  addedAt: any;
+  inCsVault: boolean;
+  rawText?: string;
+  content?: string;
+  fileUrl?: string;
+  fileType?: string;
+}
+
+export default function AgentSetup() {
+  const { user } = useAuth()
+  const [agentConfig, setAgentConfig] = useState<AgentConfig>({
+    ...defaultAgentConfig,
+    // Ensure emailSettings is properly initialized
+    emailSettings: {
+      ...defaultAgentConfig.emailSettings
+    },
+    // Ensure businessKnowledge is properly initialized
+    businessKnowledge: {
+      ...defaultAgentConfig.businessKnowledge
+    }
+  })
+  const [rewardActiveTab, setRewardActiveTab] = useState("brand")
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [mainTab, setMainTab] = useState("setup")
+  const [agentType, setAgentType] = useState("reward")
+  const [customerServiceSheetOpen, setCustomerServiceSheetOpen] = useState(false)
+  const [showBusinessContext, setShowBusinessContext] = useState(false)
+  const [customerServiceActiveTab, setCustomerServiceActiveTab] = useState("settings")
+  const [businessInsights, setBusinessInsights] = useState<{
+    businessName: string;
+    businessHours: Record<string, any>;
+    products: any[];
+    objectives: string[];
+    customerSegments: any[];
+    brandVoice: string[];
+  }>({
+    businessName: "",
+    businessHours: {},
+    products: [],
+    objectives: [],
+    customerSegments: [],
+    brandVoice: []
+  })
+  const [isRecording, setIsRecording] = useState(false)
+  const [showManualInput, setShowManualInput] = useState(false)
+  const [manualInput, setManualInput] = useState("")
+  // Add state for CS Vault files
+  const [csVaultFiles, setCSVaultFiles] = useState<CSVaultFile[]>([])
+  const [loadingCSVaultFiles, setLoadingCSVaultFiles] = useState(false)
+  // Add state for viewing file details
+  const [selectedFile, setSelectedFile] = useState<CSVaultFile | null>(null)
+  const [fileDetailsOpen, setFileDetailsOpen] = useState(false)
+  const [loadingFileDetails, setLoadingFileDetails] = useState(false)
+
+  useEffect(() => {
+    async function fetchAgentConfig() {
+      if (!user?.uid) {
+        setLoading(false)
+        return
+      }
+      
+      try {
+        // Fetch agent config from the agents collection
+        const agentDocRef = doc(db, 'agents', user.uid)
+        const agentDoc = await getDoc(agentDocRef)
+        
+        // Also fetch business knowledge from the new collection path
+        const instructionsDocRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions')
+        const instructionsDoc = await getDoc(instructionsDocRef)
+        
+        // Initialize with default business knowledge
+        let businessKnowledgeData = {
+          ...defaultAgentConfig.businessKnowledge
+        }
+        
+        // Initialize email settings data and business brand data
+        let emailSettingsData = null
+        let businessBrandData = null
+        
+        // If instructions document exists, use its business knowledge data
+        if (instructionsDoc.exists()) {
+          const instructionsData = instructionsDoc.data()
+          if (instructionsData.businessKnowledge) {
+            businessKnowledgeData = instructionsData.businessKnowledge
+          }
+          
+          // Also get email settings if they exist in the instructions document
+          if (instructionsData.emailSettings) {
+            emailSettingsData = {
+              ...defaultAgentConfig.emailSettings,
+              ...instructionsData.emailSettings
+            }
+          }
+          
+          // Get business brand data if it exists in the instructions document
+          if (instructionsData.businessBrand) {
+            businessBrandData = {
+              ...defaultAgentConfig.businessBrand,
+              ...instructionsData.businessBrand
+            }
+          }
+        }
+        
+        if (agentDoc.exists()) {
+          const data = agentDoc.data() as Partial<AgentConfig>
+          
+          // Create a merged config ensuring all properties exist
+          const mergedConfig: AgentConfig = {
+            ...defaultAgentConfig,
+            ...data,
+            // Explicitly handle nested objects that might be missing
+            emailSettings: {
+              ...defaultAgentConfig.emailSettings,
+              ...(data.emailSettings || {}),
+              // Prioritize email settings from instructions document if they exist
+              ...(emailSettingsData || {})
+            },
+            businessBrand: {
+              ...defaultAgentConfig.businessBrand,
+              ...(data.businessBrand || {}),
+              // Prioritize business brand from instructions document if it exists
+              ...(businessBrandData || {})
+            },
+            // Use business knowledge from the instructions document
+            businessKnowledge: businessKnowledgeData,
+            agentTasks: {
+              ...defaultAgentConfig.agentTasks,
+              ...(data.agentTasks || {})
+            },
+            businessHours: {
+              ...defaultAgentConfig.businessHours,
+              ...(data.businessHours || {})
+            },
+            objectives: {
+              ...defaultAgentConfig.objectives,
+              ...(data.objectives || {})
+            },
+            productPricing: {
+              ...defaultAgentConfig.productPricing,
+              ...(data.productPricing || {})
+            },
+            financialGuardrails: {
+              ...defaultAgentConfig.financialGuardrails,
+              ...(data.financialGuardrails || {})
+            },
+            customerSegments: {
+              ...defaultAgentConfig.customerSegments,
+              ...(data.customerSegments || {})
+            },
+            customerCohorts: {
+              ...defaultAgentConfig.customerCohorts,
+              ...(data.customerCohorts || {})
+            },
+            rewardConstraints: {
+              ...defaultAgentConfig.rewardConstraints,
+              ...(data.rewardConstraints || {})
+            },
+            messagingConstraints: {
+              ...defaultAgentConfig.messagingConstraints,
+              ...(data.messagingConstraints || {})
+            }
+          }
+          
+          setAgentConfig(mergedConfig)
+        } else {
+          // If no agent config exists, still use any business knowledge that might exist
+          setAgentConfig(prev => ({
+            ...prev,
+            businessKnowledge: businessKnowledgeData
+          }))
+          console.log("No agent configuration found, using defaults")
+        }
+      } catch (error) {
+        console.error("Error fetching agent configuration:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load your agent configuration.",
+          variant: "destructive"
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchAgentConfig()
+  }, [user])
+
+  const saveAgentConfig = async (config?: AgentConfig) => {
+    if (!user?.uid) {
+      toast({
+        title: "Not logged in",
+        description: "You must be logged in to save your agent configuration.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setSaving(true)
+    const configToSave = config || agentConfig
+
+    try {
+      // Extract business knowledge to save separately
+      const { businessKnowledge, ...agentConfigWithoutBusinessKnowledge } = configToSave
+
+      // Save agent config to agents collection
+      await setDoc(doc(db, 'agents', user.uid), {
+        ...agentConfigWithoutBusinessKnowledge,
+        updatedAt: serverTimestamp(),
+      }, { merge: true })
+
+      // Save business knowledge, email settings, and business brand to the instructions document
+      await setDoc(doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions'), {
+        businessKnowledge,
+        emailSettings: configToSave.emailSettings,
+        businessBrand: configToSave.businessBrand,
+        updatedAt: serverTimestamp(),
+      }, { merge: true })
+
+      toast({
+        title: "Success",
+        description: "Your agent configuration has been saved.",
+      })
+    } catch (error) {
+      console.error("Error saving agent configuration:", error)
+      toast({
+        title: "Error",
+        description: "Failed to save your agent configuration.",
+        variant: "destructive",
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleRewardTabChange = (tab: string) => {
+    setRewardActiveTab(tab)
+  }
+  
+  const handleMainTabChange = (tab: string) => {
+    setMainTab(tab)
+  }
+
+  const handleAgentTypeChange = (type: string) => {
+    setAgentType(type);
+    
+    // Extract business insights when switching to customer service tab
+    if (type === "customer-service") {
+      extractBusinessInsights();
+    }
+  }
+
+  const updateSection = <K extends keyof AgentConfig>(
+    section: K, 
+    data: AgentConfig[K]
+  ) => {
+    setAgentConfig(prev => ({
+      ...prev,
+      [section]: data
+    }))
+  }
+
+  const addManualContextEntry = async (content: string) => {
+    if (!content.trim()) return;
+    
+    if (!user?.uid) {
+      toast({
+        title: "Not logged in",
+        description: "Your context was added but not saved to the server.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Update local state
+    const newEntry = {
+      id: crypto.randomUUID(),
+      content,
+      timestamp: Date.now(),
+      source: 'manual' as const
+    };
+    
+    const updatedBusinessKnowledge = {
+      ...agentConfig.businessKnowledge,
+      manualEntries: [
+        ...agentConfig.businessKnowledge.manualEntries,
+        newEntry
+      ],
+      lastUpdated: Date.now()
+    };
+    
+    // Update state first for immediate UI feedback
+    updateSection('businessKnowledge', updatedBusinessKnowledge);
+    
+    // Save to Firestore in the new collection path
+    try {
+      const instructionsDocRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions');
+      
+      await setDoc(instructionsDocRef, {
+        businessKnowledge: updatedBusinessKnowledge,
+        businessBrand: agentConfig.businessBrand,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      toast({
+        title: "Success",
+        description: "Your business context was added and saved.",
+      });
+    } catch (error) {
+      console.error("Error saving business context:", error);
+      toast({
+        title: "Error",
+        description: "Your context was added but could not be saved to the server.",
+        variant: "destructive"
+      });
+    }
+    
+    setShowManualInput(false);
+    setManualInput('');
+  };
+  
+  const addVoiceContextEntry = async (content: string) => {
+    if (!content.trim()) return;
+    
+    if (!user?.uid) {
+      toast({
+        title: "Not logged in",
+        description: "Your voice input was added but not saved to the server.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Update local state
+    const newEntry = {
+      id: crypto.randomUUID(),
+      content,
+      timestamp: Date.now(),
+      source: 'voice' as const
+    };
+    
+    const updatedBusinessKnowledge = {
+      ...agentConfig.businessKnowledge,
+      manualEntries: [
+        ...agentConfig.businessKnowledge.manualEntries,
+        newEntry
+      ],
+      lastUpdated: Date.now()
+    };
+    
+    // Update state first for immediate UI feedback
+    updateSection('businessKnowledge', updatedBusinessKnowledge);
+    
+    // Save to Firestore in the new collection path
+    try {
+      const instructionsDocRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions');
+      
+      await setDoc(instructionsDocRef, {
+        businessKnowledge: updatedBusinessKnowledge,
+        businessBrand: agentConfig.businessBrand,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      toast({
+        title: "Success",
+        description: "Your voice input was added and saved.",
+      });
+    } catch (error) {
+      console.error("Error saving voice input:", error);
+      toast({
+        title: "Error",
+        description: "Your voice input was added but could not be saved to the server.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Function to extract business insights from agent config
+  const extractBusinessInsights = () => {
+    const insights = {
+      businessName: agentConfig.businessBrand.businessName || "Your Business",
+      businessHours: agentConfig.businessHours || {},
+      products: agentConfig.productPricing.products || [],
+      objectives: agentConfig.objectives.businessObjectives.map(obj => obj.label) || [],
+      customerSegments: agentConfig.customerSegments.loyaltyTiers || [],
+      brandVoice: agentConfig.businessBrand.brandVoice || []
+    }
+    
+    setBusinessInsights(insights)
+  }
+
+  // Call extractBusinessInsights when agentConfig changes
+  useEffect(() => {
+    if (!loading) {
+      extractBusinessInsights();
+    }
+  }, [agentConfig.businessBrand, agentConfig.businessHours, agentConfig.productPricing, agentConfig.objectives, agentConfig.customerSegments, loading]);
+
+  // Handle simulated voice recording for demo
+  const handleVoiceRecord = () => {
+    if (isRecording) {
+      // Stop "recording"
+      setIsRecording(false);
+      // Simulate a transcription result
+      const transcriptions = [
+        "We offer 30-day returns on all products purchased online or in-store with a valid receipt.",
+        "Our business hours are Monday to Friday from 9 AM to 6 PM, and Saturday from 10 AM to 4 PM. We're closed on Sundays.",
+        "Our customer service team can be reached at support@example.com or by phone at (555) 123-4567.",
+        "We offer free shipping on all orders over $75 within Australia. International shipping rates vary by location.",
+        "All our products come with a 12-month manufacturer warranty that covers defects in materials and workmanship.",
+      ];
+      const randomTranscription = transcriptions[Math.floor(Math.random() * transcriptions.length)];
+      
+      // Small delay to simulate processing
+      setTimeout(() => {
+        addVoiceContextEntry(randomTranscription);
+      }, 1000);
+      
+      toast({
+        title: "Voice processed",
+        description: "Your voice input has been transcribed and is being added.",
+      });
+    } else {
+      // Start "recording"
+      setIsRecording(true);
+      
+      // Simulate automatic stop after 5 seconds
+      setTimeout(() => {
+        if (isRecording) {
+          handleVoiceRecord();
+        }
+      }, 5000);
+      
+      toast({
+        title: "Recording started",
+        description: "Recording your voice input (simulated)...",
+      });
+    }
+  };
+
+  // Reset agent config to default values
+  const resetToDefault = async () => {
+    if (!user?.uid) {
+      toast({
+        title: "Not logged in",
+        description: "You must be logged in to reset your agent configuration.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      // Update email settings and business brand in the main agent config
+      const resetConfig = {
+        ...agentConfig,
+        emailSettings: { ...defaultAgentConfig.emailSettings },
+        businessBrand: { ...defaultAgentConfig.businessBrand }
+      }
+      setAgentConfig(resetConfig)
+
+      // Reset business knowledge separately
+      const resetBusinessKnowledge = { ...defaultAgentConfig.businessKnowledge }
+      updateSection('businessKnowledge', resetBusinessKnowledge)
+
+      // Save the email settings and business brand to the agents collection
+      await setDoc(doc(db, 'agents', user.uid), {
+        emailSettings: { ...defaultAgentConfig.emailSettings },
+        businessBrand: { ...defaultAgentConfig.businessBrand },
+        updatedAt: serverTimestamp(),
+      }, { merge: true })
+
+      // Reset the business knowledge and business brand in the instructions collection
+      await setDoc(doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions'), {
+        businessKnowledge: resetBusinessKnowledge,
+        businessBrand: { ...defaultAgentConfig.businessBrand },
+        emailSettings: { ...defaultAgentConfig.emailSettings },
+        updatedAt: serverTimestamp(),
+      }, { merge: true })
+
+      toast({
+        title: "Reset complete",
+        description: "Your agent configuration has been reset to default values.",
+      })
+    } catch (error) {
+      console.error("Error resetting configuration:", error)
+      toast({
+        title: "Error",
+        description: "Failed to reset your agent configuration.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const deleteContextEntry = async (id: string) => {
+    if (!user?.uid) {
+      toast({
+        title: "Not logged in",
+        description: "You must be logged in to delete a context entry.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // Update local state
+      const updatedBusinessKnowledge = {
+        ...agentConfig.businessKnowledge,
+        manualEntries: agentConfig.businessKnowledge.manualEntries.filter((entry) => entry.id !== id)
+      };
+      updateSection('businessKnowledge', updatedBusinessKnowledge);
+
+      // Save to Firestore
+      const instructionsDocRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions');
+      await setDoc(instructionsDocRef, {
+        businessKnowledge: updatedBusinessKnowledge,
+        businessBrand: agentConfig.businessBrand,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      toast({
+        title: "Success",
+        description: "The context entry has been deleted.",
+      });
+    } catch (error) {
+      console.error("Error deleting context entry:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete the context entry.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Add fetchCSVaultFiles function after extractBusinessInsights
+  const fetchCSVaultFiles = async () => {
+    if (!user?.uid) return;
+    
+    setLoadingCSVaultFiles(true);
+    try {
+      // Query files collection for documents that have inCsVault = true
+      const filesRef = collection(db, `merchants/${user.uid}/files`);
+      const q = query(filesRef, where("inCsVault", "==", true));
+      const querySnapshot = await getDocs(q);
+      
+      const files: CSVaultFile[] = [];
+      querySnapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        const file: CSVaultFile = {
+          id: doc.id,
+          title: data.title || "Untitled",
+          summary: data.summary || "",
+          type: data.type || "other",
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+          addedAt: data.sharedWithAgentAt?.toDate ? data.sharedWithAgentAt.toDate() : new Date(),
+          inCsVault: true,
+          rawText: data.rawText || "",
+          content: data.content || "",
+          fileUrl: data.fileUrl || "",
+          fileType: data.fileType || ""
+        };
+        files.push(file);
+      });
+      
+      setCSVaultFiles(files);
+    } catch (error) {
+      console.error("Error fetching CS Vault files:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load CS Vault files",
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingCSVaultFiles(false);
+    }
+  };
+
+  // Call fetchCSVaultFiles when customer service tab changes to "cs-vault"
+  useEffect(() => {
+    if (customerServiceActiveTab === "cs-vault") {
+      fetchCSVaultFiles();
+    }
+  }, [customerServiceActiveTab, user]);
+
+  // Add fetchFileDetails function after fetchCSVaultFiles
+  const fetchFileDetails = async (fileId: string) => {
+    if (!user?.uid) return;
+    
+    setLoadingFileDetails(true);
+    try {
+      const fileRef = doc(db, `merchants/${user.uid}/files`, fileId);
+      const fileDoc = await getDoc(fileRef);
+      
+      if (fileDoc.exists()) {
+        const data = fileDoc.data();
+        const fullFile: CSVaultFile = {
+          id: fileDoc.id,
+          title: data.title || "Untitled",
+          summary: data.summary || "",
+          type: data.type || "other",
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+          addedAt: data.sharedWithAgentAt?.toDate ? data.sharedWithAgentAt.toDate() : new Date(),
+          inCsVault: true,
+          rawText: data.rawText || "",
+          content: data.content || "",
+          fileUrl: data.fileUrl || "",
+          fileType: data.fileType || ""
+        };
+        
+        setSelectedFile(fullFile);
+        setFileDetailsOpen(true);
+      } else {
+        toast({
+          title: "Error",
+          description: "File not found",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching file details:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load file details",
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingFileDetails(false);
+    }
+  };
+
+  // Add function to view file details
+  const viewFileDetails = (file: CSVaultFile) => {
+    fetchFileDetails(file.id);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0D6EFD]"></div>
+      </div>
+    )
+  }
+
+  // Render the business context page
+  const renderBusinessContextPage = () => {
+    return (
+      <>
+        <div className="flex items-center mb-6">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setShowBusinessContext(false)}
+            className="gap-1 mr-2 p-2 rounded-md"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h2 className="text-xl font-medium">Business Knowledge Base</h2>
+            <p className="text-sm text-muted-foreground">
+              Information the agent will use when responding to customer inquiries
+            </p>
+          </div>
+        </div>
+        
+        <div className="space-y-6 mb-6">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium">Business Context</h3>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleVoiceRecord}
+                  className={`gap-2 rounded-md ${isRecording ? 'bg-red-50 text-red-600 border-red-200' : ''}`}
+                >
+                  <Mic className={`h-4 w-4 ${isRecording ? 'text-red-600 animate-pulse' : ''}`} />
+                  {isRecording ? 'Recording...' : 'Add voice input'}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowManualInput(!showManualInput)}
+                  className="gap-2 rounded-md"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  Add manual context
+                </Button>
+              </div>
+            </div>
+            
+            {showManualInput && (
+              <div className="mb-6 border p-4 rounded-md bg-gray-50 space-y-3">
+                <Textarea
+                  placeholder="Describe your business, products, services, policies, or any other relevant information..."
+                  value={manualInput}
+                  onChange={(e) => setManualInput(e.target.value)}
+                  className="min-h-[100px] rounded-md"
+                />
+                <div className="flex justify-end gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setManualInput("");
+                      setShowManualInput(false);
+                    }}
+                    className="rounded-md"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    size="sm"
+                    onClick={() => addManualContextEntry(manualInput)}
+                    disabled={!manualInput.trim()}
+                    className="rounded-md"
+                  >
+                    Save Context
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <Card className="border shadow-sm rounded-md">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-md flex items-center gap-2">
+                <Store className="h-4 w-4 text-blue-600" />
+                Business Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="text-sm space-y-4">
+                <div>
+                  <Label htmlFor="businessName">Business Name</Label>
+                  <Input 
+                    id="businessName"
+                    value={agentConfig.businessBrand.businessName}
+                    onChange={(e) => updateSection("businessBrand", {
+                      ...agentConfig.businessBrand,
+                      businessName: e.target.value
+                    })}
+                    className="mt-1 rounded-md"
+                    placeholder="Enter your business name"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="businessContext">Business Description</Label>
+                  <Textarea
+                    id="businessContext"
+                    value={agentConfig.businessBrand.businessContext}
+                    onChange={(e) => updateSection("businessBrand", {
+                      ...agentConfig.businessBrand,
+                      businessContext: e.target.value
+                    })}
+                    className="mt-1 min-h-[100px] rounded-md"
+                    placeholder="Describe what your business does, your products/services, and your value proposition"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="border shadow-sm rounded-md">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-md flex items-center gap-2">
+                  <Clock3 className="h-4 w-4 text-blue-600" />
+                  Business Hours
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="text-sm space-y-3">
+                  {Object.entries(agentConfig.businessHours).map(([day, hours]: [string, any]) => (
+                    <div key={day} className="flex items-center gap-3">
+                      <div className="w-24">
+                        <span className="capitalize">{day}</span>
+                      </div>
+                      <Switch
+                        checked={hours.open}
+                        onCheckedChange={(checked) => {
+                          const updatedHours = {
+                            ...agentConfig.businessHours,
+                            [day]: {
+                              ...hours,
+                              open: checked
+                            }
+                          };
+                          updateSection("businessHours", updatedHours);
+                        }}
+                      />
+                      {hours.open && (
+                        <div className="flex-1 flex items-center gap-2">
+                          <Input
+                            type="time"
+                            value={hours.start}
+                            onChange={(e) => {
+                              const updatedHours = {
+                                ...agentConfig.businessHours,
+                                [day]: {
+                                  ...hours,
+                                  start: e.target.value
+                                }
+                              };
+                              updateSection("businessHours", updatedHours);
+                            }}
+                            className="w-28 rounded-md"
+                          />
+                          <span>to</span>
+                          <Input
+                            type="time"
+                            value={hours.end}
+                            onChange={(e) => {
+                              const updatedHours = {
+                                ...agentConfig.businessHours,
+                                [day]: {
+                                  ...hours,
+                                  end: e.target.value
+                                }
+                              };
+                              updateSection("businessHours", updatedHours);
+                            }}
+                            className="w-28 rounded-md"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="border shadow-sm rounded-md">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-md flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-blue-600" />
+                  Brand Voice
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="text-sm">
+                  <Label htmlFor="emailTone" className="mb-2 block">Communication Style</Label>
+                  <Select 
+                    value={agentConfig.emailSettings.emailTone}
+                    onValueChange={(value) => {
+                      updateSection("emailSettings", {
+                        ...agentConfig.emailSettings,
+                        emailTone: value
+                      })
+                    }}
+                  >
+                    <SelectTrigger id="emailTone" className="rounded-md">
+                      <SelectValue placeholder="Select a tone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="professional">Professional</SelectItem>
+                      <SelectItem value="friendly">Friendly</SelectItem>
+                      <SelectItem value="casual">Casual</SelectItem>
+                      <SelectItem value="formal">Formal</SelectItem>
+                      <SelectItem value="enthusiastic">Enthusiastic</SelectItem>
+                      <SelectItem value="empathetic">Empathetic</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  <div className="mt-4">
+                    <div className="flex flex-wrap gap-1">
+                      {businessInsights.brandVoice.map((trait, index) => (
+                        <Badge key={index} variant="outline" className="bg-gray-50 rounded-md">
+                          {trait}
+                        </Badge>
+                      ))}
+                    </div>
+                    {businessInsights.brandVoice.length === 0 && (
+                      <p className="text-muted-foreground mt-1">Adjust your brand voice in the Business Brand tab.</p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          
+          {/* Display manual and voice entries at the bottom */}
+          <Card className="border shadow-sm rounded-md mt-8">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-md flex items-center gap-2">
+                <BookText className="h-4 w-4 text-blue-600" />
+                Additional Business Context
+              </CardTitle>
+              <CardDescription>
+                Additional context information that will be used by the customer service agent
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {agentConfig.businessKnowledge?.manualEntries && 
+               agentConfig.businessKnowledge.manualEntries.length > 0 ? (
+                <div className="space-y-4">
+                  {agentConfig.businessKnowledge.manualEntries.map((entry) => (
+                    <div key={entry.id} className="p-3 bg-gray-50 rounded-md">
+                      <div className="flex items-center justify-between mb-2">
+                        <Badge variant={entry.source === 'voice' ? 'secondary' : 'outline'} className="rounded-md">
+                          {entry.source === 'voice' ? 'Voice Input' : 'Manual Entry'}
+                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(entry.timestamp).toLocaleString()}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteContextEntry(entry.id)}
+                            className="h-6 w-6 rounded-md hover:bg-red-50 hover:text-red-600"
+                            title="Delete entry"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-sm">{entry.content}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 text-muted-foreground">
+                  <BookText className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                  <p>No business context entries yet.</p>
+                  <p className="text-sm">Add context using the buttons above.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </>
+    )
+  }
+
+  return (
+    <div className="w-full bg-white">
+      <div className="p-6 py-4">
+        <PageHeader
+          title={<><span className="bg-gradient-to-r from-[#0D6EFD] to-[#FF8C00] bg-clip-text text-transparent">Tap Agent</span> Setup</>}
+        >
+          <div className="flex items-center gap-4">
+            {/* Tabs on the left */}
+            <div className="flex space-x-2 mr-auto">
+              <Button
+                onClick={() => handleMainTabChange("setup")}
+                variant={mainTab === "setup" ? "default" : "outline"}
+                size="sm"
+                className={`rounded-md h-9 transition-all ${
+                  mainTab === "setup" 
+                    ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white border-none shadow-sm" 
+                    : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Wrench className="h-4 w-4" />
+                  <span>Setup</span>
+                </div>
+              </Button>
+              
+              <Button
+                onClick={() => handleMainTabChange("customers")}
+                variant={mainTab === "customers" ? "default" : "outline"}
+                size="sm"
+                className={`rounded-md h-9 transition-all ${
+                  mainTab === "customers" 
+                    ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white border-none shadow-sm" 
+                    : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  <span>Customers</span>
+                </div>
+              </Button>
+            </div>
+            
+            {/* Integration logos on the right */}
+            <div className="hidden md:flex items-center">
+              <div className="flex -space-x-3 overflow-hidden">
+                <div className="z-30 relative w-8 h-8 rounded-md bg-white border border-gray-200 shadow-sm flex items-center justify-center p-1" title="Gmail Connected">
+                  <Image 
+                    src="/gmail.png" 
+                    alt="Gmail" 
+                    width={20} 
+                    height={16}
+                    className="object-contain"
+                  />
+                </div>
+                <div className="z-20 relative w-8 h-8 rounded-md bg-white shadow-sm flex items-center justify-center overflow-hidden" title="Square Connected">
+                  <Image 
+                    src="/square.png" 
+                    alt="Square" 
+                    width={24} 
+                    height={24}
+                    className="object-cover w-7 h-7"
+                  />
+                </div>
+                <div className="z-10 relative w-8 h-8 rounded-md bg-white shadow-sm flex items-center justify-center overflow-hidden" title="Lightspeed Connected">
+                  <Image 
+                    src="/lslogo.png" 
+                    alt="Lightspeed" 
+                    width={24} 
+                    height={24}
+                    className="object-cover w-7 h-7"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </PageHeader>
+        
+        <Tabs defaultValue="setup" value={mainTab} onValueChange={handleMainTabChange} className="w-full mt-6">
+          <TabsContent value="setup">
+            {/* Agent Type Selection */}
+            <Tabs 
+              defaultValue="reward" 
+              value={agentType} 
+              onValueChange={handleAgentTypeChange}
+              className="w-full mb-5"
+            >
+              {agentType !== "customer-service-setup" && (
+                <div className="flex justify-start mb-4">
+                  <TabsList className="hidden">
+                    <TabsTrigger value="reward">Reward Agent</TabsTrigger>
+                    <TabsTrigger value="customer-service">Customer Service</TabsTrigger>
+                  </TabsList>
+                  
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={() => handleAgentTypeChange("reward")}
+                      className={`flex items-center justify-center gap-2 px-5 py-3 text-sm transition-all border shadow-sm hover:bg-gray-50 rounded-md font-medium ${
+                        agentType === "reward" 
+                          ? "bg-blue-50 border-blue-200" 
+                          : "bg-white text-gray-700"
+                      }`}
+                    >
+                      <div className={`${
+                        agentType === "reward" 
+                          ? "bg-blue-100 p-1.5 rounded-full" 
+                          : "text-gray-500"
+                      }`}>
+                        <Award className={`h-5 w-5 ${agentType === "reward" ? "text-blue-600" : ""}`} />
+                      </div>
+                      <span className={agentType === "reward" ? "bg-gradient-to-r from-[#0D6EFD] to-[#FF8C00] bg-clip-text text-transparent" : ""}>Reward Agent</span>
+                    </Button>
+                    <Button
+                      onClick={() => handleAgentTypeChange("customer-service")}
+                      className={`flex items-center justify-center gap-2 px-5 py-3 text-sm transition-all border shadow-sm hover:bg-gray-50 rounded-md font-medium ${
+                        agentType === "customer-service" 
+                          ? "bg-blue-50 border-blue-200" 
+                          : "bg-white text-gray-700"
+                      }`}
+                    >
+                      <div className={`${
+                        agentType === "customer-service" 
+                          ? "bg-blue-100 p-1.5 rounded-full" 
+                          : "text-gray-500"
+                      }`}>
+                        <Bot className={`h-5 w-5 ${agentType === "customer-service" ? "text-blue-600" : ""}`} />
+                      </div>
+                      <span className={agentType === "customer-service" ? "bg-gradient-to-r from-[#0D6EFD] to-[#FF8C00] bg-clip-text text-transparent" : ""}>Customer Service Agent</span>
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
+              <TabsContent value="reward">
+                {/* Reward Agent content */}
+                {/* ... existing reward agent content ... */}
+              </TabsContent>
+              
+              <TabsContent value="customer-service">
+                {/* Customer Service Agent content */}
+                {/* ... existing customer service agent content ... */}
+              </TabsContent>
+            </Tabs>
+          </TabsContent>
+          
+          <TabsContent value="customers">
+            <CustomersList />
+          </TabsContent>
+        </Tabs>
+      </div>
+      
+      {/* Sheets and Dialogs */}
+      {customerServiceSheetOpen && (
+        <Sheet open={customerServiceSheetOpen} onOpenChange={setCustomerServiceSheetOpen}>
+          {/* ... existing sheet content ... */}
+        </Sheet>
+      )}
+      
+      {/* File Details Sheet */}
+      <Sheet open={fileDetailsOpen} onOpenChange={setFileDetailsOpen}>
+        {/* ... existing sheet content ... */}
+      </Sheet>
+    </div>
+  )
+} 

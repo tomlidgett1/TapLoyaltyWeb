@@ -2,7 +2,7 @@
 
 import { SideNav } from "@/components/side-nav"
 import { usePathname } from "next/navigation"
-import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic, Menu, Pencil, Loader2 } from "lucide-react"
+import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic, Menu, Pencil, Loader2, ExternalLink, Plug } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useState, useEffect, useRef } from "react"
@@ -48,6 +48,7 @@ import { getFunctions, httpsCallable } from "firebase/functions"
 import { useToast } from "@/components/ui/use-toast"
 import { Textarea } from "@/components/ui/textarea"
 import { TypeAnimation } from 'react-type-animation'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // Custom scrollbar styles
 const scrollbarStyles = `
@@ -939,6 +940,62 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     }
   }
   
+  // Add state for chatbot panel
+  const [showChatbotPanel, setShowChatbotPanel] = useState(false)
+  const [chatMessages, setChatMessages] = useState<{role: string, content: string}[]>([
+    {role: 'assistant', content: 'Hello! How can I assist you today?'}
+  ])
+  const [userInput, setUserInput] = useState('')
+  const [isTyping, setIsTyping] = useState(false)
+  const chatContainerRef = useRef<HTMLDivElement>(null)
+  
+  // Add state for integrations dropdown
+  const [showIntegrationsDropdown, setShowIntegrationsDropdown] = useState(false)
+  
+  // Define integration items
+  const integrations = [
+    { name: 'Gmail', connected: true, icon: 'https://www.gstatic.com/images/branding/product/1x/gmail_2020q4_32dp.png' },
+    { name: 'Lightspeed', connected: false, icon: 'https://cdn.iconscout.com/icon/free/png-256/free-lightspeed-4054744-3352961.png' },
+    { name: 'Square', connected: true, icon: 'https://cdn.iconscout.com/icon/free/png-256/free-square-5-226580.png' },
+    { name: 'HubSpot', connected: false, icon: 'https://cdn.iconscout.com/icon/free/png-256/free-hubspot-3521479-2944922.png' },
+    { name: 'Google Drive', connected: true, icon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Google_Drive_icon_%282020%29.svg/32px-Google_Drive_icon_%282020%29.svg.png' },
+    { name: 'Google Sheets', connected: true, icon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/Google_Sheets_2020_Logo.svg/32px-Google_Sheets_2020_Logo.svg.png' }
+  ]
+  
+  // Add function to handle sending messages to the chatbot
+  const handleSendMessage = () => {
+    if (!userInput.trim()) return
+    
+    // Add user message to chat
+    const newMessage = {role: 'user', content: userInput.trim()}
+    setChatMessages(prev => [...prev, newMessage])
+    setUserInput('')
+    
+    // Simulate assistant typing
+    setIsTyping(true)
+    
+    // Simulate response after delay
+    setTimeout(() => {
+      const responses = [
+        "I'd be happy to help with that!",
+        "Let me look into that for you.",
+        "Great question! Here's what I can tell you...",
+        "I'll assist you with your loyalty program needs.",
+        "I understand what you're asking. Let me provide some information."
+      ]
+      const randomResponse = responses[Math.floor(Math.random() * responses.length)]
+      setChatMessages(prev => [...prev, {role: 'assistant', content: randomResponse}])
+      setIsTyping(false)
+    }, 1500)
+  }
+  
+  // Scroll to bottom of chat when new messages are added
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+    }
+  }, [chatMessages, isTyping])
+  
   if (!pathname) {
     return null; // or a loading state
   }
@@ -1051,7 +1108,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         ></div>
         {/* Side navigation */}
         <div className={`relative h-full z-50 ${mobileNavOpen ? 'block' : 'hidden'} lg:block w-64 max-w-[80vw] lg:w-auto`}>
-          <SideNav />
+          <SideNav chatPanelOpen={showChatbotPanel} />
         </div>
       </div>
       
@@ -1329,6 +1386,17 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   Docs
                 </Link>
               </Button>
+              
+              {/* Add Chatbot button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-2 bg-white hover:bg-gray-50 border-transparent rounded-md"
+                onClick={() => setShowChatbotPanel(!showChatbotPanel)}
+              >
+                <MessageSquare className="h-4 w-4 text-blue-500 mr-1.5" />
+                <span className="font-medium">Chat</span>
+              </Button>
             </div>
             
             <DropdownMenu>
@@ -1419,11 +1487,162 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         
-        {/* Main Content */}
-        <main className="flex-1 overflow-auto px-2 pb-2">
-          <div className="bg-white rounded-md h-full overflow-auto custom-scrollbar border border-gray-200">
+        {/* Main Content with Chatbot Panel */}
+        <main className="flex-1 overflow-hidden px-2 pb-2 flex">
+          {/* Main content area - using Framer Motion for smooth animation */}
+          <motion.div 
+            className="bg-white rounded-md overflow-auto custom-scrollbar border border-gray-200"
+            animate={{
+              width: showChatbotPanel ? '65%' : '100%'
+            }}
+            transition={{
+              type: "spring",
+              stiffness: 300,
+              damping: 30
+            }}
+          >
             {children}
-          </div>
+          </motion.div>
+          
+          {/* Chatbot Panel - using Framer Motion for smooth animation */}
+          <AnimatePresence>
+            {showChatbotPanel && (
+              <motion.div 
+                className="bg-white rounded-md border border-gray-200 ml-2 overflow-hidden flex flex-col"
+                initial={{ width: 0, opacity: 0, x: 40 }}
+                animate={{ width: "35%", opacity: 1, x: 0 }}
+                exit={{ width: 0, opacity: 0, x: 40 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 300,
+                  damping: 30,
+                  opacity: { duration: 0.2 }
+                }}
+              >
+                {/* Chat header */}
+                <div className="flex items-center justify-between p-3 border-b">
+                  <div className="flex items-center">
+                    <Bot className="h-5 w-5 text-blue-500 mr-2" />
+                    <h3 className="font-medium">Chat Assistant</h3>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {/* Integrations dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 w-8 p-0 rounded-md"
+                        >
+                          <Plug className="h-4 w-4 text-gray-500" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48 rounded-md">
+                        <div className="px-2 py-1.5 text-xs font-medium text-gray-500 border-b">
+                          Integrations
+                        </div>
+                        {integrations.map((integration, index) => (
+                          <DropdownMenuItem key={index} className="py-1.5 px-2">
+                            <div className="flex items-center justify-between w-full text-xs">
+                              <div className="flex items-center gap-2">
+                                <img 
+                                  src={integration.icon} 
+                                  alt={integration.name} 
+                                  className="h-4 w-4"
+                                  onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                                    const target = e.currentTarget;
+                                    target.src = "data:image/svg+xml;charset=UTF-8,%3Csvg width='16' height='16' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23ccc'/%3E%3C/svg%3E";
+                                  }}
+                                />
+                                <span>{integration.name}</span>
+                              </div>
+                              <div className={`h-2 w-2 rounded-full ${integration.connected ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="py-1.5 px-2 text-xs text-blue-500">
+                          Manage integrations
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    
+                    {/* Close button */}
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 p-0 rounded-md"
+                      onClick={() => setShowChatbotPanel(false)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                
+                {/* Chat messages */}
+                <div 
+                  ref={chatContainerRef}
+                  className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
+                >
+                  {chatMessages.map((msg, index) => (
+                    <div 
+                      key={index} 
+                      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div 
+                        className={`max-w-[80%] p-3 rounded-md text-xs ${
+                          msg.role === 'user' 
+                            ? 'bg-blue-500 text-white rounded-tr-none' 
+                            : 'bg-gray-100 text-gray-800 rounded-tl-none'
+                        }`}
+                      >
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {isTyping && (
+                    <div className="flex justify-start">
+                      <div className="bg-gray-100 text-gray-800 p-3 rounded-md rounded-tl-none max-w-[80%]">
+                        <div className="flex space-x-1">
+                          <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce"></div>
+                          <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                          <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Chat input */}
+                <div className="p-3 border-t">
+                  <div className="flex gap-2">
+                    <Input
+                      type="text"
+                      placeholder="Type a message..."
+                      className="flex-1 text-xs"
+                      value={userInput}
+                      onChange={e => setUserInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          handleSendMessage()
+                        }
+                      }}
+                    />
+                    <Button 
+                      size="sm"
+                      onClick={handleSendMessage}
+                      disabled={!userInput.trim() || isTyping}
+                      className="h-10 px-3 rounded-md"
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </main>
       </div>
 

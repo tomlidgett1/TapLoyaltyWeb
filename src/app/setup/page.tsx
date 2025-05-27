@@ -48,6 +48,12 @@ import {
   TooltipTrigger
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 // Add custom styles
 const setupStyles = `
@@ -505,11 +511,55 @@ export default function SetupPage() {
   const [competitorAgentActivated, setCompetitorAgentActivated] = useState(false);
   
   // Tab state
-  const [activeTab, setActiveTab] = useState("merchant");
+  const [activeTab, setActiveTab] = useState("main");
   
   // Info drawer state
   const [infoDrawerOpen, setInfoDrawerOpen] = useState(false);
   const [activeInfoTab, setActiveInfoTab] = useState("merchant");
+  
+  // Integrations popup state
+  const [showIntegrationsPopup, setShowIntegrationsPopup] = useState(false);
+  
+  // Define available integrations
+  const availableIntegrations = [
+    { id: 'xero', name: 'Xero', description: 'Accounting and bookkeeping', logo: 'xero.png', status: 'active' },
+    { id: 'square', name: 'Square', description: 'Point of sale system', logo: 'square.png', status: 'active' },
+    { id: 'lightspeed', name: 'Lightspeed', description: 'Retail POS system', logo: 'lslogo.png', status: 'active' },
+    { id: 'gmail', name: 'Gmail', description: 'Email communication', logo: 'gmail.png', status: 'active' },
+    { id: 'mailchimp', name: 'Mailchimp', description: 'Email marketing', logo: 'mailchimp.png', status: 'active' },
+    { id: 'shopify', name: 'Shopify', description: 'E-commerce platform', logo: 'square.png', status: 'coming-soon' },
+    { id: 'stripe', name: 'Stripe', description: 'Payment processing', logo: 'square.png', status: 'coming-soon' },
+    { id: 'quickbooks', name: 'QuickBooks', description: 'Accounting software', logo: 'xero.png', status: 'coming-soon' },
+    { id: 'hubspot', name: 'HubSpot', description: 'CRM and marketing', logo: 'mailchimp.png', status: 'coming-soon' },
+    { id: 'salesforce', name: 'Salesforce', description: 'Customer relationship management', logo: 'square.png', status: 'coming-soon' },
+  ];
+  
+  // Function to handle integration connection
+  const handleIntegrationConnect = (integration: typeof availableIntegrations[0]) => {
+    if (integration.status === 'active') {
+      toast({
+        title: `${integration.name} Connected`,
+        description: `Successfully connected to ${integration.name}!`
+      });
+      
+      // Update connection state based on integration type
+      if (integration.id === 'gmail') {
+        setGmailConnected(true);
+      } else if (integration.id === 'square') {
+        setSquareConnected(true);
+      } else if (integration.id === 'lightspeed') {
+        setLightspeedConnected(true);
+      } else if (integration.id === 'xero') {
+        setXeroConnected(true);
+      }
+    } else {
+      toast({
+        title: `${integration.name}`,
+        description: `${integration.name} integration coming soon!`
+      });
+    }
+    setShowIntegrationsPopup(false);
+  };
 
   // Mock handlers for connect buttons
   const handleConnectGmail = () => {
@@ -589,40 +639,10 @@ export default function SetupPage() {
       <style dangerouslySetInnerHTML={{ __html: setupStyles }} />
       
       <div className="flex flex-col h-full max-w-full">
-        {/* Header Section with tabs */}
-        <div className="px-6 py-5 border-b border-gray-100">
+        {/* Header Section */}
+        <div className="px-6 py-5">
           <div className="flex justify-between items-center">
-            <h1 className="text-xl font-semibold tracking-tight text-gray-900">Get Started</h1>
-            
-            <div className="flex items-center gap-3">
-              {/* Tabs positioned directly to the left of Learn More button */}
-              <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
-            <button
-              onClick={() => setActiveTab("merchant")}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                activeTab === "merchant"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
-              )}
-            >
-                  <Store size={15} /> 
-              <span>Tap Merchant</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("loyalty")}
-              className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                activeTab === "loyalty"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
-              )}
-            >
-                  <Gift size={15} />
-              <span>Tap Loyalty</span>
-            </button>
-          </div>
-          
+            <div>
               <Button
                 variant="outline"
                 className="rounded-md flex items-center gap-1.5"
@@ -632,21 +652,113 @@ export default function SetupPage() {
                 <span>Learn More</span>
               </Button>
             </div>
+            
+            {/* Back button for tab pages */}
+            {(activeTab === "merchant" || activeTab === "loyalty") && (
+              <div>
+                <Button 
+                  variant="outline" 
+                  className="rounded-md flex items-center gap-2"
+                  onClick={() => setActiveTab("main")}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Back
+                </Button>
+              </div>
+            )}
           </div>
         </div>
         
         <div className="px-6 pt-6 pb-14 flex-1 overflow-y-auto bg-white content-area">
+          {/* Main Get Started Content */}
+          {activeTab === "main" && (
+            <div className="tab-section">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                {/* Tap Merchant Box */}
+                <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
+                  <div>
+                    <h3 className="text-md font-semibold mb-2">Tap Merchant</h3>
+                    <p className="text-sm text-gray-600 mb-4">Connect your business systems, manage data, and build powerful integrations with POS systems, accounting software, and communication tools.</p>
+                    
+                    {/* Integration Icons */}
+                    <div className="mb-6">
+                      <p className="text-xs text-gray-500 mb-3 font-medium">INTEGRATIONS AVAILABLE</p>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <div className="bg-white p-2 rounded-md border border-gray-200 shadow-sm">
+                          <Image src="/gmailnew.png" alt="Gmail" width={20} height={20} className="object-contain" />
+                        </div>
+                        <div className="bg-white p-2 rounded-md border border-gray-200 shadow-sm">
+                          <Image src="/square.png" alt="Square" width={20} height={20} className="object-contain" />
+                        </div>
+                        <div className="bg-white p-2 rounded-md border border-gray-200 shadow-sm">
+                          <Image src="/lslogo.png" alt="Lightspeed" width={20} height={20} className="object-contain" />
+                        </div>
+                        <div className="bg-white p-2 rounded-md border border-gray-200 shadow-sm">
+                          <Image src="/xero.png" alt="Xero" width={20} height={20} className="object-contain" />
+                        </div>
+                        <div className="bg-white p-2 rounded-md border border-gray-200 shadow-sm">
+                          <Image src="/mailchimp.png" alt="Mailchimp" width={20} height={20} className="object-contain" />
+                        </div>
+                        <div className="bg-white p-2 rounded-md border border-gray-200 shadow-sm">
+                          <Database className="h-5 w-5 text-gray-600" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-auto">
+                    <Button 
+                      variant="outline" 
+                      className="rounded-md"
+                      onClick={() => setActiveTab("merchant")}
+                    >
+                      Get Started
+                    </Button>
+                  </div>
+                </div>
+                
+                {/* Tap Loyalty Box */}
+                <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
+                  <div>
+                    <div className="flex items-center gap-3 mb-3">
+                      <Image src="/taplogo.png" alt="Tap" width={24} height={24} className="object-contain rounded-md" />
+                      <h3 className="text-md font-semibold">Tap Loyalty</h3>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-4">Create engaging loyalty programs, manage customer rewards, and build lasting relationships with your customers through personalised experiences.</p>
+                    
+                    {/* Platform Icons */}
+                    <div className="mb-6">
+                      <p className="text-xs text-gray-500 mb-3 font-medium">POWERED BY</p>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <div className="bg-white p-2 rounded-md border border-gray-200 shadow-sm h-9 w-9 flex items-center justify-center">
+                          <Image src="/apple.jpg" alt="iOS App" width={20} height={20} className="object-contain" />
+                        </div>
+                        <div className="bg-white p-2 rounded-md border border-gray-200 shadow-sm h-9 w-9 flex items-center justify-center">
+                          <Image src="/cdr.png" alt="Consumer Data Right" width={20} height={20} className="object-contain" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-auto">
+                    <Button 
+                      variant="outline" 
+                      className="rounded-md"
+                      onClick={() => setActiveTab("loyalty")}
+                    >
+                      Get Started
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
           {/* Tap Merchant Tab Content */}
           {activeTab === "merchant" && (
             <div className="tab-section">
-              <div className="mb-8">
-                <h2 className="text-xl font-semibold mb-2 text-gray-900">Get started with Tap Merchant</h2>
-                <p className="text-sm text-gray-600">Learn how to set up Tap Merchant and start building your intelligent business platform.</p>
-              </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 {/* Developer quickstart section */}
-                <div className="border border-gray-200 rounded-md p-6 flex flex-col">
+                <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
                   <div>
                     <h3 className="text-md font-semibold mb-2">Business setup quickstart</h3>
                     <p className="text-sm text-gray-600 mb-6">Learn how to get started with Tap Merchant and start building your first connected business application.</p>
@@ -661,7 +773,7 @@ export default function SetupPage() {
               </div>
               
                 {/* Creating core connections */}
-                <div className="border border-gray-200 rounded-md p-6 flex flex-col">
+                <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
                   <div>
                     <h3 className="text-md font-semibold mb-2">Create core connections</h3>
                     <p className="text-sm text-gray-600 mb-6">Configure and create connections to your core business systems to start gathering data.</p>
@@ -670,10 +782,7 @@ export default function SetupPage() {
                     <Button 
                       variant="outline" 
                       className="rounded-md"
-                      onClick={() => toast({
-                        title: "Business Connections",
-                        description: "Configure your email and POS connections to start collecting data"
-                      })}
+                      onClick={() => setShowIntegrationsPopup(true)}
                     >
                       Begin setup
                     </Button>
@@ -684,89 +793,128 @@ export default function SetupPage() {
               <div className="mb-10">
                 <h2 className="text-lg font-medium mb-4">Connect Your Systems</h2>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   {/* Gmail Connection */}
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col">
-                    <div className="mb-4 h-16 flex items-center">
+                  <div className="border border-gray-200 rounded-md p-3 flex flex-col bg-gray-50 text-center">
+                    <div className="mb-2 h-10 flex items-center justify-center">
                       <Image 
                         src="/gmailnew.png"
                         alt="Gmail"
-                        width={50}
-                        height={40}
+                        width={32}
+                        height={24}
                         className="object-contain"
-                  />
-                </div>
-                    <h3 className="text-sm font-semibold mb-2">Gmail</h3>
-                    <p className="text-xs text-gray-600 mb-auto pb-4">Connect Gmail to extract documents and enable AI email management.</p>
+                      />
+                    </div>
+                    <h3 className="text-xs font-semibold mb-1">Gmail</h3>
                     {gmailConnected ? (
-                      <Badge variant="outline" className="w-fit flex gap-1 items-center px-2 py-1 text-emerald-600 border-emerald-200 bg-emerald-50">
-                        <Check size={12} />
+                      <Badge variant="outline" className="w-fit mx-auto flex gap-1 items-center px-1.5 py-0.5 text-emerald-600 border-emerald-200 bg-emerald-50">
+                        <Check size={10} />
                         <span className="text-xs">Connected</span>
                       </Badge>
                     ) : (
-                      <Button size="sm" onClick={handleConnectGmail} variant="outline" className="w-full rounded-md">
+                      <Button size="sm" onClick={handleConnectGmail} variant="outline" className="w-full rounded-md text-xs py-1 h-7">
                         Connect
                       </Button>
                     )}
-              </div>
-              
+                  </div>
+                  
                   {/* Square Connection */}
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col">
-                    <div className="mb-4 h-16 flex items-center">
+                  <div className="border border-gray-200 rounded-md p-3 flex flex-col bg-gray-50 text-center">
+                    <div className="mb-2 h-10 flex items-center justify-center">
                       <Image 
                         src="/square.png"
                         alt="Square"
-                        width={50}
-                        height={40}
+                        width={32}
+                        height={24}
                         className="object-contain"
-                  />
-                </div>
-                    <h3 className="text-sm font-semibold mb-2">Square POS</h3>
-                    <p className="text-xs text-gray-600 mb-auto pb-4">Connect Square to sync transactions and customer data.</p>
+                      />
+                    </div>
+                    <h3 className="text-xs font-semibold mb-1">Square</h3>
                     {squareConnected ? (
-                      <Badge variant="outline" className="w-fit flex gap-1 items-center px-2 py-1 text-emerald-600 border-emerald-200 bg-emerald-50">
-                        <Check size={12} />
+                      <Badge variant="outline" className="w-fit mx-auto flex gap-1 items-center px-1.5 py-0.5 text-emerald-600 border-emerald-200 bg-emerald-50">
+                        <Check size={10} />
                         <span className="text-xs">Connected</span>
                       </Badge>
                     ) : (
-                      <Button size="sm" onClick={() => handleConnectPos('Square')} variant="outline" className="w-full rounded-md">
+                      <Button size="sm" onClick={() => handleConnectPos('Square')} variant="outline" className="w-full rounded-md text-xs py-1 h-7">
                         Connect
                       </Button>
                     )}
-              </div>
-              
+                  </div>
+                  
                   {/* Lightspeed Connection */}
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col">
-                    <div className="mb-4 h-16 flex items-center">
+                  <div className="border border-gray-200 rounded-md p-3 flex flex-col bg-gray-50 text-center">
+                    <div className="mb-2 h-10 flex items-center justify-center">
                       <Image 
                         src="/lslogo.png"
                         alt="Lightspeed"
-                        width={50}
-                        height={40}
+                        width={32}
+                        height={24}
                         className="object-contain"
-                  />
-                </div>
-                    <h3 className="text-sm font-semibold mb-2">Lightspeed</h3>
-                    <p className="text-xs text-gray-600 mb-auto pb-4">Connect Lightspeed to sync inventory and sales data.</p>
+                      />
+                    </div>
+                    <h3 className="text-xs font-semibold mb-1">Lightspeed</h3>
                     {lightspeedConnected ? (
-                      <Badge variant="outline" className="w-fit flex gap-1 items-center px-2 py-1 text-emerald-600 border-emerald-200 bg-emerald-50">
-                        <Check size={12} />
+                      <Badge variant="outline" className="w-fit mx-auto flex gap-1 items-center px-1.5 py-0.5 text-emerald-600 border-emerald-200 bg-emerald-50">
+                        <Check size={10} />
                         <span className="text-xs">Connected</span>
                       </Badge>
                     ) : (
-                      <Button size="sm" onClick={() => handleConnectPos('Lightspeed')} variant="outline" className="w-full rounded-md">
+                      <Button size="sm" onClick={() => handleConnectPos('Lightspeed')} variant="outline" className="w-full rounded-md text-xs py-1 h-7">
                         Connect
                       </Button>
                     )}
-              </div>
-            </div>
+                  </div>
+                  
+                  {/* Xero Connection */}
+                  <div className="border border-gray-200 rounded-md p-3 flex flex-col bg-gray-50 text-center">
+                    <div className="mb-2 h-10 flex items-center justify-center">
+                      <Image 
+                        src="/xero.png"
+                        alt="Xero"
+                        width={32}
+                        height={24}
+                        className="object-contain"
+                      />
+                    </div>
+                    <h3 className="text-xs font-semibold mb-1">Xero</h3>
+                    {xeroConnected ? (
+                      <Badge variant="outline" className="w-fit mx-auto flex gap-1 items-center px-1.5 py-0.5 text-emerald-600 border-emerald-200 bg-emerald-50">
+                        <Check size={10} />
+                        <span className="text-xs">Connected</span>
+                      </Badge>
+                    ) : (
+                      <Button size="sm" onClick={handleConnectXero} variant="outline" className="w-full rounded-md text-xs py-1 h-7">
+                        Connect
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {/* Plus More Section */}
+                  <div className="border border-gray-200 rounded-md p-3 flex flex-col bg-gray-50 text-center">
+                    <div className="mb-2 h-10 flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                        <span className="text-gray-500 text-lg font-bold">+</span>
+                      </div>
+                    </div>
+                    <h3 className="text-xs font-semibold mb-1">10+ More</h3>
+                    <Button 
+                      size="sm" 
+                      onClick={() => setShowIntegrationsPopup(true)} 
+                      variant="outline" 
+                      className="w-full rounded-md text-xs py-1 h-7"
+                    >
+                      View All
+                    </Button>
+                  </div>
+                </div>
               </div>
               
               <div>
                 <h2 className="text-lg font-medium mb-4">Start Building</h2>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col">
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
                     <div className="mb-2">
                       <Database className="h-8 w-8 text-blue-500" />
                     </div>
@@ -785,7 +933,7 @@ export default function SetupPage() {
                     )}
                   </div>
                   
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col">
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
                     <div className="mb-2">
                       <Bot className="h-8 w-8 text-indigo-500" />
                     </div>
@@ -804,7 +952,7 @@ export default function SetupPage() {
                     )}
                   </div>
                   
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col">
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
                     <div className="mb-2">
                       <BarChart className="h-8 w-8 text-green-500" />
                     </div>
@@ -830,14 +978,10 @@ export default function SetupPage() {
           {/* Tap Loyalty Tab Content */}
           {activeTab === "loyalty" && (
             <div className="tab-section">
-              <div className="mb-8">
-                <h2 className="text-xl font-semibold mb-2 text-gray-900">Get started with Tap Loyalty</h2>
-                <p className="text-sm text-gray-600">Learn how to set up and manage your loyalty program to drive customer retention.</p>
-              </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 {/* Developer quickstart section */}
-                <div className="border border-gray-200 rounded-md p-6 flex flex-col">
+                <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
                   <div>
                     <h3 className="text-md font-semibold mb-2">Loyalty program quickstart</h3>
                     <p className="text-sm text-gray-600 mb-6">Learn how to set up your loyalty program and start rewarding your customers.</p>
@@ -852,7 +996,7 @@ export default function SetupPage() {
               </div>
               
                 {/* Sample data demo */}
-                <div className="border border-gray-200 rounded-md p-6 flex flex-col">
+                <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
                   <div>
                     <h3 className="text-md font-semibold mb-2">Configure rewards</h3>
                     <p className="text-sm text-gray-600 mb-6">Set up your rewards catalog and points earning rules for your loyalty program.</p>
@@ -872,7 +1016,7 @@ export default function SetupPage() {
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   {/* Tap Agent */}
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col">
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
                     <div className="mb-2">
                       <Sparkles className="h-8 w-8 text-amber-500" />
                 </div>
@@ -892,7 +1036,7 @@ export default function SetupPage() {
               </div>
               
                   {/* Points Rules */}
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col">
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
                     <div className="mb-2">
                       <Zap className="h-8 w-8 text-orange-500" />
                 </div>
@@ -906,7 +1050,7 @@ export default function SetupPage() {
               </div>
               
                   {/* Rewards Catalog */}
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col">
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
                     <div className="mb-2">
                       <Gift className="h-8 w-8 text-pink-500" />
                     </div>
@@ -925,7 +1069,7 @@ export default function SetupPage() {
                 <h2 className="text-lg font-medium mb-4">Customer Analytics</h2>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col">
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
                     <div className="mb-2">
                       <Users className="h-8 w-8 text-blue-500" />
                     </div>
@@ -938,7 +1082,7 @@ export default function SetupPage() {
                     </Link>
                   </div>
                   
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col">
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
                     <div className="mb-2">
                       <LineChart className="h-8 w-8 text-indigo-500" />
                     </div>
@@ -1428,18 +1572,59 @@ export default function SetupPage() {
               <div className="mt-6 flex justify-center">
                 <Button
                   onClick={() => {
-                    setActiveTab('loyalty');
+                    setActiveTab('main');
                     setInfoDrawerOpen(false);
                   }}
                   className="rounded-md"
                 >
-                  Explore Tap Loyalty
+                  Back to Get Started
                 </Button>
               </div>
             </div>
           )}
         </div>
       </div>
+      
+      {/* Integrations Dialog */}
+      <Dialog open={showIntegrationsPopup} onOpenChange={setShowIntegrationsPopup}>
+        <DialogContent className="max-w-xl max-h-[70vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Available Integrations</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 mt-3">
+            {availableIntegrations.map((integration) => (
+              <div key={integration.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-md hover:bg-gray-50">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-white rounded-md border border-gray-200 shadow-sm flex items-center justify-center">
+                    <img
+                      src={`/${integration.logo}`}
+                      alt={integration.name}
+                      width={20}
+                      height={20}
+                      className="object-contain"
+                    />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900 text-sm">{integration.name}</h3>
+                    <p className="text-xs text-gray-600">{integration.description}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant={integration.status === 'active' ? 'default' : 'outline'}
+                    disabled={integration.status === 'coming-soon'}
+                    onClick={() => handleIntegrationConnect(integration)}
+                    className="rounded-md text-xs px-3 py-1"
+                  >
+                    {integration.status === 'active' ? 'Connect' : 'Coming Soon'}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   )
 } 

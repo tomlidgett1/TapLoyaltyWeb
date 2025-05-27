@@ -2986,7 +2986,7 @@ export default function NotesPage() {
         <div className="px-6 py-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-semibold tracking-tight">Documents</h1>
+              {/* Removed title "Documents" */}
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -3005,7 +3005,8 @@ export default function NotesPage() {
                 </Tooltip>
               </TooltipProvider>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center justify-between w-full">
+              {/* Search bar moved to far left */}
               <div className="relative w-full md:w-96 max-w-full">
                 <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
                   {searchMode === 'filter' ? 

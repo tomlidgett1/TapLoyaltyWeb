@@ -2,7 +2,7 @@
 
 import { SideNav } from "@/components/side-nav"
 import { usePathname } from "next/navigation"
-import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic, Menu, Pencil, Loader2, ExternalLink, Plug } from "lucide-react"
+import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic, Menu, Pencil, Loader2, ExternalLink, Plug, PanelRight, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useState, useEffect, useRef } from "react"
@@ -25,6 +25,8 @@ import { CreateRewardSheet } from "@/components/create-reward-sheet"
 import { CreatePointsRuleSheet } from "@/components/create-points-rule-sheet"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import NextImage from "next/image"
 import { collection, query, where, getDocs, Timestamp, orderBy, limit, getDoc, doc, onSnapshot, addDoc, updateDoc, serverTimestamp } from "firebase/firestore"
 import {
   Tooltip,
@@ -44,11 +46,55 @@ import {
 import { SendBroadcastSheet } from "@/components/send-broadcast-sheet"
 import { IntroductoryRewardSheet } from "@/components/introductory-reward-sheet"
 import { TapAgentSheet } from "@/components/tap-agent-sheet"
-import { getFunctions, httpsCallable } from "firebase/functions"
+import { getFunctions, httpsCallable, HttpsCallableResult } from "firebase/functions"
 import { useToast } from "@/components/ui/use-toast"
 import { Textarea } from "@/components/ui/textarea"
 import { TypeAnimation } from 'react-type-animation'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useMerchant } from "@/hooks/use-merchant"
+import {
+  AIInput,
+  AIInputButton,
+  AIInputSubmit,
+  AIInputTextarea,
+  AIInputToolbar,
+  AIInputTools,
+} from '@/components/ui/kibo-ui/ai/input'
+import { AIResponse } from '@/components/ui/kibo-ui/ai/response'
+
+// Streaming Markdown Component using kibo-ui AIResponse
+const StreamingMarkdown = ({ text }: { text: string }) => {
+  const [displayText, setDisplayText] = useState('')
+  const [currentIndex, setCurrentIndex] = useState(0)
+  
+  useEffect(() => {
+    if (currentIndex < text.length) {
+      const timer = setTimeout(() => {
+        setDisplayText(text.slice(0, currentIndex + 1))
+        setCurrentIndex(prev => prev + 1)
+      }, 20) // Adjust speed as needed (20ms = 50 chars/second)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [text, currentIndex])
+  
+  // Reset when text changes (new message)
+  useEffect(() => {
+    setCurrentIndex(0)
+    setDisplayText('')
+  }, [text])
+  
+  return (
+    <div className="relative">
+      <AIResponse className="prose prose-sm max-w-none prose-headings:text-gray-800 prose-p:text-gray-800 prose-li:text-gray-800 prose-strong:text-gray-800">
+        {displayText}
+      </AIResponse>
+      {currentIndex < text.length && (
+        <span className="animate-pulse">|</span>
+      )}
+    </div>
+  )
+}
 
 // Custom scrollbar styles
 const scrollbarStyles = `
@@ -73,6 +119,34 @@ const scrollbarStyles = `
     background-clip: text;
     color: transparent;
     font-weight: 600;
+  }
+  /* Hide scrollbars for sidebar */
+  .hide-scrollbar {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none;  /* IE 10+ */
+    overflow: hidden !important;
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none; /* Chrome/Safari/Webkit */
+  }
+  
+  /* Visible scrollbar for main content */
+  .main-content-scrollbar::-webkit-scrollbar {
+    width: 0px;
+    background: transparent;
+  }
+  .main-content-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .main-content-scrollbar::-webkit-scrollbar-thumb {
+    background: transparent;
+  }
+  .main-content-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: transparent;
+  }
+  .main-content-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 `;
 
@@ -151,6 +225,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   })
   const [metricsLoading, setMetricsLoading] = useState(true)
   const { user } = useAuth()
+  const { merchant } = useMerchant()
   
   // Add state for the competitor analysis sheet
   const [showCompetitorAnalysis, setShowCompetitorAnalysis] = useState(false)
@@ -208,6 +283,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   // Add state to track if animation should be shown (initially true)
   const [showAnimation, setShowAnimation] = useState(true)
+  // Add search state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showSearchPopup, setShowSearchPopup] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const searchPopupRef = useRef<HTMLDivElement>(null)
   
   // Add effect to stop animation after 60 seconds
   useEffect(() => {
@@ -221,6 +301,55 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       return () => clearTimeout(timer);
     }
   }, [showAnimation]);
+  
+  // Add click outside handler for search popup
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        searchPopupRef.current && 
+        !searchPopupRef.current.contains(event.target as Node) &&
+        showSearchPopup
+      ) {
+        setShowSearchPopup(false)
+        setSearchQuery('')
+      }
+    }
+    
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [showSearchPopup])
+  
+  // Add search handler function
+  const handleSearch = async (query: string) => {
+    if (!query.trim()) return
+    
+    // Open chat panel if not already open
+    if (!showChatbotPanel) {
+      setShowChatbotPanel(true)
+    }
+    
+    // Ensure we have a conversation ID
+    let currentConversationId = conversationId
+    if (!currentConversationId) {
+      currentConversationId = await createNewConversation()
+      setConversationId(currentConversationId)
+    }
+    
+    // Add the search query as a user message and process it
+    const searchMessage = {role: 'user', content: query.trim()}
+    setChatMessages(prev => [...prev, searchMessage])
+    
+    // Clear search and process the message
+    setSearchQuery('')
+    setUserInput(query.trim())
+    
+    // Wait a moment for the chat panel to open, then send the message
+    setTimeout(() => {
+      handleSendMessage()
+    }, 100)
+  }
   
   useEffect(() => {
     // Check if current path is onboarding
@@ -628,6 +757,24 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     // Convert path to title case (e.g., "store" -> "Store")
     return path.charAt(0).toUpperCase() + path.slice(1)
   }
+  
+  // Function to get the appropriate icon for a tool name
+  const getToolIcon = (toolName: string) => {
+    const lowerToolName = toolName.toLowerCase()
+    
+    if (lowerToolName.includes('gmail') || lowerToolName.includes('email')) {
+      return '/gmail.png'
+    }
+    
+    // Add more tool icons as needed
+    if (lowerToolName.includes('calendar')) {
+      return '/gmail.png' // Using Gmail icon for Google Calendar for now
+    }
+    
+    // Default icon for unknown tools
+    return null
+  }
+  
   const handleVoiceNoteClick = () => {
     if (recording) {
       // Stop recording
@@ -942,15 +1089,85 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   
   // Add state for chatbot panel
   const [showChatbotPanel, setShowChatbotPanel] = useState(false)
-  const [chatMessages, setChatMessages] = useState<{role: string, content: string}[]>([
-    {role: 'assistant', content: 'Hello! How can I assist you today?'}
-  ])
+  const [chatMessages, setChatMessages] = useState<{role: string, content: string, toolNames?: string[], toolCompleted?: boolean, toolId?: string, toolSuccess?: boolean}[]>([])
   const [userInput, setUserInput] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const chatContainerRef = useRef<HTMLDivElement>(null)
+  const [toolResponse, setToolResponse] = useState<any>(null)
+
+  const [conversationId, setConversationId] = useState<string | null>(null)
+  
+  // Add state for SSE streaming
+  const [streamingStatus, setStreamingStatus] = useState<string>('')
+  const [streamingStep, setStreamingStep] = useState<string>('')
+  const [streamingSteps, setStreamingSteps] = useState<any[]>([])
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [streamingProgress, setStreamingProgress] = useState<{
+    currentStep: number
+    totalSteps: number
+    stepName: string
+    message: string
+  } | null>(null)
+  const eventSourceRef = useRef<EventSource | null>(null)
+  
+  // Add state for selected tools
+  const [selectedTools, setSelectedTools] = useState<any[]>([])
+  
+  // Add state for tool selection display
+  const [showToolSelection, setShowToolSelection] = useState(false)
+  const [selectedToolNames, setSelectedToolNames] = useState<string[]>([])
+  const [toolSelectionMessage, setToolSelectionMessage] = useState<string>('')
+  const [toolCompleted, setToolCompleted] = useState(false)
+  
+  // Add state for typewriter animation
+  const [typewriterText, setTypewriterText] = useState<string>('')
+  const [showTypewriter, setShowTypewriter] = useState(false)
+  
+  // Add state for confirmation dialog
+  const [showConfirmationDialog, setShowConfirmationDialog] = useState(false)
+  const [confirmationData, setConfirmationData] = useState<any>(null)
   
   // Add state for integrations dropdown
   const [showIntegrationsDropdown, setShowIntegrationsDropdown] = useState(false)
+  
+  // Add state for Deep Thought button
+  const [deepThoughtActive, setDeepThoughtActive] = useState(false)
+  
+  // Add state for integrations popup
+  const [showIntegrationsPopup, setShowIntegrationsPopup] = useState(false)
+  
+  // Define available integrations
+  const availableIntegrations = [
+    { id: 'xero', name: 'Xero', description: 'Accounting and bookkeeping', logo: 'xero.png', status: 'active' },
+    { id: 'square', name: 'Square', description: 'Point of sale system', logo: 'square.png', status: 'active' },
+    { id: 'lightspeed', name: 'Lightspeed', description: 'Retail POS system', logo: 'lslogo.png', status: 'active' },
+    { id: 'gmail', name: 'Gmail', description: 'Email communication', logo: 'gmail.png', status: 'active' },
+    { id: 'mailchimp', name: 'Mailchimp', description: 'Email marketing', logo: 'mailchimp.png', status: 'active' },
+    { id: 'shopify', name: 'Shopify', description: 'E-commerce platform', logo: 'square.png', status: 'coming-soon' },
+    { id: 'stripe', name: 'Stripe', description: 'Payment processing', logo: 'square.png', status: 'coming-soon' },
+    { id: 'quickbooks', name: 'QuickBooks', description: 'Accounting software', logo: 'xero.png', status: 'coming-soon' },
+    { id: 'hubspot', name: 'HubSpot', description: 'CRM and marketing', logo: 'mailchimp.png', status: 'coming-soon' },
+    { id: 'salesforce', name: 'Salesforce', description: 'Customer relationship management', logo: 'square.png', status: 'coming-soon' },
+  ]
+  
+  // Function to handle integration connection
+  const handleIntegrationConnect = (integration: typeof availableIntegrations[0]) => {
+    if (integration.status === 'active') {
+      toast({
+        title: `${integration.name} Connected`,
+        description: `Successfully connected to ${integration.name}!`
+      })
+    } else {
+      toast({
+        title: `${integration.name}`,
+        description: `${integration.name} integration coming soon!`
+      })
+    }
+    setShowIntegrationsPopup(false)
+  }
+  
+  // Add state for sidebar collapse
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   
   // Define integration items
   const integrations = [
@@ -962,39 +1179,444 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     { name: 'Google Sheets', connected: true, icon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/Google_Sheets_2020_Logo.svg/32px-Google_Sheets_2020_Logo.svg.png' }
   ]
   
-  // Add function to handle sending messages to the chatbot
-  const handleSendMessage = () => {
+  // Scroll to bottom of chat when new messages are added
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      const container = chatContainerRef.current
+      
+      // Use requestAnimationFrame to ensure DOM has updated after Framer Motion animations
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          container.scrollTo({
+            top: container.scrollHeight,
+            behavior: 'smooth'
+          })
+        })
+      })
+    }
+  }, [chatMessages, isTyping, streamingStatus])
+  
+  // Auto-resize is now handled by the kibo-ui AIInputTextarea component
+  
+  // Create conversation when chat panel is first opened
+  useEffect(() => {
+    if (showChatbotPanel && !conversationId) {
+      createNewConversation().then(newConversationId => {
+        setConversationId(newConversationId)
+      })
+    }
+  }, [showChatbotPanel, conversationId])
+  
+  // Cleanup EventSource when component unmounts
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
+      }
+    }
+  }, [])
+  
+  // Close EventSource when chat panel is closed
+  useEffect(() => {
+    if (!showChatbotPanel && eventSourceRef.current) {
+      eventSourceRef.current.close()
+      eventSourceRef.current = null
+      setIsStreaming(false)
+      setStreamingStatus('')
+      setStreamingStep('')
+      setStreamingProgress(null)
+    }
+  }, [showChatbotPanel])
+  
+  // Handle typewriter animation completion
+  useEffect(() => {
+    if (showTypewriter && typewriterText) {
+      // Calculate duration based on text length and streaming speed (20ms per char)
+      const estimatedDuration = typewriterText.length * 20 + 1000 // 20ms per char + 1 second buffer
+      
+      const timer = setTimeout(() => {
+        // Add the message to chat history and clean up
+        setChatMessages(prev => [...prev, {role: 'assistant', content: typewriterText}])
+        setShowTypewriter(false)
+        setTypewriterText('')
+      }, estimatedDuration)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [showTypewriter, typewriterText])
+  
+  // Function to create a new conversation
+  const createNewConversation = async () => {
+    try {
+      const merchantId = user?.uid
+      if (!merchantId) {
+        console.error('No merchant ID available')
+        return null
+      }
+      
+      // Generate a unique conversation ID
+      const newConversationId = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      
+      // Create conversation via API endpoint
+      const response = await fetch(`/api/merchants/${merchantId}/agent/history/conversations/${newConversationId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conversationId: newConversationId,
+          merchantId: merchantId,
+          createdAt: new Date().toISOString(),
+          status: 'active'
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Failed to create conversation: ${response.status}`)
+      }
+      
+      const conversationData = await response.json()
+      console.log('Created new conversation:', conversationData)
+      
+      return newConversationId
+    } catch (error) {
+      console.error('Error creating new conversation:', error)
+      // Return a fallback conversation ID even if API fails
+      return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    }
+  }
+  
+  
+  // Add function to handle sending messages to the chatbot with SSE streaming
+  const handleSendMessage = async () => {
     if (!userInput.trim()) return
+    
+    // Clear previous responses and streaming state
+    setToolResponse(null)
+    setStreamingStatus('')
+    setStreamingStep('')
+    setStreamingSteps([])
+    setStreamingProgress(null)
+    setShowTypewriter(false)
+    setTypewriterText('')
+    
+    // Ensure we have a conversation ID
+    let currentConversationId = conversationId
+    if (!currentConversationId) {
+      currentConversationId = await createNewConversation()
+      setConversationId(currentConversationId)
+    }
     
     // Add user message to chat
     const newMessage = {role: 'user', content: userInput.trim()}
     setChatMessages(prev => [...prev, newMessage])
+    const userPrompt = userInput.trim()
     setUserInput('')
     
-    // Simulate assistant typing
+    // Textarea height is now handled by the kibo-ui component
+    
+    // Start streaming
+    setIsStreaming(true)
     setIsTyping(true)
     
-    // Simulate response after delay
-    setTimeout(() => {
-      const responses = [
-        "I'd be happy to help with that!",
-        "Let me look into that for you.",
-        "Great question! Here's what I can tell you...",
-        "I'll assist you with your loyalty program needs.",
-        "I understand what you're asking. Let me provide some information."
-      ]
-      const randomResponse = responses[Math.floor(Math.random() * responses.length)]
-      setChatMessages(prev => [...prev, {role: 'assistant', content: randomResponse}])
+    try {
+      // Prepare the request payload
+      const merchantId = user?.uid
+      console.log('Starting SSE stream for:', { merchantId, conversationId: currentConversationId, userPrompt })
+      
+      const payload = {
+        prompt: userPrompt,           // ✅ Changed from 'useCase' to 'prompt'
+        merchantId: merchantId || 'default',  // ✅ Added merchantId field
+        apps: [],
+        params: {},
+        entityId: merchantId || 'default',
+        conversationId: currentConversationId,
+        stream: 'true' // Enable streaming
+      }
+      
+      // Create SSE connection
+      const functionUrl = 'https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/processMultiStepRequest';
+      const queryParams = new URLSearchParams({
+        merchantId: merchantId || 'default',
+        conversationId: currentConversationId || '',
+        stream: 'true'
+      })
+      
+      // Close any existing EventSource
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+      }
+      
+      // Use POST with SSE by sending the payload as form data
+      console.log('Making request to:', functionUrl)
+      console.log('Request method: POST')
+      console.log('Request payload:', payload)
+      
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+        },
+        body: JSON.stringify(payload)
+      })
+      
+      console.log('Response status:', response.status)
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()))
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('HTTP error response:', errorText)
+        throw new Error(`HTTP error! Status: ${response.status} - ${errorText}`)
+      }
+      
+      // Check if response is actually SSE
+      const contentType = response.headers.get('content-type')
+      if (!contentType?.includes('text/event-stream')) {
+        // Fallback to regular JSON response
+        const result = await response.json()
+        console.log('Received regular JSON response:', result)
+        setToolResponse(result)
+        
+        let responseMessage = "I'd be happy to help with that!"
+        if (result && result.text) {
+          responseMessage = result.text
+        }
+        
+        setChatMessages(prev => [...prev, {role: 'assistant', content: responseMessage}])
+        return
+      }
+      
+      // Handle SSE stream
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+      
+      if (!reader) {
+        throw new Error('Failed to get response reader')
+      }
+      
+      let buffer = ''
+      let finalResponse = null
+      
+      while (true) {
+        const { done, value } = await reader.read()
+        
+        if (done) {
+          console.log('SSE stream completed')
+          break
+        }
+        
+        // Decode the chunk and add to buffer
+        const chunk = decoder.decode(value, { stream: true })
+        buffer += chunk
+        
+        // Process complete lines
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || '' // Keep incomplete line in buffer
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6) // Remove 'data: ' prefix
+            
+            if (data === '[DONE]') {
+              console.log('Stream completed with [DONE]')
+              break
+            }
+            
+            try {
+              // Skip empty data
+              if (!data || data.trim() === '') {
+                continue
+              }
+              
+              const parsed = JSON.parse(data)
+              console.log('SSE Event:', parsed)
+              
+              // Validate parsed data structure
+              if (!parsed || typeof parsed !== 'object') {
+                console.warn('Invalid SSE event structure:', parsed)
+                continue
+              }
+              
+              // Handle different event types based on the new SSE structure
+              switch (parsed.type) {
+                case 'status':
+                  // Handle status updates (app detection, tool loading, etc.)
+                  if (parsed.data && parsed.data.message) {
+                    setStreamingStatus(parsed.data.message)
+                  }
+                  break
+                  
+                case 'tool_selected':
+                  // Handle tool selection - add to conversation with loading state
+                  if (parsed.data && parsed.data.tool) {
+                    setChatMessages(prev => [...prev, {
+                      role: 'tool_selection', 
+                      content: '', 
+                      toolNames: [parsed.data.toolDisplayName || parsed.data.tool],
+                      toolCompleted: false,
+                      toolId: parsed.data.id
+                    }])
+                    setStreamingStatus(parsed.data.message || `Using ${parsed.data.toolDisplayName || parsed.data.tool}`)
+                  }
+                  break
+                  
+                case 'tool_complete':
+                  // Handle tool completion - update the corresponding tool selection message
+                  if (parsed.data && parsed.data.tool) {
+                    setChatMessages(prev => {
+                      const messages = [...prev]
+                      // Find the tool_selection message with matching tool name
+                      for (let i = messages.length - 1; i >= 0; i--) {
+                        if (messages[i].role === 'tool_selection' && 
+                            messages[i].toolNames?.includes(parsed.data.toolDisplayName || parsed.data.tool)) {
+                          // If we found a matching tool, it means it was successfully executed
+                          messages[i] = { 
+                            ...messages[i], 
+                            toolCompleted: true,
+                            toolSuccess: true  // Success because we found the matching tool
+                          }
+                          break
+                        }
+                      }
+                      return messages
+                    })
+                    setStreamingStatus(`✅ ${parsed.data.message}`)
+                  }
+                  break
+                  
+                case 'ai_message_chunk':
+                  // Handle streaming AI response chunks
+                  if (parsed.data && parsed.data.delta) {
+                    setTypewriterText(prev => prev + parsed.data.delta)
+                    if (!showTypewriter) {
+                      setShowTypewriter(true)
+                    }
+                  }
+                  break
+                  
+                case 'ai_message':
+                  // Handle final AI message
+                  if (parsed.data && parsed.data.message) {
+                    setChatMessages(prev => [...prev, {
+                      role: 'assistant', 
+                      content: parsed.data.message
+                    }])
+                  }
+                  break
+                  
+                case 'done':
+                  // Handle final completion
+                  finalResponse = parsed.data
+                  setStreamingStatus('✅ Task completed!')
+                  
+                  // Add completion summary if tools were used
+                  if (parsed.data && parsed.data.toolsUsed && parsed.data.toolsUsed.length > 0) {
+                    let successMessage = "## 🛠️ Tools Used:\n\n"
+                    parsed.data.toolsUsed.forEach((tool: any) => {
+                      const status = tool.successful ? '✅' : '❌'
+                      successMessage += `- ${status} **${tool.toolDisplayName || tool.tool}**\n`
+                    })
+                    
+                    setChatMessages(prev => [...prev, {
+                      role: 'assistant', 
+                      content: successMessage
+                    }])
+                  }
+                  break
+                  
+                case 'error':
+                  setStreamingStatus(`❌ ${parsed.data.message}`)
+                  setChatMessages(prev => [...prev, {
+                    role: 'assistant', 
+                    content: `Sorry, I encountered an error: ${parsed.data.message}`
+                  }])
+                  break
+                  
+                // Legacy event types for backwards compatibility
+                case 'status':
+                  setStreamingStatus(parsed.data.message)
+                  break
+                  
+                case 'step':
+                  setStreamingStatus(`Step ${parsed.data.turn}: ${parsed.data.action}`)
+                  break
+                  
+                case 'tool_selected':
+                  // Handle legacy tool selection event
+                  if (parsed.data && parsed.data.toolNames) {
+                    setChatMessages(prev => [...prev, {
+                      role: 'tool_selection', 
+                      content: '', 
+                      toolNames: parsed.data.toolNames,
+                      toolCompleted: false
+                    }])
+                    setStreamingStatus(`Using ${parsed.data.toolNames.join(', ')}`)
+                  }
+                  break
+                  
+                default:
+                  console.log('Unknown SSE event type:', parsed.type, parsed.data)
+              }
+            } catch (e) {
+              console.error('Failed to parse SSE data:', {
+                rawData: data,
+                dataLength: data?.length,
+                error: e instanceof Error ? e.message : String(e),
+                errorType: typeof e
+              })
+              // Don't break the stream for parsing errors, just log and continue
+            }
+          }
+        }
+      }
+      
+      // Process final response
+      if (finalResponse) {
+        console.log('Final response received:', finalResponse)
+        setToolResponse(finalResponse)
+        
+        let responseMessage = "I'd be happy to help with that!"
+        if (finalResponse.text) {
+          responseMessage = finalResponse.text
+        }
+        
+        setChatMessages(prev => [...prev, {role: 'assistant', content: responseMessage}])
+      }
+      
+    } catch (error) {
+      console.error('Error in SSE streaming:', error)
+      
+      // More detailed error handling
+      let errorMessage = 'Unknown error'
+      if (error instanceof Error) {
+        errorMessage = error.message
+        console.error('Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        })
+      }
+      
+      setStreamingStatus(`❌ Error: ${errorMessage}`)
+      setChatMessages(prev => [...prev, {
+        role: 'assistant', 
+        content: `Sorry, I encountered an error while processing your request: ${errorMessage}\n\nPlease try again.`
+      }])
+    } finally {
+      setIsStreaming(false)
       setIsTyping(false)
-    }, 1500)
-  }
-  
-  // Scroll to bottom of chat when new messages are added
-  useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+      
+      // Clean up streaming state after a delay
+      setTimeout(() => {
+        setStreamingStatus('')
+        setStreamingStep('')
+        setStreamingProgress(null)
+        // Tool selection is now part of message history, no need to clear
+      }, 3000)
     }
-  }, [chatMessages, isTyping])
+  }
   
   if (!pathname) {
     return null; // or a loading state
@@ -1107,8 +1729,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           onClick={() => setMobileNavOpen(false)}
         ></div>
         {/* Side navigation */}
-        <div className={`relative h-full z-50 ${mobileNavOpen ? 'block' : 'hidden'} lg:block w-64 max-w-[80vw] lg:w-auto`}>
-          <SideNav chatPanelOpen={showChatbotPanel} />
+        <div className={`relative h-full z-50 ${mobileNavOpen ? 'block' : 'hidden'} lg:block max-w-[80vw] lg:max-w-none overflow-hidden hide-scrollbar`}>
+          <SideNav onCollapseChange={setSidebarCollapsed} collapsed={sidebarCollapsed} />
         </div>
       </div>
       
@@ -1116,425 +1738,511 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         {/* Apply custom scrollbar styles */}
         <style jsx global>{scrollbarStyles}</style>
         
-        {/* Top Header */}
-        <header className="h-16 flex items-center justify-between px-2">
-          <div className="flex items-center gap-4 flex-grow mr-4">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="default"
-                  size="sm"
-                  className="h-9 gap-2 bg-[#007AFF] hover:bg-[#0066CC] text-white shrink-0"
-                >
-                  <PlusCircle className="h-4 w-4" />
-                  Create
-                  <ChevronDown className="h-4 w-4 ml-1" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuItem onClick={() => setShowRewardDialog(true)}>
-                  <Gift className="h-4 w-4 mr-2" />
-                  New Reward
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowRecurringRewardDialog(true)}>
-                  <Coffee className="h-4 w-4 mr-2" />
-                  Create Program
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowBannerDialog(true)}>
-                  <Image className="h-4 w-4 mr-2" />
-                  New Banner
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowBroadcastDialog(true)}>
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  New Message
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowPointsRuleDialog(true)}>
-                  <Zap className="h-4 w-4 mr-2" />
-                  New Points Rule
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowIntroRewardSheet(true)}>
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  <span>Introductory Reward</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            
-            {/* Add animated search bar - substantially wider */}
-            <div className="relative flex-1 min-w-[500px] max-w-[200px] w-full">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                <Search className="h-4 w-4 text-gray-400" />
-              </div>
-              <Input
-                type="text"
-                className="h-9 pl-10 pr-4 w-full rounded-md border border-gray-300 bg-white text-sm"
-                onFocus={() => setIsSearchFocused(true)}
-                onBlur={() => setIsSearchFocused(false)}
-              />
-              {!isSearchFocused && showAnimation && (
-                <div className="absolute inset-y-0 left-10 flex items-center pointer-events-none overflow-hidden">
-                  <span className="text-sm text-gray-400 ml-0.5">
-                    <TypeAnimation
-                      sequence={[
-                        searchPlaceholders[0],
-                        2000,
-                        '',
-                        500,
-                        searchPlaceholders[1],
-                        2000,
-                        '',
-                        500,
-                        searchPlaceholders[2],
-                        2000,
-                        '',
-                        500,
-                        searchPlaceholders[3],
-                        2000,
-                        '',
-                        500,
-                        searchPlaceholders[4],
-                        2000,
-                        '',
-                        500,
-                        searchPlaceholders[5],
-                        2000,
-                        '',
-                        500,
-                        searchPlaceholders[6],
-                        2000,
-                        '',
-                        500,
-                        searchPlaceholders[7],
-                        2000,
-                        '',
-                        500,
-                      ]}
-                      speed={70}
-                      deletionSpeed={60}
-                      repeat={Infinity}
-                      style={{
-                        display: 'inline-block',
-                      }}
-                    />
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-4 shrink-0">
-            <div className="flex items-center gap-2">
-              {/* Quick Note button with dropdown (replaces Voice Note) */}
-              <div className="relative">
-                <DropdownMenu open={quickNoteOpen} onOpenChange={setQuickNoteOpen}>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-9 gap-2 bg-white hover:bg-gray-50 border-transparent rounded-md"
-                      disabled={isSavingQuickNote || audioProcessing || recording || showQuickNoteInput}
-                    >
-                      {isSavingQuickNote ? (
-                        <>
-                          <span className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mr-1.5"></span>
-                          Saving...
-                        </>
-                      ) : audioProcessing ? (
-                        <>
-                          <span className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mr-1.5"></span>
-                          Processing...
-                        </>
-                      ) : recording ? (
-                        <>
-                          <Mic className="h-4 w-4 text-red-500 mr-1.5 animate-pulse" />
-                          {formatDuration(recordingDuration)}
-                        </>
-                      ) : (
-                        <>
-                          <FileText className="h-4 w-4 text-blue-500 mr-1.5" />
-                          Quick Note
-                        </>
-                      )}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  {/* Dropdown content */}
-                  <DropdownMenuContent align="start" className="w-56 rounded-md">
-                    <DropdownMenuItem 
-                      onClick={() => {
-                        setQuickNoteOpen(false);
-                        handleVoiceNoteClick();
-                      }}
-                      disabled={recording || audioProcessing}
-                      className="flex items-center gap-2 cursor-pointer"
-                    >
-                      <Mic className="h-4 w-4 text-gray-500" />
-                      <span>Voice Note</span>
-                    </DropdownMenuItem>
-                    
-                    <DropdownMenuItem 
-                      onClick={() => {
-                        setQuickNoteOpen(false);
-                        setShowQuickNoteInput(true);
-                      }}
-                      disabled={showQuickNoteInput}
-                      className="flex items-center gap-2 cursor-pointer"
-                    >
-                      <Pencil className="h-4 w-4 text-gray-500" />
-                      <span>Standard Note</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                
-                {/* Quick Note Input Popup */}
-                {showQuickNoteInput && (
-                  <div 
-                    ref={quickNoteContainerRef}
-                    className="absolute top-full mt-1 left-0 z-50 w-80 max-w-[90vw] bg-white shadow-lg rounded-md border border-gray-200 overflow-hidden"
-                  >
-                    <div className="p-3 flex flex-col">
-                      <div className="flex justify-between items-center mb-2">
-                        <h3 className="text-sm font-medium">Quick Note</h3>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setShowQuickNoteInput(false);
-                            setQuickNoteText("");
-                          }}
-                          className="h-6 w-6 p-0 rounded-full"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                      <Textarea
-                        ref={quickNoteInputRef}
-                        value={quickNoteText}
-                        onChange={(e) => {
-                          setQuickNoteText(e.target.value);
-                          // Auto-resize is handled by the event listener
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            saveQuickNote();
-                          } else if (e.key === 'Escape') {
-                            setShowQuickNoteInput(false);
-                            setQuickNoteText("");
-                          }
-                        }}
-                        placeholder="Type a quick note and press Enter..."
-                        className="w-full min-h-[80px] max-h-[200px] rounded-md resize-none text-sm"
-                        disabled={isSavingQuickNote}
-                      />
-                      <div className="flex justify-between items-center mt-2.5">
-                        <div className="text-xs text-gray-500 flex items-center">
-                          <span className={`${quickNoteText.length > 300 ? 'text-amber-500 font-medium' : ''}`}>
-                            {quickNoteText.length}
-                          </span>
-                          <span className="mx-1">/</span>
-                          <span>500 characters</span>
-                        </div>
-                        <Button
-                          size="sm"
-                          onClick={saveQuickNote}
-                          disabled={!quickNoteText.trim() || isSavingQuickNote || quickNoteText.length > 500}
-                          className="h-8 text-xs rounded-md px-3"
-                        >
-                          {isSavingQuickNote ? (
-                            <>
-                              <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
-                              Saving
-                            </>
-                          ) : (
-                            <>Save Note</>
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              {/* Tap Agent button */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 gap-2 bg-white hover:bg-gray-50 border-transparent rounded-md"
-                onClick={() => setShowTapAgentSheet(true)}
-              >
-                <Bot className="h-4 w-4 text-blue-500 mr-1.5" />
-                <div className="flex items-center">
-                  <span className="font-bold text-blue-500">Tap</span>
-                  <span className="ml-0.5 bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent font-bold animate-gradient-x">
-                    Agent
-                  </span>
-                </div>
-              </Button>
-              <TapAiButton
-                variant="default"
-                size="sm"
-                className="h-9 w-[120px] bg-[#007AFF] hover:bg-[#0066CC] text-white"
-                //initialPrompt="How can I help you today?"
-              />
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-9 gap-2"
-                asChild
-              >
-                <Link href="/docs">
-                  <FileText className="h-4 w-4" />
-                  Docs
-                </Link>
-              </Button>
-              
-              {/* Add Chatbot button */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 gap-2 bg-white hover:bg-gray-50 border-transparent rounded-md"
-                onClick={() => setShowChatbotPanel(!showChatbotPanel)}
-              >
-                <MessageSquare className="h-4 w-4 text-blue-500 mr-1.5" />
-                <span className="font-medium">Chat</span>
-              </Button>
-            </div>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative">
-                  <Bell className="h-5 w-5" />
-                  {unreadCount > 0 && (
-                    <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-96 rounded-md">
-                <div className="flex items-center justify-between px-4 py-2 border-b">
-                  <h3 className="font-medium">Notifications</h3>
-                  {unreadCount > 0 && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-8 text-xs rounded-md"
-                      onClick={markAllAsRead}
-                    >
-                      Mark all as read
-                    </Button>
-                  )}
-                </div>
-                <div className="max-h-[400px] overflow-y-auto">
-                  {notificationsLoading ? (
-                    <div className="py-6 text-center">
-                      <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto mb-2"></div>
-                      <p className="text-sm text-muted-foreground">Loading notifications...</p>
-                    </div>
-                  ) : notifications.length === 0 ? (
-                    <div className="py-6 text-center">
-                      <Bell className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">No notifications yet</p>
-                    </div>
-                  ) : (
-                    notifications.map((notification) => (
-                      <div 
-                        key={notification.id} 
-                        className={cn(
-                          "px-4 py-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors cursor-pointer",
-                          !notification.read && "bg-blue-50/50"
-                        )}
-                        onClick={() => markAsRead(notification.id)}
-                      >
-                        <div className="flex gap-3">
-                          <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
-                            {getNotificationIcon(notification.type)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start">
-                              <p className="text-sm font-medium">
-                                {notification.type === "AGENT_ACTION" ? (
-                                  <>
-                                    <span className="agent-notification-gradient">
-                                      Agent Notification:
-                                    </span>{' '}
-                                    {notification.message}
-                                  </>
-                                ) : (
-                                  notification.message
-                                )}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatTimeAgo(notification.dateCreated || notification.timestamp)}
-                              </p>
-                            </div>
-                            {notification.customerId && (
-                              <p className="text-xs text-gray-500 mt-1">
-                                Customer: {notification.customerFullName || notification.customerId.substring(0, 8)}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="justify-center" asChild>
-                  <a href="/notifications" className="w-full text-center cursor-pointer">
-                    View all notifications
-                  </a>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </header>
-        
         {/* Main Content with Chatbot Panel */}
-        <main className="flex-1 overflow-hidden px-2 pb-2 flex">
-          {/* Main content area - using Framer Motion for smooth animation */}
+        <main className="flex-1 overflow-hidden p-2 flex">
+          {/* Main content area - no animation */}
           <motion.div 
-            className="bg-white rounded-md overflow-auto custom-scrollbar border border-gray-200"
+            className="bg-white rounded-md overflow-hidden border border-gray-200 flex flex-col"
             animate={{
               width: showChatbotPanel ? '65%' : '100%'
             }}
             transition={{
-              type: "spring",
-              stiffness: 300,
-              damping: 30
+              type: "tween",
+              ease: "easeInOut",
+              duration: 0.35
+            }}
+            style={{
+              width: showChatbotPanel ? '65%' : '100%'
             }}
           >
-            {children}
+            {/* Header moved inside main content */}
+            <header className="h-16 flex items-center justify-between px-4 border-b border-gray-200 bg-white">
+              <div className="flex items-center gap-4 flex-grow mr-4">
+                {/* Title removed from setup page header */}
+                <h1 className="text-lg font-medium ml-2">{getPageTitle()}</h1>
+              </div>
+              
+              <div className="flex items-center gap-4 shrink-0">
+                <div className="flex items-center gap-2">
+                  {/* Quick Note button with dropdown - now text style */}
+                  <div className="relative">
+                    <DropdownMenu open={quickNoteOpen} onOpenChange={setQuickNoteOpen}>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 gap-2 text-gray-600 hover:text-gray-900 hover:bg-transparent font-normal px-2"
+                          disabled={isSavingQuickNote || audioProcessing || recording || showQuickNoteInput}
+                        >
+                          {isSavingQuickNote ? (
+                            <>
+                              <span className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mr-1.5"></span>
+                              Saving...
+                            </>
+                          ) : audioProcessing ? (
+                            <>
+                              <span className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mr-1.5"></span>
+                              Processing...
+                            </>
+                          ) : recording ? (
+                            <>
+                              <Mic className="h-4 w-4 text-red-500 mr-1.5 animate-pulse" />
+                              {formatDuration(recordingDuration)}
+                            </>
+                          ) : (
+                            <>Quick Note</>
+                          )}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      {/* Dropdown content */}
+                      <DropdownMenuContent align="start" className="w-56 rounded-md">
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setQuickNoteOpen(false);
+                            handleVoiceNoteClick();
+                          }}
+                          disabled={recording || audioProcessing}
+                          className="flex items-center gap-2 cursor-pointer"
+                        >
+                          <Mic className="h-4 w-4 text-gray-500" />
+                          <span>Voice Note</span>
+                        </DropdownMenuItem>
+                        
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setQuickNoteOpen(false);
+                            setShowQuickNoteInput(true);
+                          }}
+                          disabled={showQuickNoteInput}
+                          className="flex items-center gap-2 cursor-pointer"
+                        >
+                          <Pencil className="h-4 w-4 text-gray-500" />
+                          <span>Standard Note</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    
+                    {/* Quick Note Input Popup */}
+                    {showQuickNoteInput && (
+                      <div 
+                        ref={quickNoteContainerRef}
+                        className="absolute top-full mt-1 left-0 z-50 w-80 max-w-[90vw] bg-white shadow-lg rounded-md border border-gray-200 overflow-hidden"
+                      >
+                        <div className="p-3 flex flex-col">
+                          <div className="flex justify-between items-center mb-2">
+                            <h3 className="text-sm font-medium">Quick Note</h3>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setShowQuickNoteInput(false);
+                                setQuickNoteText("");
+                              }}
+                              className="h-6 w-6 p-0 rounded-full"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <Textarea
+                            ref={quickNoteInputRef}
+                            value={quickNoteText}
+                            onChange={(e) => {
+                              setQuickNoteText(e.target.value);
+                              // Auto-resize is handled by the event listener
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                saveQuickNote();
+                              } else if (e.key === 'Escape') {
+                                setShowQuickNoteInput(false);
+                                setQuickNoteText("");
+                              }
+                            }}
+                            placeholder="Type a quick note and press Enter..."
+                            className="w-full min-h-[80px] max-h-[200px] rounded-md resize-none text-sm"
+                            disabled={isSavingQuickNote}
+                          />
+                          <div className="flex justify-between items-center mt-2.5">
+                            <div className="text-xs text-gray-500 flex items-center">
+                              <span className={`${quickNoteText.length > 300 ? 'text-amber-500 font-medium' : ''}`}>
+                                {quickNoteText.length}
+                              </span>
+                              <span className="mx-1">/</span>
+                              <span>500 characters</span>
+                            </div>
+                            <Button
+                              size="sm"
+                              onClick={saveQuickNote}
+                              disabled={!quickNoteText.trim() || isSavingQuickNote || quickNoteText.length > 500}
+                              className="h-8 text-xs rounded-md px-3"
+                            >
+                              {isSavingQuickNote ? (
+                                <>
+                                  <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                                  Saving
+                                </>
+                              ) : (
+                                <>Save Note</>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Tap Agent button - now text style */}
+                  {/* <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 gap-2 text-gray-600 hover:text-gray-900 hover:bg-transparent font-normal px-2"
+                    onClick={() => setShowTapAgentSheet(true)}
+                  >
+                    <div className="flex items-center">
+                      <span className="font-bold text-blue-500">Tap</span>
+                      <span className="ml-0.5 bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent font-bold animate-gradient-x">
+                        Agent
+                      </span>
+                    </div>
+                  </Button> */}
+                  
+                  {/* Docs button - now text style */}
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-9 gap-2 text-gray-600 hover:text-gray-900 hover:bg-transparent font-normal px-2"
+                    asChild
+                  >
+                    <Link href="/docs">
+                      Help Guide
+                    </Link>
+                  </Button>
+                  
+                  {/* Integrations button */}
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-9 gap-2 text-gray-600 hover:text-gray-900 hover:bg-transparent font-normal px-2"
+                    onClick={() => setShowIntegrationsPopup(true)}
+                  >
+                    Integrations
+                  </Button>
+                </div>
+                
+                {/* Search button with popup */}
+                <div className="relative">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setShowSearchPopup(!showSearchPopup)
+                      // Focus the input after a short delay to ensure it's rendered
+                      setTimeout(() => {
+                        if (searchInputRef.current) {
+                          searchInputRef.current.focus()
+                        }
+                      }, 100)
+                    }}
+                    className="relative"
+                  >
+                    <Search className="h-5 w-5" />
+                  </Button>
+                  
+                  {/* Search popup */}
+                  {showSearchPopup && (
+                    <div 
+                      ref={searchPopupRef}
+                      className="absolute top-full right-0 mt-2 w-96 bg-white shadow-lg rounded-md border border-gray-200 overflow-hidden z-50"
+                    >
+                      <div className="p-3">
+                        <form onSubmit={(e) => {
+                          e.preventDefault()
+                          if (searchQuery.trim()) {
+                            handleSearch(searchQuery)
+                            setShowSearchPopup(false)
+                          }
+                        }}>
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                              <Search className="h-4 w-4 text-gray-400" />
+                            </div>
+                            <Input
+                              ref={searchInputRef}
+                              type="text"
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              className="h-10 pl-10 pr-4 w-full rounded-md border border-gray-300 bg-white text-sm"
+                              placeholder="Ask something..."
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  if (searchQuery.trim()) {
+                                    handleSearch(searchQuery)
+                                    setShowSearchPopup(false)
+                                  }
+                                } else if (e.key === 'Escape') {
+                                  setShowSearchPopup(false)
+                                  setSearchQuery('')
+                                }
+                              }}
+                            />
+                          </div>
+                        </form>
+                        
+                        {/* Search suggestions */}
+                        <div className="mt-3 space-y-1">
+                          <div className="text-xs font-medium text-gray-500 mb-2">Quick searches:</div>
+                          {searchPlaceholders.slice(0, 4).map((placeholder, index) => (
+                            <button
+                              key={index}
+                              className="w-full text-left px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-50 rounded-md transition-colors"
+                              onClick={() => {
+                                setSearchQuery(placeholder)
+                                handleSearch(placeholder)
+                                setShowSearchPopup(false)
+                              }}
+                            >
+                              {placeholder}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Notifications button moved to be before chat button */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="relative">
+                      <Bell className="h-5 w-5" />
+                      {unreadCount > 0 && (
+                        <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-96 rounded-md">
+                    <div className="flex items-center justify-between px-4 py-2 border-b">
+                      <h3 className="font-medium">Notifications</h3>
+                      {unreadCount > 0 && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 text-xs rounded-md"
+                          onClick={markAllAsRead}
+                        >
+                          Mark all as read
+                        </Button>
+                      )}
+                    </div>
+                    <div className="max-h-[400px] overflow-y-auto">
+                      {notificationsLoading ? (
+                        <div className="py-6 text-center">
+                          <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto mb-2"></div>
+                          <p className="text-sm text-muted-foreground">Loading notifications...</p>
+                        </div>
+                      ) : notifications.length === 0 ? (
+                        <div className="py-6 text-center">
+                          <Bell className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                          <p className="text-sm text-muted-foreground">No notifications yet</p>
+                        </div>
+                      ) : (
+                        notifications.map((notification) => (
+                          <div 
+                            key={notification.id} 
+                            className={cn(
+                              "px-4 py-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors cursor-pointer",
+                              !notification.read && "bg-blue-50/50"
+                            )}
+                            onClick={() => markAsRead(notification.id)}
+                          >
+                            <div className="flex gap-3">
+                              <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+                                {getNotificationIcon(notification.type)}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-start">
+                                  <p className="text-sm font-medium">
+                                    {notification.type === "AGENT_ACTION" ? (
+                                      <>
+                                        <span className="agent-notification-gradient">
+                                          Agent Notification:
+                                        </span>{' '}
+                                        {notification.message}
+                                      </>
+                                    ) : (
+                                      notification.message
+                                    )}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {formatTimeAgo(notification.dateCreated || notification.timestamp)}
+                                  </p>
+                                </div>
+                                {notification.customerId && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Customer: {notification.customerFullName || notification.customerId.substring(0, 8)}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="justify-center" asChild>
+                      <a href="/notifications" className="w-full text-center cursor-pointer">
+                        View all notifications
+                      </a>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* Chat button moved to be after notifications */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowChatbotPanel(!showChatbotPanel)}
+                  className="relative"
+                  title={showChatbotPanel ? "Collapse chat panel" : "Expand chat panel"}
+                >
+                  <PanelRight className="h-5 w-5" />
+                </Button>
+              </div>
+            </header>
+            
+            {/* Page content */}
+            <div className="flex-1 overflow-auto main-content-scrollbar">
+              {children}
+            </div>
           </motion.div>
-          
-          {/* Chatbot Panel - using Framer Motion for smooth animation */}
-          <AnimatePresence>
+
+          {/* Chatbot Panel - using simple slide animation */}
+          <AnimatePresence mode="sync">
             {showChatbotPanel && (
               <motion.div 
                 className="bg-white rounded-md border border-gray-200 ml-2 overflow-hidden flex flex-col"
-                initial={{ width: 0, opacity: 0, x: 40 }}
-                animate={{ width: "35%", opacity: 1, x: 0 }}
-                exit={{ width: 0, opacity: 0, x: 40 }}
+                initial={{ 
+                  width: 0, 
+                  opacity: 0, 
+                  x: 80,
+                  scale: 0.95,
+                  boxShadow: "0px 0px 0px rgba(0, 0, 0, 0)",
+                  borderColor: "rgba(229, 231, 235, 0)"
+                }}
+                animate={{ 
+                  width: "35%", 
+                  opacity: 1,
+                  x: 0,
+                  scale: 1,
+                  boxShadow: "0px 4px 20px rgba(0, 0, 0, 0.08)",
+                  borderColor: "rgba(229, 231, 235, 1)"
+                }}
+                exit={{ 
+                  width: 0, 
+                  opacity: 0,
+                  x: 80,
+                  scale: 0.95,
+                  boxShadow: "0px 0px 0px rgba(0, 0, 0, 0)",
+                  borderColor: "rgba(229, 231, 235, 0)"
+                }}
                 transition={{
-                  type: "spring",
-                  stiffness: 300,
-                  damping: 30,
-                  opacity: { duration: 0.2 }
+                  type: "tween",
+                  ease: "easeInOut",
+                  duration: 0.35,
+                  opacity: { duration: 0.3 },
+                  scale: { duration: 0.3 },
+                  boxShadow: { duration: 0.3 },
+                  borderColor: { duration: 0.3 }
                 }}
               >
                 {/* Chat header */}
-                <div className="flex items-center justify-between p-3 border-b">
-                  <div className="flex items-center">
-                    <Bot className="h-5 w-5 text-blue-500 mr-2" />
-                    <h3 className="font-medium">Chat Assistant</h3>
+                <motion.div 
+                  className="p-4 border-b flex items-center justify-between"
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ type: "tween", ease: "easeOut", duration: 0.25, delay: 0.05 }}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="font-semibold text-sm bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent">
+                      Tap Agent
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  
+                  {/* Rest of header content */}
+                  <div className="flex items-center gap-1">
+                    {/* Debug button - show when there's a tool response */}
+                    {toolResponse && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
+                            title="Debug Response"
+                          >
+                            <span className="text-xs font-mono text-yellow-600">🐛</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-96 rounded-md">
+                          <div className="p-3">
+                            <div className="text-xs font-semibold text-yellow-800 mb-2">
+                              🐛 Debug: Full Function Response
+                            </div>
+                            <div className="text-xs text-yellow-700 font-mono bg-yellow-100 p-2 rounded border max-h-60 overflow-y-auto">
+                              <pre className="whitespace-pre-wrap break-words">
+                                {JSON.stringify(toolResponse, null, 2)}
+                              </pre>
+                            </div>
+                            <div className="mt-2 text-xs text-yellow-600">
+                              <strong>Response Type:</strong> {typeof toolResponse}<br/>
+                              <strong>Has text:</strong> {toolResponse?.text ? 'Yes' : 'No'}<br/>
+                              <strong>Has step:</strong> {toolResponse?.step ? 'Yes' : 'No'}<br/>
+                              <strong>Has action:</strong> {toolResponse?.action ? 'Yes' : 'No'}<br/>
+                              <strong>Has result.action:</strong> {toolResponse?.result?.action ? 'Yes' : 'No'}<br/>
+                              <strong>Has actionUsed:</strong> {toolResponse?.actionUsed ? 'Yes' : 'No'}<br/>
+                              <strong>Has tool:</strong> {toolResponse?.tool ? 'Yes' : 'No'}<br/>
+                              <strong>Result Type:</strong> {typeof toolResponse?.result}<br/>
+                              <strong>All Keys:</strong> {Object.keys(toolResponse || {}).join(', ')}
+                            </div>
+                          </div>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                    
+                    {/* New conversation button - plus icon */}
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
+                      onClick={async () => {
+                        // Create a new conversation
+                        const newConversationId = await createNewConversation()
+                        setConversationId(newConversationId)
+                        
+                        // Reset chat state
+                        setChatMessages([])
+                        setUserInput('')
+                        setIsTyping(false)
+                        setToolResponse(null) // Clear debug response
+                        setShowTypewriter(false)
+                        setTypewriterText('')
+                      }}
+                    >
+                      <PlusCircle className="h-3 w-3 text-gray-500" />
+                    </Button>
+                    
                     {/* Integrations dropdown */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button 
                           variant="ghost" 
                           size="sm" 
-                          className="h-8 w-8 p-0 rounded-md"
+                          className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
+                          title="Integrations"
                         >
-                          <Plug className="h-4 w-4 text-gray-500" />
+                          <Plug className="h-3 w-3 text-gray-500" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48 rounded-md">
@@ -1567,1068 +2275,278 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       </DropdownMenuContent>
                     </DropdownMenu>
                     
+                    {/* Stop button - show when streaming or typing */}
+                    {(isStreaming || isTyping) && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
+                        onClick={() => {
+                          // Stop streaming
+                          if (eventSourceRef.current) {
+                            eventSourceRef.current.close()
+                          }
+                          setIsStreaming(false)
+                          setIsTyping(false)
+                          setStreamingStatus('')
+                          setStreamingStep('')
+                          setStreamingProgress(null)
+                        }}
+                        title="Stop"
+                      >
+                        <X className="h-3 w-3 text-gray-500" />
+                      </Button>
+                    )}
+                    
                     {/* Close button */}
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      className="h-8 w-8 p-0 rounded-md"
+                      className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
                       onClick={() => setShowChatbotPanel(false)}
+                      title="Close chat"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-3 w-3 text-gray-500" />
                     </Button>
                   </div>
-                </div>
-                
+                </motion.div>
+                  
                 {/* Chat messages */}
-                <div 
+                <motion.div 
                   ref={chatContainerRef}
                   className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ type: "tween", ease: "easeOut", duration: 0.25, delay: 0.1 }}
                 >
-                  {chatMessages.map((msg, index) => (
-                    <div 
-                      key={index} 
-                      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div 
-                        className={`max-w-[80%] p-3 rounded-md text-xs ${
-                          msg.role === 'user' 
-                            ? 'bg-blue-500 text-white rounded-tr-none' 
-                            : 'bg-gray-100 text-gray-800 rounded-tl-none'
-                        }`}
-                      >
-                        {msg.content}
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {isTyping && (
-                    <div className="flex justify-start">
-                      <div className="bg-gray-100 text-gray-800 p-3 rounded-md rounded-tl-none max-w-[80%]">
-                        <div className="flex space-x-1">
-                          <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce"></div>
-                          <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                          <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Chat input */}
-                <div className="p-3 border-t">
-                  <div className="flex gap-2">
-                    <Input
-                      type="text"
-                      placeholder="Type a message..."
-                      className="flex-1 text-xs"
-                      value={userInput}
-                      onChange={e => setUserInput(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault()
-                          handleSendMessage()
+                  <div className="space-y-4">
+                    {/* Display all chat messages in chronological order */}
+                    {chatMessages.map((msg, index) => {
+                      const isLastUserMessage = msg.role === 'user' && index === chatMessages.length - 1
+                      const isLastAssistantMessage = msg.role === 'assistant' && index === chatMessages.length - 1
+                      
+                      if (msg.role === 'tool_selection') {
+                        // Tool selection message
+                        return (
+                          <motion.div 
+                            key={`tool-${index}`}
+                            className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3 py-2 mb-3 text-sm"
+                            initial={{ opacity: 0, y: 5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ 
+                              type: "tween",
+                              duration: 0.2,
+                              ease: "easeOut"
+                            }}
+                          >
+                            {/* Loading animation, success tick, or failure cross */}
+                            {msg.toolCompleted ? (
+                              msg.toolSuccess ? (
+                                <Check className="h-3 w-3 text-green-600 flex-shrink-0" />
+                              ) : (
+                                <X className="h-3 w-3 text-red-600 flex-shrink-0" />
+                              )
+                            ) : (
+                              <div className="h-3 w-3 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin flex-shrink-0"></div>
+                            )}
+                            
+                            <span className="text-gray-700 font-medium text-xs">
+                              {msg.toolCompleted ? (msg.toolSuccess ? 'Completed:' : 'Failed:') : 'Using:'}
+                            </span>
+                            
+                            {/* Tool icons and names */}
+                            <div className="flex items-center gap-1.5">
+                              {msg.toolNames?.map((toolName, toolIndex) => {
+                                const toolIcon = getToolIcon(toolName)
+                                return (
+                                  <div key={toolIndex} className="flex items-center gap-1">
+                                    {toolIcon && (
+                                      <img 
+                                        src={toolIcon} 
+                                        alt={`${toolName} icon`}
+                                        className="w-3 h-3 object-contain"
+                                      />
+                                    )}
+                                    <span className={`text-xs font-medium ${
+                                      msg.toolCompleted 
+                                        ? (msg.toolSuccess ? 'text-green-700' : 'text-red-700')
+                                        : 'text-gray-600'
+                                    }`}>
+                                      {toolName}
+                                    </span>
+                                    {toolIndex < (msg.toolNames?.length || 0) - 1 && <span className="text-gray-400">,</span>}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </motion.div>
+                        )
+                      } else if (msg.role === 'user') {
+                        // User messages - show in gray box when it's the last message and streaming, otherwise show normally
+                        if (isLastUserMessage && isStreaming) {
+                          return (
+                            <motion.div 
+                              key={`user-${index}`} 
+                              className="bg-gray-100 border border-gray-200 rounded-md p-2 relative min-h-fit flex items-start gap-2"
+                              initial={{ opacity: 0 }}
+                              animate={{ 
+                                opacity: 1,
+                                height: "auto"
+                              }}
+                              transition={{ 
+                                type: "tween",
+                                duration: 0.2,
+                                ease: "easeOut"
+                              }}
+                            >
+                              {/* Merchant logo in top-left corner - fixed position */}
+                              {merchant?.logoUrl && (
+                                <div className="flex-shrink-0 mt-0.5">
+                                  <img 
+                                    src={merchant.logoUrl} 
+                                    alt="Merchant logo"
+                                    className="w-5 h-5 rounded-md object-cover"
+                                  />
+                                </div>
+                              )}
+                              
+                              <div className="text-sm text-gray-800 leading-relaxed flex-1 pb-8 pt-0 flex items-center min-h-[20px]">
+                                {msg.content}
+                              </div>
+                    
+                              {/* SSE updates in bottom left corner */}
+                              <div className="absolute bottom-2 left-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-3 w-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                                  <span 
+                                    key={streamingStatus} 
+                                    className="text-xs text-gray-600 font-medium animate-in fade-in duration-300"
+                                  >
+                                    {streamingStatus || 'Processing...'}
+                                  </span>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )
+                        } else {
+                          // Regular user message display - collapsed state after streaming
+                          return (
+                            <motion.div 
+                              key={`user-${index}`} 
+                              className="bg-gray-100 border border-gray-200 rounded-md p-2 min-h-fit flex items-start gap-2"
+                              initial={{ opacity: 0 }}
+                              animate={{ 
+                                opacity: 1,
+                                height: "auto"
+                              }}
+                              transition={{ 
+                                type: "tween",
+                                duration: 0.25,
+                                ease: "easeOut"
+                              }}
+                              layout
+                            >
+                              {/* Merchant logo in top-left corner - fixed position */}
+                              {merchant?.logoUrl && (
+                                <div className="flex-shrink-0 mt-0.5">
+                                  <img 
+                                    src={merchant.logoUrl} 
+                                    alt="Merchant logo"
+                                    className="w-5 h-5 rounded-md object-cover"
+                                  />
+                                </div>
+                              )}
+                              
+                              <div className="text-sm text-gray-800 leading-relaxed flex-1 pt-0 flex items-center min-h-[20px]">
+                                {msg.content}
+                              </div>
+                            </motion.div>
+                          )
                         }
-                      }}
-                    />
-                    <Button 
-                      size="sm"
-                      onClick={handleSendMessage}
-                      disabled={!userInput.trim() || isTyping}
-                      className="h-10 px-3 rounded-md"
-                    >
-                      <MessageSquare className="h-4 w-4" />
-                    </Button>
+                      } else {
+                        // Assistant messages - show using kibo-ui AIResponse component
+                        return (
+                          <motion.div 
+                            key={`assistant-${index}`} 
+                            className="text-sm text-gray-800 leading-relaxed"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ 
+                              type: "tween",
+                              duration: 0.2,
+                              ease: "easeOut"
+                            }}
+                          >
+                            <AIResponse className="prose prose-sm max-w-none prose-headings:text-gray-800 prose-p:text-gray-800 prose-li:text-gray-800 prose-strong:text-gray-800">
+                              {msg.content}
+                            </AIResponse>
+                          </motion.div>
+                        )
+                      }
+                    })}
+                    
+                    {/* Typewriter Animation - show when done event is received */}
+                    {showTypewriter && typewriterText && (
+                      <motion.div 
+                        className="text-sm text-gray-800 leading-relaxed"
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ 
+                          type: "tween",
+                          duration: 0.2,
+                          ease: "easeOut"
+                        }}
+                      >
+                        <StreamingMarkdown text={typewriterText} />
+                      </motion.div>
+                    )}
                   </div>
+                </motion.div>
+                  
+                {/* Chat input at bottom - fixed position */}
+                <div className="p-4 bg-white">
+                  <AIInput onSubmit={(e: React.FormEvent) => {
+                    e.preventDefault()
+                    if (!isStreaming && userInput.trim()) {
+                      handleSendMessage()
+                    }
+                  }}>
+                    <AIInputTextarea
+                      value={userInput}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setUserInput(e.target.value)}
+                      placeholder={isStreaming ? "Processing..." : isTyping ? "" : "Ask something..."}
+                      disabled={isStreaming}
+                      minHeight={56}
+                      maxHeight={164}
+                    />
+                    <AIInputToolbar>
+                      <AIInputTools>
+                        <AIInputButton
+                          className={`transition-all duration-200 ${
+                            deepThoughtActive 
+                              ? 'bg-white text-gray-700 border border-gray-300 shadow-sm' 
+                              : 'text-gray-500 hover:bg-white hover:text-gray-700 hover:shadow-sm'
+                          }`}
+                          onClick={() => {
+                            setDeepThoughtActive(!deepThoughtActive)
+                            console.log('Deep Thought clicked', !deepThoughtActive)
+                          }}
+                        >
+                          <Brain className="h-3 w-3" />
+                          <span>Deep Thought</span>
+                        </AIInputButton>
+                      </AIInputTools>
+                      <AIInputSubmit disabled={isStreaming || !userInput.trim()}>
+                        <Send className="h-4 w-4" />
+                      </AIInputSubmit>
+                    </AIInputToolbar>
+                  </AIInput>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
         </main>
       </div>
-
-      {/* Add the dialogs */}
-      <CreateBannerDialog 
-        open={showBannerDialog} 
-        onOpenChange={setShowBannerDialog}
-      />
-      <CreateRewardSheet 
-        open={showRewardDialog} 
-        onOpenChange={setShowRewardDialog}
-      />
-      <CreatePointsRuleSheet 
-        open={showPointsRuleDialog} 
-        onOpenChange={setShowPointsRuleDialog}
-      />
-      <SendBroadcastSheet 
-        open={showBroadcastDialog} 
-        onOpenChange={setShowBroadcastDialog}
-      />
-      <CreateRecurringRewardDialog
-        open={showRecurringRewardDialog}
-        onOpenChange={setShowRecurringRewardDialog}
-      />
-      
-      {/* Competitor Analysis Sheet */}
-      <Sheet open={showCompetitorAnalysis} onOpenChange={setShowCompetitorAnalysis}>
-        <SheetContent side="right" className="w-full sm:max-w-md md:max-w-xl lg:max-w-2xl overflow-hidden p-0 flex flex-col">
-          <div className="flex-none px-6 py-4 border-b">
-            <SheetHeader className="mb-2">
-              <SheetTitle className="text-xl font-bold flex items-center">
-                <Target className="h-5 w-5 mr-3 text-blue-500" />
-                <span className="bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent animate-gradient-x">Competitor Intelligence</span>
-              </SheetTitle>
-              <SheetDescription>
-                AI-powered analysis of your local market and competitors
-              </SheetDescription>
-            </SheetHeader>
-          </div>
-          
-          <div className="flex-1 overflow-auto p-6 pt-2">
-            {competitorAnalysisLoading ? (
-              <div className="h-full pt-0">
-                <div className="mt-0 mb-1 text-left">
-                  <h3 className="text-lg font-medium text-blue-600 animate-pulse">
-                    Tap Agent is thinking<span className="animate-ellipsis">...</span>
-                  </h3>
-                </div>
-                
-                {/* Agent workflow animation - steps appear sequentially */}
-                <div className="w-full space-y-2">
-                  {/* Step 1 */}
-                  <div id="step-1-container" className="w-full bg-white rounded-md p-3 border border-gray-800 shadow-sm">
-                    <div className="flex items-center">
-                      <div id="step-1-spinner" className="relative h-6 w-6 mr-3 flex-shrink-0">
-                        <div className="absolute inset-0 rounded-full border-2 border-orange-400 border-t-transparent animate-spin"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="h-1.5 w-1.5 bg-orange-400 rounded-full"></div>
-                        </div>
-                      </div>
-                      <div id="step-1-check" className="h-6 w-6 mr-3 flex-shrink-0 text-green-500 hidden">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                          <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm text-gray-800">Looking up merchant information</p>
-                        <p id="step-1-status" className="text-xs text-gray-600 mt-0.5 animate-pulse">Processing<span className="animate-ellipsis">...</span></p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Step 2 */}
-                  <div id="step-2-container" className="w-full bg-gray-50 rounded-md p-3 border border-gray-200 opacity-70">
-                    <div className="flex items-center">
-                      <div id="step-2-spinner" className="relative h-6 w-6 mr-3 flex-shrink-0 hidden">
-                        <div className="absolute inset-0 rounded-full border-2 border-orange-400 border-t-transparent animate-spin"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="h-1.5 w-1.5 bg-orange-400 rounded-full"></div>
-                        </div>
-                      </div>
-                      <div id="step-2-check" className="h-6 w-6 mr-3 flex-shrink-0 text-green-500 hidden">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                          <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <div id="step-2-number" className="h-6 w-6 mr-3 flex-shrink-0 rounded-full bg-gray-200 flex items-center justify-center">
-                        <span className="text-gray-600 font-medium text-xs">2</span>
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm text-gray-600">Conducting competitor analysis</p>
-                        <p id="step-2-status" className="text-xs text-gray-500 mt-0.5">Waiting...</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Step 3 */}
-                  <div id="step-3-container" className="w-full bg-gray-50 rounded-md p-3 border border-gray-200 opacity-70">
-                    <div className="flex items-center">
-                      <div id="step-3-spinner" className="relative h-6 w-6 mr-3 flex-shrink-0 hidden">
-                        <div className="absolute inset-0 rounded-full border-2 border-orange-400 border-t-transparent animate-spin"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="h-1.5 w-1.5 bg-orange-400 rounded-full"></div>
-                        </div>
-                      </div>
-                      <div id="step-3-check" className="h-6 w-6 mr-3 flex-shrink-0 text-green-500 hidden">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                          <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <div id="step-3-number" className="h-6 w-6 mr-3 flex-shrink-0 rounded-full bg-gray-200 flex items-center justify-center">
-                        <span className="text-gray-600 font-medium text-xs">3</span>
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm text-gray-600">Generating strategic insights</p>
-                        <p id="step-3-status" className="text-xs text-gray-500 mt-0.5">Waiting...</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Step 4 */}
-                  <div id="step-4-container" className="w-full bg-gray-50 rounded-md p-3 border border-gray-200 opacity-70">
-                    <div className="flex items-center">
-                      <div id="step-4-spinner" className="relative h-6 w-6 mr-3 flex-shrink-0 hidden">
-                        <div className="absolute inset-0 rounded-full border-2 border-orange-400 border-t-transparent animate-spin"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="h-1.5 w-1.5 bg-orange-400 rounded-full"></div>
-                        </div>
-                      </div>
-                      <div id="step-4-check" className="h-6 w-6 mr-3 flex-shrink-0 text-green-500 hidden">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                          <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <div id="step-4-number" className="h-6 w-6 mr-3 flex-shrink-0 rounded-full bg-gray-200 flex items-center justify-center">
-                        <span className="text-gray-600 font-medium text-xs">4</span>
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm text-gray-600">Preparing recommendations</p>
-                        <p id="step-4-status" className="text-xs text-gray-500 mt-0.5">Waiting...</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : competitorAnalysisResults ? (
-              <div className="space-y-6">
-                <div className="bg-gradient-to-r from-blue-50 to-orange-50 p-4 rounded-lg border border-blue-100">
-                  <h3 className="font-medium text-blue-800 mb-2">Market Overview</h3>
-                  <p className="text-gray-700">
-                    Your business is positioned in a moderately competitive market with 8 direct competitors in a 5-mile radius.
-                    The average customer satisfaction score in your area is 4.2/5, with your business currently at 4.5/5.
-                  </p>
-                </div>
-                
-                {/* This would be populated with actual data from the Firebase function */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium border-b pb-2">Top Competitors</h3>
-                  
-                  <div className="border rounded-lg p-4 hover:bg-gray-50 transition-all">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-medium">Competitor A</h4>
-                        <p className="text-sm text-gray-500 mt-1">0.8 miles away • 4.7/5 rating</p>
-                      </div>
-                      <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-none">
-                        High Threat
-                      </Badge>
-                    </div>
-                    <div className="mt-3 text-sm">
-                      <p className="text-gray-700">Strengths: Customer service, product variety</p>
-                      <p className="text-gray-700">Weaknesses: Higher pricing, limited hours</p>
-                    </div>
-                  </div>
-                  
-                  <div className="border rounded-lg p-4 hover:bg-gray-50 transition-all">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-medium">Competitor B</h4>
-                        <p className="text-sm text-gray-500 mt-1">1.2 miles away • 4.3/5 rating</p>
-                      </div>
-                      <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-none">
-                        Medium Threat
-                      </Badge>
-                    </div>
-                    <div className="mt-3 text-sm">
-                      <p className="text-gray-700">Strengths: Marketing, location</p>
-                      <p className="text-gray-700">Weaknesses: Product quality, staff turnover</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium border-b pb-2">Strategic Recommendations</h3>
-                  
-                  <div className="space-y-2">
-                    <div className="flex items-start gap-3">
-                      <div className="h-6 w-6 rounded-full bg-gradient-to-r from-blue-500 to-orange-400 text-white flex items-center justify-center flex-shrink-0 text-xs">
-                        1
-                      </div>
-                      <div>
-                        <p className="font-medium">Highlight your superior customer satisfaction in marketing</p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          Your 4.5/5 rating exceeds the local average of 4.2/5
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start gap-3">
-                      <div className="h-6 w-6 rounded-full bg-gradient-to-r from-blue-500 to-orange-400 text-white flex items-center justify-center flex-shrink-0 text-xs">
-                        2
-                      </div>
-                      <div>
-                        <p className="font-medium">Consider extending business hours</p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          This would address a key weakness of your highest-rated competitor
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start gap-3">
-                      <div className="h-6 w-6 rounded-full bg-gradient-to-r from-blue-500 to-orange-400 text-white flex items-center justify-center flex-shrink-0 text-xs">
-                        3
-                      </div>
-                      <div>
-                        <p className="font-medium">Implement a loyalty program</p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          None of your top 3 competitors currently offer robust loyalty incentives
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <div className="flex justify-between items-start mb-2">
-                  <div className="max-w-md">
-                    <h3 className="text-lg font-medium text-gray-800 mb-1">Competitor Intelligence</h3>
-                    <p className="text-gray-500">
-                      Analyze your local market and competitors to gain strategic insights and recommendations.
-                    </p>
-                  </div>
-                  <Button 
-                    onClick={() => {
-                      setCompetitorAnalysisLoading(true);
-                      
-                      // Sequential animation with 3 seconds per step
-                      
-                      // Step 1 is already active
-                      
-                      // After 3 seconds, complete step 1 and activate step 2
-                      setTimeout(() => {
-                        // Complete step 1
-                        const step1Spinner = document.getElementById('step-1-spinner');
-                        const step1Check = document.getElementById('step-1-check');
-                        const step1Status = document.getElementById('step-1-status');
-                        
-                        if (step1Spinner) step1Spinner.classList.add('hidden');
-                        if (step1Check) step1Check.classList.remove('hidden');
-                        if (step1Status) step1Status.innerHTML = 'Complete';
-                        
-                        // Activate step 2
-                        const step2Container = document.getElementById('step-2-container');
-                        const step2Number = document.getElementById('step-2-number');
-                        const step2Spinner = document.getElementById('step-2-spinner');
-                        const step2Status = document.getElementById('step-2-status');
-                        
-                        if (step2Container) step2Container.className = 'w-full bg-white rounded-md p-3 border border-gray-200 shadow-sm';
-                        if (step2Number) step2Number.classList.add('hidden');
-                        if (step2Spinner) step2Spinner.classList.remove('hidden');
-                        if (step2Status) step2Status.innerHTML = '<span class="animate-pulse">Generating insights<span class="animate-ellipsis">...</span></span>';
-                      }, 3000);
-                      
-                      // After 6 seconds, complete step 2 and activate step 3
-                      setTimeout(() => {
-                        // Complete step 2
-                        const step2Spinner = document.getElementById('step-2-spinner');
-                        const step2Check = document.getElementById('step-2-check');
-                        const step2Status = document.getElementById('step-2-status');
-                        
-                        if (step2Spinner) step2Spinner.classList.add('hidden');
-                        if (step2Check) step2Check.classList.remove('hidden');
-                        if (step2Status) step2Status.innerHTML = 'Complete';
-                        
-                        // Activate step 3
-                        const step3Container = document.getElementById('step-3-container');
-                        const step3Number = document.getElementById('step-3-number');
-                        const step3Spinner = document.getElementById('step-3-spinner');
-                        const step3Status = document.getElementById('step-3-status');
-                        
-                        if (step3Container) step3Container.className = 'w-full bg-white rounded-md p-3 border border-gray-200 shadow-sm';
-                        if (step3Number) step3Number.classList.add('hidden');
-                        if (step3Spinner) step3Spinner.classList.remove('hidden');
-                        if (step3Status) step3Status.innerHTML = '<span class="animate-pulse">Analyzing opportunities<span class="animate-ellipsis">...</span></span>';
-                      }, 6000);
-                      
-                      // After 9 seconds, complete step 3 and activate step 4
-                      setTimeout(() => {
-                        // Complete step 3
-                        const step3Spinner = document.getElementById('step-3-spinner');
-                        const step3Check = document.getElementById('step-3-check');
-                        const step3Status = document.getElementById('step-3-status');
-                        
-                        if (step3Spinner) step3Spinner.classList.add('hidden');
-                        if (step3Check) step3Check.classList.remove('hidden');
-                        if (step3Status) step3Status.innerHTML = 'Complete';
-                        
-                        // Activate step 4
-                        const step4Container = document.getElementById('step-4-container');
-                        const step4Number = document.getElementById('step-4-number');
-                        const step4Spinner = document.getElementById('step-4-spinner');
-                        const step4Status = document.getElementById('step-4-status');
-                        
-                        if (step4Container) step4Container.className = 'w-full bg-white rounded-md p-3 border border-gray-200 shadow-sm';
-                        if (step4Number) step4Number.classList.add('hidden');
-                        if (step4Spinner) step4Spinner.classList.remove('hidden');
-                        if (step4Status) step4Status.innerHTML = '<span class="animate-pulse">Creating report<span class="animate-ellipsis">...</span></span>';
-                        
-                        // After showing step 4 for 3 seconds, complete it and show results
-                        setTimeout(() => {
-                          // Complete step 4
-                          const step4Spinner = document.getElementById('step-4-spinner');
-                          const step4Check = document.getElementById('step-4-check');
-                          const step4Status = document.getElementById('step-4-status');
-                          
-                          if (step4Spinner) step4Spinner.classList.add('hidden');
-                          if (step4Check) step4Check.classList.remove('hidden');
-                          if (step4Status) step4Status.innerHTML = 'Complete';
-                          
-                          // Show results after a brief pause
-                          setTimeout(() => {
-                            setCompetitorAnalysisLoading(false);
-                            setCompetitorAnalysisResults({
-                              // This would be populated with actual data from the Firebase function
-                              marketOverview: {
-                                competitorCount: 8,
-                                averageRating: 4.2,
-                                businessRating: 4.5
-                              },
-                              competitors: [
-                                {
-                                  name: "Competitor A",
-                                  distance: 0.8,
-                                  rating: 4.7,
-                                  threatLevel: "high",
-                                  strengths: ["Customer service", "product variety"],
-                                  weaknesses: ["Higher pricing", "limited hours"]
-                                },
-                                {
-                                  name: "Competitor B",
-                                  distance: 1.2,
-                                  rating: 4.3,
-                                  threatLevel: "medium",
-                                  strengths: ["Marketing", "location"],
-                                  weaknesses: ["Product quality", "staff turnover"]
-                                }
-                              ],
-                              recommendations: [
-                                {
-                                  title: "Highlight your superior customer satisfaction in marketing",
-                                  description: "Your 4.5/5 rating exceeds the local average of 4.2/5"
-                                },
-                                {
-                                  title: "Consider extending business hours",
-                                  description: "This would address a key weakness of your highest-rated competitor"
-                                },
-                                {
-                                  title: "Implement a loyalty program",
-                                  description: "None of your top 3 competitors currently offer robust loyalty incentives"
-                                }
-                              ]
-                            });
-                          }, 1000);
-                        }, 3000);
-                      }, 9000);
-                    }}
-                    className="bg-blue-500 hover:bg-blue-600 text-white"
-                  >
-                    Start Analysis
-                  </Button>
-                </div>
-                
-                <div className="flex items-center justify-center h-48">
-                  <Target className="h-16 w-16 text-gray-200" />
-                </div>
-              </div>
-            )}
-          </div>
-          
-          <div className="flex-none px-6 py-4 border-t">
-            <div className="flex justify-between">
-              <Button 
-                variant="outline" 
-                onClick={() => setShowCompetitorAnalysis(false)}
-              >
-                Close
-              </Button>
-              
-              {competitorAnalysisResults && (
-                <Button 
-                  className="bg-gradient-to-r from-blue-500 to-orange-400 hover:from-blue-600 hover:to-orange-500 text-white"
-                >
-                  Export Report
-                </Button>
-              )}
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
-      
-      {/* Sales Activity Analysis Sheet */}
-      <Sheet open={showSalesAnalysis} onOpenChange={setShowSalesAnalysis}>
-        <SheetContent side="right" className="w-full sm:max-w-md md:max-w-xl lg:max-w-2xl overflow-hidden p-0 flex flex-col">
-          <div className="flex-none px-6 py-4 border-b">
-            <SheetHeader className="mb-2">
-              <SheetTitle className="text-xl font-bold flex items-center">
-                <BarChart className="h-5 w-5 mr-3 text-blue-500" />
-                <span className="bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent animate-gradient-x">Sales Activity Analysis</span>
-              </SheetTitle>
-              <SheetDescription>
-                AI-powered analysis of your recent sales activities and customer engagement
-              </SheetDescription>
-            </SheetHeader>
-          </div>
-          
-          <div className="flex-1 overflow-auto p-6">
-            {salesAnalysisLoading ? (
-              <div className="h-full">
-                <div className="mb-8 text-center">
-                  <h3 className="text-xl font-medium text-blue-600 animate-pulse">
-                    Tap Agent is thinking<span className="animate-ellipsis">...</span>
-                  </h3>
-                </div>
-                
-                {/* Agent workflow animation - steps appear one after another */}
-                <div className="w-full max-w-md mx-auto space-y-3">
-                  {/* Step 1: Always visible from the start */}
-                  <div 
-                    id="sales-step-1-container"
-                    className="bg-blue-50 rounded-lg p-4 border border-blue-100 transform transition-all duration-500 ease-in-out"
-                  >
-                    <div className="flex items-center">
-                      <div className="relative h-8 w-8 mr-3 flex-shrink-0">
-                        <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="font-medium text-blue-800">Processing transaction history</p>
-                        <p className="text-sm text-blue-600 mt-1">Analyzing data<span className="animate-ellipsis">...</span></p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Step 2: Hidden initially, appears with animation */}
-                  <div 
-                    id="sales-step-2-container"
-                    className="bg-blue-50 rounded-lg p-4 border border-blue-100 opacity-0 transform translate-y-4 transition-all duration-500 ease-in-out"
-                  >
-                    <div className="flex items-center">
-                      <div className="relative h-8 w-8 mr-3 flex-shrink-0">
-                        <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="font-medium text-blue-800">Identifying sales patterns</p>
-                        <p className="text-sm text-blue-600 mt-1">Discovering trends<span className="animate-ellipsis">...</span></p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Step 3: Hidden initially, appears with animation */}
-                  <div 
-                    id="sales-step-3-container"
-                    className="bg-blue-50 rounded-lg p-4 border border-blue-100 opacity-0 transform translate-y-4 transition-all duration-500 ease-in-out"
-                  >
-                    <div className="flex items-center">
-                      <div className="relative h-8 w-8 mr-3 flex-shrink-0">
-                        <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="font-medium text-blue-800">Analyzing customer engagement</p>
-                        <p className="text-sm text-blue-600 mt-1">Creating report<span className="animate-ellipsis">...</span></p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : salesAnalysisResults ? (
-              <div className="space-y-6">
-                <div className="bg-gradient-to-r from-blue-50 to-orange-50 p-4 rounded-lg border border-blue-100">
-                  <h3 className="font-medium text-blue-800 mb-2">Performance Summary</h3>
-                  <p className="text-gray-700">
-                    Your sales have increased by 12% compared to last month, with customer engagement up by 8%.
-                    Peak transaction times are between 11am-2pm and 5pm-7pm.
-                  </p>
-                </div>
-                
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium border-b pb-2">Top Performing Products</h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="border rounded-lg p-4 hover:bg-gray-50 transition-all">
-                      <div className="flex justify-between items-start">
-                        <h4 className="font-medium">Cappuccino</h4>
-                        <Badge className="bg-green-100 text-green-800 hover:bg-green-200 border-none">
-                          +18% ↑
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-gray-500 mt-1">42% of total coffee sales</p>
-                    </div>
-                    
-                    <div className="border rounded-lg p-4 hover:bg-gray-50 transition-all">
-                      <div className="flex justify-between items-start">
-                        <h4 className="font-medium">Croissant</h4>
-                        <Badge className="bg-green-100 text-green-800 hover:bg-green-200 border-none">
-                          +15% ↑
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-gray-500 mt-1">38% of total pastry sales</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium border-b pb-2">Customer Engagement</h3>
-                  
-                  <div className="space-y-2">
-                    <div className="flex items-start gap-3">
-                      <div className="h-6 w-6 rounded-full bg-gradient-to-r from-blue-500 to-orange-400 text-white flex items-center justify-center flex-shrink-0 text-xs">
-                        1
-                      </div>
-                      <div>
-                        <p className="font-medium">Loyalty program participation up 22%</p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          New customers are signing up at 2.3x the rate of last quarter
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start gap-3">
-                      <div className="h-6 w-6 rounded-full bg-gradient-to-r from-blue-500 to-orange-400 text-white flex items-center justify-center flex-shrink-0 text-xs">
-                        2
-                      </div>
-                      <div>
-                        <p className="font-medium">Average transaction value increased</p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          $8.75 per transaction, up from $7.20 last month
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start gap-3">
-                      <div className="h-6 w-6 rounded-full bg-gradient-to-r from-blue-500 to-orange-400 text-white flex items-center justify-center flex-shrink-0 text-xs">
-                        3
-                      </div>
-                      <div>
-                        <p className="font-medium">Repeat customer rate at 68%</p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          Industry average is 42% - your customer retention is excellent
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <div className="flex justify-between items-start mb-4">
-                  <div className="max-w-md">
-                    <h3 className="text-lg font-medium text-gray-800 mb-1">Sales Activity Analysis</h3>
-                    <p className="text-gray-500">
-                      Analyze your recent sales data to discover trends, top products, and customer engagement patterns.
-                    </p>
-                  </div>
-                  <Button 
-                    onClick={() => {
-                      setSalesAnalysisLoading(true);
-                      
-                      // Sequential loading animation - show steps one after another
-                      const step1 = document.getElementById('sales-step-1-container');
-                      const step2 = document.getElementById('sales-step-2-container');
-                      const step3 = document.getElementById('sales-step-3-container');
-                      
-                      // Make sure step 1 is visible
-                      if (step1) {
-                        step1.classList.remove('opacity-0', 'translate-y-4');
-                        step1.classList.add('opacity-100', 'translate-y-0');
-                      }
-                      
-                      // After 1.5 seconds, show step 2
-                      setTimeout(() => {
-                        if (step2) {
-                          step2.classList.remove('opacity-0', 'translate-y-4');
-                          step2.classList.add('opacity-100', 'translate-y-0');
-                        }
-                      }, 1500);
-                      
-                      // After 3 seconds, show step 3
-                      setTimeout(() => {
-                        if (step3) {
-                          step3.classList.remove('opacity-0', 'translate-y-4');
-                          step3.classList.add('opacity-100', 'translate-y-0');
-                        }
-                        
-                        // Complete the final step and show results after a short delay
-                        setTimeout(() => {
-                          setSalesAnalysisLoading(false);
-                          setSalesAnalysisResults({
-                            // This would be populated with actual data from a Firebase function
-                            performanceSummary: {
-                              salesIncrease: "12%",
-                              engagementIncrease: "8%",
-                              peakTimes: ["11am-2pm", "5pm-7pm"]
-                            },
-                            topProducts: [
-                              {
-                                name: "Cappuccino",
-                                increase: "+18%",
-                                percentageOfCategory: "42%"
-                              },
-                              {
-                                name: "Croissant",
-                                increase: "+15%",
-                                percentageOfCategory: "38%"
-                              }
-                            ],
-                            customerEngagement: [
-                              {
-                                metric: "Loyalty program participation",
-                                value: "up 22%",
-                                detail: "New customers are signing up at 2.3x the rate of last quarter"
-                              },
-                              {
-                                metric: "Average transaction value",
-                                value: "$8.75",
-                                detail: "Up from $7.20 last month"
-                              },
-                              {
-                                metric: "Repeat customer rate",
-                                value: "68%",
-                                detail: "Industry average is 42% - your customer retention is excellent"
-                              }
-                            ]
-                          });
-                        }, 1500);
-                      }, 3000);
-                    }}
-                    className="bg-gradient-to-r from-blue-500 to-orange-400 hover:from-blue-600 hover:to-orange-500 text-white"
-                  >
-                    Start Analysis
-                  </Button>
-                </div>
-                
-                <div className="flex items-center justify-center h-48">
-                  <BarChart className="h-16 w-16 text-gray-200" />
-                </div>
-              </div>
-            )}
-          </div>
-          
-          <div className="flex-none px-6 py-4 border-t">
-            <div className="flex justify-between">
-              <Button 
-                variant="outline" 
-                onClick={() => setShowSalesAnalysis(false)}
-              >
-                Close
-              </Button>
-              
-              {salesAnalysisResults && (
-                <Button 
-                  className="bg-gradient-to-r from-blue-500 to-orange-400 hover:from-blue-600 hover:to-orange-500 text-white"
-                >
-                  Export Report
-                </Button>
-              )}
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
-      
-      {/* Random Reward Generator Sheet */}
-      <Sheet open={showRewardGenerator} onOpenChange={setShowRewardGenerator}>
-        <SheetContent side="right" className="w-full sm:max-w-md md:max-w-xl overflow-hidden p-0 flex flex-col">
-          <div className="flex-none px-6 py-4 border-b">
-            <SheetHeader className="mb-2">
-              <SheetTitle className="text-2xl font-bold flex items-center">
-                <Lightbulb className="h-6 w-6 mr-3 text-amber-500" />
-                <span className="bg-gradient-to-r from-amber-500 to-orange-400 bg-clip-text text-transparent animate-gradient-x">Reward Generator</span>
-              </SheetTitle>
-              <SheetDescription>
-                AI-powered reward ideas tailored to your business and customers
-              </SheetDescription>
-            </SheetHeader>
-          </div>
-          
-          <div className="flex-1 overflow-auto p-6">
-            {rewardGeneratorLoading ? (
-              <div className="h-full">
-                <div className="relative h-24 w-24 mx-auto mb-6">
-                  {/* Pulsing circles */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-amber-500 to-orange-400 rounded-full opacity-20 animate-ping"></div>
-                  <div className="absolute inset-2 bg-gradient-to-r from-amber-400 to-orange-300 rounded-full opacity-40 animate-pulse"></div>
-                  <div className="absolute inset-4 bg-gradient-to-r from-amber-300 to-orange-200 rounded-full opacity-60 animate-pulse" style={{ animationDelay: '0.3s' }}></div>
-                  <div className="absolute inset-6 bg-gradient-to-r from-amber-200 to-orange-100 rounded-full opacity-80 animate-pulse" style={{ animationDelay: '0.6s' }}></div>
-                  
-                  {/* Center icon */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Lightbulb className="h-8 w-8 text-amber-600" />
-                  </div>
-                </div>
-                
-                {/* Agent workflow animation - only one step visible at a time */}
-                <div className="w-full max-w-md mx-auto">
-                  {/* Step 1: Always visible from the start */}
-                  <div 
-                    id="reward-step-1-container"
-                    className="bg-amber-50 rounded-lg p-4 border border-amber-100 mb-3 transform transition-all duration-500 ease-in-out"
-                  >
-                    <div className="flex items-center">
-                      <div className="relative h-8 w-8 mr-3 flex-shrink-0">
-                        <div className="absolute inset-0 rounded-full border-2 border-amber-500 border-t-transparent animate-spin"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="h-2 w-2 bg-amber-500 rounded-full"></div>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="font-medium text-amber-800">Analyzing customer preferences</p>
-                        <p className="text-sm text-amber-600 mt-1">Evaluating purchase history and loyalty patterns...</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Step 2: Hidden initially, appears with animation */}
-                  <div 
-                    id="reward-step-2-container"
-                    className="bg-amber-50 rounded-lg p-4 border border-amber-100 mb-3 hidden transform transition-all duration-500 ease-in-out"
-                  >
-                    <div className="flex items-center">
-                      <div className="relative h-8 w-8 mr-3 flex-shrink-0">
-                        <div className="absolute inset-0 rounded-full border-2 border-amber-500 border-t-transparent animate-spin"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="h-2 w-2 bg-amber-500 rounded-full"></div>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="font-medium text-amber-800">Evaluating market trends</p>
-                        <p className="text-sm text-amber-600 mt-1">Identifying effective promotion strategies...</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Step 3: Hidden initially, appears with animation */}
-                  <div 
-                    id="reward-step-3-container"
-                    className="bg-amber-50 rounded-lg p-4 border border-amber-100 hidden transform transition-all duration-500 ease-in-out"
-                  >
-                    <div className="flex items-center">
-                      <div className="relative h-8 w-8 mr-3 flex-shrink-0">
-                        <div className="absolute inset-0 rounded-full border-2 border-amber-500 border-t-transparent animate-spin"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="h-2 w-2 bg-amber-500 rounded-full"></div>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="font-medium text-amber-800">Creating personalized reward</p>
-                        <p className="text-sm text-amber-600 mt-1">Designing an optimized incentive program...</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : generatedReward ? (
-              <div className="space-y-6">
-                <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-6 rounded-lg border border-amber-100">
-                  <div className="flex items-center justify-center mb-4">
-                    <div className="h-16 w-16 bg-gradient-to-r from-amber-500 to-orange-400 rounded-full flex items-center justify-center">
-                      <Gift className="h-8 w-8 text-white" />
-                    </div>
-                  </div>
-                  
-                  <h3 className="font-bold text-xl text-center text-amber-800 mb-2">{generatedReward.name}</h3>
-                  <p className="text-gray-700 text-center mb-4">
-                    {generatedReward.description}
-                  </p>
-                  
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="bg-white p-3 rounded border">
-                      <span className="block text-gray-500 mb-1">Points Cost</span>
-                      <span className="font-medium">{generatedReward.pointsCost} points</span>
-                    </div>
-                    <div className="bg-white p-3 rounded border">
-                      <span className="block text-gray-500 mb-1">Estimated Value</span>
-                      <span className="font-medium">${generatedReward.estimatedValue}</span>
-                    </div>
-                    <div className="bg-white p-3 rounded border">
-                      <span className="block text-gray-500 mb-1">Target Audience</span>
-                      <span className="font-medium">{generatedReward.targetAudience}</span>
-                    </div>
-                    <div className="bg-white p-3 rounded border">
-                      <span className="block text-gray-500 mb-1">Duration</span>
-                      <span className="font-medium">{generatedReward.duration}</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium border-b pb-2">Implementation Tips</h3>
-                  
-                  <div className="space-y-3">
-                    {generatedReward.tips.map((tip: string, index: number) => (
-                      <div key={index} className="flex items-start gap-3">
-                        <div className="h-6 w-6 rounded-full bg-gradient-to-r from-amber-500 to-orange-400 text-white flex items-center justify-center flex-shrink-0 text-xs">
-                          {index + 1}
-                        </div>
-                        <p className="text-gray-700">{tip}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                
-                <div className="flex justify-center">
-                  <Button 
-                    onClick={() => {
-                      setGeneratedReward(null);
-                      setRewardGeneratorLoading(true);
-                      
-                      // Sequential loading animation - show one step at a time
-                      const step1 = document.getElementById('reward-step-1-container');
-                      const step2 = document.getElementById('reward-step-2-container');
-                      const step3 = document.getElementById('reward-step-3-container');
-                      
-                      // Make sure step 1 is visible and others are hidden
-                      if (step1) step1.classList.remove('hidden');
-                      if (step2) step2.classList.add('hidden');
-                      if (step3) step3.classList.add('hidden');
-                      
-                      // After 1.5 seconds, hide step 1 and show step 2
-                      setTimeout(() => {
-                        if (step1) step1.classList.add('hidden');
-                        if (step2) {
-                          step2.classList.remove('hidden');
-                          step2.classList.remove('opacity-0', 'translate-y-4');
-                          step2.classList.add('opacity-100', 'translate-y-0');
-                        }
-                      }, 1500);
-                      
-                      // After 3 seconds, hide step 2 and show step 3
-                      setTimeout(() => {
-                        if (step2) step2.classList.add('hidden');
-                        if (step3) {
-                          step3.classList.remove('hidden');
-                          step3.classList.remove('opacity-0', 'translate-y-4');
-                          step3.classList.add('opacity-100', 'translate-y-0');
-                        }
-                        
-                        // After 4.5 seconds, show the results
-                        setTimeout(() => {
-                          setRewardGeneratorLoading(false);
-                          setGeneratedReward({
-                            name: "Midweek Morning Special",
-                            description: "Free pastry with any coffee purchase before 10am, Tuesday-Thursday. Designed to boost slower morning traffic.",
-                            pointsCost: 100,
-                            estimatedValue: "3.50",
-                            targetAudience: "Morning commuters",
-                            duration: "Ongoing",
-                            tips: [
-                              "Promote to customers who typically visit on weekends to encourage weekday visits",
-                              "Display prominent signage during the morning rush hour",
-                              "Consider adding a loyalty card element for repeat weekday visits",
-                              "Track morning sales increases to measure effectiveness"
-                            ]
-                          });
-                        }, 1500);
-                      }, 3000);
-                    }}
-                    className="bg-gradient-to-r from-amber-500 to-orange-400 hover:from-amber-600 hover:to-orange-500 text-white"
-                  >
-                    Generate Another Reward
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <div className="flex justify-between items-start mb-8">
-                  <div className="max-w-md">
-                    <h3 className="text-lg font-medium text-gray-800 mb-2">Reward Generator</h3>
-                    <p className="text-gray-500">
-                      Let AI create unique reward ideas tailored to your business and customer preferences.
-                    </p>
-                  </div>
-                  <Button 
-                    onClick={() => {
-                      setRewardGeneratorLoading(true);
-                      
-                      // Sequential loading animation - show one step at a time
-                      const step1 = document.getElementById('reward-step-1-container');
-                      const step2 = document.getElementById('reward-step-2-container');
-                      const step3 = document.getElementById('reward-step-3-container');
-                      
-                      // Make sure step 1 is visible and others are hidden
-                      if (step1) step1.classList.remove('hidden');
-                      if (step2) step2.classList.add('hidden');
-                      if (step3) step3.classList.add('hidden');
-                      
-                      // After 1.5 seconds, hide step 1 and show step 2
-                      setTimeout(() => {
-                        if (step1) step1.classList.add('hidden');
-                        if (step2) {
-                          step2.classList.remove('hidden');
-                          step2.classList.remove('opacity-0', 'translate-y-4');
-                          step2.classList.add('opacity-100', 'translate-y-0');
-                        }
-                      }, 1500);
-                      
-                      // After 3 seconds, hide step 2 and show step 3
-                      setTimeout(() => {
-                        if (step2) step2.classList.add('hidden');
-                        if (step3) {
-                          step3.classList.remove('hidden');
-                          step3.classList.remove('opacity-0', 'translate-y-4');
-                          step3.classList.add('opacity-100', 'translate-y-0');
-                        }
-                        
-                        // After 4.5 seconds, show the results
-                        setTimeout(() => {
-                          setRewardGeneratorLoading(false);
-                          setGeneratedReward({
-                            name: "Midweek Morning Special",
-                            description: "Free pastry with any coffee purchase before 10am, Tuesday-Thursday. Designed to boost slower morning traffic.",
-                            pointsCost: 100,
-                            estimatedValue: "3.50",
-                            targetAudience: "Morning commuters",
-                            duration: "Ongoing",
-                            tips: [
-                              "Promote to customers who typically visit on weekends to encourage weekday visits",
-                              "Display prominent signage during the morning rush hour",
-                              "Consider adding a loyalty card element for repeat weekday visits",
-                              "Track morning sales increases to measure effectiveness"
-                            ]
-                          });
-                        }, 1500);
-                      }, 3000);
-                    }}
-                    className="bg-gradient-to-r from-amber-500 to-orange-400 hover:from-amber-600 hover:to-orange-500 text-white"
-                  >
-                    Generate Reward
-                  </Button>
-                </div>
-                
-                <div className="flex items-center justify-center h-64">
-                  <Lightbulb className="h-16 w-16 text-gray-200" />
-                </div>
-              </div>
-            )}
-          </div>
-          
-          <div className="flex-none px-6 py-4 border-t">
-            <div className="flex justify-between">
-              <Button 
-                variant="outline" 
-                onClick={() => setShowRewardGenerator(false)}
-              >
-                Close
-              </Button>
-              
-              {generatedReward && (
-                <Button 
-                  className="bg-gradient-to-r from-amber-500 to-orange-400 hover:from-amber-600 hover:to-orange-500 text-white"
-                  onClick={() => setShowRewardDialog(true)}
-                >
-                  Create This Reward
-                </Button>
-              )}
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
       
       {/* Add the IntroductoryRewardSheet component */}
       <IntroductoryRewardSheet
@@ -2641,6 +2559,78 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         open={showTapAgentSheet} 
         onOpenChange={setShowTapAgentSheet}
       />
+      
+      {/* Add missing dialog components for Create button dropdown */}
+      <CreateBannerDialog
+        open={showBannerDialog}
+        onOpenChange={setShowBannerDialog}
+      />
+      
+      <CreateRewardDialog
+        open={showRewardDialog}
+        onOpenChange={setShowRewardDialog}
+      />
+      
+      <CreateRewardSheet
+        open={showRewardDialog}
+        onOpenChange={setShowRewardDialog}
+      />
+      
+      <CreatePointsRuleSheet
+        open={showPointsRuleDialog}
+        onOpenChange={setShowPointsRuleDialog}
+      />
+      
+      <CreateRecurringRewardDialog
+        open={showRecurringRewardDialog}
+        onOpenChange={setShowRecurringRewardDialog}
+      />
+      
+      <SendBroadcastSheet
+        open={showBroadcastDialog}
+        onOpenChange={setShowBroadcastDialog}
+      />
+      
+      {/* Integrations Dialog */}
+      <Dialog open={showIntegrationsPopup} onOpenChange={setShowIntegrationsPopup}>
+        <DialogContent className="max-w-xl max-h-[70vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Available Integrations</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 mt-3">
+            {availableIntegrations.map((integration) => (
+              <div key={integration.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-md hover:bg-gray-50">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-white rounded-md border border-gray-200 shadow-sm flex items-center justify-center">
+                    <NextImage
+                      src={`/${integration.logo}`}
+                      alt={integration.name}
+                      width={20}
+                      height={20}
+                      className="object-contain"
+                    />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900 text-sm">{integration.name}</h3>
+                    <p className="text-xs text-gray-600">{integration.description}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant={integration.status === 'active' ? 'default' : 'outline'}
+                    disabled={integration.status === 'coming-soon'}
+                    onClick={() => handleIntegrationConnect(integration)}
+                    className="rounded-md text-xs px-3 py-1"
+                  >
+                    {integration.status === 'active' ? 'Connect' : 'Coming Soon'}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

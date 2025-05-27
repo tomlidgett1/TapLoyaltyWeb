@@ -1570,98 +1570,100 @@ export default function InsightsPage() {
   return (
     <DashboardLayout>
       <style dangerouslySetInnerHTML={{ __html: transitionStyles }} />
-      <div className="flex flex-col h-full max-w-full overflow-hidden">
+      <div className="flex flex-col h-full max-w-full">
         {/* Header Section */}
-        <div className="border-b border-gray-200">
-          <div className="px-6 py-4">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-semibold tracking-tight">Insights</h1>
-                
-                {historicalDataInfo.loading && (
-                  <Badge variant="outline" className="ml-2 rounded-md bg-gray-50 text-gray-500">
-                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                    Loading data info...
-                  </Badge>
+        <div className="px-6 py-5">
+          <div className="flex items-center justify-between gap-4">
+            {/* Tab Navigation moved to header */}
+            <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
+              <button
+                onClick={() => handleTabSelect("all")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  activeTab === "all"
+                    ? "text-gray-800 bg-white shadow-sm"
+                    : "text-gray-600 hover:bg-gray-200/70"
                 )}
+              >
+                <BarChartIcon className="h-4 w-4" />
+                <span>All Insights</span>
+              </button>
+              <button
+                onClick={() => handleTabSelect("saved")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  activeTab === "saved"
+                    ? "text-gray-800 bg-white shadow-sm"
+                    : "text-gray-600 hover:bg-gray-200/70"
+                )}
+              >
+                <Clock className="h-4 w-4" />
+                <span>Saved</span>
+              </button>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              {/* Search Input */}
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                  <Database className="h-4 w-4 text-blue-500" />
+                </div>
+                <Input 
+                  placeholder="Ask a question about your sales data..." 
+                  className="pl-10 h-9 rounded-md w-full min-w-[400px]"
+                  value={insight.query}
+                  onChange={(e) => setInsight(prev => ({ ...prev, query: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !insight.isLoading) {
+                      handleProcessQuery();
+                    }
+                  }}
+                />
               </div>
               
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
-                    <Database className="h-4 w-4 text-blue-500" />
-                  </div>
-                  <Input 
-                    placeholder="Ask a question about your sales data..." 
-                    className="pl-10 h-9 rounded-md w-full min-w-[400px]"
-                    value={insight.query}
-                    onChange={(e) => setInsight(prev => ({ ...prev, query: e.target.value }))}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !insight.isLoading) {
-                        handleProcessQuery();
-                      }
-                    }}
-                  />
-                </div>
-              </div>
+              <Button 
+                onClick={handleProcessQuery}
+                disabled={!insight.query.trim() || insight.isLoading}
+                className="rounded-md"
+              >
+                {insight.isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Processing
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    Generate
+                  </>
+                )}
+              </Button>
             </div>
           </div>
-        </div>
-        
-        {/* GitHub-inspired Tab Navigation - updating to match new style */}
-        <div className="px-6 pt-4 flex items-center justify-between">
-          <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
-            <button
-              onClick={() => handleTabSelect("all")}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                activeTab === "all"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
-              )}
-            >
-              <BarChartIcon className="h-4 w-4" />
-              <span>All Insights</span>
-            </button>
-            <button
-              onClick={() => handleTabSelect("saved")}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                activeTab === "saved"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
-              )}
-            >
-              <Clock className="h-4 w-4" />
-              <span>Saved</span>
-            </button>
-          </div>
           
-          {/* Display data range information with more details */}
+          {/* Data Range Information */}
           {historicalDataInfo.timestamp && (
-            <div className="text-xs text-gray-500 flex items-center">
+            <div className="text-xs text-gray-500 flex items-center mt-3">
               <Info className="h-3.5 w-3.5 mr-1.5 text-blue-500" />
               <span>Historical data available from <span className="font-medium">{formatHistoricalDate(historicalDataInfo.timestamp)}</span></span>
             </div>
           )}
         </div>
         
-        {/* Main Content Area */}
-        <div className="flex-1 overflow-auto px-6 pb-6 mt-2">
-          {/* Loading state placed underneath tabs */}
+        {/* Content Area */}
+        <div className="flex-1 overflow-auto px-6 pb-6">
+          
+          {/* Loading State */}
           {insight.isLoading && <ThinkingLoadingState />}
           
+          {/* Main Content */}
           {insight.isLoading ? null : insights.length > 0 ? (
-            <div className="space-y-8">
+            <div className="space-y-6">
               {insights.map((insightItem, insightIndex) => (
-                <div key={insightItem.id} className="insight-result fade-in">
-                  {insightIndex > 0 && (
-                    <div className="border-t border-gray-200 my-8"></div>
-                  )}
-                  
-                  {/* Query and Summary */}
+                <div key={insightItem.id} className="bg-gray-50 border border-gray-200 rounded-md p-6 insight-result fade-in">
+                  {/* Query Header */}
                   <div className="mb-4">
-                    <h2 className="text-lg font-medium">{insightItem.query}</h2>
+                    <h2 className="text-lg font-medium text-gray-900">{insightItem.query}</h2>
                     {insightItem.response?.answer && (
                       <p className="mt-1 text-gray-600">
                         {insightItem.response.answer || insightItem.response.summary || "Analysis of your data"}
@@ -1671,13 +1673,13 @@ export default function InsightsPage() {
                   
                   {insightItem.error ? (
                     <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-                      <h2 className="text-lg font-medium text-red-600">Error Generating Insight</h2>
+                      <h3 className="text-lg font-medium text-red-600">Error Generating Insight</h3>
                       <p className="mt-1 text-sm text-red-600">{insightItem.error}</p>
                       <p className="mt-4 text-sm text-red-600">Please try a different question or try again later.</p>
                     </div>
                   ) : insightItem.response ? (
-                    <>
-                      {/* Follow-up Questions - Moved to the top */}
+                    <div className="space-y-6">
+                      {/* Follow-up Questions */}
                       {insightItem.response.followUpQuestions && (
                         <FollowUpQuestions 
                           questions={insightItem.response.followUpQuestions} 
@@ -1685,23 +1687,26 @@ export default function InsightsPage() {
                         />
                       )}
                       
-                      {/* Table Data Display */}
-                      {insightItem.response.table && (
-                        <DataTable data={insightItem.response.table} />
-                      )}
+                      {/* Data Visualization Container */}
+                      <div className="bg-white border border-gray-200 rounded-md p-6">
+                        {/* Table Data Display */}
+                        {insightItem.response.table && (
+                          <DataTable data={insightItem.response.table} />
+                        )}
+                        
+                        {/* Traditional Visualization (only if no table) */}
+                        {!insightItem.response.table && insightItem.response.viz && (
+                          <InsightViz response={insightItem.response} />
+                        )}
+                        
+                        {/* Key Figures */}
+                        {insightItem.response.keyFigures && (
+                          <KeyFigures keyFigures={insightItem.response.keyFigures} />
+                        )}
+                      </div>
                       
-                      {/* Traditional Visualization (only if no table) */}
-                      {!insightItem.response.table && insightItem.response.viz && (
-                        <InsightViz response={insightItem.response} />
-                      )}
-                      
-                      {/* Key Figures */}
-                      {insightItem.response.keyFigures && (
-                        <KeyFigures keyFigures={insightItem.response.keyFigures} />
-                      )}
-                      
-                      {/* Debug Toggle Button - Moved to bottom */}
-                      <div className="flex justify-end mt-6 mb-2">
+                      {/* Debug Section */}
+                      <div className="flex justify-end">
                         <Button
                           variant="outline"
                           size="sm"
@@ -1722,11 +1727,11 @@ export default function InsightsPage() {
                         </Button>
                       </div>
                       
-                      {/* Debug Information - Now at the bottom */}
+                      {/* Debug Information */}
                       {showDebug && (
-                        <>
+                        <div className="space-y-4">
                           {/* Debug Function Response */}
-                          <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-md">
+                          <div className="bg-white border border-gray-200 rounded-md p-4">
                             <div className="flex items-center justify-between mb-2">
                               <h3 className="text-sm font-medium flex items-center gap-1">
                                 <Code className="h-4 w-4 text-blue-500" />
@@ -1740,18 +1745,20 @@ export default function InsightsPage() {
                           
                           {/* SQL Query Display */}
                           {insightItem.response.sql && (
-                            <div className="sql-query mb-4">
-                              <button className="sql-toggle" onClick={() => toggleSqlVisibility(insightItem.id)}>
-                                {insightItem.showSql ? 'Hide SQL' : 'Show SQL'}
-                              </button>
-                              <pre>{insightItem.response.sql}</pre>
+                            <div className="bg-white border border-gray-200 rounded-md">
+                              <div className="sql-query">
+                                <button className="sql-toggle" onClick={() => toggleSqlVisibility(insightItem.id)}>
+                                  {insightItem.showSql ? 'Hide SQL' : 'Show SQL'}
+                                </button>
+                                <pre>{insightItem.response.sql}</pre>
+                              </div>
                             </div>
                           )}
-                        </>
+                        </div>
                       )}
                       
-                      {/* Footer Information */}
-                      <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-200 text-xs text-gray-500">
+                      {/* Footer */}
+                      <div className="flex justify-between items-center pt-4 border-t border-gray-200 text-xs text-gray-500">
                         <div className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
                           <span>Generated {insightIndex === 0 ? 'just now' : 'earlier'}</span>
@@ -1762,14 +1769,15 @@ export default function InsightsPage() {
                           </Button>
                         </div>
                       </div>
-                    </>
+                    </div>
                   ) : null}
                 </div>
               ))}
             </div>
           ) : (
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center p-8">
+            /* Empty State */
+            <div className="bg-gray-50 border border-gray-200 rounded-md p-12">
+              <div className="text-center">
                 <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center mb-4">
                   <Database className="h-6 w-6 text-blue-500" />
                 </div>
@@ -1777,13 +1785,24 @@ export default function InsightsPage() {
                 <p className="text-gray-500 max-w-md mx-auto mb-6">
                   Type your question in the search bar above to generate insights from your sales data.
                 </p>
-                <Button 
-                  className="rounded-md"
-                  onClick={() => handleProcessQuery()}
-                  disabled={!insight.query.trim()}
-                >
-                  Generate Insight
-                </Button>
+                
+                {/* Suggested Questions */}
+                <div className="mt-6">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Try asking:</h4>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {suggestedQueries.slice(0, 3).map((query, index) => (
+                      <Button
+                        key={index}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleSelectSuggestedQuery(query)}
+                        className="text-xs rounded-md border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                      >
+                        {query}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}

@@ -353,10 +353,7 @@ export default function AnalyticsPage() {
   return (
     <PageTransition>
       <div className="p-6">
-        <PageHeader
-          title="Analytics"
-          subtitle="Track and analyze your business performance"
-        >
+        <PageHeader>
           <div className="flex items-center gap-2">
             <Button 
               variant="outline" 

@@ -19,8 +19,25 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { PageTransition } from "@/components/page-transition"
 import { PageHeader } from "@/components/page-header"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { 
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { RewardDetailSheet } from "@/components/reward-detail-sheet"
+import { cn } from "@/lib/utils"
+import { updateDoc, deleteDoc } from "firebase/firestore"
 
 // Icons
 import { 
@@ -51,23 +68,54 @@ import {
   Search,
   Loader2,
   Tag,
-  Download
+  Download,
+  Coffee,
+  Ticket,
+  Award,
+  Plus,
+  Filter,
+  MoreHorizontal,
+  Edit,
+  Trash,
+  ChevronUp,
+  ChevronDown,
+  HelpCircle
 } from "lucide-react"
 
 // Component interfaces
 interface Reward {
   id: string;
-  rewardName?: string;
+  rewardName: string;
   name?: string;
   description: string;
+  type: string;
+  programtype?: string;
+  category: "individual" | "customer-specific" | "program" | "agent";
   pointsCost: number;
+  redemptionCount: number;
   status: string;
   createdAt: any;
+  updatedAt: any;
   expiryDate?: any;
-  redemptionCount?: number;
+  imageUrl?: string;
+  punchCount?: number;
+  expiryDays?: number;
+  customerIds?: string[];
+  rewardVisibility?: string;
+  conditions?: any[];
+  limitations?: any[];
+  hasActivePeriod: boolean;
+  activePeriod: {
+    startDate: string;
+    endDate: string;
+  };
+  isActive: boolean;
+  lastRedeemed?: Date | null;
+  programName?: string;
+  impressions: number;
+  redeemableCustomers: number;
   viewCount?: number;
   isAgentGenerated?: boolean;
-  programtype?: string;
 }
 
 interface Banner {
@@ -170,10 +218,989 @@ const GradientText = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
+// Full Rewards Tab Component
+const RewardsTabContent = () => {
+  const router = useRouter()
+  const { user } = useAuth()
+  const [rewardsData, setRewardsData] = useState<Reward[]>([])
+  const [searchQuery, setSearchQuery] = useState("")
+  const [rewardCategory, setRewardCategory] = useState<"all" | "individual" | "customer-specific" | "programs" | "agent">("all")
+  const [sortField, setSortField] = useState<"rewardName" | "type" | "pointsCost" | "redemptionCount" | "redeemableCustomers" | "impressions" | "createdAt" | "lastRedeemed" | "isActive">("rewardName")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
+  const [loadingRewards, setLoadingRewards] = useState(true)
+  const [showFilters, setShowFilters] = useState(false)
+  const [statusFilters, setStatusFilters] = useState({
+    active: true,
+    inactive: true
+  })
+  const [typeFilters, setTypeFilters] = useState({
+    coffee: true,
+    discount: true,
+    gift: true,
+    ticket: true,
+    other: true
+  })
+  const [pointsCostRange, setPointsCostRange] = useState([0, 500])
+  const [selectedRewardId, setSelectedRewardId] = useState<string | null>(null)
+  const [isRewardDetailOpen, setIsRewardDetailOpen] = useState(false)
+  const [rewardToDelete, setRewardToDelete] = useState<string | null>(null)
+  const [expandedPrograms, setExpandedPrograms] = useState<Record<string, boolean>>({})
+
+  // Fetch rewards data
+  useEffect(() => {
+    const fetchRewardsData = async () => {
+      if (!user?.uid) return
+      
+      try {
+        setLoadingRewards(true)
+        const rewardsRef = collection(db, 'merchants', user.uid, 'rewards')
+        const q = query(rewardsRef, orderBy('createdAt', 'desc'))
+        const querySnapshot = await getDocs(q)
+        
+        const fetchedRewards: Reward[] = []
+        
+        querySnapshot.forEach(doc => {
+          try {
+            const data = doc.data()
+            
+            let createdAt, updatedAt, lastRedeemed;
+            try {
+              createdAt = data.createdAt?.toDate() || new Date();
+              updatedAt = data.updatedAt?.toDate() || data.createdAt?.toDate() || new Date();
+              lastRedeemed = data.lastRedeemed ? data.lastRedeemed.toDate() : null;
+            } catch (dateError) {
+              createdAt = new Date();
+              updatedAt = new Date();
+              lastRedeemed = null;
+            }
+            
+            fetchedRewards.push({
+              ...data,
+              id: doc.id,
+              rewardName: data.rewardName || data.name || 'Unnamed Reward',
+              description: data.description || '',
+              type: data.type || 'gift',
+              programtype: data.programtype || '',
+              category: data.category || 'individual',
+              pointsCost: data.pointsCost || 0,
+              redemptionCount: data.redemptionCount || 0,
+              status: data.status || 'active',
+              createdAt,
+              updatedAt,
+              lastRedeemed,
+              isActive: !!data.isActive,
+              impressions: data.impressions || 0,
+              redeemableCustomers: data.redeemableCustomers || 0,
+              hasActivePeriod: !!data.hasActivePeriod,
+              activePeriod: data.activePeriod || { startDate: '', endDate: '' }
+            } as Reward);
+          } catch (err) {
+            console.error("Error processing reward document:", err, "Document ID:", doc.id);
+          }
+        });
+        
+        setRewardsData(fetchedRewards);
+      } catch (error) {
+        console.error("Error fetching rewards:", error);
+      } finally {
+        setLoadingRewards(false);
+      }
+    }
+    
+    fetchRewardsData()
+  }, [user])
+
+  // Helper functions
+  const getRewardTypeIcon = (type: string) => {
+    switch (type?.toLowerCase()) {
+      case 'coffee':
+        return <Coffee className="h-5 w-5 text-amber-600" />;
+      case 'ticket':
+        return <Ticket className="h-5 w-5 text-purple-600" />;
+      case 'discount':
+        return <Tag className="h-5 w-5 text-green-600" />;
+      case 'gift':
+        return <Gift className="h-5 w-5 text-red-600" />;
+      default:
+        return <Gift className="h-5 w-5 text-blue-600" />;
+    }
+  };
+
+  const handleSort = (field: typeof sortField) => {
+    if (field === sortField) {
+      setSortDirection(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setSortField(field)
+      setSortDirection("asc")
+    }
+  }
+
+  const handleStatusFilterChange = (status: string, checked: boolean) => {
+    setStatusFilters(prev => ({
+      ...prev,
+      [status.toLowerCase()]: checked
+    }))
+  }
+
+  const handleTypeFilterChange = (type: string, checked: boolean) => {
+    setTypeFilters(prev => ({
+      ...prev,
+      [type.toLowerCase()]: checked
+    }))
+  }
+
+  const applyFilters = (data: Reward[]) => {
+    return data.filter(reward => {
+      // Apply status filter
+      const isActive = reward.isActive
+      if ((isActive && !statusFilters.active) || (!isActive && !statusFilters.inactive)) {
+        return false
+      }
+
+      // Apply type filter
+      const type = reward.type?.toLowerCase() || 'other'
+      if (!typeFilters[type as keyof typeof typeFilters] && !typeFilters.other) {
+        return false
+      }
+
+      // Apply points cost filter
+      if (reward.pointsCost < pointsCostRange[0] || reward.pointsCost > pointsCostRange[1]) {
+        return false
+      }
+
+      return true
+    })
+  }
+
+  const getFilteredRewards = () => {
+    let filtered = rewardsData.filter(reward => {
+      // Apply category filter
+      if (rewardCategory !== "all" && reward.category !== rewardCategory) {
+        return false
+      }
+      
+      // Apply search filter
+      if (searchQuery && !reward.rewardName.toLowerCase().includes(searchQuery.toLowerCase())) {
+        return false
+      }
+      
+      return true
+    })
+    
+    // Apply additional filters
+    filtered = applyFilters(filtered)
+    
+    // Apply sorting
+    return filtered.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortField) {
+        case "rewardName":
+          comparison = (a.rewardName || "").localeCompare(b.rewardName || "");
+          break;
+        case "type":
+          comparison = (a.type || "").localeCompare(b.type || "");
+          break;
+        case "pointsCost":
+          comparison = (a.pointsCost || 0) - (b.pointsCost || 0);
+          break;
+        case "redemptionCount":
+          comparison = (a.redemptionCount || 0) - (b.redemptionCount || 0);
+          break;
+        case "redeemableCustomers":
+          comparison = (a.redeemableCustomers || 0) - (b.redeemableCustomers || 0);
+          break;
+        case "impressions":
+          comparison = (a.impressions || 0) - (b.impressions || 0);
+          break;
+        case "createdAt":
+          const aTime = a.createdAt ? a.createdAt.getTime() : 0;
+          const bTime = b.createdAt ? b.createdAt.getTime() : 0;
+          comparison = aTime - bTime;
+          break;
+        case "lastRedeemed":
+          const aRedeemed = a.lastRedeemed ? a.lastRedeemed.getTime() : 0;
+          const bRedeemed = b.lastRedeemed ? b.lastRedeemed.getTime() : 0;
+          comparison = aRedeemed - bRedeemed;
+          break;
+        case "isActive":
+          comparison = (a.isActive ? 1 : 0) - (b.isActive ? 1 : 0);
+          break;
+        default:
+          comparison = 0;
+      }
+      
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+  };
+
+  const toggleRewardStatus = async (rewardId: string, currentStatus: boolean) => {
+    if (!user?.uid) return;
+    
+    try {
+      const rewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
+      
+      await updateDoc(rewardRef, { 
+        isActive: !currentStatus,
+        updatedAt: new Date()
+      });
+      
+      setRewardsData(rewardsData.map(reward => 
+        reward.id === rewardId 
+          ? { ...reward, isActive: !currentStatus } 
+          : reward
+      ));
+      
+    } catch (error) {
+      console.error("Error toggling reward status:", error);
+    }
+  };
+
+  const deleteReward = (id: string) => {
+    setRewardToDelete(id)
+  }
+
+  const confirmDelete = async () => {
+    if (!rewardToDelete || !user) return
+    
+    try {
+      const rewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardToDelete)
+      await deleteDoc(rewardRef)
+      
+      setRewardsData(prev => prev.filter(reward => reward.id !== rewardToDelete))
+    } catch (error) {
+      console.error("Error deleting reward:", error)
+    } finally {
+      setRewardToDelete(null)
+    }
+  }
+
+  const handleViewReward = (rewardId: string) => {
+    setSelectedRewardId(rewardId);
+    setIsRewardDetailOpen(true);
+  };
+
+  const handleExportPDF = async () => {
+    try {
+      const jspdfModule = await import('jspdf');
+      const autoTableModule = await import('jspdf-autotable');
+      
+      const doc = new jspdfModule.default();
+      const autoTable = autoTableModule.default;
+      
+      doc.setFontSize(18);
+      doc.text('Rewards Report', 14, 22);
+      
+      doc.setFontSize(11);
+      doc.text(`Generated: ${format(new Date(), 'MMM d, yyyy h:mm a')}`, 14, 30);
+      
+      const dataToExport = getFilteredRewards().map(reward => [
+        reward.rewardName,
+        reward.description || '',
+        reward.pointsCost || 0,
+        reward.isActive ? 'Active' : 'Inactive',
+        reward.type || '',
+        reward.redemptionCount || 0,
+        reward.createdAt ? format(reward.createdAt, 'MMM d, yyyy') : ''
+      ]);
+      
+      autoTable(doc, {
+        head: [['Name', 'Description', 'Points Cost', 'Status', 'Type', 'Redemptions', 'Created Date']],
+        body: dataToExport,
+        startY: 40,
+        styles: { fontSize: 10, cellPadding: 3 },
+        headStyles: { fillColor: [0, 102, 255], textColor: 255 }
+      });
+      
+      doc.save('rewards-report.pdf');
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+    }
+  };
+
+  return (
+    <div>
+      <Tabs defaultValue="all" onValueChange={(value) => setRewardCategory(value as typeof rewardCategory)}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
+            <button
+              onClick={() => setRewardCategory("all")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                rewardCategory === "all"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+            >
+              <Package className="h-4 w-4" />
+              All Rewards
+            </button>
+            <button
+              onClick={() => setRewardCategory("individual")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                rewardCategory === "individual"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+            >
+              <Gift className="h-4 w-4" />
+              Individual
+            </button>
+            <button
+              onClick={() => setRewardCategory("customer-specific")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                rewardCategory === "customer-specific"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+            >
+              <Users className="h-4 w-4" />
+              Customer-Specific
+            </button>
+            <button
+              onClick={() => setRewardCategory("programs")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                rewardCategory === "programs"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+            >
+              <Award className="h-4 w-4" />
+              Programs
+            </button>
+            <button
+              onClick={() => setRewardCategory("agent")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                rewardCategory === "agent"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+            >
+              <Sparkles className="h-4 w-4 text-blue-500" />
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-orange-500">
+                Agent
+              </span>
+            </button>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input 
+                type="search" 
+                placeholder="Search rewards..." 
+                className="w-[250px] pl-9 h-9 rounded-md"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            
+            <Popover open={showFilters} onOpenChange={setShowFilters}>
+              <PopoverTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  className="h-9 gap-2 rounded-md"
+                  onClick={() => setShowFilters(true)}
+                >
+                  <Filter className="h-4 w-4" />
+                  Filter
+                  {(Object.values(statusFilters).some(v => !v) || 
+                    Object.values(typeFilters).some(v => !v)) && (
+                    <Badge className="ml-1 bg-primary h-5 w-5 p-0 flex items-center justify-center">
+                      <span className="text-xs">!</span>
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-96 p-4">
+                <div className="space-y-4">
+                  <h4 className="font-medium">Filter Rewards</h4>
+                  
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox 
+                          id="status-active" 
+                          checked={statusFilters.active}
+                          onCheckedChange={(checked) => 
+                            handleStatusFilterChange('active', checked as boolean)}
+                        />
+                        <Label htmlFor="status-active" className="cursor-pointer">Active</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox 
+                          id="status-inactive" 
+                          checked={statusFilters.inactive}
+                          onCheckedChange={(checked) => 
+                            handleStatusFilterChange('inactive', checked as boolean)}
+                        />
+                        <Label htmlFor="status-inactive" className="cursor-pointer">Inactive</Label>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Type</Label>
+                    <div className="flex flex-col gap-2">
+                      {['coffee', 'discount', 'gift', 'ticket', 'other'].map(type => (
+                        <div key={type} className="flex items-center space-x-2">
+                          <Checkbox 
+                            id={`type-${type}`}
+                            checked={typeFilters[type as keyof typeof typeFilters]}
+                            onCheckedChange={(checked) => 
+                              handleTypeFilterChange(type, checked as boolean)}
+                          />
+                          <Label htmlFor={`type-${type}`} className="cursor-pointer capitalize">{type}</Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <Label>Points Cost Range</Label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="min-points" className="text-xs">Min</Label>
+                        <Input
+                          id="min-points"
+                          type="number"
+                          min={0}
+                          max={500}
+                          value={pointsCostRange[0]}
+                          onChange={(e) => setPointsCostRange([Number(e.target.value), pointsCostRange[1]])}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="max-points" className="text-xs">Max</Label>
+                        <Input
+                          id="max-points"
+                          type="number"
+                          min={0}
+                          max={500}
+                          value={pointsCostRange[1]}
+                          onChange={(e) => setPointsCostRange([pointsCostRange[0], Number(e.target.value)])}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between pt-2">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setStatusFilters({ active: true, inactive: true })
+                        setTypeFilters({ 
+                          coffee: true, 
+                          discount: true, 
+                          gift: true, 
+                          ticket: true, 
+                          other: true 
+                        })
+                        setPointsCostRange([0, 500])
+                      }}
+                    >
+                      Reset Filters
+                    </Button>
+                    <Button onClick={() => setShowFilters(false)}>Apply Filters</Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            <Button 
+              variant="outline" 
+              className="gap-2 rounded-md"
+              onClick={handleExportPDF}
+            >
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
+          </div>
+        </div>
+        
+        <TabsContent value="all" className="mt-0">
+          <Card className="rounded-lg overflow-hidden">
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[300px]">
+                      <Button 
+                        variant="ghost" 
+                        onClick={() => handleSort("rewardName")}
+                        className="flex items-center gap-1 px-0 font-medium"
+                      >
+                        Reward Name
+                        {sortField === "rewardName" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TableHead>
+                    <TableHead className="text-center">
+                      <Button 
+                        variant="ghost" 
+                        onClick={() => handleSort("type")}
+                        className="flex items-center gap-1 px-0 font-medium mx-auto"
+                      >
+                        Type
+                        {sortField === "type" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TableHead>
+                    <TableHead className="text-center">
+                      <Button 
+                        variant="ghost" 
+                        onClick={() => handleSort("pointsCost")}
+                        className="flex items-center gap-1 px-0 font-medium mx-auto"
+                      >
+                        Points
+                        {sortField === "pointsCost" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TableHead>
+                    <TableHead className="text-center">
+                      <Button 
+                        variant="ghost" 
+                        onClick={() => handleSort("redemptionCount")}
+                        className="flex items-center gap-1 px-0 font-medium mx-auto"
+                      >
+                        Redemptions
+                        {sortField === "redemptionCount" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TableHead>
+                    <TableHead className="text-center">
+                      <Button 
+                        variant="ghost" 
+                        onClick={() => handleSort("redeemableCustomers")}
+                        className="flex items-center gap-1 px-0 font-medium mx-auto"
+                      >
+                        Redeemable
+                        {sortField === "redeemableCustomers" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                        )}
+                        <HelpCircle className="h-3 w-3 text-muted-foreground ml-1" />
+                      </Button>
+                    </TableHead>
+                    <TableHead className="text-center">
+                      <Button 
+                        variant="ghost" 
+                        onClick={() => handleSort("createdAt")}
+                        className="flex items-center gap-1 px-0 font-medium mx-auto"
+                      >
+                        Created
+                        {sortField === "createdAt" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TableHead>
+                    <TableHead className="text-center">
+                      <Button 
+                        variant="ghost" 
+                        onClick={() => handleSort("isActive")}
+                        className="flex items-center gap-1 px-0 font-medium mx-auto"
+                      >
+                        Status
+                        {sortField === "isActive" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loadingRewards ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="h-24 text-center">
+                        <div className="flex justify-center">
+                          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : getFilteredRewards().length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="h-24 text-center">
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                            <Gift className="h-6 w-6 text-muted-foreground" />
+                          </div>
+                          <h3 className="mt-4 text-lg font-medium">No rewards found</h3>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {searchQuery ? "Try adjusting your search query" : "Create your first reward to get started"}
+                          </p>
+                          {!searchQuery && (
+                            <Button 
+                              className="mt-4 h-9 gap-2 rounded-md"
+                              onClick={() => router.push('/create')}
+                            >
+                              <Plus className="h-4 w-4" />
+                              Create Reward
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    getFilteredRewards().map((reward) => (
+                      <TableRow 
+                        key={reward.id}
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleViewReward(reward.id)}
+                      >
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <div className="h-9 w-9 min-w-[36px] rounded-md bg-muted flex items-center justify-center">
+                              {reward.category === "program" 
+                                ? <Award className="h-5 w-5 text-amber-600" />
+                                : getRewardTypeIcon(reward.type)}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate flex items-center gap-1">
+                                {reward.rewardName}
+                                {Array.isArray(reward.conditions) && 
+                                  reward.conditions.find(c => c.type === 'maximumTransactions')?.value === 0 && (
+                                  <Badge variant="outline" className="ml-1 py-0 h-4 text-[10px] px-1.5 bg-teal-50 text-teal-700 border-teal-200">
+                                    New Customers
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground line-clamp-1">
+                                {reward.description}
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {reward.programtype === "agent" ? (
+                            <div className="font-medium">
+                              <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-orange-500">
+                                Agent
+                              </span>
+                            </div>
+                          ) : (
+                            <div className={cn(
+                              "font-medium",
+                              reward.programtype === "voucher" && "text-purple-700",
+                              reward.programtype === "points" && "text-blue-700",
+                              reward.programtype === "coffee" && "text-amber-700",
+                              reward.programtype === "discount" && "text-emerald-700",
+                              !reward.programtype && "text-gray-700"
+                            )}>
+                              {reward.programtype 
+                                ? reward.programtype.charAt(0).toUpperCase() + reward.programtype.slice(1)
+                                : "Individual Reward"}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="font-medium text-blue-700">
+                            {reward.pointsCost}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="font-medium text-green-700">
+                            {reward.redemptionCount || 0}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="font-medium text-blue-700">
+                            {reward.redeemableCustomers || 0}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className={cn(
+                            "font-medium",
+                            reward.isActive ? "text-green-700" : "text-red-700"
+                          )}>
+                            {reward.isActive ? "Live" : "Inactive"}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                className="h-8 w-8 p-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent 
+                              align="end"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <DropdownMenuItem onClick={() => handleViewReward(reward.id)}>
+                                <Eye className="h-4 w-4 mr-2" />
+                                View
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => router.push(`/store/${reward.id}/edit`)}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => toggleRewardStatus(reward.id, reward.isActive)}>
+                                {reward.isActive ? (
+                                  <>
+                                    <Clock className="h-4 w-4 mr-2" />
+                                    Deactivate
+                                  </>
+                                ) : (
+                                  <>
+                                    <Zap className="h-4 w-4 mr-2" />
+                                    Activate
+                                  </>
+                                )}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                className="text-red-600"
+                                onClick={() => deleteReward(reward.id)}
+                              >
+                                <Trash className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Add other tab contents for individual, customer-specific, programs, agent */}
+        <TabsContent value="individual" className="mt-0">
+          <Card className="rounded-lg overflow-hidden">
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[300px]">Reward Name</TableHead>
+                    <TableHead className="text-center">Type</TableHead>
+                    <TableHead className="text-center">Points</TableHead>
+                    <TableHead className="text-center">Redemptions</TableHead>
+                    <TableHead className="text-center">Created</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loadingRewards ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="h-24 text-center">
+                        <div className="flex justify-center">
+                          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : getFilteredRewards().filter(r => r.category === "individual").length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="h-24 text-center">
+                        <div className="flex flex-col items-center justify-center">
+                          <Gift className="h-8 w-8 mb-2 text-muted-foreground" />
+                          <p className="text-muted-foreground">No individual rewards found</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    getFilteredRewards().filter(r => r.category === "individual").map((reward) => (
+                      <TableRow 
+                        key={reward.id}
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleViewReward(reward.id)}
+                      >
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <div className="h-9 w-9 min-w-[36px] rounded-md bg-muted flex items-center justify-center">
+                              {getRewardTypeIcon(reward.type)}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate">{reward.rewardName}</div>
+                              <div className="text-xs text-muted-foreground line-clamp-1">
+                                {reward.description}
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="font-medium text-gray-700">
+                            {reward.type?.charAt(0).toUpperCase() + reward.type?.slice(1) || "Gift"}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="font-medium text-blue-700">
+                            {reward.pointsCost}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="font-medium text-green-700">
+                            {reward.redemptionCount || 0}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className={cn(
+                            "font-medium",
+                            reward.isActive ? "text-green-700" : "text-red-700"
+                          )}>
+                            {reward.isActive ? "Live" : "Inactive"}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                className="h-8 w-8 p-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleViewReward(reward.id)}>
+                                <Eye className="h-4 w-4 mr-2" />
+                                View
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => router.push(`/store/${reward.id}/edit`)}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => toggleRewardStatus(reward.id, reward.isActive)}>
+                                {reward.isActive ? (
+                                  <>
+                                    <Clock className="h-4 w-4 mr-2" />
+                                    Deactivate
+                                  </>
+                                ) : (
+                                  <>
+                                    <Zap className="h-4 w-4 mr-2" />
+                                    Activate
+                                  </>
+                                )}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                className="text-red-600"
+                                onClick={() => deleteReward(reward.id)}
+                              >
+                                <Trash className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Similar structure for other tabs... */}
+        <TabsContent value="customer-specific" className="mt-0">
+          <Card className="rounded-lg overflow-hidden">
+            <CardContent className="p-0">
+              <div className="p-8 text-center">
+                <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-medium mb-2">Customer-Specific Rewards</h3>
+                <p className="text-muted-foreground mb-4">
+                  {getFilteredRewards().filter(r => r.category === "customer-specific").length} customer-specific rewards
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="programs" className="mt-0">
+          <Card className="rounded-lg overflow-hidden">
+            <CardContent className="p-0">
+              <div className="p-8 text-center">
+                <Award className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-medium mb-2">Program Rewards</h3>
+                                 <p className="text-muted-foreground mb-4">
+                   {getFilteredRewards().filter(r => r.category === "program").length} program rewards
+                 </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="agent" className="mt-0">
+          <Card className="rounded-lg overflow-hidden">
+            <CardContent className="p-0">
+              <div className="p-8 text-center">
+                <Sparkles className="h-12 w-12 mx-auto mb-4 text-blue-500" />
+                <h3 className="text-lg font-medium mb-2">
+                  <GradientText>Agent Rewards</GradientText>
+                </h3>
+                <p className="text-muted-foreground mb-4">
+                  {getFilteredRewards().filter(r => r.programtype === "agent").length} AI-generated rewards
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!rewardToDelete} onOpenChange={() => setRewardToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Delete Reward</DialogTitle>
+            <DialogDescription className="text-red-500">
+              Are you sure you want to delete this reward? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end space-x-2 mt-5">
+            <Button variant="outline" onClick={() => setRewardToDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reward Detail Sheet */}
+      {selectedRewardId && (
+        <RewardDetailSheet
+          open={isRewardDetailOpen}
+          onOpenChange={setIsRewardDetailOpen}
+          rewardId={selectedRewardId}
+        />
+      )}
+    </div>
+  );
+};
+
 export default function StoreOverviewPage() {
   const router = useRouter()
   const { user } = useAuth()
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState("rewards")
   
   // State for different data sections
   const [rewards, setRewards] = useState<Reward[]>([])
@@ -224,15 +1251,32 @@ export default function StoreOverviewPage() {
           id: doc.id,
           rewardName: data.rewardName || data.name || 'Unnamed Reward',
           description: data.description || '',
+          type: data.type || 'gift',
+          programtype: data.programtype || '',
+          category: data.category || 'individual',
           pointsCost: data.pointsCost || 0,
+          redemptionCount: data.redemptionCount || 0,
           status: data.status || 'active',
           createdAt: data.createdAt,
+          updatedAt: data.updatedAt || data.createdAt,
           expiryDate: data.expiryDate,
-          redemptionCount: data.redemptionCount || 0,
+          imageUrl: data.imageUrl,
+          punchCount: data.punchCount,
+          expiryDays: data.expiryDays,
+          customerIds: data.customerIds,
+          rewardVisibility: data.rewardVisibility,
+          conditions: data.conditions,
+          limitations: data.limitations,
+          hasActivePeriod: !!data.hasActivePeriod,
+          activePeriod: data.activePeriod || { startDate: '', endDate: '' },
+          isActive: !!data.isActive,
+          lastRedeemed: data.lastRedeemed ? data.lastRedeemed.toDate() : null,
+          programName: data.programName,
+          impressions: data.impressions || 0,
+          redeemableCustomers: data.redeemableCustomers || 0,
           viewCount: data.viewCount || 0,
-          isAgentGenerated: data.isAgentGenerated || false,
-          programtype: data.programtype || ''
-        }
+          isAgentGenerated: data.isAgentGenerated || false
+        } as Reward
       })
       
       setRewards(fetchedRewards)
@@ -646,9 +1690,71 @@ export default function StoreOverviewPage() {
   return (
     <PageTransition>
       <div className="p-6 py-4">
-        <PageHeader
-          title="Store Overview"
-        >
+        <div className="flex items-center justify-between">
+          {/* Top Navigation Tabs */}
+          <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+            <button
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                activeTab === "rewards"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+              onClick={() => setActiveTab("rewards")}
+            >
+              <Gift size={15} />
+              Rewards
+            </button>
+            <button
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                activeTab === "programs"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+              onClick={() => setActiveTab("programs")}
+            >
+              <Sparkles size={15} />
+              Programs
+            </button>
+            <button
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                activeTab === "customers"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+              onClick={() => setActiveTab("customers")}
+            >
+              <Users size={15} />
+              Customers
+            </button>
+            <button
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                activeTab === "messages"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+              onClick={() => setActiveTab("messages")}
+            >
+              <MessageSquare size={15} />
+              Messages
+            </button>
+            <button
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                activeTab === "banners"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+              onClick={() => setActiveTab("banners")}
+            >
+              <Image size={15} />
+              Banners
+            </button>
+          </div>
+          
           <Button 
             className="gap-2 rounded-md"
             onClick={() => router.push('/create')}
@@ -656,205 +1762,369 @@ export default function StoreOverviewPage() {
             <PlusCircle className="h-4 w-4" />
             Create New
           </Button>
-        </PageHeader>
+        </div>
         
         <Tabs defaultValue="rewards" className="mt-6">
-          <TabsList className="mb-4">
-            <TabsTrigger value="rewards" className="flex items-center gap-2">
-              <Gift className="h-4 w-4" />
-              Rewards
-            </TabsTrigger>
-            <TabsTrigger value="marketing" className="flex items-center gap-2">
-              <Image className="h-4 w-4" />
-              Marketing
-            </TabsTrigger>
-            <TabsTrigger value="customers" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Customers
-            </TabsTrigger>
-            <TabsTrigger value="inventory" className="flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Inventory
-            </TabsTrigger>
-          </TabsList>
+          {/* TabsList hidden since we have navigation tabs in header */}
           
           <TabsContent value="rewards">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Active Rewards Card */}
-              <Card className="rounded-md shadow-sm">
+            {/* Full Rewards Page Content */}
+            <RewardsTabContent />
+          </TabsContent>
+          
+          <TabsContent value="programs">
+            <div className="space-y-6">
+              <Card className="rounded-lg overflow-hidden">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg font-medium flex items-center">
-                      <Gift className="h-5 w-5 mr-2 text-gray-600" />
-                      Active Rewards
+                      <Sparkles className="h-5 w-5 mr-2 text-gray-600" />
+                      Loyalty Programs
                     </CardTitle>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
-                      <Link href="/store/rewards">
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
+                    <Button 
+                      className="gap-2 rounded-md"
+                      onClick={() => router.push('/create')}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Create Program
                     </Button>
                   </div>
-                  <CardDescription>All active rewards available to customers</CardDescription>
+                  <CardDescription>Manage your loyalty and rewards programs</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {loading ? (
                     <div className="flex items-center justify-center h-48">
                       <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
                     </div>
-                  ) : rewards.length === 0 ? (
+                  ) : rewards.filter(r => r.category === "program").length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-48 text-center">
-                      <Gift className="h-8 w-8 mb-2 text-muted-foreground" />
-                      <p className="text-muted-foreground">No rewards found</p>
-                      <Button variant="outline" size="sm" className="mt-4 rounded-md" asChild>
-                        <Link href="/create">Create Reward</Link>
+                      <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                        <Sparkles className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                      <h3 className="mt-4 text-lg font-medium">No programs found</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Create your first loyalty program to get started
+                      </p>
+                      <Button 
+                        className="mt-4 h-9 gap-2 rounded-md"
+                        onClick={() => router.push('/create')}
+                      >
+                        <Plus className="h-4 w-4" />
+                        Create Program
                       </Button>
                     </div>
                   ) : (
-                    <div>
-                      <Tabs defaultValue="all" className="w-full">
-                        <TabsList className="mb-4 w-full grid grid-cols-2">
-                          <TabsTrigger value="all">All Rewards</TabsTrigger>
-                          <TabsTrigger value="agent">
-                            <div className="flex items-center gap-1">
-                              <Sparkles className="h-3.5 w-3.5" />
-                              <span>Agent Rewards</span>
-                            </div>
-                          </TabsTrigger>
-                        </TabsList>
-
-                        <TabsContent value="all">
-                          <ScrollArea className="h-64">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Reward</TableHead>
-                                  <TableHead>Points</TableHead>
-                                  <TableHead>Status</TableHead>
-                                  <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {rewards.slice(0, 5).map((reward) => (
-                                  <TableRow key={reward.id}>
-                                    <TableCell className="font-medium">
-                                      <div className="flex flex-col">
-                                        {reward.programtype === "agent" ? (
-                                          <GradientText>{reward.rewardName}</GradientText>
-                                        ) : (
-                                          <span className="truncate max-w-[120px]">{reward.rewardName}</span>
-                                        )}
-                                        {reward.programtype === "agent" && (
-                                          <Badge variant="outline" className="mt-1 w-fit text-xs bg-gray-100 text-gray-800">
-                                            <Sparkles className="h-3 w-3 mr-1" />
-                                            AI Generated
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    </TableCell>
-                                    <TableCell>{reward.pointsCost}</TableCell>
-                                    <TableCell>{getStatusBadge(reward.status)}</TableCell>
-                                    <TableCell className="text-right">
-                                      <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
-                                        <Link href={`/rewards/${reward.id}`}>
-                                          <Eye className="h-4 w-4" />
-                                        </Link>
-                                      </Button>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </ScrollArea>
-                        </TabsContent>
-
-                        <TabsContent value="agent">
-                          <ScrollArea className="h-64">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Reward</TableHead>
-                                  <TableHead>Points</TableHead>
-                                  <TableHead>Status</TableHead>
-                                  <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {rewards.filter(r => r.programtype === "agent").length === 0 ? (
-                                  <TableRow>
-                                    <TableCell colSpan={4} className="h-24 text-center">
-                                      <div className="flex flex-col items-center justify-center">
-                                        <Sparkles className="h-8 w-8 mb-2 text-muted-foreground" />
-                                        <p className="text-muted-foreground">No agent rewards found</p>
-                                        <Button variant="outline" size="sm" className="mt-4 rounded-md" asChild>
-                                          <Link href="/tap-agent/setup">Generate Agent Rewards</Link>
-                                        </Button>
-                                      </div>
-                                    </TableCell>
-                                  </TableRow>
-                                ) : (
-                                  rewards.filter(r => r.programtype === "agent").map((reward) => (
-                                    <TableRow key={reward.id}>
-                                      <TableCell className="font-medium">
-                                        <div className="flex flex-col">
-                                          <GradientText>{reward.rewardName}</GradientText>
-                                          <Badge variant="outline" className="mt-1 w-fit text-xs bg-gray-100 text-gray-800">
-                                            <Sparkles className="h-3 w-3 mr-1" />
-                                            AI Generated
-                                          </Badge>
-                                        </div>
-                                      </TableCell>
-                                      <TableCell>{reward.pointsCost}</TableCell>
-                                      <TableCell>{getStatusBadge(reward.status)}</TableCell>
-                                      <TableCell className="text-right">
-                                        <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
-                                          <Link href={`/rewards/${reward.id}`}>
-                                            <Eye className="h-4 w-4" />
-                                          </Link>
-                                        </Button>
-                                      </TableCell>
-                                    </TableRow>
-                                  ))
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[300px]">Program Name</TableHead>
+                          <TableHead className="text-center">Type</TableHead>
+                          <TableHead className="text-center">Rewards</TableHead>
+                          <TableHead className="text-center">Active Users</TableHead>
+                          <TableHead className="text-center">Created</TableHead>
+                          <TableHead className="text-center">Status</TableHead>
+                          <TableHead className="w-[50px]"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {rewards.filter(r => r.category === "program").map((program) => (
+                          <TableRow 
+                            key={program.id}
+                            className="cursor-pointer hover:bg-gray-50"
+                            onClick={() => router.push(`/store/programs/${program.id}`)}
+                          >
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                <div className="h-9 w-9 min-w-[36px] rounded-md bg-muted flex items-center justify-center">
+                                  <Award className="h-5 w-5 text-amber-600" />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="truncate">{program.rewardName}</div>
+                                  <div className="text-xs text-muted-foreground line-clamp-1">
+                                    {program.description}
+                                  </div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <div className="font-medium text-amber-700">
+                                {program.programtype?.charAt(0).toUpperCase() + program.programtype?.slice(1) || "Program"}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <div className="font-medium text-blue-700">
+                                {program.redemptionCount || 0}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <div className="font-medium text-green-700">
+                                {program.redeemableCustomers || 0}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {program.createdAt ? formatDistanceToNow(program.createdAt, { addSuffix: true }) : "Unknown"}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <div className={cn(
+                                "font-medium",
+                                program.isActive ? "text-green-700" : "text-red-700"
+                              )}>
+                                {program.isActive ? "Live" : "Inactive"}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Button 
+                                variant="ghost" 
+                                className="h-8 w-8 p-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  router.push(`/store/programs/${program.id}`);
+                                }}
+                              >
+                                <ChevronRight className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+                <CardFooter className="flex justify-between pt-2">
+                  <div className="text-xs text-muted-foreground">
+                    Total: {rewards.filter(r => r.category === "program").length} programs
+                  </div>
+                  <Button variant="link" size="sm" className="px-0" asChild>
+                    <Link href="/store/programs">View all programs</Link>
+                  </Button>
+                </CardFooter>
+              </Card>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="customers">
+            <div className="space-y-6">
+              <Card className="rounded-lg overflow-hidden">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg font-medium flex items-center">
+                      <Users className="h-5 w-5 mr-2 text-gray-600" />
+                      Customer Management
+                    </CardTitle>
+                    <Button 
+                      className="gap-2 rounded-md"
+                      onClick={() => router.push('/customers')}
+                    >
+                      <Users className="h-4 w-4" />
+                      View All Customers
+                    </Button>
+                  </div>
+                  <CardDescription>Overview of your customer base and engagement</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div className="flex flex-col space-y-1.5">
+                      <h3 className="text-sm font-medium text-muted-foreground">Total Customers</h3>
+                      <div className="text-2xl font-bold">2,847</div>
+                      <div className="text-xs text-green-600">+12% from last month</div>
+                    </div>
+                    <div className="flex flex-col space-y-1.5">
+                      <h3 className="text-sm font-medium text-muted-foreground">Active This Month</h3>
+                      <div className="text-2xl font-bold">1,234</div>
+                      <div className="text-xs text-green-600">+8% from last month</div>
+                    </div>
+                    <div className="flex flex-col space-y-1.5">
+                      <h3 className="text-sm font-medium text-muted-foreground">Avg. Points Balance</h3>
+                      <div className="text-2xl font-bold">156</div>
+                      <div className="text-xs text-blue-600">+5% from last month</div>
+                    </div>
+                  </div>
+                  
+                  <Separator className="my-6" />
+                  
+                  <div className="space-y-4">
+                    <h4 className="font-medium">Recent Customer Activity</h4>
+                    <div className="space-y-3">
+                      {[
+                        { name: "Sarah Johnson", action: "Redeemed 50 points", time: "2 minutes ago", avatar: "SJ" },
+                        { name: "Mike Chen", action: "Earned 25 points", time: "15 minutes ago", avatar: "MC" },
+                        { name: "Emma Wilson", action: "Joined loyalty program", time: "1 hour ago", avatar: "EW" },
+                        { name: "David Brown", action: "Redeemed free coffee", time: "2 hours ago", avatar: "DB" },
+                        { name: "Lisa Garcia", action: "Earned 15 points", time: "3 hours ago", avatar: "LG" }
+                      ].map((activity, index) => (
+                        <div key={index} className="flex items-center gap-3 p-3 rounded-md bg-gray-50">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback className="text-xs">{activity.avatar}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm">{activity.name}</div>
+                            <div className="text-xs text-muted-foreground">{activity.action}</div>
+                          </div>
+                          <div className="text-xs text-muted-foreground">{activity.time}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter className="flex justify-between pt-2">
+                  <div className="text-xs text-muted-foreground">
+                    Last updated: {format(new Date(), 'MMM d, yyyy h:mm a')}
+                  </div>
+                  <Button variant="link" size="sm" className="px-0" asChild>
+                    <Link href="/customers">View all customers</Link>
+                  </Button>
+                </CardFooter>
+              </Card>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="messages">
+            <div className="space-y-6">
+              <Card className="rounded-lg overflow-hidden">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg font-medium flex items-center">
+                      <MessageSquare className="h-5 w-5 mr-2 text-gray-600" />
+                      Messages & Notifications
+                    </CardTitle>
+                    <Button 
+                      className="gap-2 rounded-md"
+                      onClick={() => router.push('/store/messages')}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Create Message
+                    </Button>
+                  </div>
+                  <CardDescription>Manage customer communications and push notifications</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    <div className="flex items-center justify-center h-48">
+                      <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : messages.length === 0 && notifications.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-48 text-center">
+                      <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                        <MessageSquare className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                      <h3 className="mt-4 text-lg font-medium">No messages found</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Create your first message to engage with customers
+                      </p>
+                      <Button 
+                        className="mt-4 h-9 gap-2 rounded-md"
+                        onClick={() => router.push('/store/messages')}
+                      >
+                        <Plus className="h-4 w-4" />
+                        Create Message
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {/* Messages Section */}
+                      {messages.length > 0 && (
+                        <div>
+                          <h4 className="font-medium mb-3 flex items-center gap-2">
+                            <MessageSquare className="h-4 w-4" />
+                            Recent Messages
+                          </h4>
+                          <div className="space-y-3">
+                            {messages.slice(0, 3).map((message) => (
+                              <div key={message.id} className="flex items-center gap-3 p-3 rounded-md bg-gray-50">
+                                <div className="h-8 w-8 rounded-md bg-blue-100 flex items-center justify-center">
+                                  <MessageSquare className="h-4 w-4 text-blue-600" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-sm">{message.title}</div>
+                                  <div className="text-xs text-muted-foreground line-clamp-1">{message.content}</div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-xs text-muted-foreground">
+                                    {message.sent ? `Sent to ${message.recipients}` : 'Draft'}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {message.sentAt ? getTimeAgo(message.sentAt) : 'Not sent'}
+                                  </div>
+                                </div>
+                                {message.sent && (
+                                  <Badge className="bg-green-100 text-green-800 hover:bg-green-100 rounded-md">
+                                    Sent
+                                  </Badge>
                                 )}
-                              </TableBody>
-                            </Table>
-                          </ScrollArea>
-                        </TabsContent>
-                      </Tabs>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Notifications Section */}
+                      {notifications.length > 0 && (
+                        <div>
+                          <h4 className="font-medium mb-3 flex items-center gap-2">
+                            <BellRing className="h-4 w-4" />
+                            Push Notifications
+                          </h4>
+                          <div className="space-y-3">
+                            {notifications.slice(0, 3).map((notification) => (
+                              <div key={notification.id} className="flex items-center gap-3 p-3 rounded-md bg-gray-50">
+                                <div className="h-8 w-8 rounded-md bg-orange-100 flex items-center justify-center">
+                                  <BellRing className="h-4 w-4 text-orange-600" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-sm">{notification.title}</div>
+                                  <div className="text-xs text-muted-foreground line-clamp-1">{notification.body}</div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-xs text-muted-foreground">
+                                    {notification.sent ? `Sent to ${notification.recipients}` : 'Draft'}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {notification.sentAt ? getTimeAgo(notification.sentAt) : 'Not sent'}
+                                  </div>
+                                </div>
+                                {notification.sent && (
+                                  <Badge className="bg-green-100 text-green-800 hover:bg-green-100 rounded-md">
+                                    Sent
+                                  </Badge>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>
                 <CardFooter className="flex justify-between pt-2">
                   <div className="text-xs text-muted-foreground">
-                    Total: {rewards.filter(r => r.status === 'active').length} active rewards
-                    {rewards.filter(r => r.programtype === "agent" && r.status === 'active').length > 0 && (
-                      <span className="ml-2">
-                        ({rewards.filter(r => r.programtype === "agent" && r.status === 'active').length} agent)
-                      </span>
-                    )}
+                    {messages.length} messages, {notifications.length} notifications
                   </div>
-                  {rewards.length > 0 && (
-                    <Button variant="link" size="sm" className="px-0" asChild>
-                      <Link href="/store/rewards">View all rewards</Link>
-                    </Button>
-                  )}
+                  <Button variant="link" size="sm" className="px-0" asChild>
+                    <Link href="/store/messages">View all messages</Link>
+                  </Button>
                 </CardFooter>
               </Card>
-              
-              {/* Active Banners Card */}
-              <Card className="rounded-md shadow-sm">
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="banners">
+            <div className="space-y-6">
+              <Card className="rounded-lg overflow-hidden">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg font-medium flex items-center">
                       <Image className="h-5 w-5 mr-2 text-gray-600" />
-                      Banners
+                      Marketing Banners
                     </CardTitle>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
-                      <Link href="/store/banners">
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
+                    <Button 
+                      className="gap-2 rounded-md"
+                      onClick={() => router.push('/store/banners')}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Create Banner
                     </Button>
                   </div>
-                  <CardDescription>Marketing banners displayed to customers</CardDescription>
+                  <CardDescription>Manage promotional banners and marketing content</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {loading ? (
@@ -863,430 +2133,129 @@ export default function StoreOverviewPage() {
                     </div>
                   ) : banners.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-48 text-center">
-                      <Image className="h-8 w-8 mb-2 text-muted-foreground" />
-                      <p className="text-muted-foreground">No banners found</p>
-                      <Button variant="outline" size="sm" className="mt-4 rounded-md" asChild>
-                        <Link href="/store/banners">Create Banner</Link>
+                      <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                        <Image className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                      <h3 className="mt-4 text-lg font-medium">No banners found</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Create your first marketing banner to promote offers
+                      </p>
+                      <Button 
+                        className="mt-4 h-9 gap-2 rounded-md"
+                        onClick={() => router.push('/store/banners')}
+                      >
+                        <Plus className="h-4 w-4" />
+                        Create Banner
                       </Button>
                     </div>
                   ) : (
-                    <ScrollArea className="h-64">
-                      <div className="grid grid-cols-1 gap-4">
-                        {banners.slice(0, 3).map((banner) => (
-                          <Card key={banner.id} className="overflow-hidden rounded-md shadow-sm">
-                            <div className="relative h-24 bg-gray-100">
-                              {banner.imageUrl ? (
-                                <div 
-                                  className="w-full h-full bg-cover bg-center"
-                                  style={{ backgroundImage: `url(${banner.imageUrl})` }}
-                                />
-                              ) : (
-                                <div className="flex items-center justify-center h-full">
-                                  <Image className="h-8 w-8 text-gray-400" />
-                                </div>
-                              )}
-                              <div className="absolute top-2 right-2">
-                                {getStatusBadge(banner.status)}
-                              </div>
-                              {banner.isAgentGenerated && (
-                                <Badge variant="outline" className="absolute bottom-2 left-2 bg-gray-100 text-gray-800 text-xs">
-                                  <Sparkles className="h-3 w-3 mr-1" />
-                                  AI Generated
-                                </Badge>
-                              )}
-                            </div>
-                            <CardContent className="p-3">
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <h3 className="font-medium text-sm truncate max-w-[160px]">{banner.title}</h3>
-                                  <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                                    <div className="flex items-center">
-                                      <Eye className="h-3 w-3 mr-1" />
-                                      {banner.viewCount || 0}
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[300px]">Banner Title</TableHead>
+                          <TableHead className="text-center">Views</TableHead>
+                          <TableHead className="text-center">Clicks</TableHead>
+                          <TableHead className="text-center">CTR</TableHead>
+                          <TableHead className="text-center">Created</TableHead>
+                          <TableHead className="text-center">Status</TableHead>
+                          <TableHead className="w-[50px]"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {banners.slice(0, 5).map((banner) => {
+                          const ctr = banner.viewCount && banner.viewCount > 0 
+                            ? ((banner.clickCount || 0) / banner.viewCount * 100).toFixed(1)
+                            : '0.0';
+                          
+                          return (
+                            <TableRow 
+                              key={banner.id}
+                              className="cursor-pointer hover:bg-gray-50"
+                              onClick={() => router.push(`/store/banners/${banner.id}`)}
+                            >
+                              <TableCell className="font-medium">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-9 w-9 min-w-[36px] rounded-md bg-muted flex items-center justify-center overflow-hidden">
+                                    {banner.imageUrl ? (
+                                      <img 
+                                        src={banner.imageUrl} 
+                                        alt={banner.title}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      <Image className="h-5 w-5 text-muted-foreground" />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="truncate flex items-center gap-1">
+                                      {banner.title}
+                                      {banner.isAgentGenerated && (
+                                        <Badge variant="outline" className="ml-1 py-0 h-4 text-[10px] px-1.5 bg-gradient-to-r from-blue-50 to-orange-50 text-blue-700 border-blue-200">
+                                          <Sparkles className="h-2.5 w-2.5 mr-0.5" />
+                                          Agent
+                                        </Badge>
+                                      )}
                                     </div>
-                                    <div className="flex items-center">
-                                      <Calendar className="h-3 w-3 mr-1" />
-                                      {formatDate(banner.expiryDate)}
+                                    <div className="text-xs text-muted-foreground line-clamp-1">
+                                      {banner.description}
                                     </div>
                                   </div>
                                 </div>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
-                                  <Link href={`/store/banners/${banner.id}`}>
-                                    <Eye className="h-4 w-4" />
-                                  </Link>
-                                </Button>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  )}
-                </CardContent>
-                <CardFooter className="flex justify-between pt-2">
-                  <div className="text-xs text-muted-foreground">
-                    Total: {banners.filter(b => b.status === 'active').length} active banners
-                  </div>
-                  {banners.length > 0 && (
-                    <Button variant="link" size="sm" className="px-0" asChild>
-                      <Link href="/store/banners">View all banners</Link>
-                    </Button>
-                  )}
-                </CardFooter>
-              </Card>
-              
-              {/* Points Rules Card */}
-              <Card className="rounded-md shadow-sm">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-medium flex items-center">
-                      <Zap className="h-5 w-5 mr-2 text-gray-600" />
-                      Points Rules
-                    </CardTitle>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
-                      <Link href="/store/points-rules">
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                  <CardDescription>Rules for customers to earn points</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <div className="flex items-center justify-center h-48">
-                      <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : pointsRules.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-48 text-center">
-                      <Zap className="h-8 w-8 mb-2 text-muted-foreground" />
-                      <p className="text-muted-foreground">No points rules found</p>
-                      <Button variant="outline" size="sm" className="mt-4 rounded-md" asChild>
-                        <Link href="/store/points-rules">Create Points Rule</Link>
-                      </Button>
-                    </div>
-                  ) : (
-                    <ScrollArea className="h-64">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Rule</TableHead>
-                            <TableHead>Points</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {pointsRules.slice(0, 5).map((rule) => (
-                            <TableRow key={rule.id}>
-                              <TableCell className="font-medium">
-                                <span className="truncate max-w-[120px] block">{rule.name}</span>
                               </TableCell>
-                              <TableCell>{rule.pointsAmount}</TableCell>
-                              <TableCell>{getStatusBadge(rule.status)}</TableCell>
-                              <TableCell className="text-right">
-                                <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
-                                  <Link href={`/store/points-rules/${rule.id}`}>
-                                    <Eye className="h-4 w-4" />
-                                  </Link>
+                              <TableCell className="text-center">
+                                <div className="font-medium text-blue-700">
+                                  {(banner.viewCount || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <div className="font-medium text-green-700">
+                                  {(banner.clickCount || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <div className="font-medium text-purple-700">
+                                  {ctr}%
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {banner.createdAt ? formatDistanceToNow(banner.createdAt.toDate(), { addSuffix: true }) : "Unknown"}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {getStatusBadge(banner.status)}
+                              </TableCell>
+                              <TableCell>
+                                <Button 
+                                  variant="ghost" 
+                                  className="h-8 w-8 p-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/store/banners/${banner.id}`);
+                                  }}
+                                >
+                                  <ChevronRight className="h-4 w-4" />
                                 </Button>
                               </TableCell>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </ScrollArea>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
                   )}
                 </CardContent>
                 <CardFooter className="flex justify-between pt-2">
                   <div className="text-xs text-muted-foreground">
-                    Total: {pointsRules.filter(r => r.status === 'active').length} active rules
-                  </div>
-                  {pointsRules.length > 0 && (
-                    <Button variant="link" size="sm" className="px-0" asChild>
-                      <Link href="/store/points-rules">View all rules</Link>
-                    </Button>
-                  )}
-                </CardFooter>
-              </Card>
-              
-              {/* Recent Messages Card */}
-              <Card className="rounded-md shadow-sm">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-medium flex items-center">
-                      <MessageSquare className="h-5 w-5 mr-2 text-gray-600" />
-                      Recent Messages
-                    </CardTitle>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
-                      <Link href="/store/messages">
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                  <CardDescription>Messages sent to customers</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <div className="flex items-center justify-center h-48">
-                      <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : messages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-48 text-center">
-                      <MessageSquare className="h-8 w-8 mb-2 text-muted-foreground" />
-                      <p className="text-muted-foreground">No messages found</p>
-                      <Button variant="outline" size="sm" className="mt-4 rounded-md" asChild>
-                        <Link href="/store/messages">Create Message</Link>
-                      </Button>
-                    </div>
-                  ) : (
-                    <ScrollArea className="h-64">
-                      <div className="space-y-4">
-                        {messages.map((message) => (
-                          <div key={message.id} className="flex items-start space-x-3 pb-4 border-b border-gray-100 last:border-0">
-                            <div className="bg-gray-100 rounded-full p-2 flex-shrink-0">
-                              <MessageSquare className="h-4 w-4 text-gray-600" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex justify-between items-start">
-                                <h3 className="font-medium truncate max-w-[160px]">{message.title}</h3>
-                                <Badge 
-                                  variant={message.sent ? "default" : "outline"} 
-                                  className={message.sent ? "bg-green-500 rounded-md" : "text-gray-500 rounded-md"}
-                                >
-                                  {message.sent ? "Sent" : "Draft"}
-                                </Badge>
-                              </div>
-                              <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{message.content}</p>
-                              <div className="flex items-center gap-3 text-xs text-muted-foreground mt-2">
-                                {message.sent && (
-                                  <>
-                                    <div className="flex items-center">
-                                      <Users className="h-3 w-3 mr-1" />
-                                      {message.recipients || 0} recipients
-                                    </div>
-                                    <div className="flex items-center">
-                                      <Eye className="h-3 w-3 mr-1" />
-                                      {message.openRate || 0}% open rate
-                                    </div>
-                                  </>
-                                )}
-                                {message.sentAt && (
-                                  <div className="flex items-center">
-                                    <Clock className="h-3 w-3 mr-1" />
-                                    {getTimeAgo(message.sentAt)}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  )}
-                </CardContent>
-                <CardFooter className="flex justify-between pt-2">
-                  <div className="text-xs text-muted-foreground">
-                    {messages.filter(m => m.sent).length} messages sent
+                    Total: {banners.length} banners
+                    {hasAiBanners && (
+                      <span className="ml-2 text-blue-600">
+                        • {banners.filter(b => b.isAgentGenerated).length} AI-generated
+                      </span>
+                    )}
                   </div>
                   <Button variant="link" size="sm" className="px-0" asChild>
-                    <Link href="/store/messages">View all messages</Link>
+                    <Link href="/store/banners">View all banners</Link>
                   </Button>
                 </CardFooter>
               </Card>
-              
-              {/* Push Notifications Card */}
-              <Card className="rounded-md shadow-sm">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-medium flex items-center">
-                      <BellRing className="h-5 w-5 mr-2 text-gray-600" />
-                      Push Notifications
-                    </CardTitle>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
-                      <Link href="/store/notifications">
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                  <CardDescription>Notifications sent to customer devices</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <div className="flex items-center justify-center h-48">
-                      <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : notifications.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-48 text-center">
-                      <BellRing className="h-8 w-8 mb-2 text-muted-foreground" />
-                      <p className="text-muted-foreground">No notifications found</p>
-                      <Button variant="outline" size="sm" className="mt-4 rounded-md" asChild>
-                        <Link href="/store/notifications">Create Notification</Link>
-                      </Button>
-                    </div>
-                  ) : (
-                    <ScrollArea className="h-64">
-                      <div className="space-y-4">
-                        {notifications.map((notification) => (
-                          <div key={notification.id} className="flex items-start space-x-3 pb-4 border-b border-gray-100 last:border-0">
-                            <div className="bg-gray-100 rounded-full p-2 flex-shrink-0">
-                              <BellRing className="h-4 w-4 text-gray-600" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex justify-between items-start">
-                                <h3 className="font-medium truncate max-w-[160px]">{notification.title}</h3>
-                                <Badge 
-                                  variant={notification.sent ? "default" : "outline"} 
-                                  className={notification.sent ? "bg-green-500 rounded-md" : "text-gray-500 rounded-md"}
-                                >
-                                  {notification.sent ? "Sent" : "Draft"}
-                                </Badge>
-                              </div>
-                              <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{notification.body}</p>
-                              <div className="flex items-center gap-3 text-xs text-muted-foreground mt-2">
-                                {notification.sent && (
-                                  <>
-                                    <div className="flex items-center">
-                                      <Users className="h-3 w-3 mr-1" />
-                                      {notification.recipients || 0} recipients
-                                    </div>
-                                    <div className="flex items-center">
-                                      <ArrowRight className="h-3 w-3 mr-1" />
-                                      {notification.clickRate || 0}% click rate
-                                    </div>
-                                  </>
-                                )}
-                                {notification.sentAt && (
-                                  <div className="flex items-center">
-                                    <Clock className="h-3 w-3 mr-1" />
-                                    {getTimeAgo(notification.sentAt)}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  )}
-                </CardContent>
-                <CardFooter className="flex justify-between pt-2">
-                  <div className="text-xs text-muted-foreground">
-                    {notifications.filter(n => n.sent).length} notifications sent
-                  </div>
-                  <Button variant="link" size="sm" className="px-0" asChild>
-                    <Link href="/store/notifications">View all notifications</Link>
-                  </Button>
-                </CardFooter>
-              </Card>
-              
-              {/* Inventory Sync Card */}
-              <Card className="rounded-md shadow-sm">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-medium flex items-center">
-                      <Package className="h-5 w-5 mr-2 text-gray-600" />
-                      Inventory Status
-                    </CardTitle>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
-                      <Link href="/store/inventory">
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                  <CardDescription>Product inventory synchronization</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <div className="flex items-center justify-center h-48">
-                      <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : !inventorySync ? (
-                    <div className="flex flex-col items-center justify-center h-48 text-center">
-                      <Package className="h-8 w-8 mb-2 text-muted-foreground" />
-                      <p className="text-muted-foreground">No inventory data found</p>
-                      <Button variant="outline" size="sm" className="mt-4 rounded-md" asChild>
-                        <Link href="/store/inventory">Set Up Inventory</Link>
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-6 pt-4">
-                      <div className="flex flex-col space-y-1.5">
-                        <div className="flex justify-between items-center">
-                          <h3 className="text-sm font-medium">Last Synchronized</h3>
-                          <Badge 
-                            variant={inventorySync.status === 'synced' ? "default" : "outline"}
-                            className={inventorySync.status === 'synced' ? "bg-green-500 rounded-md" : inventorySync.status === 'syncing' ? "bg-blue-500 rounded-md" : "text-gray-500 rounded-md"}
-                          >
-                            {inventorySync.status === 'synced' ? 'Synced' : 
-                             inventorySync.status === 'syncing' ? 'Syncing' : 
-                             inventorySync.status === 'error' ? 'Error' : 'Idle'}
-                          </Badge>
-                        </div>
-                        {inventorySync.lastSynced ? (
-                          <div className="flex items-center text-xl font-semibold">
-                            {getTimeAgo(inventorySync.lastSynced)}
-                          </div>
-                        ) : (
-                          <div className="text-xl font-semibold text-muted-foreground">Never</div>
-                        )}
-                      </div>
-                      
-                      <Separator />
-                      
-                      <div className="grid grid-cols-2 gap-6">
-                        <div className="flex flex-col space-y-1.5">
-                          <h3 className="text-sm font-medium">Total Items</h3>
-                          <div className="flex items-center text-xl font-semibold">
-                            {inventorySync.totalItems.toLocaleString()}
-                          </div>
-                        </div>
-                        
-                        <div className="flex flex-col space-y-1.5">
-                          <h3 className="text-sm font-medium">Source</h3>
-                          <div className="flex items-center text-xl font-semibold">
-                            {inventorySync.source === 'square' ? 'Square' : 
-                             inventorySync.source === 'shopify' ? 'Shopify' : 
-                             inventorySync.source === 'lightspeed' ? 'Lightspeed' : 
-                             'Manual'}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <Button className="w-full" variant="outline" asChild>
-                        <Link href="/store/inventory">
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Sync Inventory
-                        </Link>
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-                {inventorySync && (
-                  <CardFooter className="flex justify-between pt-2">
-                    <div className="text-xs text-muted-foreground">
-                      Source: {inventorySync.source === 'square' ? 'Square' : 
-                              inventorySync.source === 'shopify' ? 'Shopify' : 
-                              inventorySync.source === 'lightspeed' ? 'Lightspeed' : 
-                              'Manual'}
-                    </div>
-                    <Button variant="link" size="sm" className="px-0" asChild>
-                      <Link href="/integrations">Manage Integration</Link>
-                    </Button>
-                  </CardFooter>
-                )}
-              </Card>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="marketing">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Existing marketing content */}
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="customers">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Existing customers content */}
             </div>
           </TabsContent>
           

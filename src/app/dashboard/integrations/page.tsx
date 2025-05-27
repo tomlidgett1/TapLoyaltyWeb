@@ -12,7 +12,7 @@ import Link from "next/link"
 import { PageTransition } from "@/components/page-transition"
 import { PageHeader } from "@/components/page-header"
 import { generateCodeVerifier, generateCodeChallenge } from "@/lib/pkce"
-import { CheckCircle, Globe, BarChart2, MessageSquare, Mail, Phone, Calculator } from "lucide-react"
+import { CheckCircle, Globe, BarChart2, MessageSquare, Mail, Phone, Calculator, Calendar } from "lucide-react"
 
 // Import icons for different POS systems
 import { LightspeedIcon } from "@/components/icons/lightspeed-icon"
@@ -33,6 +33,7 @@ interface IntegrationsState {
   shopify: IntegrationState;
   lightspeed_new: IntegrationState;
   gmail: IntegrationState;
+  google_calendar: IntegrationState;
 }
 
 export default function IntegrationsPage() {
@@ -43,13 +44,21 @@ export default function IntegrationsPage() {
     clover: { connected: false, data: null },
     shopify: { connected: false, data: null },
     lightspeed_new: { connected: false, data: null },
-    gmail: { connected: false, data: null }
+    gmail: { connected: false, data: null },
+    google_calendar: { connected: false, data: null }
   })
   
   const [refreshing, setRefreshing] = useState(false)
   const [errorDetails, setErrorDetails] = useState<string | null>(null)
   const [configCheckResult, setConfigCheckResult] = useState<any>(null)
   const [checkingConfig, setCheckingConfig] = useState(false)
+  
+  // Add debug state
+  const [debugMode, setDebugMode] = useState(false)
+  const [debugResult, setDebugResult] = useState<any>(null)
+  const [debugLoading, setDebugLoading] = useState(false)
+  const [debugError, setDebugError] = useState<string | null>(null)
+  const [customIntegrationId, setCustomIntegrationId] = useState<string>('48ab3736-146c-4fdf-bd30-dda79973bd1d')
   
   // Function to check environment configuration
   const checkEnvironmentConfig = async () => {
@@ -118,6 +127,11 @@ export default function IntegrationsPage() {
         const gmailConnected = gmailDoc.exists() && gmailDoc.data()?.connected === true;
         console.log('Gmail integration status:', gmailConnected ? 'Connected' : 'Not connected');
         
+        // Check Google Calendar integration status
+        const googleCalendarDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/google_calendar`));
+        const googleCalendarConnected = googleCalendarDoc.exists() && googleCalendarDoc.data()?.connected === true;
+        console.log('Google Calendar integration status:', googleCalendarConnected ? 'Connected' : 'Not connected');
+        
         setIntegrations(prev => ({
           ...prev,
           square: {
@@ -131,6 +145,10 @@ export default function IntegrationsPage() {
           gmail: {
             connected: gmailConnected,
             data: gmailDoc.exists() ? gmailDoc.data() : null
+          },
+          google_calendar: {
+            connected: googleCalendarConnected,
+            data: googleCalendarDoc.exists() ? googleCalendarDoc.data() : null
           }
         }));
       } else {
@@ -140,6 +158,11 @@ export default function IntegrationsPage() {
         const gmailDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/gmail`));
         const gmailConnected = gmailDoc.exists() && gmailDoc.data()?.connected === true;
         console.log('Gmail integration status:', gmailConnected ? 'Connected' : 'Not connected');
+        
+        // Check Google Calendar integration status even if Lightspeed is not found
+        const googleCalendarDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/google_calendar`));
+        const googleCalendarConnected = googleCalendarDoc.exists() && googleCalendarDoc.data()?.connected === true;
+        console.log('Google Calendar integration status:', googleCalendarConnected ? 'Connected' : 'Not connected');
         
         setIntegrations(prev => ({
           ...prev,
@@ -154,6 +177,10 @@ export default function IntegrationsPage() {
           gmail: {
             connected: gmailConnected,
             data: gmailDoc.exists() ? gmailDoc.data() : null
+          },
+          google_calendar: {
+            connected: googleCalendarConnected,
+            data: googleCalendarDoc.exists() ? googleCalendarDoc.data() : null
           }
         }));
       }
@@ -220,6 +247,21 @@ export default function IntegrationsPage() {
           }))
         } else {
           console.log('Gmail integration not connected or not found')
+        }
+        
+        // Check Google Calendar integration status
+        const googleCalendarDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'google_calendar'))
+        if (googleCalendarDoc.exists() && googleCalendarDoc.data().connected) {
+          console.log('Google Calendar integration found:', googleCalendarDoc.data())
+          setIntegrations(prev => ({
+            ...prev,
+            google_calendar: { 
+              connected: true, 
+              data: googleCalendarDoc.data() 
+            }
+          }))
+        } else {
+          console.log('Google Calendar integration not connected or not found')
         }
       } catch (error) {
         console.error("Error checking integrations:", error)
@@ -467,35 +509,336 @@ export default function IntegrationsPage() {
     }
   }
 
+  // Google Calendar integration – using Composio like Gmail
+  const connectGoogleCalendar = () => {
+    if (!user?.uid) return
+
+    setConnecting("google_calendar")
+
+    try {
+      // Simply hit our server-side connect endpoint for Google Calendar
+      window.location.href = `/api/auth/google-calendar/composio?merchantId=${user.uid}`
+    } catch (error) {
+      console.error("Error redirecting to Google Calendar connect route:", error)
+      toast({
+        title: "Connection Failed",
+        description: "Failed to initiate Google Calendar connection. Please try again.",
+        variant: "destructive",
+      })
+      setConnecting(null)
+    }
+  }
+
+  // Disconnect Google Calendar
+  const disconnectGoogleCalendar = async () => {
+    if (!user) return
+    
+    try {
+      // Delete the integration from Firestore
+      const integrationRef = doc(db, `merchants/${user.uid}/integrations/google_calendar`);
+      await deleteDoc(integrationRef);
+      
+      // Update local state
+      setIntegrations(prev => ({
+        ...prev,
+        google_calendar: { connected: false, data: null }
+      }))
+      
+      toast({
+        title: "Disconnected",
+        description: "Your Google Calendar account has been disconnected."
+      })
+    } catch (error) {
+      console.error("Error disconnecting Google Calendar:", error)
+      toast({
+        title: "Error",
+        description: "Failed to disconnect Google Calendar. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
+
+  // Debug test functions
+  const runDebugTest = async (testType: string) => {
+    if (!user?.uid) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to run tests",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setDebugLoading(true);
+    setDebugError(null);
+    setDebugResult(null);
+    
+    try {
+      let url = '';
+      
+      if (testType === 'direct') {
+        url = `/api/auth/gmail/composio/direct-test?merchantId=${user.uid}`;
+      } else if (testType === 'diagnostic') {
+        url = `/api/auth/gmail/composio/test?verbose=1`;
+      } else if (testType === 'custom') {
+        url = `/api/auth/gmail/composio/test?integrationId=${customIntegrationId}&verbose=1`;
+      } else if (testType === 'simplified') {
+        url = `/api/auth/gmail/composio/simplified?merchantId=${user.uid}&debug=1`;
+      } else if (testType === 'calendar_test') {
+        url = `/api/auth/google-calendar/composio/test?verbose=1`;
+      } else if (testType === 'calendar_connect') {
+        url = `/api/auth/google-calendar/composio?merchantId=${user.uid}&debug=1`;
+      } else {
+        url = `/api/auth/gmail/composio?merchantId=${user.uid}&debug=1`;
+      }
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      setDebugResult(data);
+      
+      // Show success toast
+      toast({
+        title: "Debug Test Complete",
+        description: `${testType} test completed successfully`,
+      });
+    } catch (err) {
+      setDebugError(`Error running test: ${err instanceof Error ? err.message : String(err)}`);
+      
+      toast({
+        title: "Test Error",
+        description: `Error running ${testType} test`,
+        variant: "destructive"
+      });
+    } finally {
+      setDebugLoading(false);
+    }
+  };
+
   return (
     <PageTransition>
       <div className="p-6 py-4">
         <PageHeader
           title="Integrations"
         >
-          <Button 
-            variant="outline" 
-            onClick={refreshIntegrationStatus}
-            disabled={refreshing}
-          >
-            {refreshing ? (
-              <>
-                <svg className="mr-2 h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Refreshing...
-              </>
-            ) : (
-              <>
-                <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Refresh Status
-              </>
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={refreshIntegrationStatus}
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <>
+                  <svg className="mr-2 h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Refreshing...
+                </>
+              ) : (
+                <>
+                  <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh Status
+                </>
+              )}
+            </Button>
+            
+            <Button 
+              variant={debugMode ? "default" : "outline"}
+              className="rounded-md"
+              onClick={() => setDebugMode(!debugMode)}
+            >
+              {debugMode ? "Hide Debug Tools" : "Show Debug Tools"}
+            </Button>
+          </div>
         </PageHeader>
+        
+        {/* Debug Tools */}
+        {debugMode && (
+          <div className="mb-6">
+            <Card className="rounded-md">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Composio Debug Tools</CardTitle>
+                <CardDescription>Test and troubleshoot Gmail and Google Calendar Composio integrations</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md"
+                      onClick={() => runDebugTest('direct')}
+                      disabled={debugLoading}
+                    >
+                      {debugLoading ? (
+                        <svg className="mr-2 h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      ) : null}
+                      Test Direct Implementation
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md"
+                      onClick={() => runDebugTest('diagnostic')}
+                      disabled={debugLoading}
+                    >
+                      Run Diagnostics
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md"
+                      onClick={() => runDebugTest('normal')}
+                      disabled={debugLoading}
+                    >
+                      Test Regular Flow
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-800"
+                      onClick={() => runDebugTest('simplified')}
+                      disabled={debugLoading}
+                    >
+                      Test Simplified Version
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md bg-green-50 hover:bg-green-100 text-green-700 hover:text-green-800"
+                      onClick={() => runDebugTest('calendar_test')}
+                      disabled={debugLoading}
+                    >
+                      Test Google Calendar
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md bg-purple-50 hover:bg-purple-100 text-purple-700 hover:text-purple-800"
+                      onClick={() => runDebugTest('calendar_connect')}
+                      disabled={debugLoading}
+                    >
+                      Test Calendar Connect
+                    </Button>
+                    
+                    <div className="flex items-center gap-2 ml-2">
+                      <input
+                        type="text"
+                        value={customIntegrationId}
+                        onChange={(e) => setCustomIntegrationId(e.target.value)}
+                        placeholder="Custom Integration ID"
+                        className="px-2 py-1 text-sm border rounded-md w-64"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-md"
+                        onClick={() => runDebugTest('custom')}
+                        disabled={debugLoading || !customIntegrationId}
+                      >
+                        Test Custom ID
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Debug Results */}
+                  {debugError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                      <p className="font-medium text-sm text-red-700">Error</p>
+                      <p className="text-sm text-red-600">{debugError}</p>
+                    </div>
+                  )}
+                  
+                  {debugResult && (
+                    <div className="border rounded-md overflow-auto max-h-[300px]">
+                      <div className="p-2 bg-slate-100 border-b font-medium text-sm">Debug Result</div>
+                      <pre className="p-3 text-xs whitespace-pre-wrap break-words bg-slate-50">
+                        {JSON.stringify(debugResult, null, 2)}
+                      </pre>
+                      
+                      {/* Error logs display */}
+                      {debugResult.error && (
+                        <div className="p-2 bg-red-100 border-t border-red-200">
+                          <div className="font-medium text-sm text-red-800 mb-1">Error Details</div>
+                          <div className="text-xs text-red-700 whitespace-pre-wrap break-words">
+                            <p><strong>Message:</strong> {debugResult.error}</p>
+                            {debugResult.detailedError && (
+                              <>
+                                <p className="mt-1"><strong>Error Code:</strong> {debugResult.detailedError.errCode || 'N/A'}</p>
+                                <p><strong>Description:</strong> {debugResult.detailedError.description || 'N/A'}</p>
+                                <p><strong>Possible Fix:</strong> {debugResult.detailedError.possibleFix || 'N/A'}</p>
+                                <p><strong>Error ID:</strong> {debugResult.detailedError.errorId || 'N/A'}</p>
+                              </>
+                            )}
+                            {debugResult.stack && (
+                              <div className="mt-1">
+                                <p><strong>Stack Trace:</strong></p>
+                                <div className="bg-red-50 p-2 mt-1 rounded overflow-auto">
+                                  {debugResult.stack}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="text-xs text-red-700 mt-2">
+                            <p><strong>Composio Log Hints:</strong></p>
+                            <ul className="list-disc ml-4 mt-1">
+                              <li>Get Help: <span className="font-mono">https://dub.composio.dev/discord</span></li>
+                              <li>Report Issue: <span className="font-mono">https://github.com/ComposioHQ/composio/issues</span></li>
+                              <li>Set <span className="font-mono">COMPOSIO_LOGGING_LEVEL=debug</span> for more information</li>
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Success path debug info */}
+                      {debugResult.success && (
+                        <div className="p-2 bg-green-100 border-t border-green-200">
+                          <div className="font-medium text-sm text-green-800 mb-1">Integration Details</div>
+                          <div className="text-xs text-green-700">
+                            {debugResult.integration && (
+                              <>
+                                <p><strong>Integration ID:</strong> {debugResult.integration.id}</p>
+                                <p><strong>Integration Name:</strong> {debugResult.integration.name}</p>
+                              </>
+                            )}
+                            {debugResult.connectedAccount && (
+                              <>
+                                <p className="mt-1"><strong>Connected Account ID:</strong> {debugResult.connectedAccount.id}</p>
+                                <p><strong>Status:</strong> {debugResult.connectedAccount.status}</p>
+                                <p><strong>Redirect URL:</strong> {debugResult.redirectUrl ? "Available" : "Not Available"}</p>
+                              </>
+                            )}
+                            {debugResult.note && (
+                              <p className="mt-1"><strong>Note:</strong> {debugResult.note}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {!debugError && !debugResult && (
+                    <div className="p-4 bg-slate-50 text-slate-500 rounded-md border text-center">
+                      <p>Run a test to see results</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
         
         {/* Error Details Display */}
         {errorDetails && (
@@ -583,7 +926,7 @@ export default function IntegrationsPage() {
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           {/* Gmail Integration Card */}
-          <Card className="rounded-md">
+          <Card className="rounded-md bg-gray-50">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -600,25 +943,85 @@ export default function IntegrationsPage() {
                     )}
                   </div>
                 </div>
+                <div className="flex space-x-2">
+                  <Button 
+                    variant="outline"
+                    className="rounded-md"
+                    onClick={() => window.location.href = `/api/auth/gmail/composio/simplified?merchantId=${user?.uid}`}
+                    disabled={connecting === "gmail" || !user?.uid}
+                  >
+                    Connect with Composio
+                  </Button>
+                  <Button 
+                    variant={integrations.gmail.connected ? "outline" : "default"}
+                    className="rounded-md"
+                    onClick={integrations.gmail.connected ? disconnectGmail : connectGmail}
+                    disabled={connecting === "gmail"}
+                  >
+                    {connecting === "gmail" ? "Connecting..." : 
+                    integrations.gmail.connected ? "Disconnect" : "Connect"}
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pb-2">
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  Connect your Gmail account to enable automated email sending and communication with your customers. 
+                  Use Composio for enhanced Gmail capabilities.
+                </p>
+                {integrations.gmail.connected && integrations.gmail.data?.connectedAt && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Connected on {new Date(integrations.gmail.data.connectedAt.toDate()).toLocaleDateString()} at {new Date(integrations.gmail.data.connectedAt.toDate()).toLocaleTimeString()}
+                    {integrations.gmail.data?.provider && (
+                      <span className="ml-1">via {integrations.gmail.data.provider}</span>
+                    )}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* Google Calendar Integration Card */}
+          <Card className="rounded-md bg-gray-50">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center">
+                    <Calendar className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div className="flex items-center">
+                    <div>
+                      <CardTitle className="text-base font-medium">Google Calendar</CardTitle>
+                      <CardDescription>Calendar Integration</CardDescription>
+                    </div>
+                    {integrations.google_calendar.connected && (
+                      <CheckCircle className="h-5 w-5 ml-2 text-green-500" />
+                    )}
+                  </div>
+                </div>
                 <Button 
-                  variant={integrations.gmail.connected ? "outline" : "default"}
+                  variant={integrations.google_calendar.connected ? "outline" : "default"}
                   className="rounded-md"
-                  onClick={integrations.gmail.connected ? disconnectGmail : connectGmail}
-                  disabled={connecting === "gmail"}
+                  onClick={integrations.google_calendar.connected ? disconnectGoogleCalendar : connectGoogleCalendar}
+                  disabled={connecting === "google_calendar"}
                 >
-                  {connecting === "gmail" ? "Connecting..." : 
-                  integrations.gmail.connected ? "Disconnect" : "Connect"}
+                  {connecting === "google_calendar" ? "Connecting..." : 
+                  integrations.google_calendar.connected ? "Disconnect" : "Connect"}
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="pb-2">
               <div>
                 <p className="text-sm text-muted-foreground">
-                  Connect your Gmail account to enable automated email sending and communication with your customers.
+                  Connect your Google Calendar to manage appointments, schedule events, and sync calendar data with your business operations.
                 </p>
-                {integrations.gmail.connected && integrations.gmail.data?.connectedAt && (
+                {integrations.google_calendar.connected && integrations.google_calendar.data?.connectedAt && (
                   <p className="text-xs text-muted-foreground mt-2">
-                    Connected on {new Date(integrations.gmail.data.connectedAt.toDate()).toLocaleDateString()} at {new Date(integrations.gmail.data.connectedAt.toDate()).toLocaleTimeString()}
+                    Connected on {new Date(integrations.google_calendar.data.connectedAt.toDate()).toLocaleDateString()} at {new Date(integrations.google_calendar.data.connectedAt.toDate()).toLocaleTimeString()}
+                    {integrations.google_calendar.data?.provider && (
+                      <span className="ml-1">via {integrations.google_calendar.data.provider}</span>
+                    )}
                   </p>
                 )}
               </div>
@@ -626,7 +1029,7 @@ export default function IntegrationsPage() {
           </Card>
           
           {/* Lightspeed Retail Integration Card */}
-          <Card className="rounded-md">
+          <Card className="rounded-md bg-gray-50">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -669,7 +1072,7 @@ export default function IntegrationsPage() {
           </Card>
           
           {/* Square Integration Card */}
-          <Card className="rounded-md">
+          <Card className="rounded-md bg-gray-50">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -707,7 +1110,7 @@ export default function IntegrationsPage() {
           </Card>
 
           {/* Google Integration Card */}
-          <Card className="rounded-md">
+          <Card className="rounded-md bg-gray-50">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -743,7 +1146,7 @@ export default function IntegrationsPage() {
           </Card>
           
           {/* Lightspeed Restaurant Integration Card */}
-          <Card className="rounded-md">
+          <Card className="rounded-md bg-gray-50">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -779,7 +1182,7 @@ export default function IntegrationsPage() {
           </Card>
           
           {/* HubSpot Integration Card */}
-          <Card className="rounded-md">
+          <Card className="rounded-md bg-gray-50">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -815,7 +1218,7 @@ export default function IntegrationsPage() {
           </Card>
           
           {/* Mailchimp Integration Card */}
-          <Card className="rounded-md">
+          <Card className="rounded-md bg-gray-50">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -851,7 +1254,7 @@ export default function IntegrationsPage() {
           </Card>
           
           {/* Twilio Integration Card */}
-          <Card className="rounded-md">
+          <Card className="rounded-md bg-gray-50">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -887,7 +1290,7 @@ export default function IntegrationsPage() {
           </Card>
           
           {/* Xero Integration Card */}
-          <Card className="rounded-md">
+          <Card className="rounded-md bg-gray-50">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">

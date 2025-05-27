@@ -179,3 +179,13 @@ body {
 .membership-page [class*="dialog"] {
   border-radius: 0.25rem !important;
 }
+
+/* Temporarily commented out to allow scrolling
+html, body {
+  scrollbar-width: none; 
+  -ms-overflow-style: none;  
+}
+html::-webkit-scrollbar, body::-webkit-scrollbar {
+  display: none; 
+}
+*/

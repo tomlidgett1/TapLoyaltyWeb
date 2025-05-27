@@ -1019,7 +1019,7 @@ export default function ActivityPage() {
 
   return (
     <PageTransition>
-      <div className="p-6 py-4">
+      <div className="p-6 py-4 overflow-hidden">
         <PageHeader
           title="Activity"
         >

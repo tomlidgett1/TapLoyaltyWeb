@@ -203,9 +203,7 @@ export default function CustomersPage() {
     <PageTransition>
       <div className="p-6 py-4">
         <div>
-          <PageHeader 
-            title="Customers" 
-          >
+          <PageHeader>
             <Button 
               className="gap-2 rounded-md"
               onClick={() => router.push('/customers/invite')}

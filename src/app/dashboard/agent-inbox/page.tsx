@@ -5,7 +5,7 @@ import {
   Mail, Package, AlertCircle, CheckCircle, XCircle, ChevronDown, Star, 
   Clock, Eye, Filter, Bot, User, ArrowDown, Pencil, Save, 
   MessageSquare, Send, Loader2, Info, Check, Archive, Settings,
-  InboxIcon
+  InboxIcon, LinkIcon
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -179,6 +179,36 @@ export default function AgentInboxPage() {
   // New state for type filter
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
   
+  // Define available integrations
+  const availableIntegrations = [
+    { id: 'xero', name: 'Xero', description: 'Accounting and bookkeeping', logo: 'xero.png', status: 'active' },
+    { id: 'square', name: 'Square', description: 'Point of sale system', logo: 'square.png', status: 'active' },
+    { id: 'lightspeed', name: 'Lightspeed', description: 'Retail POS system', logo: 'lslogo.png', status: 'active' },
+    { id: 'gmail', name: 'Gmail', description: 'Email communication', logo: 'gmail.png', status: 'active' },
+    { id: 'mailchimp', name: 'Mailchimp', description: 'Email marketing', logo: 'mailchimp.png', status: 'active' },
+    { id: 'shopify', name: 'Shopify', description: 'E-commerce platform', logo: 'square.png', status: 'coming-soon' },
+    { id: 'stripe', name: 'Stripe', description: 'Payment processing', logo: 'square.png', status: 'coming-soon' },
+    { id: 'quickbooks', name: 'QuickBooks', description: 'Accounting software', logo: 'xero.png', status: 'coming-soon' },
+    { id: 'hubspot', name: 'HubSpot', description: 'CRM and marketing', logo: 'mailchimp.png', status: 'coming-soon' },
+    { id: 'salesforce', name: 'Salesforce', description: 'Customer relationship management', logo: 'square.png', status: 'coming-soon' },
+  ]
+  
+  // Function to handle integration connection
+  const handleIntegrationConnect = (integration: typeof availableIntegrations[0]) => {
+    if (integration.status === 'active') {
+      toast({
+        title: `${integration.name} Connected`,
+        description: `Successfully connected to ${integration.name}!`
+      })
+    } else {
+      toast({
+        title: `${integration.name}`,
+        description: `${integration.name} integration coming soon!`
+      })
+    }
+    setShowIntegrationsPopup(false)
+  }
+  
   // State for email thread
   const [emailThread, setEmailThread] = useState<EmailThread>({
     messages: [],
@@ -190,6 +220,9 @@ export default function AgentInboxPage() {
   const [rejectingActionId, setRejectingActionId] = useState<string | null>(null)
   const [selectedReasons, setSelectedReasons] = useState<string[]>([])
   const [otherReason, setOtherReason] = useState("")
+  
+  // State for integrations popup
+  const [showIntegrationsPopup, setShowIntegrationsPopup] = useState(false)
   
   // Track which actions have been viewed
   const [viewedActions, setViewedActions] = useState<Record<string, boolean>>({})
@@ -821,18 +854,48 @@ export default function AgentInboxPage() {
             </h1>
           </div>
           
-          {/* Settings Button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="rounded-md"
-            onClick={() => {
-              router.push('/tap-agent/setup');
-            }}
-          >
-            <Settings className="h-6 w-6 text-gray-600" />
-            <span className="sr-only">Settings</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Agents Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push('/dashboard/agents')}
+              className="rounded-md gap-2"
+            >
+              <Bot className="h-4 w-4" />
+              Agents
+            </Button>
+            
+            {/* Settings Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-md"
+                >
+                  <Settings className="h-6 w-6 text-gray-600" />
+                  <span className="sr-only">Settings</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40 rounded-md">
+                <DropdownMenuItem 
+                  onClick={() => setShowIntegrationsPopup(true)}
+                  className="cursor-pointer flex items-center gap-2"
+                >
+                  <LinkIcon className="h-4 w-4 text-blue-500" />
+                  <span>Integrations</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => router.push('/tap-agent/setup')}
+                  className="cursor-pointer flex items-center gap-2"
+                >
+                  <Settings className="h-4 w-4 text-gray-500" />
+                  <span>Agent Settings</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
 
@@ -1488,6 +1551,47 @@ export default function AgentInboxPage() {
               Decline Action
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Integrations Dialog */}
+      <Dialog open={showIntegrationsPopup} onOpenChange={setShowIntegrationsPopup}>
+        <DialogContent className="max-w-xl max-h-[70vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Available Integrations</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 mt-3">
+            {availableIntegrations.map((integration) => (
+              <div key={integration.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-md hover:bg-gray-50">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-white rounded-md border border-gray-200 shadow-sm flex items-center justify-center">
+                    <img
+                      src={`/${integration.logo}`}
+                      alt={integration.name}
+                      width={20}
+                      height={20}
+                      className="object-contain"
+                    />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900 text-sm">{integration.name}</h3>
+                    <p className="text-xs text-gray-600">{integration.description}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant={integration.status === 'active' ? 'default' : 'outline'}
+                    disabled={integration.status === 'coming-soon'}
+                    onClick={() => handleIntegrationConnect(integration)}
+                    className="rounded-md text-xs px-3 py-1"
+                  >
+                    {integration.status === 'active' ? 'Connect' : 'Coming Soon'}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

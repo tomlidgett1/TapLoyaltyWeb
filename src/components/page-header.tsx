@@ -1,7 +1,7 @@
 import React from "react"
 
 interface PageHeaderProps {
-  title: React.ReactNode
+  title?: React.ReactNode
   subtitle?: React.ReactNode
   children?: React.ReactNode
 }
@@ -11,7 +11,9 @@ export function PageHeader({ title, subtitle, children }: PageHeaderProps) {
     <div className="mb-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-0">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+          {title && (
+            <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+          )}
           {subtitle && (
             <p className="text-sm text-gray-500 mt-1">
               {subtitle}

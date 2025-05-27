@@ -3211,9 +3211,6 @@ export default function TapAgentPage() {
                 <Card className="border-0 shadow-md apple-card">
                   <CardHeader className="pb-2">
                         <div>
-                      <CardTitle className="text-xl">
-                        <span className="gradient-text">Customer Segments</span>
-                      </CardTitle>
                       <CardDescription className="text-gray-500 mt-1">
                         Define your customer segments and loyalty tiers
                           </CardDescription>

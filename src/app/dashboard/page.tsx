@@ -21,6 +21,7 @@ import {
   Clock,
   Star,
   ChevronRight,
+  ChevronLeft,
   BarChart as BarChartIcon,
   Eye,
   Server,
@@ -41,7 +42,14 @@ import {
   AlertCircle,
   Minimize2,
   Maximize2,
-  X
+  X,
+  Bot,
+  FileText,
+  TrendingUp,
+  Receipt,
+  Headphones,
+  Brain,
+  BarChart3
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -52,7 +60,6 @@ import { db } from "@/lib/firebase"
 import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, where, Timestamp, onSnapshot } from "firebase/firestore"
 import { toast } from "@/components/ui/use-toast"
 import { TapAiButton } from "@/components/tap-ai-button"
-import { PageTransition } from "@/components/page-transition"
 import { PageHeader } from "@/components/page-header"
 import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banner-preview"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
@@ -194,6 +201,7 @@ export default function DashboardPage() {
   const [topViewingCustomers, setTopViewingCustomers] = useState<any[]>([])
   const [topCustomersLoading, setTopCustomersLoading] = useState(false)
   const [isRewardDialogOpen, setIsRewardDialogOpen] = useState(false)
+  const [showRewardDialog, setShowRewardDialog] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<{id: string, name: string} | null>(null)
   const [isSetupWizardOpen, setIsSetupWizardOpen] = useState(false)
   const [isIntroductoryRewardSheetOpen, setIsIntroductoryRewardSheetOpen] = useState(false)
@@ -285,6 +293,73 @@ export default function DashboardPage() {
   // Add state variable for the AI assistant response
   const [assistantResponse, setAssistantResponse] = useState<string | null>(null)
   const [assistantLoading, setAssistantLoading] = useState(false)
+
+  // Agents carousel state
+
+  // Define available agents
+  const availableAgents: Array<{
+    id: string;
+    name: string;
+    description: string;
+    icon: React.ReactNode;
+    status: 'active' | 'coming-soon';
+    color: string;
+    features: string[];
+    customisable?: boolean;
+    frequencies?: string[];
+  }> = [
+    {
+      id: 'customer-service',
+      name: 'Customer Service Agent',
+      description: 'Handle customer inquiries and support requests automatically',
+      icon: <Headphones className="h-8 w-8 text-blue-500" />,
+      status: 'active',
+      color: 'blue',
+      features: ['24/7 Support', 'Auto-responses', 'Ticket routing']
+    },
+    {
+      id: 'email-summary',
+      name: 'Email Summary Agent',
+      description: 'Summarise and analyse your email communications',
+      icon: <Inbox className="h-8 w-8 text-purple-500" />,
+      status: 'active',
+      color: 'purple',
+      features: ['Daily summaries', 'Priority detection', 'Action items']
+    },
+    {
+      id: 'insights',
+      name: 'Insights Agent',
+      description: 'Generate business insights from your data',
+      icon: <Brain className="h-8 w-8 text-green-500" />,
+      status: 'active',
+      color: 'green',
+      features: ['Data analysis', 'Trend detection', 'Recommendations']
+    },
+    {
+      id: 'sales-analysis',
+      name: 'Sales Analysis Agent',
+      description: 'Analyse sales performance with customisable reporting',
+      icon: <BarChart3 className="h-8 w-8 text-orange-500" />,
+      status: 'active',
+      color: 'orange',
+      features: ['Daily reports', 'Weekly summaries', 'Monthly analysis'],
+      customisable: true,
+      frequencies: ['Daily', 'Weekly', 'Monthly']
+    },
+    {
+      id: 'invoice-xero',
+      name: 'Invoice Agent with Xero',
+      description: 'Automate invoice processing and Xero integration',
+      icon: <Receipt className="h-8 w-8 text-indigo-500" />,
+      status: 'coming-soon',
+      color: 'indigo',
+      features: ['Auto-invoicing', 'Xero sync', 'Payment tracking']
+    }
+  ]
+
+  // Carousel navigation functions
+
+
 
   const getDateRange = (tf: TimeframeType): { start: Date; end: Date } => {
     const now = new Date()
@@ -2303,71 +2378,23 @@ export default function DashboardPage() {
 
   if (initialLoading) {
     return (
-      <PageTransition>
-        <div className="container mx-auto p-4">
-          <div className="max-w-7xl mx-auto space-y-8">
-            {/* Empty state instead of spinner */}
-          </div>
+      <div className="container mx-auto p-4">
+        <div className="max-w-7xl mx-auto space-y-8">
+          {/* Empty state instead of spinner */}
         </div>
-      </PageTransition>
+      </div>
     )
   }
 
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: customAnimationStyles }} />
-      <div className="px-8 py-4 max-w-full overflow-x-hidden bg-white">
-        <div className="space-y-8">
-          {/* Welcome Section with Timeframe Tabs */}
-          <div>
-            <style jsx>{`
-              .full-width-divider {
-                width: 100vw;
-                position: relative;
-                left: 50%;
-                right: 50%;
-                margin-left: -50vw;
-                margin-right: -50vw;
-                height: 1px;
-                background-color: rgb(229, 231, 235);
-              }
-            `}</style>
-            <PageHeader
-              title="Welcome back"
-            >
-              <div className="flex space-x-2">
-                <Button 
-                  variant="outline" 
-                  className="gap-1 border-[#007AFF] hover:bg-[#007AFF]/5 h-9"
-                  onClick={fetchDailySummaries}
-                  disabled={isDailySummaryLoading}
-                >
-                  {isDailySummaryLoading ? (
-                    <>
-                      <div className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
-                      <GradientText>Processing...</GradientText>
-                    </>
-                  ) : (
-                    <>
-                      <Calendar className="h-4 w-4 text-blue-500" />
-                      <GradientText>Daily Summary</GradientText>
-                    </>
-                  )}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="gap-1 border-[#007AFF] text-[#007AFF] hover:bg-[#007AFF]/5 h-9"
-                  onClick={() => setIsSetupWizardOpen(true)}
-                >
-                  <PlusCircle className="h-4 w-4" />
-                  Setup Wizard
-                </Button>
-              </div>
-            </PageHeader>
-
-            {/* Update the tabs layout to be side-by-side with a separator */}
-            <div className="flex items-center gap-5 mt-2">
-              {/* Metrics type tabs */}
+      <div className="flex flex-col h-full max-w-full">
+        {/* Header Section */}
+        <div className="px-6 py-5">
+          <div className="flex justify-between items-center">
+            <div>
+              {/* Metrics type tabs moved to the left */}
               <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
                 <button
                   onClick={() => setMetricsType("platform")}
@@ -2379,7 +2406,7 @@ export default function DashboardPage() {
                   )}
                 >
                   <Server className="h-4 w-4" />
-                  <span>Platform Metrics</span>
+                  <span>Platform</span>
                 </button>
                 <button
                   onClick={() => setMetricsType("consumer")}
@@ -2391,13 +2418,12 @@ export default function DashboardPage() {
                   )}
                 >
                   <Users className="h-4 w-4" />
-                  <span>Consumer Metrics</span>
+                  <span>Consumer</span>
                 </button>
               </div>
-              
-              {/* Vertical separator */}
-              <div className="h-8 w-px bg-gray-200"></div>
-              
+            </div>
+            
+            <div className="flex items-center gap-3">
               {/* Date range tabs */}
               <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
                 <button
@@ -2431,7 +2457,7 @@ export default function DashboardPage() {
                       : "text-gray-600 hover:bg-gray-200/70"
                   )}
                 >
-                  Last 7 Days
+                  7 Days
                 </button>
                 <button
                   onClick={() => setTimeframe("30days")}
@@ -2442,259 +2468,280 @@ export default function DashboardPage() {
                       : "text-gray-600 hover:bg-gray-200/70"
                   )}
                 >
-                  Last 30 Days
+                  30 Days
                 </button>
               </div>
             </div>
           </div>
+        </div>
+        
+        <div className="px-6 pt-6 pb-14 flex-1 overflow-y-auto bg-white">
+          {/* Quick Actions Section */}
+          <div className="mb-8">
+            <h2 className="text-lg font-medium mb-4">Quick Actions</h2>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+              <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
+                <div className="mb-2">
+                  <PlusCircle className="h-8 w-8 text-gray-600" />
+                </div>
+                <h3 className="text-sm font-semibold mb-2">Setup Wizard</h3>
+                <p className="text-xs text-gray-600 mb-auto pb-4">Configure your business settings and integrations.</p>
+                <Button 
+                  size="sm" 
+                  onClick={() => setIsSetupWizardOpen(true)} 
+                  variant="outline" 
+                  className="w-full rounded-md"
+                >
+                  Open Wizard
+                </Button>
+              </div>
+              
+              <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
+                <div className="mb-2">
+                  <BarChartIcon className="h-8 w-8 text-gray-600" />
+                </div>
+                <h3 className="text-sm font-semibold mb-2">Business Insights</h3>
+                <p className="text-xs text-gray-600 mb-auto pb-4">Get AI-powered insights about your business performance.</p>
+                <Button 
+                  size="sm" 
+                  onClick={() => setInsightDialogOpen(true)} 
+                  variant="outline" 
+                  className="w-full rounded-md"
+                >
+                  View Insights
+                </Button>
+              </div>
+              
+              <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
+                <div className="mb-2">
+                  <Gift className="h-8 w-8 text-gray-600" />
+                </div>
+                <h3 className="text-sm font-semibold mb-2">Create Reward</h3>
+                <p className="text-xs text-gray-600 mb-auto pb-4">Create a new loyalty reward for your customers.</p>
+                <Button 
+                  size="sm" 
+                  onClick={() => setShowRewardDialog(true)} 
+                  variant="outline" 
+                  className="w-full rounded-md"
+                >
+                  Create Reward
+                </Button>
+              </div>
 
-          {/* Metrics section with Apple-style cards */}
-          <div>
+              <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
+                <div className="mb-2">
+                  <Bot className="h-8 w-8 text-gray-600" />
+                </div>
+                <h3 className="text-sm font-semibold mb-2">AI Agents</h3>
+                <p className="text-xs text-gray-600 mb-auto pb-4">View and connect to all available AI agents.</p>
+                <Button 
+                  size="sm" 
+                  onClick={() => router.push('/dashboard/agents')} 
+                  variant="outline" 
+                  className="w-full rounded-md"
+                >
+                  View Agents
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Metrics Section */}
+          <div className="mb-8">
+            <h2 className="text-lg font-medium mb-4">
+              {metricsType === "platform" ? "Platform Metrics" : "Consumer Metrics"}
+            </h2>
+            
             {metricsType === "platform" && (
-              <div className="grid grid-cols-4 gap-5">
-                {/* First card: Active Rewards */}
-                <div className="bg-white rounded-md shadow-sm border border-gray-200/80 p-5 transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
-                    <div className="flex justify-between">
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Active Rewards</p>
-                        {metricsLoading ? (
-                        <div className="h-6 w-12 bg-gray-200/70 animate-pulse rounded-md"></div>
-                        ) : (
-                        <div className="text-2xl font-medium text-gray-900">{metrics.activeRewards}</div>
-                        )}
-                      </div>
-                    <div className="h-9 w-9 rounded-full bg-[#E9F3FF] flex items-center justify-center">
-                      <Gift className="h-4.5 w-4.5 text-[#007AFF]" />
-                      </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+                <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="h-8 w-8 rounded-md bg-blue-100 flex items-center justify-center">
+                      <Gift className="h-4 w-4 text-blue-600" />
                     </div>
+                    {metricsLoading ? (
+                      <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
+                    ) : (
+                      <div className="text-2xl font-semibold text-gray-900">{metrics.activeRewards}</div>
+                    )}
+                  </div>
+                  <h3 className="text-sm font-medium text-gray-900 mb-1">Active Rewards</h3>
+                  <p className="text-xs text-gray-600">Currently available rewards</p>
                 </div>
                 
-                {/* Second card: Total Reward Views */}
-                <div className="bg-white rounded-md shadow-sm border border-gray-200/80 p-5 transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
-                    <div className="flex justify-between">
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Reward Views</p>
-                        {metricsLoading ? (
-                        <div className="h-6 w-12 bg-gray-200/70 animate-pulse rounded-md"></div>
-                        ) : (
-                        <div className="text-2xl font-medium text-gray-900">{metrics.totalRewardViews}</div>
-                        )}
-                      </div>
-                    <div className="h-9 w-9 rounded-full bg-[#E9F3FF] flex items-center justify-center">
-                      <Eye className="h-4.5 w-4.5 text-[#007AFF]" />
-                      </div>
+                <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="h-8 w-8 rounded-md bg-green-100 flex items-center justify-center">
+                      <Eye className="h-4 w-4 text-green-600" />
                     </div>
+                    {metricsLoading ? (
+                      <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
+                    ) : (
+                      <div className="text-2xl font-semibold text-gray-900">{metrics.totalRewardViews}</div>
+                    )}
+                  </div>
+                  <h3 className="text-sm font-medium text-gray-900 mb-1">Reward Views</h3>
+                  <p className="text-xs text-gray-600">Total reward page views</p>
                 </div>
                 
-                {/* Third card: Total Points Issued */}
-                <div className="bg-white rounded-md shadow-sm border border-gray-200/80 p-5 transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
-                    <div className="flex justify-between">
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Points Issued</p>
-                        {metricsLoading ? (
-                        <div className="h-6 w-12 bg-gray-200/70 animate-pulse rounded-md"></div>
-                        ) : (
-                        <div className="text-2xl font-medium text-gray-900">{metrics.totalPointsIssued}</div>
-                        )}
-                      </div>
-                    <div className="h-9 w-9 rounded-full bg-[#E9F3FF] flex items-center justify-center">
-                      <Zap className="h-4.5 w-4.5 text-[#007AFF]" />
-                      </div>
+                <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="h-8 w-8 rounded-md bg-purple-100 flex items-center justify-center">
+                      <Zap className="h-4 w-4 text-purple-600" />
                     </div>
+                    {metricsLoading ? (
+                      <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
+                    ) : (
+                      <div className="text-2xl font-semibold text-gray-900">{metrics.totalPointsIssued}</div>
+                    )}
+                  </div>
+                  <h3 className="text-sm font-medium text-gray-900 mb-1">Points Issued</h3>
+                  <p className="text-xs text-gray-600">Total loyalty points awarded</p>
                 </div>
                 
-                {/* Fourth card: Store Views */}
-                <div className="bg-white rounded-md shadow-sm border border-gray-200/80 p-5 transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
-                    <div className="flex justify-between">
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Store Views</p>
-                        {metricsLoading ? (
-                        <div className="h-6 w-12 bg-gray-200/70 animate-pulse rounded-md"></div>
-                        ) : (
-                        <div className="text-2xl font-medium text-gray-900">{metrics.totalStoreViews}</div>
-                        )}
-                      </div>
-                    <div className="h-9 w-9 rounded-full bg-[#E9F3FF] flex items-center justify-center">
-                      <Eye className="h-4.5 w-4.5 text-[#007AFF]" />
-                      </div>
+                <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="h-8 w-8 rounded-md bg-orange-100 flex items-center justify-center">
+                      <Eye className="h-4 w-4 text-orange-600" />
                     </div>
+                    {metricsLoading ? (
+                      <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
+                    ) : (
+                      <div className="text-2xl font-semibold text-gray-900">{metrics.totalStoreViews}</div>
+                    )}
+                  </div>
+                  <h3 className="text-sm font-medium text-gray-900 mb-1">Store Views</h3>
+                  <p className="text-xs text-gray-600">Total store page visits</p>
                 </div>
               </div>
             )}
 
             {metricsType === "consumer" && (
-              <div className="grid grid-cols-4 gap-5">
-                <div className="bg-white rounded-md shadow-sm border border-gray-200/80 p-5 transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
-                    <div className="flex justify-between">
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Active Customers</p>
-                        {metricsLoading ? (
-                        <div className="h-6 w-12 bg-gray-200/70 animate-pulse rounded-md"></div>
-                        ) : (
-                        <div className="text-2xl font-medium text-gray-900">{metrics.activeCustomers}</div>
-                        )}
-                      </div>
-                    <div className="h-9 w-9 rounded-full bg-[#E9F3FF] flex items-center justify-center">
-                      <Users className="h-4.5 w-4.5 text-[#007AFF]" />
-                      </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+                <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="h-8 w-8 rounded-md bg-blue-100 flex items-center justify-center">
+                      <Users className="h-4 w-4 text-blue-600" />
                     </div>
+                    {metricsLoading ? (
+                      <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
+                    ) : (
+                      <div className="text-2xl font-semibold text-gray-900">{metrics.activeCustomers}</div>
+                    )}
+                  </div>
+                  <h3 className="text-sm font-medium text-gray-900 mb-1">Active Customers</h3>
+                  <p className="text-xs text-gray-600">Customers with recent activity</p>
                 </div>
                 
-                <div className="bg-white rounded-md shadow-sm border border-gray-200/80 p-5 transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
-                    <div className="flex justify-between">
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Transactions</p>
-                        {metricsLoading ? (
-                        <div className="h-6 w-12 bg-gray-200/70 animate-pulse rounded-md"></div>
-                        ) : (
-                        <div className="text-2xl font-medium text-gray-900">{metrics.totalTransactions}</div>
-                        )}
-                      </div>
-                    <div className="h-9 w-9 rounded-full bg-[#E9F3FF] flex items-center justify-center">
-                      <ShoppingCart className="h-4.5 w-4.5 text-[#007AFF]" />
-                      </div>
+                <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="h-8 w-8 rounded-md bg-green-100 flex items-center justify-center">
+                      <ShoppingCart className="h-4 w-4 text-green-600" />
                     </div>
+                    {metricsLoading ? (
+                      <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
+                    ) : (
+                      <div className="text-2xl font-semibold text-gray-900">{metrics.totalTransactions}</div>
+                    )}
+                  </div>
+                  <h3 className="text-sm font-medium text-gray-900 mb-1">Transactions</h3>
+                  <p className="text-xs text-gray-600">Total completed purchases</p>
                 </div>
                 
-                <div className="bg-white rounded-md shadow-sm border border-gray-200/80 p-5 transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
-                    <div className="flex justify-between">
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Redemptions</p>
-                        {metricsLoading ? (
-                        <div className="h-6 w-12 bg-gray-200/70 animate-pulse rounded-md"></div>
-                        ) : (
-                        <div className="text-2xl font-medium text-gray-900">{metrics.totalRedemptions}</div>
-                        )}
-                      </div>
-                    <div className="h-9 w-9 rounded-full bg-[#E9F3FF] flex items-center justify-center">
-                      <Gift className="h-4.5 w-4.5 text-[#007AFF]" />
-                      </div>
+                <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="h-8 w-8 rounded-md bg-purple-100 flex items-center justify-center">
+                      <Gift className="h-4 w-4 text-purple-600" />
                     </div>
+                    {metricsLoading ? (
+                      <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
+                    ) : (
+                      <div className="text-2xl font-semibold text-gray-900">{metrics.totalRedemptions}</div>
+                    )}
+                  </div>
+                  <h3 className="text-sm font-medium text-gray-900 mb-1">Redemptions</h3>
+                  <p className="text-xs text-gray-600">Total rewards redeemed</p>
                 </div>
                 
-                <div className="bg-white rounded-md shadow-sm border border-gray-200/80 p-5 transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
-                    <div className="flex justify-between">
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Avg Order Value</p>
-                        {metricsLoading ? (
-                        <div className="h-6 w-12 bg-gray-200/70 animate-pulse rounded-md"></div>
-                        ) : (
-                        <div className="text-2xl font-medium text-gray-900">${metrics.avgOrderValue}</div>
-                        )}
-                      </div>
-                    <div className="h-9 w-9 rounded-full bg-[#E9F3FF] flex items-center justify-center">
-                      <DollarSign className="h-4.5 w-4.5 text-[#007AFF]" />
-                      </div>
+                <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="h-8 w-8 rounded-md bg-orange-100 flex items-center justify-center">
+                      <DollarSign className="h-4 w-4 text-orange-600" />
                     </div>
+                    {metricsLoading ? (
+                      <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
+                    ) : (
+                      <div className="text-2xl font-semibold text-gray-900">${metrics.avgOrderValue}</div>
+                    )}
+                  </div>
+                  <h3 className="text-sm font-medium text-gray-900 mb-1">Avg Order Value</h3>
+                  <p className="text-xs text-gray-600">Average transaction amount</p>
+                </div>
               </div>
-          </div>
             )}
-                </div>
-          
-          {/* Recent Activity and Insights Section - Two Column Layout */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 overflow-hidden">
-            {/* Recent Activity Section */}
-            <div className="bg-white rounded-md shadow-sm border border-gray-200/80 overflow-hidden">
-              <div className="py-4 px-5 border-b border-gray-100">
+          </div>
+
+          {/* Activity and Analytics Section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Recent Activity */}
+            <div className="border border-gray-200 rounded-md bg-gray-50">
+              <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-base font-medium text-gray-900 flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-[#007AFF]" />
-                    Recent Activity
-                    </h2>
-                    <p className="text-xs text-gray-500 mt-0.5">Latest transactions and redemptions</p>
-                </div>
-                <Button 
-                    variant="ghost" 
-                  size="sm"
-                    className="text-[#007AFF] hover:text-[#0058B9] hover:bg-[#007AFF]/5 h-7 px-3"
-                  asChild
-                >
-                  <Link href="/store/activity" className="flex items-center gap-1">
-                    View all
-                    <ChevronRight className="h-3 w-3" />
-                  </Link>
-                </Button>
+                  <div>
+                    <h3 className="text-md font-semibold mb-1">Recent Activity</h3>
+                    <p className="text-sm text-gray-600">Latest transactions and redemptions</p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="rounded-md"
+                    asChild
+                  >
+                    <Link href="/store/activity" className="flex items-center gap-1">
+                      View all
+                      <ChevronRight className="h-3 w-3" />
+                    </Link>
+                  </Button>
                 </div>
               </div>
-              <div className="p-0">
+              <div className="p-6">
                 {activityLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
                   </div>
                 ) : recentActivity.length === 0 ? (
-                  <div className="py-12 text-center">
-                    <div className="bg-[#F5F9FF] rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-3">
-                      <Clock className="h-8 w-8 text-[#007AFF]/40" />
+                  <div className="py-8 text-center">
+                    <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
+                      <Clock className="h-6 w-6 text-gray-400" />
                     </div>
                     <p className="text-sm font-medium text-gray-700">No recent activity</p>
-                    <p className="text-xs text-gray-500 mt-1">Transactions and redemptions will appear here</p>
+                    <p className="text-xs text-gray-500 mt-1">Transactions will appear here</p>
                   </div>
                 ) : (
-                  <div>
-                    {recentActivity.map((activity, index) => (
-                      <div 
-                        key={activity.id} 
-                        className={`px-5 py-3 hover:bg-[#F5F9FF]/50 transition-colors ${
-                          index !== recentActivity.length - 1 ? 'border-b border-gray-100' : ''
-                        }`}
-                      >
-                        <div className="flex items-center gap-4">
-                          {/* Left side - Customer Avatar */}
-                          <div className="flex-shrink-0">
-                            <div className={`h-10 w-10 rounded-full ${
-                              activity.type === "transaction" ? 'bg-[#E9F3FF]' : 'bg-[#E97FF3]'
-                            } flex items-center justify-center overflow-hidden shadow-sm`}>
-                              {activity.customer?.profilePicture ? (
-                                <img 
-                                  src={activity.customer.profilePicture} 
-                                  alt={activity.customer.name}
-                                  className="h-full w-full object-cover"
-                                  onError={() => {/* error handling */}}
-                                />
-                              ) : activity.type === "transaction" ? (
-                                <ShoppingCart className="h-5 w-5 text-[#007AFF]" />
-                              ) : (
-                                <Gift className="h-5 w-5 text-[#5AC8FA]" />
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Right side - Activity Details */}
-                          <div className="flex-1 min-w-0 flex items-center justify-between">
-                            <div>
-                              <p className="font-medium text-sm text-gray-900">{activity.customer.name}</p>
-                              <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
-                                {activity.type === "transaction" ? (
-                                  <span className="px-1.5 py-0.5 bg-[#F5F9FF] text-[#007AFF] text-xs rounded-full flex items-center">
-                                    <ShoppingCart className="h-3 w-3 mr-1" />
-                                    Purchase
-                                  </span>
-                                ) : (
-                                  <span className="px-1.5 py-0.5 bg-[#F5FBFF] text-[#5AC8FA] text-xs rounded-full flex items-center">
-                                    <Gift className="h-3 w-3 mr-1" />
-                                    Redemption
-                                  </span>
-                                )}
-                                <span className="text-gray-400">&bull;</span>
-                                <span>{formatTimeAgo(activity.timestamp)}</span>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className={`text-sm font-medium ${
-                                activity.type === "transaction" ? 'text-[#007AFF]' : 'text-[#5AC8FA]'
-                              }`}>
-                                {activity.type === "transaction" 
-                                  ? `$${activity.amount.toFixed(2)}` 
-                                  : `${activity.points} pts`}
-                              </p>
-                              {activity.type !== "transaction" && (
-                                <p className="text-xs text-gray-500 mt-0.5">
-                                  {activity.rewardName}
-                                </p>
-                              )}
-                            </div>
-                          </div>
+                  <div className="space-y-4">
+                    {recentActivity.slice(0, 5).map((activity, index) => (
+                      <div key={activity.id} className="flex items-center gap-3">
+                        <div className={`h-8 w-8 rounded-md ${
+                          activity.type === "transaction" ? 'bg-blue-100' : 'bg-purple-100'
+                        } flex items-center justify-center`}>
+                          {activity.type === "transaction" ? (
+                            <ShoppingCart className="h-4 w-4 text-blue-600" />
+                          ) : (
+                            <Gift className="h-4 w-4 text-purple-600" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900">{activity.customer.name}</p>
+                          <p className="text-xs text-gray-500">
+                            {activity.type === "transaction" ? "Purchase" : "Redemption"} • {formatTimeAgo(activity.timestamp)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-gray-900">
+                            {activity.type === "transaction" 
+                              ? `$${activity.amount.toFixed(2)}` 
+                              : `${activity.points} pts`}
+                          </p>
                         </div>
                       </div>
                     ))}
@@ -2703,649 +2750,62 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Recent Insights Section */}
-            <div className="bg-white rounded-md shadow-sm border border-gray-200/80 overflow-hidden">
-              <div className="py-4 px-5 border-b border-gray-100">
+            {/* Popular Rewards */}
+            <div className="border border-gray-200 rounded-md bg-gray-50">
+              <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-base font-medium text-gray-900 flex items-center gap-2">
-                      <Lightbulb className="h-4 w-4 text-[#FF9500]" />
-                      Recent Insights
-                    </h2>
-                    <p className="text-xs text-gray-500 mt-0.5">Daily summaries from your integrations</p>
+                    <h3 className="text-md font-semibold mb-1">Popular Rewards</h3>
+                    <p className="text-sm text-gray-600">Most viewed and redeemed rewards</p>
                   </div>
                   <Button 
-                    variant="ghost" 
+                    variant="outline" 
                     size="sm"
-                    className="text-[#FF9500] hover:text-[#CC7600] hover:bg-[#FF9500]/5 h-7 px-3"
-                    onClick={fetchDailySummaries}
-                  >
-                    <div className="flex items-center gap-1">
-                      Refresh
-                      <ArrowRight className="h-3 w-3" />
-                    </div>
-                  </Button>
-                </div>
-              </div>
-              <div className="p-0">
-                {isDailySummaryLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="h-6 w-6 rounded-full border-2 border-[#FF9500] border-t-transparent animate-spin"></div>
-                  </div>
-                ) : (!dailySummaryGmailResponse && !dailySummaryLightspeedResponse && !gmailQueryResponse && !lightspeedQueryResponse) ? (
-                  // Show dummy insights if no real data available
-                  <div>
-                    {/* Gmail Dummy Insights */}
-                    <div className="px-5 py-3.5 border-b border-gray-100 hover:bg-[#F5F9FF]/30 transition-colors">
-                      <div className="flex items-start gap-4">
-                        <div className="flex-shrink-0 mt-1">
-                          <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
-                            <Image src="/gmail.png" width={24} height={24} alt="Gmail" className="h-6 w-6 object-contain" />
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="font-medium text-sm text-gray-900">Gmail Daily Report</p>
-                            <span className="px-1.5 py-0.5 bg-red-50 text-red-500 text-xs rounded-full border border-red-100">
-                              Last 24h
-                            </span>
-                          </div>
-                          <div className="text-sm text-gray-700 line-clamp-3">
-                            You received 14 new emails today. 4 require your attention, including one from a new customer inquiry about your loyalty program and 2 order confirmations.
-                          </div>
-                          <Button 
-                            variant="link" 
-                            size="sm" 
-                            className="h-6 p-0 text-[#007AFF] mt-1" 
-                            onClick={() => {
-                              toast({
-                                title: "Gmail Report",
-                                description: "You received 14 new emails today. 4 require your attention, including one from a new customer inquiry about your loyalty program and 2 order confirmations. There's also an invoice due in 7 days that requires payment. The remaining emails were newsletters and marketing communications.",
-                              })
-                            }}
-                          >
-                            View full report
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Lightspeed Dummy Insights */}
-                    <div className="px-5 py-3.5 border-b border-gray-100 hover:bg-[#F5F9FF]/30 transition-colors">
-                      <div className="flex items-start gap-4">
-                        <div className="flex-shrink-0 mt-1">
-                          <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
-                            <Image src="/lslogo.png" width={24} height={24} alt="Lightspeed" className="h-6 w-6 object-contain" />
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="font-medium text-sm text-gray-900">Lightspeed Sales Report</p>
-                            <span className="px-1.5 py-0.5 bg-green-50 text-green-500 text-xs rounded-full border border-green-100">
-                              Last 30d
-                            </span>
-                          </div>
-                          <div className="text-sm text-gray-700 line-clamp-3">
-                            Sales are up 12% compared to last month. Your best-selling product was "Premium Coffee Beans" with 87 units sold. 23% of transactions included a loyalty program item.
-                          </div>
-                          <Button 
-                            variant="link" 
-                            size="sm" 
-                            className="h-6 p-0 text-[#007AFF] mt-1" 
-                            onClick={() => {
-                              toast({
-                                title: "Lightspeed Report",
-                                description: "Sales are up 12% compared to last month. Your best-selling product was \"Premium Coffee Beans\" with 87 units sold. 23% of transactions included a loyalty program item. Average transaction value has increased by $4.50, suggesting your upselling strategies are working. Tuesday and Friday are your highest-volume days.",
-                              })
-                            }}
-                          >
-                            View full report
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Square Dummy Insights */}
-                    <div className="px-5 py-3.5 hover:bg-[#F5F9FF]/30 transition-colors">
-                      <div className="flex items-start gap-4">
-                        <div className="flex-shrink-0 mt-1">
-                          <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
-                            <Image src="/square.png" width={24} height={24} alt="Square" className="h-6 w-6 object-contain" />
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="font-medium text-sm text-gray-900">Square Transactions</p>
-                            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-500 text-xs rounded-full border border-blue-100">
-                              Last 7d
-                            </span>
-                          </div>
-                          <div className="text-sm text-gray-700 line-clamp-3">
-                            Processed 245 transactions totaling $5,872. Credit card was the preferred payment method (78%). 42 loyalty redemptions were applied to purchases.
-                          </div>
-                          <Button 
-                            variant="link" 
-                            size="sm" 
-                            className="h-6 p-0 text-[#007AFF] mt-1" 
-                            onClick={() => {
-                              toast({
-                                title: "Square Report",
-                                description: "Processed 245 transactions totaling $5,872. Credit card was the preferred payment method (78%). 42 loyalty redemptions were applied to purchases. The busiest time was between 12-2pm, with an average queue time of 4.3 minutes. Mobile ordering accounts for 22% of total sales, up 5% from last month.",
-                              })
-                            }}
-                          >
-                            View full report
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    {/* Gmail Insights */}
-                    {(dailySummaryGmailResponse || gmailQueryResponse) ? (
-                      <div className="px-5 py-3.5 border-b border-gray-100 hover:bg-[#F5F9FF]/30 transition-colors">
-                        <div className="flex items-start gap-4">
-                          <div className="flex-shrink-0 mt-1">
-                            <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
-                              <Image src="/gmail.png" width={24} height={24} alt="Gmail" className="h-6 w-6 object-contain" />
-                            </div>
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <p className="font-medium text-sm text-gray-900">Gmail Daily Report</p>
-                              <span className="px-1.5 py-0.5 bg-red-50 text-red-500 text-xs rounded-full border border-red-100">
-                                Last 24h
-                              </span>
-                            </div>
-                            <div className="text-sm text-gray-700 line-clamp-3">
-                              {dailySummaryGmailResponse || gmailQueryResponse}
-                            </div>
-                            <Button 
-                              variant="link" 
-                              size="sm" 
-                              className="h-6 p-0 text-[#007AFF] mt-1" 
-                              onClick={() => {
-                                toast({
-                                  title: "Gmail Report",
-                                  description: dailySummaryGmailResponse || gmailQueryResponse,
-                                })
-                              }}
-                            >
-                              View full report
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="px-5 py-3.5 border-b border-gray-100 hover:bg-[#F5F9FF]/30 transition-colors">
-                        <div className="flex items-start gap-4">
-                          <div className="flex-shrink-0 mt-1">
-                            <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
-                              <Image src="/gmail.png" width={24} height={24} alt="Gmail" className="h-6 w-6 object-contain" />
-                            </div>
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <p className="font-medium text-sm text-gray-900">Gmail Daily Report</p>
-                              <span className="px-1.5 py-0.5 bg-red-50 text-red-500 text-xs rounded-full border border-red-100">
-                                Last 24h
-                              </span>
-                            </div>
-                            <div className="text-sm text-gray-700 line-clamp-3">
-                              You received 14 new emails today. 4 require your attention, including one from a new customer inquiry about your loyalty program and 2 order confirmations.
-                            </div>
-                            <Button 
-                              variant="link" 
-                              size="sm" 
-                              className="h-6 p-0 text-[#007AFF] mt-1" 
-                              onClick={() => {
-                                toast({
-                                  title: "Gmail Report",
-                                  description: "You received 14 new emails today. 4 require your attention, including one from a new customer inquiry about your loyalty program and 2 order confirmations. There's also an invoice due in 7 days that requires payment. The remaining emails were newsletters and marketing communications.",
-                                })
-                              }}
-                            >
-                              View full report
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Lightspeed Insights */}
-                    {(dailySummaryLightspeedResponse || lightspeedQueryResponse) ? (
-                      <div className="px-5 py-3.5 border-b border-gray-100 hover:bg-[#F5F9FF]/30 transition-colors">
-                        <div className="flex items-start gap-4">
-                          <div className="flex-shrink-0 mt-1">
-                            <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
-                              <Image src="/lslogo.png" width={24} height={24} alt="Lightspeed" className="h-6 w-6 object-contain" />
-                            </div>
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <p className="font-medium text-sm text-gray-900">Lightspeed Sales Report</p>
-                              <span className="px-1.5 py-0.5 bg-green-50 text-green-500 text-xs rounded-full border border-green-100">
-                                Last 30d
-                              </span>
-                            </div>
-                            <div className="text-sm text-gray-700 line-clamp-3">
-                              {dailySummaryLightspeedResponse || lightspeedQueryResponse}
-                            </div>
-                            <Button 
-                              variant="link" 
-                              size="sm" 
-                              className="h-6 p-0 text-[#007AFF] mt-1" 
-                              onClick={() => {
-                                toast({
-                                  title: "Lightspeed Report",
-                                  description: dailySummaryLightspeedResponse || lightspeedQueryResponse,
-                                })
-                              }}
-                            >
-                              View full report
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="px-5 py-3.5 border-b border-gray-100 hover:bg-[#F5F9FF]/30 transition-colors">
-                        <div className="flex items-start gap-4">
-                          <div className="flex-shrink-0 mt-1">
-                            <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
-                              <Image src="/lslogo.png" width={24} height={24} alt="Lightspeed" className="h-6 w-6 object-contain" />
-                            </div>
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <p className="font-medium text-sm text-gray-900">Lightspeed Sales Report</p>
-                              <span className="px-1.5 py-0.5 bg-green-50 text-green-500 text-xs rounded-full border border-green-100">
-                                Last 30d
-                              </span>
-                            </div>
-                            <div className="text-sm text-gray-700 line-clamp-3">
-                              Sales are up 12% compared to last month. Your best-selling product was "Premium Coffee Beans" with 87 units sold. 23% of transactions included a loyalty program item.
-                            </div>
-                            <Button 
-                              variant="link" 
-                              size="sm" 
-                              className="h-6 p-0 text-[#007AFF] mt-1" 
-                              onClick={() => {
-                                toast({
-                                  title: "Lightspeed Report",
-                                  description: "Sales are up 12% compared to last month. Your best-selling product was \"Premium Coffee Beans\" with 87 units sold. 23% of transactions included a loyalty program item. Average transaction value has increased by $4.50, suggesting your upselling strategies are working. Tuesday and Friday are your highest-volume days.",
-                                })
-                              }}
-                            >
-                              View full report
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Square Insights */}
-                    {tapQueryResponse ? (
-                      <div className="px-5 py-3.5 hover:bg-[#F5F9FF]/30 transition-colors">
-                        <div className="flex items-start gap-4">
-                          <div className="flex-shrink-0 mt-1">
-                            <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
-                              <Image src="/square.png" width={24} height={24} alt="Square" className="h-6 w-6 object-contain" />
-                            </div>
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <p className="font-medium text-sm text-gray-900">Square Transactions</p>
-                              <span className="px-1.5 py-0.5 bg-blue-50 text-blue-500 text-xs rounded-full border border-blue-100">
-                                Last 7d
-                              </span>
-                            </div>
-                            <div className="text-sm text-gray-700 line-clamp-3">
-                              {tapQueryResponse}
-                            </div>
-                            <Button 
-                              variant="link" 
-                              size="sm" 
-                              className="h-6 p-0 text-[#007AFF] mt-1" 
-                              onClick={() => {
-                                toast({
-                                  title: "Square Report",
-                                  description: tapQueryResponse,
-                                })
-                              }}
-                            >
-                              View full report
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="px-5 py-3.5 hover:bg-[#F5F9FF]/30 transition-colors">
-                        <div className="flex items-start gap-4">
-                          <div className="flex-shrink-0 mt-1">
-                            <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center overflow-hidden shadow-sm border border-gray-200/80">
-                              <Image src="/square.png" width={24} height={24} alt="Square" className="h-6 w-6 object-contain" />
-                            </div>
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <p className="font-medium text-sm text-gray-900">Square Transactions</p>
-                              <span className="px-1.5 py-0.5 bg-blue-50 text-blue-500 text-xs rounded-full border border-blue-100">
-                                Last 7d
-                              </span>
-                            </div>
-                            <div className="text-sm text-gray-700 line-clamp-3">
-                              Processed 245 transactions totaling $5,872. Credit card was the preferred payment method (78%). 42 loyalty redemptions were applied to purchases.
-                            </div>
-                            <Button 
-                              variant="link" 
-                              size="sm" 
-                              className="h-6 p-0 text-[#007AFF] mt-1" 
-                              onClick={() => {
-                                toast({
-                                  title: "Square Report",
-                                  description: "Processed 245 transactions totaling $5,872. Credit card was the preferred payment method (78%). 42 loyalty redemptions were applied to purchases. The busiest time was between 12-2pm, with an average queue time of 4.3 minutes. Mobile ordering accounts for 22% of total sales, up 5% from last month.",
-                                })
-                              }}
-                            >
-                              View full report
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Top Viewing Customers and Popular Rewards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 overflow-hidden">
-            <div className="bg-white rounded-md shadow-sm border border-gray-200/80 overflow-hidden">
-              <div className="py-4 px-5 border-b border-gray-100">
-                <div>
-                  <h2 className="text-base font-medium text-gray-900 flex items-center gap-2">
-                    <Users className="h-4 w-4 text-[#007AFF]" />
-                    Top Store Visitors
-                  </h2>
-                  <p className="text-xs text-gray-500 mt-0.5">Customers who view your store most frequently</p>
-                </div>
-              </div>
-              <div className="p-0">
-                {topCustomersLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
-                  </div>
-                ) : topViewingCustomers.length === 0 ? (
-                  <div className="py-12 text-center">
-                    <div className="bg-[#F5F9FF] rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-3">
-                      <Users className="h-8 w-8 text-[#007AFF]/40" />
-                    </div>
-                    <p className="text-sm font-medium text-gray-700">No visitor data available</p>
-                    <p className="text-xs text-gray-500 mt-1">Customer visits will appear here</p>
-                  </div>
-                ) : (
-                  <div>
-                    {topViewingCustomers.map((customer, index) => (
-                      <div 
-                        key={customer.id} 
-                        className={`px-5 py-3.5 hover:bg-[#F5F9FF]/50 transition-colors ${
-                          index !== topViewingCustomers.length - 1 ? 'border-b border-gray-100' : ''
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="h-10 w-10 rounded-full bg-[#E9F3FF] flex items-center justify-center shadow-sm">
-                              <Users className="h-5 w-5 text-[#007AFF]" />
-                            </div>
-                            <div>
-                              <p className="font-medium text-sm text-gray-900">{customer.name}</p>
-                              <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
-                                <span className="px-1.5 py-0.5 bg-[#F5F9FF] text-[#007AFF] text-xs rounded-full border border-[#007AFF]/10 flex items-center">
-                                  <Eye className="h-3 w-3 mr-1" />
-                                  {customer.viewCount} views
-                                </span>
-                                <span className="text-gray-400">&bull;</span>
-                                <span>Last visit: {formatDistanceToNow(customer.lastView, { addSuffix: true })}</span>
-                              </div>
-                            </div>
-                          </div>
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            className="h-8 gap-1 border-[#007AFF]/20 text-[#007AFF] hover:bg-[#F5F9FF] hover:text-[#0062CC]"
-                            onClick={() => {
-                              setSelectedCustomer({
-                                id: customer.id,
-                                name: customer.name
-                              })
-                              setIsRewardDialogOpen(true)
-                            }}
-                          >
-                            <Gift className="h-3.5 w-3.5" />
-                            Create Reward
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Popular Rewards card */}
-            <div className="bg-white rounded-md shadow-sm border border-gray-200/80 overflow-hidden">
-              <div className="py-4 px-5 border-b border-gray-100">
-                <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-base font-medium text-gray-900 flex items-center gap-2">
-                      <Gift className="h-4 w-4 text-[#FF9500]" />
-                    Popular Rewards
-                    </h2>
-                    <p className="text-xs text-gray-500 mt-0.5">Most redeemed rewards by customers</p>
-                </div>
-                <Button 
-                    variant="ghost" 
-                  size="sm"
-                    className="text-[#FF9500] hover:text-[#CC7600] hover:bg-[#FF9500]/5 h-7 px-3"
-                  asChild
-                >
-                  <Link href="/store/rewards" className="flex items-center gap-1">
-                    View all
-                    <ChevronRight className="h-3 w-3" />
-                  </Link>
-                </Button>
-                </div>
-              </div>
-              <div className="p-0">
-                {rewardsLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="h-6 w-6 rounded-full border-2 border-[#FF9500] border-t-transparent animate-spin"></div>
-                  </div>
-                ) : popularRewards.length === 0 ? (
-                  <div className="py-12 text-center">
-                    <div className="bg-[#FFF8F0] rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-3">
-                      <Gift className="h-8 w-8 text-[#FF9500]/40" />
-                    </div>
-                    <p className="text-sm font-medium text-gray-700">No rewards data available</p>
-                    <p className="text-xs text-gray-500 mt-1">Popular rewards will appear here</p>
-                  </div>
-                ) : (
-                  <div>
-                    {popularRewards.map((reward, index) => (
-                      <div 
-                        key={reward.id} 
-                        className={`px-5 py-3.5 hover:bg-[#FFF8F0]/30 transition-colors ${
-                          index !== popularRewards.length - 1 ? 'border-b border-gray-100' : ''
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className={`h-10 w-10 rounded-full flex items-center justify-center shadow-sm
-                              ${reward.programtype === 'coffee' ? 'bg-[#E9F3FF]' : 
-                                reward.programtype === 'voucher' ? 'bg-[#E9FFF3]' : 'bg-[#FFF8F0]'}`}>
-                              {reward.programtype === 'coffee' ? (
-                                <Coffee className="h-5 w-5 text-[#007AFF]" />
-                              ) : reward.programtype === 'voucher' ? (
-                                <Ticket className="h-5 w-5 text-[#34C759]" />
-                              ) : (
-                                <Gift className="h-5 w-5 text-[#FF9500]" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium text-sm text-gray-900">{reward.rewardName}</p>
-                                {reward.programtype === 'coffee' && (
-                                  <span className="px-1.5 py-0.5 bg-[#F5F9FF] text-[#007AFF] text-xs rounded-full border border-[#007AFF]/10 flex items-center">
-                                    <Coffee className="h-3 w-3 mr-1" />
-                                    Coffee Card
-                                  </span>
-                                )}
-                                {reward.programtype === 'voucher' && (
-                                  <span className="px-1.5 py-0.5 bg-[#F0FFF5] text-[#34C759] text-xs rounded-full border border-[#34C759]/10 flex items-center">
-                                    <Ticket className="h-3 w-3 mr-1" />
-                                    Voucher
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
-                                <span className="px-1.5 py-0.5 bg-[#FFF8F0] text-[#FF9500] text-xs rounded-full border border-[#FF9500]/10">
-                                  {reward.pointsCost} points
-                                </span>
-                                <span className="text-gray-400">&bull;</span>
-                                <div className="flex items-center gap-1">
-                                  <Eye className="h-3 w-3 text-gray-400" />
-                                  <span>{reward.impressions || 0}</span>
-                                </div>
-                                {reward.lastRedeemedAt && (
-                                  <>
-                                    <span className="text-gray-400">&bull;</span>
-                                    <div className="flex items-center gap-1">
-                                      <Clock className="h-3 w-3 text-gray-400" />
-                                      <span>{formatDistanceToNow(reward.lastRedeemedAt, { addSuffix: true })}</span>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-medium text-[#FF9500]">{reward.redemptionCount} redeemed</p>
-                            <div className="flex items-center justify-end gap-1 text-xs mt-0.5">
-                              {reward.trend === "up" ? (
-                                <ArrowUp className="h-3 w-3 text-[#34C759]" />
-                              ) : (
-                                <ArrowDown className="h-3 w-3 text-[#FF3B30]" />
-                              )}
-                              <span className={reward.trend === "up" ? "text-[#34C759]" : "text-[#FF3B30]"}>
-                                {reward.changePercentage}%
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-          </div>
-              </div>
-          </div>
-
-          {/* Live and Scheduled Banners Section */}
-          {(activeBanners.length > 0 || scheduledBanners.length > 0) && (
-            <div className="space-y-4 mt-8">
-              <div className="flex justify-between items-center mb-4">
-                <div>
-                  <h2 className="text-lg font-medium flex items-center gap-2">
-                    <svg className="h-5 w-5 text-[#5AC8FA]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
-                    </svg>
-                    Banners
-                  </h2>
-                  <p className="text-xs text-gray-500">Your active and scheduled banners</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline"
-                    size="sm"
-                    className="h-8 gap-2 border-[#5AC8FA]/20 text-[#5AC8FA] hover:bg-[#F5FBFF] hover:text-[#5AC8FA]"
-                    onClick={() => router.push('/store/banner?tab=scheduled')}
-                  >
-                    <Clock className="h-4 w-4" />
-                    View Schedule
-                  </Button>
-                  <Button 
-                    variant="outline"
-                    size="sm"
-                    className="h-8 gap-2 border-[#5AC8FA]/20 text-[#5AC8FA] hover:bg-[#F5FBFF] hover:text-[#5AC8FA]"
+                    className="rounded-md"
                     asChild
                   >
-                    <Link href="/store/banner">
-                      Manage banners
+                    <Link href="/store/rewards" className="flex items-center gap-1">
+                      View all
+                      <ChevronRight className="h-3 w-3" />
                     </Link>
                   </Button>
                 </div>
               </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Live Banners First */}
-                {activeBanners.map((banner) => (
-                  <div key={banner.id} className="flex flex-col bg-white rounded-md shadow-sm border border-gray-200/80 overflow-hidden transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
-                    <div className="relative">
-                      <div className="absolute top-3 right-3 z-10 flex gap-2">
-                        <div className="bg-[#E9FFF3] text-[#34C759] text-xs px-2.5 py-1 rounded-full flex items-center shadow-sm">
-                          <Eye className="h-3 w-3 mr-1" />
-                          Live
-                        </div>
-                        <div className="bg-[#F5F9FF] text-[#007AFF] text-xs px-2.5 py-1 rounded-full flex items-center shadow-sm">
-                          <Eye className="h-3 w-3 mr-1" />
-                          {banner.impressions || 0} views
-                        </div>
-                      </div>
-                      
-                      <div className="rounded-md overflow-hidden">
-                        <BannerPreview {...banner} />
-                      </div>
-                      
-                      <div className="p-3 bg-white border-t border-gray-100">
-                        <h3 className="font-medium text-sm truncate">{banner.title}</h3>
-                        <p className="text-xs text-gray-500 mt-1 truncate">{banner.description}</p>
-                      </div>
-                    </div>
+              <div className="p-6">
+                {rewardsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
                   </div>
-                ))}
-
-                {/* Then Scheduled Banners */}
-                {scheduledBanners.map((banner) => (
-                  <div key={banner.id} className="flex flex-col bg-white rounded-md shadow-sm border border-gray-200/80 overflow-hidden transform transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md">
-                    <div className="relative">
-                      <div className="absolute top-3 right-3 z-10 flex gap-2">
-                        <div className="bg-[#F5F9FF] text-[#007AFF] text-xs px-2.5 py-1 rounded-full flex items-center shadow-sm">
-                          <Clock className="h-3 w-3 mr-1" />
-                          Scheduled
-                        </div>
-                        <div className="bg-[#F5F9FF] text-[#007AFF] text-xs px-2.5 py-1 rounded-full flex items-center shadow-sm">
-                          <Eye className="h-3 w-3 mr-1" />
-                          {banner.impressions || 0} views
-                        </div>
-                      </div>
-                      
-                      <div className="rounded-md overflow-hidden">
-                        <BannerPreview {...banner} />
-                      </div>
-                      
-                      <div className="p-3 bg-white border-t border-gray-100">
-                        <h3 className="font-medium text-sm truncate">{banner.title}</h3>
-                        <p className="text-xs text-gray-500 mt-1 truncate">{banner.description}</p>
-                      </div>
+                ) : popularRewards.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
+                      <Gift className="h-6 w-6 text-gray-400" />
                     </div>
+                    <p className="text-sm font-medium text-gray-700">No rewards yet</p>
+                    <p className="text-xs text-gray-500 mt-1">Create rewards to see analytics</p>
                   </div>
-                ))}
+                ) : (
+                  <div className="space-y-4">
+                    {popularRewards.slice(0, 5).map((reward, index) => (
+                      <div key={reward.id} className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-md bg-green-100 flex items-center justify-center">
+                          <Gift className="h-4 w-4 text-green-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900">{reward.name}</p>
+                          <p className="text-xs text-gray-500">{reward.pointsCost} points</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-gray-900">{reward.views || 0}</p>
+                          <p className="text-xs text-gray-500">views</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -3439,6 +2899,60 @@ export default function DashboardPage() {
           {/* Popup content */}
         </div>
       )}
+
+      {/* Business Insights Dialog */}
+      <Dialog open={insightDialogOpen} onOpenChange={setInsightDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Business Insights</DialogTitle>
+            <DialogDescription>
+              AI-powered insights about your business performance and recommendations.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-6">
+            {insightLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
+                <span className="ml-2 text-sm text-gray-600">Generating insights...</span>
+              </div>
+            ) : insightError ? (
+              <div className="text-center py-8">
+                <div className="bg-red-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
+                  <AlertCircle className="h-6 w-6 text-red-600" />
+                </div>
+                <p className="text-sm font-medium text-red-700">Error generating insights</p>
+                <p className="text-xs text-red-600 mt-1">{insightError}</p>
+              </div>
+            ) : insightData ? (
+              <div className="space-y-4">
+                <div className="bg-blue-50 rounded-md p-4">
+                  <h4 className="font-medium text-blue-900 mb-2">Key Insights</h4>
+                  <p className="text-sm text-blue-800">{insightData.summary}</p>
+                </div>
+                {insightData.recommendations && (
+                  <div className="bg-green-50 rounded-md p-4">
+                    <h4 className="font-medium text-green-900 mb-2">Recommendations</h4>
+                    <ul className="text-sm text-green-800 space-y-1">
+                      {insightData.recommendations.map((rec: string, index: number) => (
+                        <li key={index}>• {rec}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
+                  <BarChartIcon className="h-6 w-6 text-gray-400" />
+                </div>
+                <p className="text-sm font-medium text-gray-700">No insights available</p>
+                <p className="text-xs text-gray-500 mt-1">Generate insights to see recommendations</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

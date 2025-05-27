@@ -673,10 +673,6 @@ export default function TapAgentIntroPage() {
       ) : (
         // Original welcome section for users who haven't configured their agent yet
         <div className="p-6">
-          <PageHeader
-            title={<>Welcome to <span className="gradient-text" style={gradientTextStyle}>Tap Agent</span></>}
-          >
-          </PageHeader>
               
           <div className="flex flex-col md:flex-row gap-8 w-full">
             <div className="md:w-2/3">

@@ -1,0 +1,350 @@
+[debug] [2025-05-26T11:40:14.993Z] ----------------------------------------------------------------------
+[debug] [2025-05-26T11:40:14.995Z] Command:       /usr/local/bin/node /usr/local/bin/firebase emulators:start --only functions,firestore
+[debug] [2025-05-26T11:40:14.995Z] CLI Version:   14.1.0
+[debug] [2025-05-26T11:40:14.995Z] Platform:      darwin
+[debug] [2025-05-26T11:40:14.995Z] Node Version:  v22.13.1
+[debug] [2025-05-26T11:40:14.995Z] Time:          Mon May 26 2025 21:40:14 GMT+1000 (Australian Eastern Standard Time)
+[debug] [2025-05-26T11:40:14.995Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-05-26T11:40:15.130Z] Object "" in "firebase.json" has unknown property: {"additionalProperty":"apphosting"}
+[debug] [2025-05-26T11:40:15.134Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-05-26T11:40:15.134Z] > authorizing via signed-in user (tomlidgettprojects@gmail.com)
+[debug] [2025-05-26T11:40:15.308Z] openjdk version "17.0.15" 2025-04-15
+
+[debug] [2025-05-26T11:40:15.309Z] OpenJDK Runtime Environment Homebrew (build 17.0.15+0)
+OpenJDK 64-Bit Server VM Homebrew (build 17.0.15+0, mixed mode, sharing)
+
+[debug] [2025-05-26T11:40:15.313Z] Parsed Java major version: 17
+[info] i  emulators: Starting emulators: functions, firestore {"metadata":{"emulator":{"name":"hub"},"message":"Starting emulators: functions, firestore"}}
+[debug] [2025-05-26T11:40:15.693Z] [logging] Logging Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-05-26T11:40:15.693Z] [firestore] Firestore Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-05-26T11:40:15.693Z] [firestore.websocket] websocket server for firestore only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-05-26T11:40:15.693Z] assigned listening specs for emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4400},{"address":"::1","family":"IPv6","port":4400}],"ui":[{"address":"127.0.0.1","family":"IPv4","port":4000},{"address":"::1","family":"IPv6","port":4000}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4500}],"firestore":[{"address":"127.0.0.1","family":"IPv4","port":8080}],"firestore.websocket":[{"address":"127.0.0.1","family":"IPv4","port":9150}]},"metadata":{"message":"assigned listening specs for emulators"}}
+[debug] [2025-05-26T11:40:15.696Z] [hub] writing locator at /var/folders/n9/kfy2pqs96yz94kctnztv4_540000gp/T/hub-tap-loyalty-fb6d0.json
+[debug] [2025-05-26T11:40:15.990Z] [functions] Functions Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-05-26T11:40:15.990Z] [eventarc] Eventarc Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-05-26T11:40:15.990Z] [tasks] Cloud Tasks Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-05-26T11:40:15.990Z] late-assigned ports for functions and eventarc emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4400},{"address":"::1","family":"IPv6","port":4400}],"ui":[{"address":"127.0.0.1","family":"IPv4","port":4000},{"address":"::1","family":"IPv6","port":4000}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4500}],"firestore":[{"address":"127.0.0.1","family":"IPv4","port":8080}],"firestore.websocket":[{"address":"127.0.0.1","family":"IPv4","port":9150}],"functions":[{"address":"127.0.0.1","family":"IPv4","port":5001}],"eventarc":[{"address":"127.0.0.1","family":"IPv4","port":9299}],"tasks":[{"address":"127.0.0.1","family":"IPv4","port":9499}]},"metadata":{"message":"late-assigned ports for functions and eventarc emulators"}}
+[warn] ⚠  functions: The following emulators are not running, calls to these services from the Functions emulator will affect production: apphosting, auth, database, hosting, pubsub, storage, dataconnect {"metadata":{"emulator":{"name":"functions"},"message":"The following emulators are not running, calls to these services from the Functions emulator will affect production: \u001b[1mapphosting, auth, database, hosting, pubsub, storage, dataconnect\u001b[22m"}}
+[warn] ⚠  functions: Application Default Credentials detected. Non-emulated services will access production using these credentials. Be careful! {"metadata":{"emulator":{"name":"functions"},"message":"Application Default Credentials detected. Non-emulated services will access production using these credentials. Be careful!"}}
+[debug] [2025-05-26T11:40:17.324Z] Checked if tokens are valid: true, expires at: 1748262885124
+[debug] [2025-05-26T11:40:17.324Z] Checked if tokens are valid: true, expires at: 1748262885124
+[debug] [2025-05-26T11:40:17.325Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/tap-loyalty-fb6d0/adminSdkConfig [none]
+[debug] [2025-05-26T11:40:18.447Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/tap-loyalty-fb6d0/adminSdkConfig 200
+[debug] [2025-05-26T11:40:18.448Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/tap-loyalty-fb6d0/adminSdkConfig {"projectId":"tap-loyalty-fb6d0","databaseURL":"https://tap-loyalty-fb6d0-default-rtdb.firebaseio.com","storageBucket":"tap-loyalty-fb6d0.firebasestorage.app"}
+[warn] ⚠  firestore: Cloud Firestore Emulator does not support multiple databases yet. {"metadata":{"emulator":{"name":"firestore"},"message":"Cloud Firestore Emulator does not support multiple databases yet."}}
+[warn] ⚠  firestore: Did not find a Cloud Firestore rules file specified in a firebase.json config file. {"metadata":{"emulator":{"name":"firestore"},"message":"Did not find a Cloud Firestore rules file specified in a firebase.json config file."}}
+[warn] ⚠  firestore: The emulator will default to allowing all reads and writes. Learn more about this option: https://firebase.google.com/docs/emulator-suite/install_and_configure#security_rules_configuration. {"metadata":{"emulator":{"name":"firestore"},"message":"The emulator will default to allowing all reads and writes. Learn more about this option: https://firebase.google.com/docs/emulator-suite/install_and_configure#security_rules_configuration."}}
+[debug] [2025-05-26T11:40:18.463Z] Ignoring unsupported arg: auto_download {"metadata":{"emulator":{"name":"firestore"},"message":"Ignoring unsupported arg: auto_download"}}
+[debug] [2025-05-26T11:40:18.463Z] Ignoring unsupported arg: single_project_mode_error {"metadata":{"emulator":{"name":"firestore"},"message":"Ignoring unsupported arg: single_project_mode_error"}}
+[debug] [2025-05-26T11:40:18.463Z] Starting Firestore Emulator with command {"binary":"java","args":["-Dgoogle.cloud_firestore.debug_log_level=FINE","-Duser.language=en","-jar","/Users/user/.cache/firebase/emulators/cloud-firestore-emulator-v1.19.8.jar","--host","127.0.0.1","--port",8080,"--websocket_port",9150,"--project_id","tap-loyalty-fb6d0","--single_project_mode",true,"--functions_emulator","127.0.0.1:5001"],"optionalArgs":["port","webchannel_port","host","rules","websocket_port","functions_emulator","seed_from_export","project_id","single_project_mode"],"joinArgs":false,"shell":false,"port":8080} {"metadata":{"emulator":{"name":"firestore"},"message":"Starting Firestore Emulator with command {\"binary\":\"java\",\"args\":[\"-Dgoogle.cloud_firestore.debug_log_level=FINE\",\"-Duser.language=en\",\"-jar\",\"/Users/user/.cache/firebase/emulators/cloud-firestore-emulator-v1.19.8.jar\",\"--host\",\"127.0.0.1\",\"--port\",8080,\"--websocket_port\",9150,\"--project_id\",\"tap-loyalty-fb6d0\",\"--single_project_mode\",true,\"--functions_emulator\",\"127.0.0.1:5001\"],\"optionalArgs\":[\"port\",\"webchannel_port\",\"host\",\"rules\",\"websocket_port\",\"functions_emulator\",\"seed_from_export\",\"project_id\",\"single_project_mode\"],\"joinArgs\":false,\"shell\":false,\"port\":8080}"}}
+[info] i  firestore: Firestore Emulator logging to firestore-debug.log {"metadata":{"emulator":{"name":"firestore"},"message":"Firestore Emulator logging to \u001b[1mfirestore-debug.log\u001b[22m"}}
+[debug] [2025-05-26T11:40:19.447Z] May 26, 2025 9:40:19 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start
+INFO: Started WebSocket server on ws://127.0.0.1:9150
+ {"metadata":{"emulator":{"name":"firestore"},"message":"May 26, 2025 9:40:19 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start\nINFO: Started WebSocket server on ws://127.0.0.1:9150\n"}}
+[debug] [2025-05-26T11:40:19.459Z] API endpoint: http:// {"metadata":{"emulator":{"name":"firestore"},"message":"API endpoint: http://"}}
+[debug] [2025-05-26T11:40:19.459Z] 127.0.0.1:8080
+If you are using a library that supports the FIRESTORE_EMULATOR_HOST environment variable, run:
+
+   export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+
+If you are running a Firestore in Datastore Mode project, run:
+
+   export DATASTORE_EMULATOR_HOST=127.0.0.1:8080
+
+Note: Support for Datastore Mode is in preview. If you encounter any bugs please file at https://github.com/firebase/firebase-tools/issues.
+Dev App Server is now running.
+
+ {"metadata":{"emulator":{"name":"firestore"},"message":"127.0.0.1:8080\nIf you are using a library that supports the FIRESTORE_EMULATOR_HOST environment variable, run:\n\n   export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080\n\nIf you are running a Firestore in Datastore Mode project, run:\n\n   export DATASTORE_EMULATOR_HOST=127.0.0.1:8080\n\nNote: Support for Datastore Mode is in preview. If you encounter any bugs please file at https://github.com/firebase/firebase-tools/issues.\nDev App Server is now running.\n\n"}}
+[info] ✔  firestore: Firestore Emulator UI websocket is running on 9150. {"metadata":{"emulator":{"name":"firestore"},"message":"Firestore Emulator UI websocket is running on 9150."}}
+[info] i  functions: Watching "/Users/user/mxweb/functions" for Cloud Functions... {"metadata":{"emulator":{"name":"functions"},"message":"Watching \"/Users/user/mxweb/functions\" for Cloud Functions..."}}
+[debug] [2025-05-26T11:40:19.488Z] Validating nodejs source
+[warn] ⚠  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory. 
+[warn] ⚠  functions: Please note that there will be breaking changes when you upgrade. 
+[debug] [2025-05-26T11:40:20.051Z] > [functions] package.json contents: {
+  "name": "functions",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "main": "lib/index.js",
+  "dependencies": {
+    "axios": "^1.9.0",
+    "cors": "^2.8.5",
+    "firebase-admin": "^11.8.0",
+    "firebase-functions": "^4.3.1",
+    "googleapis": "^148.0.0",
+    "openai": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.13",
+    "firebase-functions-test": "^3.1.0",
+    "typescript": "^4.9.0"
+  },
+  "private": true
+}
+[debug] [2025-05-26T11:40:20.051Z] Building nodejs source
+[debug] [2025-05-26T11:40:20.051Z] Failed to find version of module node: reached end of search path /Users/user/mxweb/functions/node_modules
+[warn] ⚠  functions: Your requested "node" version "18" doesn't match your global version "22". Using node@22 from host. 
+[info] i  functions: You are using a version of firebase-functions SDK (4.9.0) that does not have support for the newest Firebase Extensions features. Please update firebase-functions SDK to >=5.1.0 to use them correctly 
+[debug] [2025-05-26T11:40:20.052Z] Could not find functions.yaml. Must use http discovery
+[debug] [2025-05-26T11:40:20.055Z] Found firebase-functions binary at '/Users/user/mxweb/functions/node_modules/.bin/firebase-functions'
+[info] Serving at port 8741
+
+[error] (node:21886) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+[error] TypeError: cors is not a function
+    at Object.<anonymous> (/Users/user/mxweb/functions/lib/index.js:49:21)
+    at Module._compile (node:internal/modules/cjs/loader:1562:14)
+    at Object..js (node:internal/modules/cjs/loader:1699:10)
+    at Module.load (node:internal/modules/cjs/loader:1313:32)
+    at Function._load (node:internal/modules/cjs/loader:1123:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:217:24)
+    at Module.require (node:internal/modules/cjs/loader:1335:12)
+    at require (node:internal/modules/helpers:136:16)
+    at loadModule (/Users/user/mxweb/functions/node_modules/firebase-functions/lib/runtime/loader.js:40:16)
+
+[debug] [2025-05-26T11:40:20.557Z] Got response code 400; body Failed to generate manifest from function source: TypeError: cors is not a function
+[error] ⬢  functions: Failed to load function definition from source: FirebaseError: Functions codebase could not be analyzed successfully. It may have a syntax or runtime error {"metadata":{"emulator":{"name":"functions"},"message":"Failed to load function definition from source: FirebaseError: Functions codebase could not be analyzed successfully. It may have a syntax or runtime error"}}
+[info] i  functions: Watching "/Users/user/mxweb/python-functions" for Cloud Functions... {"metadata":{"emulator":{"name":"functions"},"message":"Watching \"/Users/user/mxweb/python-functions\" for Cloud Functions..."}}
+[debug] [2025-05-26T11:40:24.572Z] Customer code is not Node
+[debug] [2025-05-26T11:40:24.572Z] Validating python source
+[debug] [2025-05-26T11:40:24.572Z] Building python source
+[debug] [2025-05-26T11:40:24.573Z] Could not find functions.yaml. Must use http discovery
+[debug] [2025-05-26T11:40:24.573Z] Running command with virtualenv: command=., args=["\"/Users/user/mxweb/python-functions/venv/bin/activate\"","&&","python3.12","-c","\"import firebase_functions; import os; print(os.path.dirname(firebase_functions.__file__))\""]
+[debug] [2025-05-26T11:40:24.660Z] stdout: /Users/user/mxweb/python-functions/venv/lib/python3.12/site-packages/firebase_functions
+
+[debug] [2025-05-26T11:40:24.662Z] Running admin server with args: ["python3.12","\"/Users/user/mxweb/python-functions/venv/lib/python3.12/site-packages/firebase_functions/private/serving.py\""] and env: {"GCLOUD_PROJECT":"tap-loyalty-fb6d0","K_REVISION":"1","PORT":"80","GOOGLE_CLOUD_QUOTA_PROJECT":"tap-loyalty-fb6d0","FUNCTIONS_EMULATOR":"true","TZ":"UTC","FIREBASE_DEBUG_MODE":"true","FIREBASE_DEBUG_FEATURES":"{\"skipTokenVerification\":true,\"enableCors\":true}","FIREBASE_EMULATOR_HUB":"127.0.0.1:4400","FIRESTORE_EMULATOR_HOST":"127.0.0.1:8080","FIREBASE_FIRESTORE_EMULATOR_ADDRESS":"127.0.0.1:8080","CLOUD_EVENTARC_EMULATOR_HOST":"http://127.0.0.1:9299","CLOUD_TASKS_EMULATOR_HOST":"127.0.0.1:9499","FIREBASE_CONFIG":"{\"storageBucket\":\"tap-loyalty-fb6d0.firebasestorage.app\",\"databaseURL\":\"https://tap-loyalty-fb6d0-default-rtdb.firebaseio.com\",\"projectId\":\"tap-loyalty-fb6d0\"}","ADMIN_PORT":"8081"} in /Users/user/mxweb/python-functions
+[debug] [2025-05-26T11:40:24.662Z] Running command with virtualenv: command=., args=["\"/Users/user/mxweb/python-functions/venv/bin/activate\"","&&","python3.12","\"/Users/user/mxweb/python-functions/venv/lib/python3.12/site-packages/firebase_functions/private/serving.py\""]
+[info]  * Serving Flask app 'serving'
+ * Debug mode: off
+
+[error] WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:8081
+
+[error] Press CTRL+C to quit
+
+[error] 127.0.0.1 - - [26/May/2025 11:40:25] "GET /__/functions.yaml HTTP/1.1" 200 -
+
+[info] 2025-05-26 11:40:25,776 INFO 127.0.0.1 - - [26/May/2025 11:40:25] "GET /__/functions.yaml HTTP/1.1" 200 -
+
+[debug] [2025-05-26T11:40:25.777Z] Got response from /__/functions.yaml endpoints:
+  customer_service_agent_handler:
+    availableMemoryMb: 1024
+    concurrency: null
+    entryPoint: customer_service_agent_handler
+    eventTrigger:
+      eventFilterPathPatterns:
+        document: merchants/{merchantId}/pushemails/{emailId}
+      eventFilters:
+        database: (default)
+        namespace: (default)
+      eventType: google.cloud.firestore.document.v1.created
+      retry: false
+    ingressSettings: null
+    labels: {}
+    maxInstances: null
+    minInstances: null
+    platform: gcfv2
+    region:
+    - australia-southeast1
+    secretEnvironmentVariables:
+    - key: OPENAI_API_KEY
+    - key: PINECONE_API_KEY
+    serviceAccountEmail: null
+    timeoutSeconds: 540
+  http_function:
+    availableMemoryMb: 256
+    concurrency: null
+    entryPoint: http_function
+    httpsTrigger: {}
+    ingressSettings: null
+    labels: {}
+    maxInstances: null
+    minInstances: null
+    platform: gcfv2
+    region:
+    - australia-southeast1
+    secretEnvironmentVariables:
+    - key: OPENAI_API_KEY
+    - key: PINECONE_API_KEY
+    serviceAccountEmail: null
+    timeoutSeconds: null
+params: []
+requiredAPIs: []
+specVersion: v1alpha1
+
+[error] 127.0.0.1 - - [26/May/2025 11:40:25] "GET /__/quitquitquit HTTP/1.1" 200 -
+
+[info] 2025-05-26 11:40:25,788 INFO 127.0.0.1 - - [26/May/2025 11:40:25] "GET /__/quitquitquit HTTP/1.1" 200 -
+
+[error] /bin/sh: line 1: 21893 Terminated: 15          python3.12 "/Users/user/mxweb/python-functions/venv/lib/python3.12/site-packages/firebase_functions/private/serving.py"
+
+[info] ✔  functions: Loaded functions definitions from source: customer_service_agent_handler, http_function. {"metadata":{"emulator":{"name":"functions"},"message":"Loaded functions definitions from source: customer_service_agent_handler, http_function."}}
+[debug] [2025-05-26T11:40:25.793Z] Found a v2 firestore trigger.
+[debug] [2025-05-26T11:40:25.793Z] addFirestoreTrigger "{\"eventType\":\"google.cloud.firestore.document.v1.created\",\"database\":\"(default)\",\"namespace\":\"(default)\",\"document\":{\"value\":\"merchants/{merchantId}/pushemails/{emailId}\",\"matchType\":\"PATH_PATTERN\"}}"
+[debug] [2025-05-26T11:40:25.793Z] >>> [apiv2][query] POST http://127.0.0.1:8080/emulator/v1/projects/tap-loyalty-fb6d0/eventarcTrigger?eventarcTriggerId=australia-southeast1-customer_service_agent_handler-0 [none]
+[debug] [2025-05-26T11:40:25.793Z] >>> [apiv2][body] POST http://127.0.0.1:8080/emulator/v1/projects/tap-loyalty-fb6d0/eventarcTrigger?eventarcTriggerId=australia-southeast1-customer_service_agent_handler-0 "{\"eventType\":\"google.cloud.firestore.document.v1.created\",\"database\":\"(default)\",\"namespace\":\"(default)\",\"document\":{\"value\":\"merchants/{merchantId}/pushemails/{emailId}\",\"matchType\":\"PATH_PATTERN\"}}"
+[debug] [2025-05-26T11:40:25.798Z] May 26, 2025 9:40:25 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+INFO: Detected non-HTTP/2 connection.
+ {"metadata":{"emulator":{"name":"firestore"},"message":"May 26, 2025 9:40:25 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\nINFO: Detected non-HTTP/2 connection.\n"}}
+[debug] [2025-05-26T11:40:25.892Z] May 26, 2025 9:40:25 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+INFO: Detected HTTP/2 connection.
+ {"metadata":{"emulator":{"name":"firestore"},"message":"May 26, 2025 9:40:25 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\nINFO: Detected HTTP/2 connection.\n"}}
+[debug] [2025-05-26T11:40:26.203Z] <<< [apiv2][status] POST http://127.0.0.1:8080/emulator/v1/projects/tap-loyalty-fb6d0/eventarcTrigger?eventarcTriggerId=australia-southeast1-customer_service_agent_handler-0 200
+[debug] [2025-05-26T11:40:26.203Z] <<< [apiv2][body] POST http://127.0.0.1:8080/emulator/v1/projects/tap-loyalty-fb6d0/eventarcTrigger?eventarcTriggerId=australia-southeast1-customer_service_agent_handler-0 {"eventType":"google.cloud.firestore.document.v1.created","database":"(default)","namespace":"(default)","document":{"value":"merchants/{merchantId}/pushemails/{emailId}","matchType":"PATH_PATTERN"}}
+[info] ✔  functions[australia-southeast1-customer_service_agent_handler]: firestore function initialized. {"metadata":{"emulator":{"name":"functions"},"message":"\u001b[1mfirestore\u001b[22m function initialized."}}
+[info] ✔  functions[australia-southeast1-http_function]: http function initialized (http://127.0.0.1:5001/tap-loyalty-fb6d0/australia-southeast1/http_function). {"metadata":{"emulator":{"name":"functions"},"message":"\u001b[1mhttp\u001b[22m function initialized (http://127.0.0.1:5001/tap-loyalty-fb6d0/australia-southeast1/http_function)."}}
+[debug] [2025-05-26T11:40:26.207Z] Could not find VSCode notification endpoint: FetchError: request to http://localhost:40001/vscode/notify failed, reason: . If you are not running the Firebase Data Connect VSCode extension, this is expected and not an issue.
+[info] 
+┌─────────────────────────────────────────────────────────────┐
+│ ✔  All emulators ready! It is now safe to connect your app. │
+│ i  View Emulator UI at http://127.0.0.1:4000/               │
+└─────────────────────────────────────────────────────────────┘
+
+┌───────────┬────────────────┬─────────────────────────────────┐
+│ Emulator  │ Host:Port      │ View in Emulator UI             │
+├───────────┼────────────────┼─────────────────────────────────┤
+│ Functions │ 127.0.0.1:5001 │ http://127.0.0.1:4000/functions │
+├───────────┼────────────────┼─────────────────────────────────┤
+│ Firestore │ 127.0.0.1:8080 │ http://127.0.0.1:4000/firestore │
+└───────────┴────────────────┴─────────────────────────────────┘
+  Emulator Hub host: 127.0.0.1 port: 4400
+  Other reserved ports: 4500, 9150
+
+Issues? Report them at https://github.com/firebase/firebase-tools/issues and attach the *-debug.log files.
+ 
+[debug] [2025-05-26T11:40:34.028Z] May 26, 2025 9:40:34 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler initChannel
+INFO: Connected to new websocket client
+ {"metadata":{"emulator":{"name":"firestore"},"message":"May 26, 2025 9:40:34 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler initChannel\nINFO: Connected to new websocket client\n"}}
+[debug] [2025-05-26T11:40:58.487Z] May 26, 2025 9:40:58 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+INFO: Detected non-HTTP/2 connection.
+ {"metadata":{"emulator":{"name":"firestore"},"message":"May 26, 2025 9:40:58 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\nINFO: Detected non-HTTP/2 connection.\n"}}
+[debug] [2025-05-26T11:41:39.667Z] File /Users/user/mxweb/functions/functions/index.js changed, reloading triggers {"metadata":{"emulator":{"name":"functions"},"message":"File /Users/user/mxweb/functions/functions/index.js changed, reloading triggers"}}
+[debug] [2025-05-26T11:41:40.669Z] Validating nodejs source
+[warn] ⚠  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory. 
+[warn] ⚠  functions: Please note that there will be breaking changes when you upgrade. 
+[debug] [2025-05-26T11:41:41.355Z] > [functions] package.json contents: {
+  "name": "functions",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "main": "lib/index.js",
+  "dependencies": {
+    "axios": "^1.9.0",
+    "cors": "^2.8.5",
+    "firebase-admin": "^11.8.0",
+    "firebase-functions": "^4.3.1",
+    "googleapis": "^148.0.0",
+    "openai": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.13",
+    "firebase-functions-test": "^3.1.0",
+    "typescript": "^4.9.0"
+  },
+  "private": true
+}
+[debug] [2025-05-26T11:41:41.355Z] Building nodejs source
+[debug] [2025-05-26T11:41:41.355Z] Failed to find version of module node: reached end of search path /Users/user/mxweb/functions/node_modules
+[warn] ⚠  functions: Your requested "node" version "18" doesn't match your global version "22". Using node@22 from host. 
+[info] i  functions: You are using a version of firebase-functions SDK (4.9.0) that does not have support for the newest Firebase Extensions features. Please update firebase-functions SDK to >=5.1.0 to use them correctly 
+[debug] [2025-05-26T11:41:41.356Z] Could not find functions.yaml. Must use http discovery
+[debug] [2025-05-26T11:41:41.358Z] Found firebase-functions binary at '/Users/user/mxweb/functions/node_modules/.bin/firebase-functions'
+[info] Serving at port 8175
+
+[error] (node:21932) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+[error] TypeError: cors is not a function
+    at Object.<anonymous> (/Users/user/mxweb/functions/lib/index.js:49:21)
+    at Module._compile (node:internal/modules/cjs/loader:1562:14)
+    at Object..js (node:internal/modules/cjs/loader:1699:10)
+    at Module.load (node:internal/modules/cjs/loader:1313:32)
+    at Function._load (node:internal/modules/cjs/loader:1123:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:217:24)
+    at Module.require (node:internal/modules/cjs/loader:1335:12)
+    at require (node:internal/modules/helpers:136:16)
+    at loadModule (/Users/user/mxweb/functions/node_modules/firebase-functions/lib/runtime/loader.js:40:16)
+
+[debug] [2025-05-26T11:41:41.796Z] Got response code 400; body Failed to generate manifest from function source: TypeError: cors is not a function
+[error] ⬢  functions: Failed to load function definition from source: FirebaseError: Functions codebase could not be analyzed successfully. It may have a syntax or runtime error {"metadata":{"emulator":{"name":"functions"},"message":"Failed to load function definition from source: FirebaseError: Functions codebase could not be analyzed successfully. It may have a syntax or runtime error"}}
+[debug] [2025-05-26T11:41:55.964Z] File /Users/user/mxweb/functions/functions/index.js changed, reloading triggers {"metadata":{"emulator":{"name":"functions"},"message":"File /Users/user/mxweb/functions/functions/index.js changed, reloading triggers"}}
+[debug] [2025-05-26T11:41:56.966Z] Validating nodejs source
+[warn] ⚠  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory. 
+[warn] ⚠  functions: Please note that there will be breaking changes when you upgrade. 
+[debug] [2025-05-26T11:41:57.668Z] > [functions] package.json contents: {
+  "name": "functions",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "main": "lib/index.js",
+  "dependencies": {
+    "axios": "^1.9.0",
+    "cors": "^2.8.5",
+    "firebase-admin": "^11.8.0",
+    "firebase-functions": "^4.3.1",
+    "googleapis": "^148.0.0",
+    "openai": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.13",
+    "firebase-functions-test": "^3.1.0",
+    "typescript": "^4.9.0"
+  },
+  "private": true
+}
+[debug] [2025-05-26T11:41:57.668Z] Building nodejs source
+[debug] [2025-05-26T11:41:57.668Z] Failed to find version of module node: reached end of search path /Users/user/mxweb/functions/node_modules
+[warn] ⚠  functions: Your requested "node" version "18" doesn't match your global version "22". Using node@22 from host. 
+[info] i  functions: You are using a version of firebase-functions SDK (4.9.0) that does not have support for the newest Firebase Extensions features. Please update firebase-functions SDK to >=5.1.0 to use them correctly 
+[debug] [2025-05-26T11:41:57.669Z] Could not find functions.yaml. Must use http discovery
+[debug] [2025-05-26T11:41:57.670Z] Found firebase-functions binary at '/Users/user/mxweb/functions/node_modules/.bin/firebase-functions'
+[info] Serving at port 8503
+
+[error] (node:21945) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+[error] TypeError: cors is not a function
+    at Object.<anonymous> (/Users/user/mxweb/functions/lib/index.js:49:21)
+    at Module._compile (node:internal/modules/cjs/loader:1562:14)
+    at Object..js (node:internal/modules/cjs/loader:1699:10)
+    at Module.load (node:internal/modules/cjs/loader:1313:32)
+    at Function._load (node:internal/modules/cjs/loader:1123:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:217:24)
+    at Module.require (node:internal/modules/cjs/loader:1335:12)
+    at require (node:internal/modules/helpers:136:16)
+    at loadModule (/Users/user/mxweb/functions/node_modules/firebase-functions/lib/runtime/loader.js:40:16)
+
+[debug] [2025-05-26T11:41:58.016Z] Got response code 400; body Failed to generate manifest from function source: TypeError: cors is not a function
+[error] ⬢  functions: Failed to load function definition from source: FirebaseError: Functions codebase could not be analyzed successfully. It may have a syntax or runtime error {"metadata":{"emulator":{"name":"functions"},"message":"Failed to load function definition from source: FirebaseError: Functions codebase could not be analyzed successfully. It may have a syntax or runtime error"}}

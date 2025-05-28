@@ -21,6 +21,23 @@ import { db } from '@/lib/firebase'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import * as DialogPrimitive from "@radix-ui/react-dialog"
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from '@/components/ui/avatar'
+import {
+  TableBody,
+  TableCell,
+  TableColumnHeader,
+  TableHead,
+  TableHeader,
+  TableHeaderGroup,
+  TableProvider,
+  TableRow,
+} from '@/components/ui/kibo-ui/table'
+import type { ColumnDef } from '@/components/ui/kibo-ui/table'
+import { ChevronRightIcon } from 'lucide-react'
 
 export default function AgentsPage() {
   const router = useRouter()
@@ -103,6 +120,7 @@ export default function AgentsPage() {
     priorityOnly: true,
     includeAttachments: true
   })
+  const [showLogsView, setShowLogsView] = useState(false)
 
   // Define agent type
   type Agent = {
@@ -581,149 +599,326 @@ export default function AgentsPage() {
     }
   }
 
+  // Sample agent logs data
+  const statuses = [
+    { id: '1', name: 'Success', color: '#10B981' },
+    { id: '2', name: 'Failed', color: '#EF4444' },
+    { id: '3', name: 'Running', color: '#F59E0B' },
+    { id: '4', name: 'Scheduled', color: '#6B7280' },
+  ]
+
+  const agentsForLogs = [
+    { id: '1', name: 'Customer Service Agent', avatar: '/gmail.png' },
+    { id: '2', name: 'Email Summary Agent', avatar: '/gmail.png' },
+    { id: '3', name: 'Sales Analysis Agent', avatar: '/square.png' },
+  ]
+
+  const sampleLogs = Array.from({ length: 25 }).map((_, index) => ({
+    id: `log-${index + 1}`,
+    agent: agentsForLogs[index % agentsForLogs.length],
+    executedAt: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000), // Random date within last week
+    duration: Math.floor(Math.random() * 300) + 5, // 5-305 seconds
+    status: statuses[Math.floor(Math.random() * statuses.length)],
+    tasksCompleted: Math.floor(Math.random() * 20) + 1,
+    message: index % 4 === 1 ? 'Rate limit exceeded' : index % 7 === 2 ? 'Authentication failed' : 'Completed successfully',
+    type: ['Scheduled', 'Manual', 'Triggered'][Math.floor(Math.random() * 3)],
+  }))
+
+  // Define table columns for agent logs
+  const logColumns: ColumnDef<typeof sampleLogs[number]>[] = [
+    {
+      accessorKey: 'agent',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Agent" />
+      ),
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Avatar className="size-6">
+              <AvatarImage src={row.original.agent.avatar} />
+              <AvatarFallback>
+                {row.original.agent.name?.slice(0, 2)}
+              </AvatarFallback>
+            </Avatar>
+            <div
+              className="absolute right-0 bottom-0 h-2 w-2 rounded-full ring-2 ring-background"
+              style={{
+                backgroundColor: row.original.status.color,
+              }}
+            />
+          </div>
+          <div>
+            <span className="font-medium">{row.original.agent.name}</span>
+            <div className="flex items-center gap-1 text-muted-foreground text-xs">
+              <span>{row.original.type}</span>
+              <ChevronRightIcon size={12} />
+              <span>{row.original.tasksCompleted} tasks</span>
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'executedAt',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Executed At" />
+      ),
+      cell: ({ row }) =>
+        new Intl.DateTimeFormat('en-US', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }).format(row.original.executedAt),
+    },
+    {
+      accessorKey: 'duration',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Duration" />
+      ),
+      cell: ({ row }) => {
+        const duration = row.original.duration
+        const minutes = Math.floor(duration / 60)
+        const seconds = duration % 60
+        return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`
+      },
+    },
+    {
+      accessorKey: 'status',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Status" />
+      ),
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <div
+            className="h-2 w-2 rounded-full"
+            style={{ backgroundColor: row.original.status.color }}
+          />
+          <span className="text-sm font-medium">{row.original.status.name}</span>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'message',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Message" />
+      ),
+      cell: ({ row }) => (
+        <span className="text-sm text-muted-foreground max-w-xs truncate">
+          {row.original.message}
+        </span>
+      ),
+    },
+  ]
+
   return (
     <div className="px-6 py-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsRequestAgentOpen(true)}
-            className="rounded-md gap-2"
+          {!showLogsView ? (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsRequestAgentOpen(true)}
+                className="rounded-md gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Request an Agent
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsIntegrationsOpen(true)}
+                className="rounded-md gap-2"
+              >
+                <Settings className="h-4 w-4" />
+                Integrations
+              </Button>
+            </>
+          ) : (
+            <p className="text-sm text-gray-600">{sampleLogs.length} total executions</p>
+          )}
+        </div>
+        
+        {/* Logs Tab on the right */}
+        <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+          <button
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              !showLogsView
+                ? "text-gray-800 bg-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-200/70"
+            )}
+            onClick={() => setShowLogsView(false)}
           >
-            <Plus className="h-4 w-4" />
-            Request an Agent
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsIntegrationsOpen(true)}
-            className="rounded-md gap-2"
+            Agents
+          </button>
+          <button
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              showLogsView
+                ? "text-gray-800 bg-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-200/70"
+            )}
+            onClick={() => setShowLogsView(true)}
           >
-            <Settings className="h-4 w-4" />
-            Integrations
-          </Button>
+            Logs
+          </button>
         </div>
       </div>
 
-      {/* Agents Sections */}
-      <div className="space-y-8">
-        {Object.entries(agentSections).map(([sectionName, agents]) => (
-          <div key={sectionName} className="space-y-4">
-            <div className="flex items-center gap-3">
-              <h2 className="text-base font-medium text-gray-900">{sectionName}</h2>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {agents.map((agent) => (
-                <div key={agent.id} className="bg-gray-50 border border-gray-200 rounded-md p-5 flex flex-col hover:border-gray-300 transition-colors">
-                  {/* Header with title and button */}
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-2 flex-1">
-                      <h3 className="text-base font-medium text-gray-900">{agent.name}</h3>
-                      {enrolledAgents[agent.id]?.status === 'active' && (
-                        <div className="flex items-center gap-1">
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                          <span className="text-xs text-green-600 font-medium">Connected</span>
-                        </div>
-                      )}
-                    </div>
-                    {(() => {
-                      const isEnrolled = enrolledAgents[agent.id]?.status === 'active'
-                      const isConnecting = connectingAgents.has(agent.id)
-                      const isComingSoon = agent.status === 'coming-soon'
-                      
-                      return (
-                        <Button 
-                          size="sm" 
-                          variant={isEnrolled ? 'secondary' : (agent.status === 'active' ? 'default' : 'outline')}
-                          disabled={isComingSoon || isConnecting || !user}
-                          className="rounded-md text-xs px-3 py-1 h-7 ml-3"
-                          onClick={() => handleAgentAction(agent)}
-                        >
-                          {isConnecting 
-                            ? (isEnrolled ? 'Connecting...' : 'Connecting...') 
-                            : isEnrolled 
-                              ? 'Configure' 
-                              : (agent.status === 'active' ? 'Connect' : 'Coming Soon')
-                          }
-                        </Button>
-                      )
-                    })()}
+      {/* Content with fade transition */}
+      <div className={cn(
+        "transition-opacity duration-300 ease-in-out",
+        "opacity-100"
+      )}>
+        {!showLogsView ? (
+          <div className="animate-in fade-in-0 duration-300">
+            {/* Agents Sections */}
+            <div className="space-y-8">
+              {Object.entries(agentSections).map(([sectionName, agents]) => (
+                <div key={sectionName} className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-base font-medium text-gray-900">{sectionName}</h2>
                   </div>
-
-                  {/* Description */}
-                  <p className="text-sm text-gray-600 mb-4 flex-1 leading-relaxed">{agent.description}</p>
-
-                  {/* Integration Logos - Bottom */}
-                  <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-                    <TooltipProvider>
-                      {/* Required Integrations */}
-                      <div className="flex gap-1.5">
-                        {(agent.requiredIntegrations || agent.integrations).map((integration, index) => (
-                          <Tooltip key={`required-${index}`}>
-                            <TooltipTrigger asChild>
-                              <div className="w-5 h-5 bg-gray-50 rounded border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors cursor-help">
-                                {integration === 'vault.png' ? (
-                                  <FileText className="h-3 w-3 text-blue-600" />
-                                ) : (
-                                  <Image
-                                    src={`/${integration}`}
-                                    alt={integration.split('.')[0]}
-                                    width={14}
-                                    height={14}
-                                    className="object-contain"
-                                  />
-                                )}
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {agents.map((agent) => (
+                      <div key={agent.id} className="bg-gray-50 border border-gray-200 rounded-md p-5 flex flex-col hover:border-gray-300 transition-colors">
+                        {/* Header with title and button */}
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2 flex-1">
+                            <h3 className="text-base font-medium text-gray-900">{agent.name}</h3>
+                            {enrolledAgents[agent.id]?.status === 'active' && (
+                              <div className="flex items-center gap-1">
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                <span className="text-xs text-green-600 font-medium">Connected</span>
                               </div>
-                            </TooltipTrigger>
-                            <TooltipContent className="bg-gray-900 text-white border-gray-700">
-                              <p>{integrationNames[integration] || integration.split('.')[0]} (Required)</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        ))}
-                      </div>
-
-                      {/* Separator */}
-                      {agent.optionalIntegrations && agent.optionalIntegrations.length > 0 && (
-                        <>
-                          <div className="w-px h-4 bg-gray-300"></div>
-                          
-                          {/* Optional Integrations */}
-                          <div className="flex gap-1.5">
-                            {agent.optionalIntegrations.map((integration, index) => (
-                              <Tooltip key={`optional-${index}`}>
-                                <TooltipTrigger asChild>
-                                  <div className="w-5 h-5 bg-gray-50 rounded border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors cursor-help opacity-60">
-                                    {integration === 'vault.png' ? (
-                                      <FileText className="h-3 w-3 text-blue-600" />
-                                    ) : (
-                                      <Image
-                                        src={`/${integration}`}
-                                        alt={integration.split('.')[0]}
-                                        width={14}
-                                        height={14}
-                                        className="object-contain"
-                                      />
-                                    )}
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent className="bg-gray-900 text-white border-gray-700">
-                                  <p>{integrationNames[integration] || integration.split('.')[0]} (Optional)</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            ))}
+                            )}
                           </div>
-                        </>
-                      )}
-                    </TooltipProvider>
+                          {(() => {
+                            const isEnrolled = enrolledAgents[agent.id]?.status === 'active'
+                            const isConnecting = connectingAgents.has(agent.id)
+                            const isComingSoon = agent.status === 'coming-soon'
+                            
+                            return (
+                              <Button 
+                                size="sm" 
+                                variant={isEnrolled ? 'secondary' : (agent.status === 'active' ? 'default' : 'outline')}
+                                disabled={isComingSoon || isConnecting || !user}
+                                className="rounded-md text-xs px-3 py-1 h-7 ml-3"
+                                onClick={() => handleAgentAction(agent)}
+                              >
+                                {isConnecting 
+                                  ? (isEnrolled ? 'Connecting...' : 'Connecting...') 
+                                  : isEnrolled 
+                                    ? 'Configure' 
+                                    : (agent.status === 'active' ? 'Connect' : 'Coming Soon')
+                                }
+                              </Button>
+                            )
+                          })()}
+                        </div>
+
+                        {/* Description */}
+                        <p className="text-sm text-gray-600 mb-4 flex-1 leading-relaxed">{agent.description}</p>
+
+                        {/* Integration Logos - Bottom */}
+                        <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                          <TooltipProvider>
+                            {/* Required Integrations */}
+                            <div className="flex gap-1.5">
+                              {(agent.requiredIntegrations || agent.integrations).map((integration, index) => (
+                                <Tooltip key={`required-${index}`}>
+                                  <TooltipTrigger asChild>
+                                    <div className="w-5 h-5 bg-gray-50 rounded border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors cursor-help">
+                                      {integration === 'vault.png' ? (
+                                        <FileText className="h-3 w-3 text-blue-600" />
+                                      ) : (
+                                        <Image
+                                          src={`/${integration}`}
+                                          alt={integration.split('.')[0]}
+                                          width={14}
+                                          height={14}
+                                          className="object-contain"
+                                        />
+                                      )}
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="bg-gray-900 text-white border-gray-700">
+                                    <p>{integrationNames[integration] || integration.split('.')[0]} (Required)</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              ))}
+                            </div>
+
+                            {/* Separator */}
+                            {agent.optionalIntegrations && agent.optionalIntegrations.length > 0 && (
+                              <>
+                                <div className="w-px h-4 bg-gray-300"></div>
+                                
+                                {/* Optional Integrations */}
+                                <div className="flex gap-1.5">
+                                  {agent.optionalIntegrations.map((integration, index) => (
+                                    <Tooltip key={`optional-${index}`}>
+                                      <TooltipTrigger asChild>
+                                        <div className="w-5 h-5 bg-gray-50 rounded border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors cursor-help opacity-60">
+                                          {integration === 'vault.png' ? (
+                                            <FileText className="h-3 w-3 text-blue-600" />
+                                          ) : (
+                                            <Image
+                                              src={`/${integration}`}
+                                              alt={integration.split('.')[0]}
+                                              width={14}
+                                              height={14}
+                                              className="object-contain"
+                                            />
+                                          )}
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="bg-gray-900 text-white border-gray-700">
+                                        <p>{integrationNames[integration] || integration.split('.')[0]} (Optional)</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </TooltipProvider>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}
             </div>
           </div>
-        ))}
+        ) : (
+          <div className="animate-in fade-in-0 duration-300">
+            {/* Logs View */}
+            <div className="space-y-4">
+              {/* Logs Table */}
+              <div className="border border-gray-200 rounded-md bg-white">
+                <TableProvider columns={logColumns} data={sampleLogs}>
+                  <TableHeader>
+                    {({ headerGroup }) => (
+                      <TableHeaderGroup key={headerGroup.id} headerGroup={headerGroup}>
+                        {({ header }) => <TableHead key={header.id} header={header} />}
+                      </TableHeaderGroup>
+                    )}
+                  </TableHeader>
+                  <TableBody>
+                    {({ row }) => (
+                      <TableRow key={row.id} row={row}>
+                        {({ cell }) => <TableCell key={cell.id} cell={cell} />}
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </TableProvider>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Integrations Dialog */}

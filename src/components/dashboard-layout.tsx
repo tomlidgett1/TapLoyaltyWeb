@@ -337,18 +337,275 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       setConversationId(currentConversationId)
     }
     
-    // Add the search query as a user message and process it
-    const searchMessage = {role: 'user', content: query.trim()}
-    setChatMessages(prev => [...prev, searchMessage])
-    
-    // Clear search and process the message
+    // Clear search first
     setSearchQuery('')
-    setUserInput(query.trim())
     
-    // Wait a moment for the chat panel to open, then send the message
+    // Set the user input to the query and add it to chat messages
+    setUserInput(query.trim())
+    setChatMessages(prev => [...prev, {role: 'user', content: query.trim()}])
+    
+    // Wait a moment for the chat panel to open and state to update, then send the message
     setTimeout(() => {
-      handleSendMessage()
-    }, 100)
+      // Manually trigger the send message logic since handleSendMessage expects userInput to be set
+      if (currentConversationId) {
+        handleSendMessageWithQuery(query.trim(), currentConversationId)
+      }
+    }, 150)
+  }
+  
+  // Helper function to send message with a specific query
+  const handleSendMessageWithQuery = async (query: string, currentConversationId: string) => {
+    // Clear previous responses and streaming state
+    setToolResponse(null)
+    setStreamingStatus('')
+    setStreamingStep('')
+    setStreamingSteps([])
+    setStreamingProgress(null)
+    setShowTypewriter(false)
+    setTypewriterText('')
+    
+    // Clear the user input since we've already added the message to chat
+    setUserInput('')
+    
+    // Start streaming
+    setIsStreaming(true)
+    setIsTyping(true)
+    
+    try {
+      // Prepare the request payload
+      const merchantId = user?.uid
+      console.log('Starting SSE stream for:', { merchantId, conversationId: currentConversationId, userPrompt: query })
+      
+      const payload = {
+        prompt: query,
+        merchantId: merchantId || 'default',
+        apps: [],
+        params: {},
+        entityId: merchantId || 'default',
+        conversationId: currentConversationId,
+        stream: 'true'
+      }
+      
+      // Create SSE connection
+      const functionUrl = 'https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/processMultiStepRequest';
+      
+      // Close any existing EventSource
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+      }
+      
+      console.log('Making request to:', functionUrl)
+      console.log('Request method: POST')
+      console.log('Request payload:', payload)
+      
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+        },
+        body: JSON.stringify(payload)
+      })
+      
+      console.log('Response status:', response.status)
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()))
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('HTTP error response:', errorText)
+        throw new Error(`HTTP error! Status: ${response.status} - ${errorText}`)
+      }
+      
+      // Check if response is actually SSE
+      const contentType = response.headers.get('content-type')
+      if (!contentType?.includes('text/event-stream')) {
+        // Fallback to regular JSON response
+        const result = await response.json()
+        console.log('Received regular JSON response:', result)
+        setToolResponse(result)
+        
+        if (result && result.text) {
+          setChatMessages(prev => [...prev, {role: 'assistant', content: result.text}])
+        }
+        return
+      }
+      
+      // Handle SSE stream - same logic as handleSendMessage
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+      
+      if (!reader) {
+        throw new Error('Failed to get response reader')
+      }
+      
+      let buffer = ''
+      let finalResponse = null
+      
+      while (true) {
+        const { done, value } = await reader.read()
+        
+        if (done) {
+          console.log('SSE stream completed')
+          break
+        }
+        
+        // Decode the chunk and add to buffer
+        const chunk = decoder.decode(value, { stream: true })
+        buffer += chunk
+        
+        // Process complete lines
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6)
+            
+            if (data === '[DONE]') {
+              console.log('Stream completed with [DONE]')
+              break
+            }
+            
+            try {
+              if (!data || data.trim() === '') {
+                continue
+              }
+              
+              const parsed = JSON.parse(data)
+              console.log('SSE Event:', parsed)
+              
+              if (!parsed || typeof parsed !== 'object') {
+                console.warn('Invalid SSE event structure:', parsed)
+                continue
+              }
+              
+              // Handle different event types
+              switch (parsed.type) {
+                case 'status':
+                  if (parsed.data && parsed.data.message) {
+                    setStreamingStatus(parsed.data.message)
+                  }
+                  break
+                  
+                case 'tool_selected':
+                  if (parsed.data && parsed.data.tool) {
+                    setChatMessages(prev => [...prev, {
+                      role: 'tool_selection', 
+                      content: '', 
+                      toolNames: [parsed.data.toolDisplayName || parsed.data.tool],
+                      toolCompleted: false,
+                      toolId: parsed.data.id
+                    }])
+                    setStreamingStatus(parsed.data.message || `Using ${parsed.data.toolDisplayName || parsed.data.tool}`)
+                  }
+                  break
+                  
+                case 'tool_complete':
+                  if (parsed.data && parsed.data.tool) {
+                    setChatMessages(prev => {
+                      const messages = [...prev]
+                      for (let i = messages.length - 1; i >= 0; i--) {
+                        if (messages[i].role === 'tool_selection' && 
+                            messages[i].toolNames?.includes(parsed.data.toolDisplayName || parsed.data.tool)) {
+                          messages[i] = { 
+                            ...messages[i], 
+                            toolCompleted: true,
+                            toolSuccess: true
+                          }
+                          break
+                        }
+                      }
+                      return messages
+                    })
+                    setStreamingStatus(`✅ ${parsed.data.message}`)
+                  }
+                  break
+                  
+                case 'ai_message_chunk':
+                  if (parsed.data && parsed.data.delta) {
+                    setTypewriterText(prev => prev + parsed.data.delta)
+                    if (!showTypewriter) {
+                      setShowTypewriter(true)
+                    }
+                  }
+                  break
+                  
+                case 'ai_message':
+                  if (parsed.data && parsed.data.message) {
+                    setChatMessages(prev => [...prev, {
+                      role: 'assistant', 
+                      content: parsed.data.message
+                    }])
+                  }
+                  break
+                  
+                case 'done':
+                  finalResponse = parsed.data
+                  setStreamingStatus('✅ Task completed!')
+                  break
+                  
+                case 'error':
+                  setStreamingStatus(`❌ ${parsed.data.message}`)
+                  setChatMessages(prev => [...prev, {
+                    role: 'assistant', 
+                    content: `Sorry, I encountered an error: ${parsed.data.message}`
+                  }])
+                  break
+                  
+                default:
+                  console.log('Unknown SSE event type:', parsed.type, parsed.data)
+              }
+            } catch (e) {
+              console.error('Failed to parse SSE data:', {
+                rawData: data,
+                dataLength: data?.length,
+                error: e instanceof Error ? e.message : String(e),
+                errorType: typeof e
+              })
+            }
+          }
+        }
+      }
+      
+      // Process final response
+      if (finalResponse) {
+        console.log('Final response received:', finalResponse)
+        setToolResponse(finalResponse)
+        
+        if (finalResponse.text) {
+          setChatMessages(prev => [...prev, {role: 'assistant', content: finalResponse.text}])
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error in SSE streaming:', error)
+      
+      let errorMessage = 'Unknown error'
+      if (error instanceof Error) {
+        errorMessage = error.message
+        console.error('Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        })
+      }
+      
+      setStreamingStatus(`❌ Error: ${errorMessage}`)
+      setChatMessages(prev => [...prev, {
+        role: 'assistant', 
+        content: `Sorry, I encountered an error while processing your request: ${errorMessage}\n\nPlease try again.`
+      }])
+    } finally {
+      setIsStreaming(false)
+      setIsTyping(false)
+      
+      // Clean up streaming state after a delay
+      setTimeout(() => {
+        setStreamingStatus('')
+        setStreamingStep('')
+        setStreamingProgress(null)
+      }, 3000)
+    }
   }
   
   useEffect(() => {
@@ -751,11 +1008,19 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   
   // Function to get the current page title based on pathname
   const getPageTitle = () => {
-    const path = pathname?.split('/')[1]
-    if (!path) return 'Dashboard'
+    const segments = pathname?.split('/').filter(Boolean) // Remove empty segments
+    if (!segments || segments.length === 0) return 'Dashboard'
     
-    // Convert path to title case (e.g., "store" -> "Store")
-    return path.charAt(0).toUpperCase() + path.slice(1)
+    // Get the last segment instead of the first
+    const lastSegment = segments[segments.length - 1]
+    
+    // Handle specific cases for proper capitalization
+    if (lastSegment === 'agent-inbox') {
+      return 'Agent Inbox'
+    }
+    
+    // Convert path to title case (e.g., "agents" -> "Agents")
+    return lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1)
   }
   
   // Function to get the appropriate icon for a tool name
@@ -1094,7 +1359,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [isTyping, setIsTyping] = useState(false)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const [toolResponse, setToolResponse] = useState<any>(null)
-
+  
   const [conversationId, setConversationId] = useState<string | null>(null)
   
   // Add state for SSE streaming
@@ -1169,6 +1434,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   // Add state for sidebar collapse
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   
+  // Auto-collapse sidebar when chat panel opens/closes
+  useEffect(() => {
+    setSidebarCollapsed(showChatbotPanel)
+  }, [showChatbotPanel])
+  
   // Define integration items
   const integrations = [
     { name: 'Gmail', connected: true, icon: 'https://www.gstatic.com/images/branding/product/1x/gmail_2020q4_32dp.png' },
@@ -1179,22 +1449,40 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     { name: 'Google Sheets', connected: true, icon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/Google_Sheets_2020_Logo.svg/32px-Google_Sheets_2020_Logo.svg.png' }
   ]
   
-  // Scroll to bottom of chat when new messages are added
+  // Scroll to show new messages after animation completes
   useEffect(() => {
-    if (chatContainerRef.current) {
+    if (chatContainerRef.current && chatMessages.length > 0) {
       const container = chatContainerRef.current
       
-      // Use requestAnimationFrame to ensure DOM has updated after Framer Motion animations
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          container.scrollTo({
-            top: container.scrollHeight,
-            behavior: 'smooth'
+      // Delay scroll to allow the slide animation to be visible first
+      setTimeout(() => {
+        // Find the last user message to scroll to it specifically
+        const lastUserMessageIndex = chatMessages.map((m, i) => m.role === 'user' ? i : -1).filter(i => i !== -1).pop()
+        
+        if (lastUserMessageIndex !== undefined) {
+          // Scroll to position the user message near the top with some padding
+          requestAnimationFrame(() => {
+            const userMessageElement = container.querySelector(`[data-message-index="${lastUserMessageIndex}"]`)
+            
+            if (userMessageElement && userMessageElement instanceof HTMLElement) {
+              const containerRect = container.getBoundingClientRect()
+              const elementRect = userMessageElement.getBoundingClientRect()
+              const headerHeight = 60 // Chat header height
+              const padding = 20 // Padding from top
+              
+              // Calculate scroll position to place message near top
+              const targetScrollTop = container.scrollTop + (elementRect.top - containerRect.top) - headerHeight - padding
+              
+              container.scrollTo({
+                top: Math.max(0, targetScrollTop),
+                behavior: 'smooth'
+              })
+            }
           })
-        })
-      })
+        }
+      }, 400) // Wait for animation to be visible (400ms matches our spring animation duration)
     }
-  }, [chatMessages, isTyping, streamingStatus])
+  }, [chatMessages])
   
   // Auto-resize is now handled by the kibo-ui AIInputTextarea component
   
@@ -1379,12 +1667,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         console.log('Received regular JSON response:', result)
         setToolResponse(result)
         
-        let responseMessage = "I'd be happy to help with that!"
         if (result && result.text) {
-          responseMessage = result.text
+          setChatMessages(prev => [...prev, {role: 'assistant', content: result.text}])
         }
-        
-        setChatMessages(prev => [...prev, {role: 'assistant', content: responseMessage}])
         return
       }
       
@@ -1534,26 +1819,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   }])
                   break
                   
-                // Legacy event types for backwards compatibility
-                case 'status':
-                  setStreamingStatus(parsed.data.message)
-                  break
-                  
+                // Legacy event types for backwards compatibility  
                 case 'step':
                   setStreamingStatus(`Step ${parsed.data.turn}: ${parsed.data.action}`)
-                  break
-                  
-                case 'tool_selected':
-                  // Handle legacy tool selection event
-                  if (parsed.data && parsed.data.toolNames) {
-                    setChatMessages(prev => [...prev, {
-                      role: 'tool_selection', 
-                      content: '', 
-                      toolNames: parsed.data.toolNames,
-                      toolCompleted: false
-                    }])
-                    setStreamingStatus(`Using ${parsed.data.toolNames.join(', ')}`)
-                  }
                   break
                   
                 default:
@@ -1577,12 +1845,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         console.log('Final response received:', finalResponse)
         setToolResponse(finalResponse)
         
-        let responseMessage = "I'd be happy to help with that!"
         if (finalResponse.text) {
-          responseMessage = finalResponse.text
+          setChatMessages(prev => [...prev, {role: 'assistant', content: finalResponse.text}])
         }
-        
-        setChatMessages(prev => [...prev, {role: 'assistant', content: responseMessage}])
       }
       
     } catch (error) {
@@ -1744,7 +2009,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <motion.div 
             className="bg-white rounded-md overflow-hidden border border-gray-200 flex flex-col"
             animate={{
-              width: showChatbotPanel ? '65%' : '100%'
+              width: showChatbotPanel ? '68%' : '100%'
             }}
             transition={{
               type: "tween",
@@ -1752,7 +2017,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               duration: 0.35
             }}
             style={{
-              width: showChatbotPanel ? '65%' : '100%'
+              width: showChatbotPanel ? '68%' : '100%'
             }}
           >
             {/* Header moved inside main content */}
@@ -2118,51 +2383,45 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </div>
           </motion.div>
 
-          {/* Chatbot Panel - using simple slide animation */}
+          {/* Chatbot Panel - clean width animation with fixed right edge */}
           <AnimatePresence mode="sync">
             {showChatbotPanel && (
               <motion.div 
-                className="bg-white rounded-md border border-gray-200 ml-2 overflow-hidden flex flex-col"
+                className="bg-white rounded-md border border-gray-200 overflow-hidden flex flex-col"
+                style={{ marginLeft: '8px' }} // 8px gap (equivalent to ml-2)
                 initial={{ 
                   width: 0, 
-                  opacity: 0, 
-                  x: 80,
-                  scale: 0.95,
-                  boxShadow: "0px 0px 0px rgba(0, 0, 0, 0)",
-                  borderColor: "rgba(229, 231, 235, 0)"
+                  opacity: 0
                 }}
                 animate={{ 
-                  width: "35%", 
-                  opacity: 1,
-                  x: 0,
-                  scale: 1,
-                  boxShadow: "0px 4px 20px rgba(0, 0, 0, 0.08)",
-                  borderColor: "rgba(229, 231, 235, 1)"
+                  width: "32%", 
+                  opacity: 1
                 }}
                 exit={{ 
                   width: 0, 
-                  opacity: 0,
-                  x: 80,
-                  scale: 0.95,
-                  boxShadow: "0px 0px 0px rgba(0, 0, 0, 0)",
-                  borderColor: "rgba(229, 231, 235, 0)"
+                  opacity: 0
                 }}
                 transition={{
                   type: "tween",
                   ease: "easeInOut",
-                  duration: 0.35,
-                  opacity: { duration: 0.3 },
-                  scale: { duration: 0.3 },
-                  boxShadow: { duration: 0.3 },
-                  borderColor: { duration: 0.3 }
+                  duration: 0.3,
+                  opacity: { 
+                    duration: showChatbotPanel ? 0.15 : 0.1 // Fade out faster when closing
+                  }
                 }}
               >
                 {/* Chat header */}
                 <motion.div 
-                  className="p-4 border-b flex items-center justify-between"
-                  initial={{ opacity: 0, y: -5 }}
+                  className="h-16 px-4 border-b flex items-center justify-between"
+                  initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ type: "tween", ease: "easeOut", duration: 0.25, delay: 0.05 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ 
+                    type: "tween", 
+                    ease: "easeOut", 
+                    duration: 0.25, 
+                    delay: 0.1 
+                  }}
                 >
                   <div className="flex items-center gap-2">
                     <div className="font-semibold text-sm bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent">
@@ -2315,12 +2574,18 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <motion.div 
                   ref={chatContainerRef}
                   className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ type: "tween", ease: "easeOut", duration: 0.25, delay: 0.1 }}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ 
+                    type: "tween", 
+                    ease: "easeOut", 
+                    duration: 0.25, 
+                    delay: 0.15 
+                  }}
                 >
                   <div className="space-y-4">
-                    {/* Display all chat messages in chronological order */}
+                    {/* Display all messages with smooth transitions */}
                     {chatMessages.map((msg, index) => {
                       const isLastUserMessage = msg.role === 'user' && index === chatMessages.length - 1
                       const isLastAssistantMessage = msg.role === 'assistant' && index === chatMessages.length - 1
@@ -2331,12 +2596,21 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           <motion.div 
                             key={`tool-${index}`}
                             className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3 py-2 mb-3 text-sm"
-                            initial={{ opacity: 0, y: 5 }}
-                            animate={{ opacity: 1, y: 0 }}
+                            initial={{ 
+                              opacity: 0, 
+                              y: 20,
+                              scale: 0.95
+                            }}
+                            animate={{ 
+                              opacity: 1, 
+                              y: 0,
+                              scale: 1
+                            }}
                             transition={{ 
-                              type: "tween",
-                              duration: 0.2,
-                              ease: "easeOut"
+                              type: "spring",
+                              damping: 20,
+                              stiffness: 300,
+                              duration: 0.4
                             }}
                           >
                             {/* Loading animation, success tick, or failure cross */}
@@ -2383,20 +2657,28 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                         )
                       } else if (msg.role === 'user') {
                         // User messages - show in gray box when it's the last message and streaming, otherwise show normally
-                        if (isLastUserMessage && isStreaming) {
+                        if (isLastUserMessage && (isStreaming || streamingStatus)) {
                           return (
                             <motion.div 
                               key={`user-${index}`} 
+                              data-message-index={index}
                               className="bg-gray-100 border border-gray-200 rounded-md p-2 relative min-h-fit flex items-start gap-2"
-                              initial={{ opacity: 0 }}
+                              initial={{ 
+                                opacity: 0,
+                                y: 60,
+                                scale: 0.95
+                              }}
                               animate={{ 
                                 opacity: 1,
+                                y: 0,
+                                scale: 1,
                                 height: "auto"
                               }}
                               transition={{ 
-                                type: "tween",
-                                duration: 0.2,
-                                ease: "easeOut"
+                                type: "spring",
+                                damping: 25,
+                                stiffness: 300,
+                                duration: 0.6
                               }}
                             >
                               {/* Merchant logo in top-left corner - fixed position */}
@@ -2433,16 +2715,24 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           return (
                             <motion.div 
                               key={`user-${index}`} 
+                              data-message-index={index}
                               className="bg-gray-100 border border-gray-200 rounded-md p-2 min-h-fit flex items-start gap-2"
-                              initial={{ opacity: 0 }}
+                              initial={{ 
+                                opacity: 0,
+                                y: 60,
+                                scale: 0.95
+                              }}
                               animate={{ 
                                 opacity: 1,
+                                y: 0,
+                                scale: 1,
                                 height: "auto"
                               }}
                               transition={{ 
-                                type: "tween",
-                                duration: 0.25,
-                                ease: "easeOut"
+                                type: "spring",
+                                damping: 25,
+                                stiffness: 300,
+                                duration: 0.6
                               }}
                               layout
                             >
@@ -2469,12 +2759,21 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           <motion.div 
                             key={`assistant-${index}`} 
                             className="text-sm text-gray-800 leading-relaxed"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
+                            initial={{ 
+                              opacity: 0,
+                              y: 20,
+                              scale: 0.98
+                            }}
+                            animate={{ 
+                              opacity: 1,
+                              y: 0,
+                              scale: 1
+                            }}
                             transition={{ 
-                              type: "tween",
-                              duration: 0.2,
-                              ease: "easeOut"
+                              type: "spring",
+                              damping: 20,
+                              stiffness: 300,
+                              duration: 0.5
                             }}
                           >
                             <AIResponse className="prose prose-sm max-w-none prose-headings:text-gray-800 prose-p:text-gray-800 prose-li:text-gray-800 prose-strong:text-gray-800">
@@ -2504,7 +2803,18 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 </motion.div>
                   
                 {/* Chat input at bottom - fixed position */}
-                <div className="p-4 bg-white">
+                <motion.div 
+                  className="p-4 bg-white"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ 
+                    type: "tween", 
+                    ease: "easeOut", 
+                    duration: 0.25, 
+                    delay: 0.2 
+                  }}
+                >
                   <AIInput onSubmit={(e: React.FormEvent) => {
                     e.preventDefault()
                     if (!isStreaming && userInput.trim()) {
@@ -2541,7 +2851,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       </AIInputSubmit>
                     </AIInputToolbar>
                   </AIInput>
-                </div>
+                </motion.div>
               </motion.div>
             )}
           </AnimatePresence>

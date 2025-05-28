@@ -27,7 +27,8 @@ import {
   Coffee,
   Image,
   Zap,
-  Sparkles
+  Sparkles,
+  Inbox
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -168,9 +169,14 @@ const navItems: NavItem[] = [
     ]
   },
   {
+    title: "Agents",
+    href: "/dashboard/agents",
+    icon: Bot,
+  },
+  {
     title: "Agent Inbox",
     href: "/dashboard/agent-inbox",
-    icon: Bot,
+    icon: Inbox,
   },
   {
     title: "Insights",
@@ -495,7 +501,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-normal transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 w-full h-10"
+                className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-normal transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 w-full h-9"
                 title="Create"
               >
                 <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
@@ -534,7 +540,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="group flex items-center justify-between w-full gap-3 rounded-md px-3 py-2 text-sm font-normal transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 h-10"
+                className="group flex items-center justify-between w-full gap-3 rounded-md px-3 py-2 text-sm font-normal transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 h-9"
               >
                 <div className="flex items-center gap-3 h-full">
                   <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
@@ -596,7 +602,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
         <ul className="space-y-1">
           {navItems.map((item) => {
             const isActive = item.title === "Dashboard" 
-              ? (pathname === item.href || pathname.match(/^\/dashboard\/(?!settings|agent-inbox).*$/)) 
+              ? pathname === item.href // Only exact match for Dashboard
               : (pathname === item.href || pathname.startsWith(`${item.href}/`))
             
             return (
@@ -606,7 +612,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                     <CollapsibleTrigger asChild>
                       <button
                         className={cn(
-                          "group flex items-center justify-between w-full gap-3 rounded-md px-3 text-sm font-normal transition-all duration-200 ease-in-out h-10",
+                          "group flex items-center justify-between w-full gap-3 rounded-md px-3 text-sm font-normal transition-all duration-200 ease-in-out h-9",
                           isActive 
                             ? "bg-[#007AFF]/10 text-[#007AFF]" 
                             : "text-gray-800 hover:bg-[#007AFF]/5"
@@ -688,7 +694,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                   <Link
                     href={item.href}
                     className={cn(
-                      "group flex items-center gap-3 rounded-md px-3 text-sm font-normal transition-all duration-200 ease-in-out whitespace-nowrap relative h-10",
+                      "group flex items-center gap-3 rounded-md px-3 text-sm font-normal transition-all duration-200 ease-in-out whitespace-nowrap relative h-9",
                       isActive 
                         ? "bg-[#007AFF]/10 text-[#007AFF]" 
                         : "text-gray-800 hover:bg-[#007AFF]/5"

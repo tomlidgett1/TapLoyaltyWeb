@@ -11,7 +11,7 @@ import {onRequest} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import {onCall} from "firebase-functions/v2/https";
 import * as functions from "firebase-functions";
-import * as cors from 'cors';
+import cors from 'cors';
 import * as admin from 'firebase-admin';
 import * as OpenAI from 'openai';
 
@@ -32,12 +32,7 @@ admin.initializeApp();
 // This function will make your OpenAI API key available to your app
 export const getOpenAIKey = onCall({
   region: "us-central1",
-  cors: {
-    origin: ['https://taployalty.com.au', 'https://www.taployalty.com.au', 'https://taptap--tap-loyalty-fb6d0.us-central1.hosted.app', 'http://localhost:3000', 'http://localhost:3001'],
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    maxAge: 3600
-  }
+  cors: true
 }, async (request) => {
   try {
     logger.info("OpenAI API key requested", {

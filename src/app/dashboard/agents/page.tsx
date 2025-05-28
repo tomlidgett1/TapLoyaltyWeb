@@ -1,29 +1,107 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/use-toast'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogOverlay, DialogPortal } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { ArrowLeft, Headphones, Inbox, Brain, BarChart3, Receipt, Users, ShoppingCart, DollarSign, Calculator, Settings, Plus } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
+import { Separator } from '@/components/ui/separator'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ArrowLeft, Headphones, Inbox, Brain, BarChart3, Receipt, Users, ShoppingCart, DollarSign, Calculator, Settings, Plus, FileText, Mail, MessageSquare, Clock, CheckCircle, X, ArrowUpRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import Image from 'next/image'
+import { useAuth } from '@/contexts/auth-context'
+import { doc, setDoc, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import * as DialogPrimitive from "@radix-ui/react-dialog"
 
 export default function AgentsPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { user } = useAuth()
   const [isIntegrationsOpen, setIsIntegrationsOpen] = useState(false)
   const [isRequestAgentOpen, setIsRequestAgentOpen] = useState(false)
+  const [isCustomerServiceModalOpen, setIsCustomerServiceModalOpen] = useState(false)
+  const [isEmailSummaryModalOpen, setIsEmailSummaryModalOpen] = useState(false)
+  const [connectingAgents, setConnectingAgents] = useState<Set<string>>(new Set())
+  const [enrolledAgents, setEnrolledAgents] = useState<Record<string, any>>({})
+  const [agentSettings, setAgentSettings] = useState({
+    autoReply: true,
+    vaultAccess: true,
+    webSearching: false,
+    lightspeedIntegration: {
+      enabled: false,
+      priceLookup: false,
+      inventoryLookup: false
+    },
+    squareIntegration: {
+      enabled: false,
+      priceLookup: false,
+      inventoryLookup: false
+    },
+    businessHours: {
+      enabled: true,
+      timezone: 'Australia/Sydney',
+      monday: { start: '09:00', end: '17:00', enabled: true },
+      tuesday: { start: '09:00', end: '17:00', enabled: true },
+      wednesday: { start: '09:00', end: '17:00', enabled: true },
+      thursday: { start: '09:00', end: '17:00', enabled: true },
+      friday: { start: '09:00', end: '17:00', enabled: true },
+      saturday: { start: '10:00', end: '16:00', enabled: false },
+      sunday: { start: '10:00', end: '16:00', enabled: false }
+    },
+    businessContext: '',
+    forbiddenResponses: [],
+    greeting: '',
+    signOff: '',
+    communicationStyle: 'professional'
+  })
+  const [testEmail, setTestEmail] = useState({
+    from: '',
+    subject: '',
+    body: '',
+    response: '',
+    isGenerating: false
+  })
+  const [showConfiguration, setShowConfiguration] = useState(false)
+  const [showEmailSummaryConfiguration, setShowEmailSummaryConfiguration] = useState(false)
+  const [integrationStatuses, setIntegrationStatuses] = useState({
+    gmail: true,
+    mailchimp: false,
+    vault: true
+  })
   const [requestForm, setRequestForm] = useState({
     agentName: '',
     description: '',
     useCase: '',
     integrations: '',
     email: ''
+  })
+  const [businessContextItems, setBusinessContextItems] = useState<string[]>([])
+  const [newContextItem, setNewContextItem] = useState('')
+  const [activeConfigTab, setActiveConfigTab] = useState('general')
+  const [newRule, setNewRule] = useState('')
+  const [businessRules, setBusinessRules] = useState<string[]>([])
+  const [newForbiddenItem, setNewForbiddenItem] = useState('')
+  const [forbiddenItems, setForbiddenItems] = useState<string[]>([])
+  const [emailSummarySettings, setEmailSummarySettings] = useState({
+    enabled: true,
+    lookbackPeriod: '30',
+    schedule: {
+      frequency: 'daily',
+      time: '12:00',
+      days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+    },
+    emailFormat: 'summary',
+    priorityOnly: true,
+    includeAttachments: true
   })
 
   // Define agent type
@@ -34,6 +112,8 @@ export default function AgentsPage() {
     status: 'active' | 'coming-soon'
     features: string[]
     integrations: string[]
+    requiredIntegrations?: string[]
+    optionalIntegrations?: string[]
     customisable?: boolean
     frequencies?: string[]
   }
@@ -47,7 +127,9 @@ export default function AgentsPage() {
         description: 'Handle customer inquiries and support requests automatically with AI-powered responses',
         status: 'active' as const,
         features: ['24/7 Support', 'Auto-responses', 'Ticket routing', 'Sentiment analysis'],
-        integrations: ['gmail.png', 'mailchimp.png']
+        integrations: ['gmail.png', 'vault.png'],
+        requiredIntegrations: ['gmail.png', 'vault.png'],
+        optionalIntegrations: ['square.png', 'lslogo.png']
       },
       {
         id: 'email-summary',
@@ -132,6 +214,16 @@ export default function AgentsPage() {
     ]
   }
 
+  // Define integration name mapping
+  const integrationNames: Record<string, string> = {
+    'gmail.png': 'Gmail',
+    'mailchimp.png': 'Mailchimp',
+    'xero.png': 'Xero',
+    'square.png': 'Square',
+    'lslogo.png': 'Lightspeed',
+    'vault.png': 'Vault'
+  }
+
   // Define available integrations
   const availableIntegrations = [
     { id: 'xero', name: 'Xero', description: 'Accounting and bookkeeping', logo: 'xero.png', status: 'active' },
@@ -146,16 +238,56 @@ export default function AgentsPage() {
     { id: 'salesforce', name: 'Salesforce', description: 'Customer relationship management', logo: 'square.png', status: 'coming-soon' },
   ]
 
-  const handleAgentAction = (agent: Agent) => {
+  // Load enrolled agents when component mounts
+  useEffect(() => {
+    const loadEnrolledAgents = async () => {
+      if (!user?.uid) return
+      
+      try {
+        // Load customer-service agent
+        const customerServiceRef = doc(db, 'merchants', user.uid, 'agentsenrolled', 'customer-service')
+        const customerServiceDoc = await getDoc(customerServiceRef)
+        
+        if (customerServiceDoc.exists()) {
+          const agentData = customerServiceDoc.data()
+          setEnrolledAgents(prev => ({
+            ...prev,
+            'customer-service': agentData
+          }))
+        }
+
+        // Load email-summary agent
+        const emailSummaryRef = doc(db, 'merchants', user.uid, 'agentsenrolled', 'email-summary')
+        const emailSummaryDoc = await getDoc(emailSummaryRef)
+        
+        if (emailSummaryDoc.exists()) {
+          const agentData = emailSummaryDoc.data()
+          setEnrolledAgents(prev => ({
+            ...prev,
+            'email-summary': agentData
+          }))
+          
+          // Update local settings if they exist
+          if (agentData.settings) {
+            setEmailSummarySettings(agentData.settings)
+          }
+        }
+      } catch (error) {
+        console.error('Error loading enrolled agents:', error)
+      }
+    }
+
+    loadEnrolledAgents()
+  }, [user?.uid])
+
+  const handleAgentAction = async (agent: Agent) => {
     if (agent.id === 'email-summary') {
-      router.push('/dashboard?action=email-summary')
+      setIsEmailSummaryModalOpen(true)
     } else if (agent.id === 'insights') {
       router.push('/insights')
     } else if (agent.id === 'customer-service') {
-      toast({
-        title: "Customer Service Agent",
-        description: "Customer service agent functionality coming soon!"
-      })
+      // Open the customer service modal
+      setIsCustomerServiceModalOpen(true)
     } else if (agent.id === 'sales-analysis') {
       toast({
         title: "Sales Analysis Agent",
@@ -215,13 +347,244 @@ export default function AgentsPage() {
     setIsRequestAgentOpen(false)
   }
 
+  const handleCustomerServiceConnect = async () => {
+    const agent = agentSections['Customer Service'].find(a => a.id === 'customer-service')
+    if (!agent) return
+
+    // Set loading state
+    setConnectingAgents(prev => new Set([...prev, agent.id]))
+    
+    try {
+      // Get merchantId from authenticated user
+      if (!user?.uid) {
+        throw new Error('User not authenticated')
+      }
+      
+      const merchantId = user.uid
+      const isEnrolled = enrolledAgents['customer-service']?.status === 'active'
+      
+      if (isEnrolled) {
+        // Handle disconnect
+        const agentEnrollmentRef = doc(db, 'merchants', merchantId, 'agentsenrolled', 'customer-service')
+        await updateDoc(agentEnrollmentRef, {
+          status: 'inactive',
+          deactivatedAt: serverTimestamp(),
+          lastUpdated: serverTimestamp()
+        })
+        
+        // Update local state
+        setEnrolledAgents(prev => ({
+          ...prev,
+          'customer-service': {
+            ...prev['customer-service'],
+            status: 'inactive'
+          }
+        }))
+        
+        toast({
+          title: "Customer Service Agent Disconnected",
+          description: "Agent has been deactivated successfully."
+        })
+      } else {
+        // Handle connect
+        const response = await fetch('/api/enrollGmailTrigger', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ merchantId })
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+          
+          // Check if agent document already exists to preserve settings
+          const agentEnrollmentRef = doc(db, 'merchants', merchantId, 'agentsenrolled', 'customer-service')
+          const existingDoc = await getDoc(agentEnrollmentRef)
+          
+          // Prepare the base agent data
+          const baseAgentData = {
+            agentId: 'customer-service',
+            agentName: 'Customer Service Agent',
+            agentType: 'gmail-trigger',
+            status: 'active',
+            enrolledAt: serverTimestamp(),
+            triggerDetails: {
+              triggerName: 'GMAIL_NEW_GMAIL_MESSAGE',
+              app: 'gmail',
+              triggerId: result.data?.triggerId,
+              entityId: result.data?.entityId,
+              triggerStatus: result.data?.status
+            },
+            description: 'Handle customer inquiries and support requests automatically with AI-powered responses',
+            features: ['24/7 Support', 'Auto-responses', 'Ticket routing', 'Sentiment analysis'],
+            integrations: ['gmail'],
+            lastUpdated: serverTimestamp()
+          }
+          
+          // If document exists, preserve existing settings, otherwise use defaults
+          const agentData = existingDoc.exists() 
+            ? {
+                ...baseAgentData,
+                settings: existingDoc.data().settings || {
+                  autoReply: agentSettings.autoReply
+                }
+              }
+            : {
+                ...baseAgentData,
+                settings: {
+                  autoReply: agentSettings.autoReply
+                }
+              }
+          
+          try {
+            await setDoc(agentEnrollmentRef, agentData)
+            
+            // Update local state
+            setEnrolledAgents(prev => ({
+              ...prev,
+              'customer-service': agentData
+            }))
+            
+            console.log('✅ Agent enrollment saved to Firestore')
+          } catch (firestoreError) {
+            console.error('❌ Failed to save enrollment to Firestore:', firestoreError)
+            // Don't fail the whole operation if Firestore save fails
+          }
+          
+          toast({
+            title: "Customer Service Agent Connected!",
+            description: "Gmail trigger has been enrolled successfully."
+          })
+          
+          // Close the modal
+          setIsCustomerServiceModalOpen(false)
+        } else {
+          const error = await response.json()
+          throw new Error(error.error || error.message || 'Failed to enroll Gmail trigger')
+        }
+      }
+    } catch (error) {
+      console.error('Error handling agent action:', error)
+      toast({
+        title: "Action Failed",
+        description: error instanceof Error ? error.message : "Failed to perform agent action. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      // Remove loading state
+      setConnectingAgents(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(agent.id)
+        return newSet
+      })
+    }
+  }
+
+  const handleEmailSummaryConnect = async () => {
+    const agent = agentSections['Customer Service'].find(a => a.id === 'email-summary')
+    if (!agent) return
+
+    // Set loading state
+    setConnectingAgents(prev => new Set([...prev, agent.id]))
+    
+    try {
+      // Get merchantId from authenticated user
+      if (!user?.uid) {
+        throw new Error('User not authenticated')
+      }
+      
+      const merchantId = user.uid
+      const isEnrolled = enrolledAgents['email-summary']?.status === 'active'
+      
+      if (isEnrolled) {
+        // Handle disconnect
+        const agentEnrollmentRef = doc(db, 'merchants', merchantId, 'agentsenrolled', 'email-summary')
+        await updateDoc(agentEnrollmentRef, {
+          status: 'inactive',
+          deactivatedAt: serverTimestamp(),
+          lastUpdated: serverTimestamp()
+        })
+        
+        // Update local state
+        setEnrolledAgents(prev => ({
+          ...prev,
+          'email-summary': {
+            ...prev['email-summary'],
+            status: 'inactive'
+          }
+        }))
+        
+        toast({
+          title: "Email Summary Agent Disconnected",
+          description: "Agent has been deactivated successfully."
+        })
+      } else {
+        // Handle connect - Email Summary Agent doesn't need special API calls like Gmail trigger
+        const agentEnrollmentRef = doc(db, 'merchants', merchantId, 'agentsenrolled', 'email-summary')
+        const existingDoc = await getDoc(agentEnrollmentRef)
+        
+        // Prepare the base agent data
+        const baseAgentData = {
+          agentId: 'email-summary',
+          agentName: 'Email Summary Agent',
+          agentType: 'email-summary',
+          status: 'active',
+          enrolledAt: serverTimestamp(),
+          description: 'Summarise and analyse your email communications for better customer insights',
+          features: ['Daily summaries', 'Priority detection', 'Action items', 'Thread analysis'],
+          integrations: ['gmail'],
+          lastUpdated: serverTimestamp()
+        }
+        
+        // If document exists, preserve existing settings, otherwise use defaults
+        const agentData = existingDoc.exists() 
+          ? {
+              ...baseAgentData,
+              settings: existingDoc.data().settings || emailSummarySettings
+            }
+          : {
+              ...baseAgentData,
+              settings: emailSummarySettings
+            }
+        
+        await setDoc(agentEnrollmentRef, agentData)
+        
+        // Update local state
+        setEnrolledAgents(prev => ({
+          ...prev,
+          'email-summary': agentData
+        }))
+        
+        toast({
+          title: "Email Summary Agent Connected!",
+          description: "Agent has been activated successfully."
+        })
+        
+        // Close the modal
+        setIsEmailSummaryModalOpen(false)
+      }
+    } catch (error) {
+      console.error('Error handling Email Summary agent action:', error)
+      toast({
+        title: "Action Failed",
+        description: error instanceof Error ? error.message : "Failed to perform agent action. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      // Remove loading state
+      setConnectingAgents(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(agent.id)
+        return newSet
+      })
+    }
+  }
+
   return (
     <div className="px-6 py-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-gray-900">AI Agents</h1>
-        </div>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -252,44 +615,110 @@ export default function AgentsPage() {
               <h2 className="text-base font-medium text-gray-900">{sectionName}</h2>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {agents.map((agent) => (
-                <div key={agent.id} className="bg-gray-50 border border-gray-200 rounded-md p-4 flex flex-col relative">
-                  {/* Connect Button - Top Right */}
-                  <div className="absolute top-3 right-3">
-                    <Button 
-                      size="sm" 
-                      variant={agent.status === 'active' ? 'default' : 'outline'}
-                      disabled={agent.status === 'coming-soon'}
-                      className="rounded-md px-4"
-                      onClick={() => handleAgentAction(agent)}
-                    >
-                      {agent.status === 'active' ? 'Connect' : 'Coming Soon'}
-                    </Button>
+                <div key={agent.id} className="bg-gray-50 border border-gray-200 rounded-md p-5 flex flex-col hover:border-gray-300 transition-colors">
+                  {/* Header with title and button */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2 flex-1">
+                      <h3 className="text-base font-medium text-gray-900">{agent.name}</h3>
+                      {enrolledAgents[agent.id]?.status === 'active' && (
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span className="text-xs text-green-600 font-medium">Connected</span>
+                        </div>
+                      )}
+                    </div>
+                    {(() => {
+                      const isEnrolled = enrolledAgents[agent.id]?.status === 'active'
+                      const isConnecting = connectingAgents.has(agent.id)
+                      const isComingSoon = agent.status === 'coming-soon'
+                      
+                      return (
+                        <Button 
+                          size="sm" 
+                          variant={isEnrolled ? 'secondary' : (agent.status === 'active' ? 'default' : 'outline')}
+                          disabled={isComingSoon || isConnecting || !user}
+                          className="rounded-md text-xs px-3 py-1 h-7 ml-3"
+                          onClick={() => handleAgentAction(agent)}
+                        >
+                          {isConnecting 
+                            ? (isEnrolled ? 'Connecting...' : 'Connecting...') 
+                            : isEnrolled 
+                              ? 'Configure' 
+                              : (agent.status === 'active' ? 'Connect' : 'Coming Soon')
+                          }
+                        </Button>
+                      )
+                    })()}
                   </div>
 
-                  {/* Integration Logos */}
-                  <div className="flex gap-1 mb-3">
-                    {agent.integrations.slice(0, 3).map((integration, index) => (
-                      <div key={index} className="relative w-6 h-6 bg-white rounded-md border border-gray-200 shadow-sm flex items-center justify-center">
-                        <Image
-                          src={`/${integration}`}
-                          alt={integration.split('.')[0]}
-                          width={20}
-                          height={20}
-                          className="object-contain"
-                        />
-                      </div>
-                    ))}
-                    {agent.integrations.length > 3 && (
-                      <div className="w-6 h-6 bg-gray-200 rounded-md border border-gray-200 shadow-sm flex items-center justify-center">
-                        <span className="text-xs text-gray-600 font-medium">+{agent.integrations.length - 3}</span>
-                      </div>
-                    )}
-                  </div>
+                  {/* Description */}
+                  <p className="text-sm text-gray-600 mb-4 flex-1 leading-relaxed">{agent.description}</p>
 
-                  <h3 className="text-base font-semibold mb-2 text-gray-900 pr-20">{agent.name}</h3>
-                  <p className="text-sm text-gray-600 mb-4 flex-1">{agent.description}</p>
+                  {/* Integration Logos - Bottom */}
+                  <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                    <TooltipProvider>
+                      {/* Required Integrations */}
+                      <div className="flex gap-1.5">
+                        {(agent.requiredIntegrations || agent.integrations).map((integration, index) => (
+                          <Tooltip key={`required-${index}`}>
+                            <TooltipTrigger asChild>
+                              <div className="w-5 h-5 bg-gray-50 rounded border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors cursor-help">
+                                {integration === 'vault.png' ? (
+                                  <FileText className="h-3 w-3 text-blue-600" />
+                                ) : (
+                                  <Image
+                                    src={`/${integration}`}
+                                    alt={integration.split('.')[0]}
+                                    width={14}
+                                    height={14}
+                                    className="object-contain"
+                                  />
+                                )}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent className="bg-gray-900 text-white border-gray-700">
+                              <p>{integrationNames[integration] || integration.split('.')[0]} (Required)</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ))}
+                      </div>
+
+                      {/* Separator */}
+                      {agent.optionalIntegrations && agent.optionalIntegrations.length > 0 && (
+                        <>
+                          <div className="w-px h-4 bg-gray-300"></div>
+                          
+                          {/* Optional Integrations */}
+                          <div className="flex gap-1.5">
+                            {agent.optionalIntegrations.map((integration, index) => (
+                              <Tooltip key={`optional-${index}`}>
+                                <TooltipTrigger asChild>
+                                  <div className="w-5 h-5 bg-gray-50 rounded border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors cursor-help opacity-60">
+                                    {integration === 'vault.png' ? (
+                                      <FileText className="h-3 w-3 text-blue-600" />
+                                    ) : (
+                                      <Image
+                                        src={`/${integration}`}
+                                        alt={integration.split('.')[0]}
+                                        width={14}
+                                        height={14}
+                                        className="object-contain"
+                                      />
+                                    )}
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-gray-900 text-white border-gray-700">
+                                  <p>{integrationNames[integration] || integration.split('.')[0]} (Optional)</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </TooltipProvider>
+                  </div>
                 </div>
               ))}
             </div>
@@ -418,6 +847,1367 @@ export default function AgentsPage() {
             </div>
           </div>
         </DialogContent>
+      </Dialog>
+
+      {/* Customer Service Agent Details Modal */}
+      <Dialog open={isCustomerServiceModalOpen} onOpenChange={setIsCustomerServiceModalOpen}>
+        <DialogPortal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+          <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-5xl h-[90vh] translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg overflow-hidden p-0">
+            <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground z-10">
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </DialogPrimitive.Close>
+          <div className="flex h-full">
+            {/* Main Content - Left Section */}
+            <div className="flex-1 flex flex-col h-full p-6 pr-4 overflow-y-auto">
+              <DialogHeader className="mb-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <DialogTitle className="text-xl font-semibold">Customer Service Agent</DialogTitle>
+                    {enrolledAgents['customer-service']?.status === 'active' && (
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span className="text-xs text-green-600 font-medium">Connected</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowConfiguration(!showConfiguration)}
+                      className="rounded-md"
+                    >
+                      {showConfiguration ? 'Back to Overview' : 'Configuration'}
+                    </Button>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              {/* Main Content */}
+              <div className="space-y-6">
+                {!showConfiguration ? (
+                  <>
+                    {/* Agent Description */}
+                    <div>
+                      <h3 className="text-base font-medium mb-3">How this agent works</h3>
+                      <div className="text-sm text-gray-600 leading-relaxed space-y-2">
+                        <div className="flex gap-3">
+                          <span className="font-medium text-gray-900">1.</span>
+                          <span>Receives and analyses incoming emails to determine if they're customer inquiries based on your business services</span>
+                        </div>
+                        <div className="flex gap-3">
+                          <span className="font-medium text-gray-900">2.</span>
+                          <span>Reviews your agent settings and documents in your customer service vault</span>
+                        </div>
+                        <div className="flex gap-3">
+                          <span className="font-medium text-gray-900">3.</span>
+                          <span>Generates an appropriate response using your business context and guidelines</span>
+                        </div>
+                        <div className="flex gap-3">
+                          <span className="font-medium text-gray-900">4.</span>
+                          <span>If human approval is required, sends the response to your agent inbox for review. If not, automatically replies to the customer</span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Configuration Settings with Tabs */}
+                    <div className="h-full">
+                      <h3 className="text-base font-medium mb-4">Agent Configuration</h3>
+                      
+                      <Tabs value={activeConfigTab} onValueChange={setActiveConfigTab} className="w-full">
+                        <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit mb-6">
+                          <button
+                            onClick={() => setActiveConfigTab("general")}
+                            className={cn(
+                              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                              activeConfigTab === "general"
+                                ? "text-gray-800 bg-white shadow-sm"
+                                : "text-gray-600 hover:bg-gray-200/70"
+                            )}
+                          >
+                            <Settings className="h-3 w-3" />
+                            General
+                          </button>
+                          <button
+                            onClick={() => setActiveConfigTab("hours")}
+                            className={cn(
+                              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                              activeConfigTab === "hours"
+                                ? "text-gray-800 bg-white shadow-sm"
+                                : "text-gray-600 hover:bg-gray-200/70"
+                            )}
+                          >
+                            <Clock className="h-3 w-3" />
+                            Business Hours
+                          </button>
+                          <button
+                            onClick={() => setActiveConfigTab("context")}
+                            className={cn(
+                              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                              activeConfigTab === "context"
+                                ? "text-gray-800 bg-white shadow-sm"
+                                : "text-gray-600 hover:bg-gray-200/70"
+                            )}
+                          >
+                            <FileText className="h-3 w-3" />
+                            Business Context
+                          </button>
+                          <button
+                            onClick={() => setActiveConfigTab("forbidden")}
+                            className={cn(
+                              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                              activeConfigTab === "forbidden"
+                                ? "text-gray-800 bg-white shadow-sm"
+                                : "text-gray-600 hover:bg-gray-200/70"
+                            )}
+                          >
+                            <X className="h-3 w-3" />
+                            Forbidden
+                          </button>
+                          <button
+                            onClick={() => setActiveConfigTab("advanced")}
+                            className={cn(
+                              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                              activeConfigTab === "advanced"
+                                ? "text-gray-800 bg-white shadow-sm"
+                                : "text-gray-600 hover:bg-gray-200/70"
+                            )}
+                          >
+                            <Brain className="h-3 w-3" />
+                            Advanced
+                          </button>
+                          <button
+                            onClick={() => setActiveConfigTab("test")}
+                            className={cn(
+                              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                              activeConfigTab === "test"
+                                ? "text-gray-800 bg-white shadow-sm"
+                                : "text-gray-600 hover:bg-gray-200/70"
+                            )}
+                          >
+                            <MessageSquare className="h-3 w-3" />
+                            Test
+                          </button>
+                        </div>
+                        
+                        <TabsContent value="general" className="space-y-4 mt-6">
+                          <div className="bg-gray-50 p-4 rounded-md space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label htmlFor="auto-reply" className="text-sm font-medium">Auto Reply</Label>
+                                <p className="text-xs text-gray-600">
+                                  {agentSettings.autoReply 
+                                    ? "Automatically respond to incoming emails" 
+                                    : "Responses will be sent to your agent inbox for approval"
+                                  }
+                                </p>
+                              </div>
+                              <Switch
+                                id="auto-reply"
+                                checked={agentSettings.autoReply}
+                                onCheckedChange={(checked) => 
+                                  setAgentSettings(prev => ({ ...prev, autoReply: checked }))
+                                }
+                              />
+                            </div>
+                            
+                            <Separator />
+                            
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label htmlFor="vault-access" className="text-sm font-medium">Allow Access to Customer Service Vault</Label>
+                                <p className="text-xs text-gray-600">
+                                  {agentSettings.vaultAccess 
+                                    ? "Agent can access files and documents in your customer service vault" 
+                                    : "Agent will not use vault files for responses"
+                                  }
+                                </p>
+                              </div>
+                              <Switch
+                                id="vault-access"
+                                checked={agentSettings.vaultAccess}
+                                onCheckedChange={(checked) => 
+                                  setAgentSettings(prev => ({ ...prev, vaultAccess: checked }))
+                                }
+                              />
+                            </div>
+                            
+                            <Separator />
+                            
+                            <div>
+                              <Label htmlFor="communication-style" className="text-sm font-medium">Communication Style</Label>
+                              <p className="text-xs text-gray-600 mb-3">Choose how the agent should communicate with customers</p>
+                              <Select
+                                value={agentSettings.communicationStyle}
+                                onValueChange={(value) => 
+                                  setAgentSettings(prev => ({ ...prev, communicationStyle: value }))
+                                }
+                              >
+                                <SelectTrigger className="w-full rounded-md">
+                                  <SelectValue placeholder="Select communication style" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="professional">Professional</SelectItem>
+                                  <SelectItem value="friendly">Friendly</SelectItem>
+                                  <SelectItem value="casual">Casual</SelectItem>
+                                  <SelectItem value="relaxed">Relaxed</SelectItem>
+                                  <SelectItem value="formal">Formal</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            
+                            <Separator />
+                            
+                            <div>
+                              <Label htmlFor="greeting" className="text-sm font-medium">Email Greeting</Label>
+                              <p className="text-xs text-gray-600 mb-3">How the agent should start emails</p>
+                              <Input
+                                id="greeting"
+                                placeholder="e.g., Hi there, Hello, Dear valued customer"
+                                value={agentSettings.greeting}
+                                onChange={(e) => 
+                                  setAgentSettings(prev => ({ ...prev, greeting: e.target.value }))
+                                }
+                                className="rounded-md"
+                              />
+                            </div>
+                            
+                            <div>
+                              <Label htmlFor="sign-off" className="text-sm font-medium">Email Sign-off</Label>
+                              <p className="text-xs text-gray-600 mb-3">How the agent should end emails</p>
+                              <Input
+                                id="sign-off"
+                                placeholder="e.g., Best regards, Kind regards, Thank you"
+                                value={agentSettings.signOff}
+                                onChange={(e) => 
+                                  setAgentSettings(prev => ({ ...prev, signOff: e.target.value }))
+                                }
+                                className="rounded-md"
+                              />
+                            </div>
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="hours" className="space-y-4 mt-6">
+                          <div className="bg-gray-50 p-4 rounded-md space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label htmlFor="business-hours" className="text-sm font-medium">Enable Business Hours</Label>
+                                <p className="text-xs text-gray-600">Only respond during specified business hours</p>
+                              </div>
+                              <Switch
+                                id="business-hours"
+                                checked={agentSettings.businessHours.enabled}
+                                onCheckedChange={(checked) => 
+                                  setAgentSettings(prev => ({ 
+                                    ...prev, 
+                                    businessHours: { ...prev.businessHours, enabled: checked }
+                                  }))
+                                }
+                              />
+                            </div>
+                            {agentSettings.businessHours.enabled && (
+                              <>
+                                <Separator />
+                                <div className="space-y-3">
+                                  <Label className="text-sm font-medium">Operating Hours</Label>
+                                  {Object.entries(agentSettings.businessHours)
+                                    .filter(([key]) => !['enabled', 'timezone'].includes(key))
+                                    .map(([day, hours]: [string, any]) => (
+                                    <div key={day} className="flex items-center gap-3">
+                                      <div className="w-20 text-xs font-medium capitalize">{day}</div>
+                                      <Switch
+                                        checked={hours.enabled}
+                                        onCheckedChange={(checked) => 
+                                          setAgentSettings(prev => ({
+                                            ...prev,
+                                            businessHours: {
+                                              ...prev.businessHours,
+                                              [day]: { ...hours, enabled: checked }
+                                            }
+                                          }))
+                                        }
+                                      />
+                                      {hours.enabled && (
+                                        <>
+                                          <Input
+                                            type="time"
+                                            value={hours.start}
+                                            onChange={(e) => 
+                                              setAgentSettings(prev => ({
+                                                ...prev,
+                                                businessHours: {
+                                                  ...prev.businessHours,
+                                                  [day]: { ...hours, start: e.target.value }
+                                                }
+                                              }))
+                                            }
+                                            className="w-20 text-xs rounded-md"
+                                          />
+                                          <span className="text-xs">to</span>
+                                          <Input
+                                            type="time"
+                                            value={hours.end}
+                                            onChange={(e) => 
+                                              setAgentSettings(prev => ({
+                                                ...prev,
+                                                businessHours: {
+                                                  ...prev.businessHours,
+                                                  [day]: { ...hours, end: e.target.value }
+                                                }
+                                              }))
+                                            }
+                                            className="w-20 text-xs rounded-md"
+                                          />
+                                        </>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="context" className="space-y-4 mt-6">
+                          <div className="bg-gray-50 p-4 rounded-md space-y-4">
+                            <div>
+                              <Label htmlFor="business-context" className="text-sm font-medium">Business Context</Label>
+                              <p className="text-xs text-gray-600 mb-3">Provide context about your business to help the agent respond appropriately</p>
+                              <Textarea
+                                id="business-context"
+                                placeholder="e.g., We're a boutique coffee shop specialising in organic, fair-trade beans. We offer brewing classes and have a loyalty program..."
+                                value={agentSettings.businessContext}
+                                onChange={(e) => 
+                                  setAgentSettings(prev => ({ ...prev, businessContext: e.target.value }))
+                                }
+                                className="rounded-md min-h-[120px]"
+                              />
+                            </div>
+                            
+                            <div>
+                              <Label htmlFor="quick-add-rules" className="text-sm font-medium">Quick Add Rules</Label>
+                              <p className="text-xs text-gray-600 mb-3">Type anything in any format - we'll handle the rest</p>
+                              <div className="flex gap-2 mb-3">
+                                <Input
+                                  id="quick-add-rules"
+                                  placeholder="e.g., Always mention our 30-day return policy, Never discuss pricing over email..."
+                                  value={newRule}
+                                  onChange={(e) => setNewRule(e.target.value)}
+                                  onKeyPress={(e) => {
+                                    if (e.key === 'Enter' && newRule.trim()) {
+                                      setBusinessRules(prev => [...prev, newRule.trim()])
+                                      setNewRule('')
+                                    }
+                                  }}
+                                  className="rounded-md flex-1"
+                                />
+                                <Button
+                                  size="sm"
+                                  onClick={() => {
+                                    if (newRule.trim()) {
+                                      setBusinessRules(prev => [...prev, newRule.trim()])
+                                      setNewRule('')
+                                    }
+                                  }}
+                                  className="rounded-md"
+                                >
+                                  Add
+                                </Button>
+                              </div>
+                              
+                              {businessRules.length > 0 && (
+                                <div className="space-y-2">
+                                  <Label className="text-xs font-medium text-gray-600">Added Rules:</Label>
+                                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                                    {businessRules.map((rule, index) => (
+                                      <div key={index} className="flex items-center justify-between bg-white p-2 rounded border border-gray-200">
+                                        <span className="text-xs text-gray-700 flex-1">{rule}</span>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => {
+                                            setBusinessRules(prev => prev.filter((_, i) => i !== index))
+                                          }}
+                                          className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="forbidden" className="space-y-4 mt-6">
+                          <div className="bg-gray-50 p-4 rounded-md space-y-4">
+                            <div>
+                              <Label htmlFor="quick-add-forbidden" className="text-sm font-medium">Quick Add Forbidden Items</Label>
+                              <p className="text-xs text-gray-600 mb-3">Type anything in any format - we'll handle the rest</p>
+                              <div className="flex gap-2 mb-3">
+                                <Input
+                                  id="quick-add-forbidden"
+                                  placeholder="e.g., Don't give medical advice, No competitor pricing, No delivery promises..."
+                                  value={newForbiddenItem}
+                                  onChange={(e) => setNewForbiddenItem(e.target.value)}
+                                  onKeyPress={(e) => {
+                                    if (e.key === 'Enter' && newForbiddenItem.trim()) {
+                                      setForbiddenItems(prev => [...prev, newForbiddenItem.trim()])
+                                      setNewForbiddenItem('')
+                                    }
+                                  }}
+                                  className="rounded-md flex-1"
+                                />
+                                <Button
+                                  size="sm"
+                                  onClick={() => {
+                                    if (newForbiddenItem.trim()) {
+                                      setForbiddenItems(prev => [...prev, newForbiddenItem.trim()])
+                                      setNewForbiddenItem('')
+                                    }
+                                  }}
+                                  className="rounded-md"
+                                >
+                                  Add
+                                </Button>
+                              </div>
+                              
+                              {forbiddenItems.length > 0 && (
+                                <div className="space-y-2">
+                                  <Label className="text-xs font-medium text-gray-600">Added Forbidden Items:</Label>
+                                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                                    {forbiddenItems.map((item, index) => (
+                                      <div key={index} className="flex items-center justify-between bg-white p-2 rounded border border-gray-200">
+                                        <span className="text-xs text-gray-700 flex-1">{item}</span>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => {
+                                            setForbiddenItems(prev => prev.filter((_, i) => i !== index))
+                                          }}
+                                          className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="advanced" className="space-y-4 mt-6">
+                          <div className="bg-gray-50 p-4 rounded-md space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label htmlFor="web-searching" className="text-sm font-medium">Allow Web Searching</Label>
+                                <p className="text-xs text-gray-600">
+                                  {agentSettings.webSearching 
+                                    ? "Agent can search the web for up-to-date information when responding" 
+                                    : "Agent will only use your business context and vault files"
+                                  }
+                                </p>
+                              </div>
+                              <Switch
+                                id="web-searching"
+                                checked={agentSettings.webSearching}
+                                onCheckedChange={(checked) => 
+                                  setAgentSettings(prev => ({ ...prev, webSearching: checked }))
+                                }
+                              />
+                            </div>
+                            
+                            {agentSettings.webSearching && (
+                              <>
+                                <Separator />
+                                <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                                  <div className="flex gap-2">
+                                    <Brain className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                                    <div>
+                                      <p className="text-xs font-medium text-blue-900">Web Search Enabled</p>
+                                      <p className="text-xs text-blue-700 mt-1">
+                                        The agent will search for current information when needed, such as business hours, 
+                                        product availability, or recent company updates. This helps provide more accurate and 
+                                        up-to-date responses to customers.
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                            
+                            <Separator />
+                            
+                            {/* Lightspeed Integration */}
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 bg-white rounded border border-gray-200 flex items-center justify-center">
+                                    <Image
+                                      src="/lslogo.png"
+                                      alt="Lightspeed"
+                                      width={16}
+                                      height={16}
+                                      className="object-contain"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label htmlFor="lightspeed-integration" className="text-sm font-medium">Lightspeed Integration</Label>
+                                    <p className="text-xs text-gray-600">Enable Lightspeed POS integration features</p>
+                                  </div>
+                                </div>
+                                <Switch
+                                  id="lightspeed-integration"
+                                  checked={agentSettings.lightspeedIntegration.enabled}
+                                  onCheckedChange={(checked) => 
+                                    setAgentSettings(prev => ({ 
+                                      ...prev, 
+                                      lightspeedIntegration: { 
+                                        ...prev.lightspeedIntegration, 
+                                        enabled: checked,
+                                        // Reset sub-options when disabled
+                                        priceLookup: checked ? prev.lightspeedIntegration.priceLookup : false,
+                                        inventoryLookup: checked ? prev.lightspeedIntegration.inventoryLookup : false
+                                      }
+                                    }))
+                                  }
+                                />
+                              </div>
+                              
+                              {agentSettings.lightspeedIntegration.enabled && (
+                                <div className="ml-8 space-y-2 border-l border-gray-200 pl-4">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <Label htmlFor="lightspeed-price" className="text-xs font-medium">Price Lookup</Label>
+                                      <p className="text-xs text-gray-500">Allow agent to check product prices</p>
+                                    </div>
+                                    <Switch
+                                      id="lightspeed-price"
+                                      checked={agentSettings.lightspeedIntegration.priceLookup}
+                                      onCheckedChange={(checked) => 
+                                        setAgentSettings(prev => ({ 
+                                          ...prev, 
+                                          lightspeedIntegration: { 
+                                            ...prev.lightspeedIntegration, 
+                                            priceLookup: checked 
+                                          }
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                  
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <Label htmlFor="lightspeed-inventory" className="text-xs font-medium">Inventory Lookup</Label>
+                                      <p className="text-xs text-gray-500">Allow agent to check product availability</p>
+                                    </div>
+                                    <Switch
+                                      id="lightspeed-inventory"
+                                      checked={agentSettings.lightspeedIntegration.inventoryLookup}
+                                      onCheckedChange={(checked) => 
+                                        setAgentSettings(prev => ({ 
+                                          ...prev, 
+                                          lightspeedIntegration: { 
+                                            ...prev.lightspeedIntegration, 
+                                            inventoryLookup: checked 
+                                          }
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            
+                            <Separator />
+                            
+                            {/* Square Integration */}
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 bg-white rounded border border-gray-200 flex items-center justify-center">
+                                    <Image
+                                      src="/square.png"
+                                      alt="Square"
+                                      width={16}
+                                      height={16}
+                                      className="object-contain"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label htmlFor="square-integration" className="text-sm font-medium">Square Integration</Label>
+                                    <p className="text-xs text-gray-600">Enable Square POS integration features</p>
+                                  </div>
+                                </div>
+                                <Switch
+                                  id="square-integration"
+                                  checked={agentSettings.squareIntegration.enabled}
+                                  onCheckedChange={(checked) => 
+                                    setAgentSettings(prev => ({ 
+                                      ...prev, 
+                                      squareIntegration: { 
+                                        ...prev.squareIntegration, 
+                                        enabled: checked,
+                                        // Reset sub-options when disabled
+                                        priceLookup: checked ? prev.squareIntegration.priceLookup : false,
+                                        inventoryLookup: checked ? prev.squareIntegration.inventoryLookup : false
+                                      }
+                                    }))
+                                  }
+                                />
+                              </div>
+                              
+                              {agentSettings.squareIntegration.enabled && (
+                                <div className="ml-8 space-y-2 border-l border-gray-200 pl-4">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <Label htmlFor="square-price" className="text-xs font-medium">Price Lookup</Label>
+                                      <p className="text-xs text-gray-500">Allow agent to check product prices</p>
+                                    </div>
+                                    <Switch
+                                      id="square-price"
+                                      checked={agentSettings.squareIntegration.priceLookup}
+                                      onCheckedChange={(checked) => 
+                                        setAgentSettings(prev => ({ 
+                                          ...prev, 
+                                          squareIntegration: { 
+                                            ...prev.squareIntegration, 
+                                            priceLookup: checked 
+                                          }
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                  
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <Label htmlFor="square-inventory" className="text-xs font-medium">Inventory Lookup</Label>
+                                      <p className="text-xs text-gray-500">Allow agent to check product availability</p>
+                                    </div>
+                                    <Switch
+                                      id="square-inventory"
+                                      checked={agentSettings.squareIntegration.inventoryLookup}
+                                      onCheckedChange={(checked) => 
+                                        setAgentSettings(prev => ({ 
+                                          ...prev, 
+                                          squareIntegration: { 
+                                            ...prev.squareIntegration, 
+                                            inventoryLookup: checked 
+                                          }
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="test" className="space-y-4 mt-6">
+                          <div className="bg-gray-50 p-4 rounded-md space-y-4">
+                            <div>
+                              <Label className="text-sm font-medium">Test Email Response</Label>
+                              <p className="text-xs text-gray-600 mb-4">Send a test email to see how the agent would respond</p>
+                              
+                              <div className="space-y-4">
+                                {/* From Field */}
+                                <div>
+                                  <Label htmlFor="test-from" className="text-xs font-medium">From</Label>
+                                  <Input
+                                    id="test-from"
+                                    placeholder="customer@example.com"
+                                    value={testEmail.from}
+                                    onChange={(e) => setTestEmail(prev => ({ ...prev, from: e.target.value }))}
+                                    className="rounded-md text-sm mt-1"
+                                  />
+                                </div>
+                                
+                                {/* Subject Field */}
+                                <div>
+                                  <Label htmlFor="test-subject" className="text-xs font-medium">Subject</Label>
+                                  <Input
+                                    id="test-subject"
+                                    placeholder="Question about my order"
+                                    value={testEmail.subject}
+                                    onChange={(e) => setTestEmail(prev => ({ ...prev, subject: e.target.value }))}
+                                    className="rounded-md text-sm mt-1"
+                                  />
+                                </div>
+                                
+                                {/* Email Body */}
+                                <div>
+                                  <Label htmlFor="test-body" className="text-xs font-medium">Email Body</Label>
+                                  <Textarea
+                                    id="test-body"
+                                    placeholder="Hi, I placed an order yesterday but haven't received a confirmation email. Can you help me check the status? My order number is #12345. Thanks!"
+                                    value={testEmail.body}
+                                    onChange={(e) => setTestEmail(prev => ({ ...prev, body: e.target.value }))}
+                                    className="rounded-md min-h-[100px] text-sm mt-1"
+                                  />
+                                </div>
+                                
+                                {/* Generate Response Button */}
+                                <div className="flex justify-end">
+                                  <Button
+                                    onClick={() => {
+                                      setTestEmail(prev => ({ ...prev, isGenerating: true }))
+                                      // Simulate API call
+                                      setTimeout(() => {
+                                        setTestEmail(prev => ({ 
+                                          ...prev, 
+                                          isGenerating: false,
+                                          response: `Hi there!\n\nThank you for reaching out about your order #12345. I'd be happy to help you check the status.\n\nI can see that your order was placed yesterday and is currently being processed in our warehouse. You should receive a confirmation email with tracking details within the next 2-4 hours.\n\nIf you don't receive the confirmation email by tomorrow morning, please don't hesitate to contact us again and we'll investigate further.\n\nIs there anything else I can help you with today?\n\nBest regards,\nCustomer Service Team`
+                                        }))
+                                      }, 2000)
+                                    }}
+                                    disabled={!testEmail.from || !testEmail.subject || !testEmail.body || testEmail.isGenerating}
+                                    className="rounded-md"
+                                  >
+                                    {testEmail.isGenerating ? 'Generating Response...' : 'Generate Response'}
+                                  </Button>
+                                </div>
+                                
+                                {/* Response Area */}
+                                {(testEmail.response || testEmail.isGenerating) && (
+                                  <div>
+                                    <Label className="text-xs font-medium">Agent Response</Label>
+                                    <div className="mt-1 p-3 bg-white border border-gray-200 rounded-md min-h-[120px]">
+                                      {testEmail.isGenerating ? (
+                                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                                          <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
+                                          Generating response...
+                                        </div>
+                                      ) : (
+                                        <div className="text-sm text-gray-700 whitespace-pre-wrap">{testEmail.response}</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </TabsContent>
+                      </Tabs>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Vertical Separator */}
+            <div className="w-px bg-gray-200"></div>
+
+            {/* Right Sidebar */}
+            <div className="w-80 p-6 pl-4 bg-gray-50 flex flex-col">
+              {/* Integrations Section */}
+              <div className="mb-8">
+                <h3 className="text-sm font-medium mb-3 text-gray-600">Integrations</h3>
+                <div className="space-y-1">
+                  <div className="bg-white border border-gray-200 rounded-md p-3 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="w-6 h-6 bg-white rounded border border-gray-200 flex items-center justify-center">
+                        <Image
+                          src="/gmail.png"
+                          alt="Gmail"
+                          width={16}
+                          height={16}
+                          className="object-contain"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-medium">Gmail</p>
+                      </div>
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white border border-gray-200 rounded-md p-3 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="w-6 h-6 bg-white rounded border border-gray-200 flex items-center justify-center">
+                        <FileText className="h-3 w-3 text-blue-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-medium">Vault</p>
+                      </div>
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Files Section */}
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-medium text-gray-600">Files in Vault</h3>
+                  <button
+                    onClick={() => router.push('/vault')}
+                    className="p-1 hover:bg-gray-200 rounded transition-colors"
+                    title="Manage vault files"
+                  >
+                    <ArrowUpRight className="h-3 w-3 text-gray-400 hover:text-gray-600" />
+                  </button>
+                </div>
+                <div className="space-y-1">
+                  {[
+                    { name: 'Customer Service Guide.pdf', type: 'PDF', size: '2.3 MB' },
+                    { name: 'FAQ Template.docx', type: 'DOC', size: '1.1 MB' },
+                    { name: 'Response Templates.txt', type: 'TXT', size: '45 KB' },
+                    { name: 'Escalation Process.pdf', type: 'PDF', size: '890 KB' }
+                  ].map((file, index) => (
+                    <div key={index} className="flex items-center gap-2 p-2 hover:bg-white rounded-md transition-colors">
+                      <div className="w-5 h-5 bg-blue-100 rounded flex items-center justify-center">
+                        <FileText className="h-3 w-3 text-blue-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{file.name}</p>
+                        <p className="text-xs text-gray-500">{file.type} • {file.size}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Connect Button Section - Fixed to bottom */}
+              <div className="border-t border-gray-200 pt-4 mt-4">
+                <div className="space-y-3">
+                  {showConfiguration ? (
+                    <>
+                    <Button
+                      onClick={async () => {
+                        if (!user?.uid) return
+                        
+                        try {
+                          const agentRef = doc(db, 'merchants', user.uid, 'agentsenrolled', 'customer-service')
+                          
+                          // Update the agent configuration
+                          await updateDoc(agentRef, {
+                            settings: {
+                              autoReply: agentSettings.autoReply,
+                                vaultAccess: agentSettings.vaultAccess,
+                                webSearching: agentSettings.webSearching,
+                                lightspeedIntegration: agentSettings.lightspeedIntegration,
+                                squareIntegration: agentSettings.squareIntegration,
+                              businessHours: agentSettings.businessHours,
+                              businessContext: agentSettings.businessContext,
+                              greeting: agentSettings.greeting,
+                              signOff: agentSettings.signOff,
+                              communicationStyle: agentSettings.communicationStyle,
+                              businessRules: businessRules,
+                              forbiddenItems: forbiddenItems,
+                              forbiddenResponses: agentSettings.forbiddenResponses
+                            },
+                            lastUpdated: serverTimestamp()
+                          })
+                          
+                          toast({
+                            title: "Configuration Saved",
+                            description: "Agent settings have been updated successfully."
+                          })
+                          setShowConfiguration(false)
+                        } catch (error) {
+                          console.error('Error saving configuration:', error)
+                          toast({
+                            title: "Save Failed",
+                            description: "Failed to save configuration. Please try again.",
+                            variant: "destructive"
+                          })
+                        }
+                      }}
+                      className="w-full rounded-md"
+                    >
+                      Save Configuration
+                    </Button>
+                      {enrolledAgents['customer-service']?.status === 'active' && (
+                        <Button
+                          variant="destructive"
+                          onClick={handleCustomerServiceConnect}
+                          disabled={connectingAgents.has('customer-service')}
+                          className="w-full rounded-md"
+                        >
+                          {connectingAgents.has('customer-service') ? 'Disconnecting...' : 'Disconnect Agent'}
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {enrolledAgents['customer-service']?.status === 'active' ? (
+                    <Button
+                          variant="destructive"
+                      onClick={handleCustomerServiceConnect}
+                      disabled={connectingAgents.has('customer-service')}
+                      className="w-full rounded-md"
+                    >
+                          {connectingAgents.has('customer-service') ? 'Disconnecting...' : 'Disconnect Agent'}
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={handleCustomerServiceConnect}
+                          disabled={connectingAgents.has('customer-service')}
+                          className="w-full rounded-md"
+                        >
+                          {connectingAgents.has('customer-service') ? 'Connecting...' : 'Connect Agent'}
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+          </DialogPrimitive.Content>
+        </DialogPortal>
+      </Dialog>
+
+      {/* Email Summary Agent Details Modal */}
+      <Dialog open={isEmailSummaryModalOpen} onOpenChange={setIsEmailSummaryModalOpen}>
+        <DialogPortal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+          <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-4xl h-[85vh] translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg overflow-hidden p-0">
+            <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground z-10">
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </DialogPrimitive.Close>
+          <div className="flex h-full">
+            {/* Main Content - Left Section */}
+            <div className="flex-1 flex flex-col h-full p-6 pr-4 overflow-y-auto">
+              <DialogHeader className="mb-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <DialogTitle className="text-xl font-semibold">Email Summary Agent</DialogTitle>
+                    {enrolledAgents['email-summary']?.status === 'active' && (
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span className="text-xs text-green-600 font-medium">Connected</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowEmailSummaryConfiguration(!showEmailSummaryConfiguration)}
+                      className="rounded-md"
+                    >
+                      {showEmailSummaryConfiguration ? 'Back to Overview' : 'Configuration'}
+                    </Button>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              {/* Main Content */}
+              <div className="space-y-6">
+                {!showEmailSummaryConfiguration ? (
+                  <>
+                    {/* Objective Section */}
+                    <div>
+                      <h3 className="text-base font-medium mb-3">Objective</h3>
+                      <p className="text-sm text-gray-600 leading-relaxed">
+                        Automatically analyse and summarise your email communications on a scheduled basis, providing insights into customer inquiries, priority issues, and key action items to help you stay on top of your business communications.
+                      </p>
+                    </div>
+
+                    {/* How it works */}
+                    <div>
+                      <h3 className="text-base font-medium mb-3">How this agent works</h3>
+                      <div className="text-sm text-gray-600 leading-relaxed space-y-2">
+                        <div className="flex gap-3">
+                          <span className="font-medium text-gray-900">1.</span>
+                          <span>Scans your Gmail inbox for the specified lookback period (1, 3, 7, or 30 days)</span>
+                        </div>
+                        <div className="flex gap-3">
+                          <span className="font-medium text-gray-900">2.</span>
+                          <span>Analyses email content, sender information, and identifies customer inquiries and business-related communications</span>
+                        </div>
+                        <div className="flex gap-3">
+                          <span className="font-medium text-gray-900">3.</span>
+                          <span>Generates a comprehensive summary including key themes, urgent items, and suggested actions</span>
+                        </div>
+                        <div className="flex gap-3">
+                          <span className="font-medium text-gray-900">4.</span>
+                          <span>Delivers the summary to your inbox at your scheduled time (daily, weekly, or custom schedule)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Configuration Settings */}
+                    <div className="space-y-4 max-h-[calc(100vh-300px)] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                      <h3 className="text-base font-medium">Agent Configuration</h3>
+                      
+                      {/* Configuration Tabs */}
+                      <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit mb-6">
+                        <button
+                          onClick={() => setActiveConfigTab("general")}
+                          className={cn(
+                            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                            activeConfigTab === "general"
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                        >
+                          <Settings className="h-3 w-3" />
+                          General
+                        </button>
+                        <button
+                          onClick={() => setActiveConfigTab("schedule")}
+                          className={cn(
+                            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                            activeConfigTab === "schedule"
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                        >
+                          <Clock className="h-3 w-3" />
+                          Schedule
+                        </button>
+                      </div>
+                      
+                      <div className="bg-gray-50 p-4 rounded-md space-y-4">
+                        {activeConfigTab === "general" ? (
+                          <>
+                            {/* Enable/Disable */}
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label htmlFor="email-summary-enabled" className="text-sm font-medium">Enable Email Summaries</Label>
+                                <p className="text-xs text-gray-600">
+                                  {emailSummarySettings.enabled 
+                                    ? "Automated email summaries will be sent according to your schedule" 
+                                    : "Email summaries are disabled"
+                                  }
+                                </p>
+                              </div>
+                              <Switch
+                                id="email-summary-enabled"
+                                checked={emailSummarySettings.enabled}
+                                onCheckedChange={(checked) => 
+                                  setEmailSummarySettings(prev => ({ ...prev, enabled: checked }))
+                                }
+                              />
+                            </div>
+
+                            <Separator />
+
+                            {/* Lookback Period */}
+                            <div>
+                              <Label htmlFor="lookback-period" className="text-sm font-medium">Lookback Period</Label>
+                              <p className="text-xs text-gray-600 mb-3">How many days of emails to include in the summary</p>
+                              <Select
+                                value={emailSummarySettings.lookbackPeriod}
+                                onValueChange={(value) => 
+                                  setEmailSummarySettings(prev => ({ ...prev, lookbackPeriod: value }))
+                                }
+                              >
+                                <SelectTrigger className="w-full rounded-md">
+                                  <SelectValue placeholder="Select lookback period" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="1">Today's emails (1 day)</SelectItem>
+                                  <SelectItem value="3">Last 3 days</SelectItem>
+                                  <SelectItem value="7">Last 7 days</SelectItem>
+                                  <SelectItem value="14">Last 2 weeks</SelectItem>
+                                  <SelectItem value="30">Last 30 days</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <Separator />
+
+                            {/* Summary Format */}
+                            <div>
+                              <Label htmlFor="email-format" className="text-sm font-medium">Summary Format</Label>
+                              <p className="text-xs text-gray-600 mb-3">Choose how detailed you want the summaries to be</p>
+                              <Select
+                                value={emailSummarySettings.emailFormat}
+                                onValueChange={(value) => 
+                                  setEmailSummarySettings(prev => ({ ...prev, emailFormat: value }))
+                                }
+                              >
+                                <SelectTrigger className="w-full rounded-md">
+                                  <SelectValue placeholder="Select format" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="summary">Brief Summary</SelectItem>
+                                  <SelectItem value="detailed">Detailed Analysis</SelectItem>
+                                  <SelectItem value="bullets">Bullet Points</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <Separator />
+
+                            {/* Additional Options */}
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <Label htmlFor="priority-only" className="text-sm font-medium">Priority Emails Only</Label>
+                                  <p className="text-xs text-gray-600">Only include emails marked as important or urgent</p>
+                                </div>
+                                <Switch
+                                  id="priority-only"
+                                  checked={emailSummarySettings.priorityOnly}
+                                  onCheckedChange={(checked) => 
+                                    setEmailSummarySettings(prev => ({ ...prev, priorityOnly: checked }))
+                                  }
+                                />
+                              </div>
+
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <Label htmlFor="include-attachments" className="text-sm font-medium">Include Attachment Info</Label>
+                                  <p className="text-xs text-gray-600">Mention emails with attachments in the summary</p>
+                                </div>
+                                <Switch
+                                  id="include-attachments"
+                                  checked={emailSummarySettings.includeAttachments}
+                                  onCheckedChange={(checked) => 
+                                    setEmailSummarySettings(prev => ({ ...prev, includeAttachments: checked }))
+                                  }
+                                />
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            {/* Schedule Configuration */}
+                            {emailSummarySettings.enabled ? (
+                              <>
+                                {/* Schedule Frequency */}
+                                <div>
+                                  <Label htmlFor="schedule-frequency" className="text-sm font-medium">Schedule Frequency</Label>
+                                  <p className="text-xs text-gray-600 mb-3">How often to send email summaries</p>
+                                  <Select
+                                    value={emailSummarySettings.schedule.frequency}
+                                    onValueChange={(value) => 
+                                      setEmailSummarySettings(prev => ({ 
+                                        ...prev, 
+                                        schedule: { ...prev.schedule, frequency: value }
+                                      }))
+                                    }
+                                  >
+                                    <SelectTrigger className="w-full rounded-md">
+                                      <SelectValue placeholder="Select frequency" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="daily">Daily</SelectItem>
+                                      <SelectItem value="weekly">Weekly</SelectItem>
+                                      <SelectItem value="custom">Custom Days</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+
+                                <Separator />
+
+                                {/* Time Selection */}
+                                <div>
+                                  <Label htmlFor="schedule-time" className="text-sm font-medium">Delivery Time</Label>
+                                  <p className="text-xs text-gray-600 mb-3">What time to send the summary</p>
+                                  <Input
+                                    id="schedule-time"
+                                    type="time"
+                                    value={emailSummarySettings.schedule.time}
+                                    onChange={(e) => 
+                                      setEmailSummarySettings(prev => ({ 
+                                        ...prev, 
+                                        schedule: { ...prev.schedule, time: e.target.value }
+                                      }))
+                                    }
+                                    className="w-32 rounded-md"
+                                  />
+                                </div>
+
+                                {/* Days Selection for Weekly/Custom */}
+                                {(emailSummarySettings.schedule.frequency === 'weekly' || emailSummarySettings.schedule.frequency === 'custom') && (
+                                  <>
+                                    <Separator />
+                                    <div>
+                                      <Label className="text-sm font-medium">
+                                        {emailSummarySettings.schedule.frequency === 'weekly' ? 'Day of Week' : 'Days to Send'}
+                                      </Label>
+                                      <p className="text-xs text-gray-600 mb-3">
+                                        {emailSummarySettings.schedule.frequency === 'weekly' 
+                                          ? 'Which day of the week to send the summary'
+                                          : 'Select which days to send summaries'
+                                        }
+                                      </p>
+                                      <div className="grid grid-cols-4 gap-2">
+                                        {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
+                                          <label key={day} className="flex items-center space-x-2 text-xs">
+                                            <input
+                                              type={emailSummarySettings.schedule.frequency === 'weekly' ? 'radio' : 'checkbox'}
+                                              name={emailSummarySettings.schedule.frequency === 'weekly' ? 'weekday' : 'days'}
+                                              checked={emailSummarySettings.schedule.days.includes(day)}
+                                              onChange={(e) => {
+                                                if (emailSummarySettings.schedule.frequency === 'weekly') {
+                                                  setEmailSummarySettings(prev => ({ 
+                                                    ...prev, 
+                                                    schedule: { ...prev.schedule, days: [day] }
+                                                  }))
+                                                } else {
+                                                  setEmailSummarySettings(prev => ({ 
+                                                    ...prev, 
+                                                    schedule: { 
+                                                      ...prev.schedule, 
+                                                      days: e.target.checked 
+                                                        ? [...prev.schedule.days, day]
+                                                        : prev.schedule.days.filter(d => d !== day)
+                                                    }
+                                                  }))
+                                                }
+                                              }}
+                                              className="rounded"
+                                            />
+                                            <span className="capitalize">{day.slice(0, 3)}</span>
+                                          </label>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                              </>
+                            ) : (
+                              <div className="text-center py-8">
+                                <p className="text-sm text-gray-500">Enable email summaries in the General tab to configure scheduling options.</p>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Vertical Separator */}
+            <div className="w-px bg-gray-200"></div>
+
+            {/* Right Sidebar */}
+            <div className="w-80 p-6 pl-4 bg-gray-50 flex flex-col">
+              {/* Integrations Section */}
+              <div className="mb-8">
+                <h3 className="text-sm font-medium mb-3 text-gray-600">Integrations</h3>
+                <div className="space-y-1">
+                  <div className="bg-white border border-gray-200 rounded-md p-3 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="w-6 h-6 bg-white rounded border border-gray-200 flex items-center justify-center">
+                        <Image
+                          src="/gmail.png"
+                          alt="Gmail"
+                          width={16}
+                          height={16}
+                          className="object-contain"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-medium">Gmail</p>
+                      </div>
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Next Summary Info */}
+              {emailSummarySettings.enabled && (
+                <div className="mb-8">
+                  <h3 className="text-sm font-medium mb-3 text-gray-600">Next Summary</h3>
+                  <div className="bg-white border border-gray-200 rounded-md p-3 shadow-sm">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-600">Frequency:</span>
+                        <span className="text-xs font-medium capitalize">{emailSummarySettings.schedule.frequency}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-600">Time:</span>
+                        <span className="text-xs font-medium">{emailSummarySettings.schedule.time}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-600">Lookback:</span>
+                        <span className="text-xs font-medium">{emailSummarySettings.lookbackPeriod} day{emailSummarySettings.lookbackPeriod !== '1' ? 's' : ''}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Connect Button Section */}
+              <div className="border-t border-gray-200 pt-4 mt-auto">
+                <div className="space-y-3">
+                  {showEmailSummaryConfiguration ? (
+                    <Button
+                      type="button"
+                      onClick={async (e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        
+                        if (!user?.uid) return
+                        
+                        try {
+                          const agentRef = doc(db, 'merchants', user.uid, 'agentsenrolled', 'email-summary')
+                          
+                          // Update the agent configuration
+                          await updateDoc(agentRef, {
+                            settings: emailSummarySettings,
+                            lastUpdated: serverTimestamp()
+                          })
+                          
+                          toast({
+                            title: "Configuration Saved",
+                            description: "Email Summary Agent settings have been updated successfully."
+                          })
+                          setShowEmailSummaryConfiguration(false)
+                        } catch (error) {
+                          console.error('Error saving Email Summary configuration:', error)
+                          toast({
+                            title: "Save Failed",
+                            description: "Failed to save configuration. Please try again.",
+                            variant: "destructive"
+                          })
+                        }
+                      }}
+                      className="w-full rounded-md"
+                    >
+                      Save Configuration
+                    </Button>
+                  ) : null}
+                  
+                  {enrolledAgents['email-summary']?.status === 'active' ? (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={handleEmailSummaryConnect}
+                      disabled={connectingAgents.has('email-summary')}
+                      className="w-full rounded-md"
+                    >
+                      {connectingAgents.has('email-summary') ? 'Disconnecting...' : 'Disconnect Agent'}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      onClick={handleEmailSummaryConnect}
+                      disabled={connectingAgents.has('email-summary')}
+                      className="w-full rounded-md"
+                    >
+                      {connectingAgents.has('email-summary') ? 'Connecting...' : 'Connect Agent'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+          </DialogPrimitive.Content>
+        </DialogPortal>
       </Dialog>
     </div>
   )

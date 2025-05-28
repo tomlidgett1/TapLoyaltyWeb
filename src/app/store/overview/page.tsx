@@ -79,7 +79,8 @@ import {
   Trash,
   ChevronUp,
   ChevronDown,
-  HelpCircle
+  HelpCircle,
+  Percent
 } from "lucide-react"
 
 // Component interfaces
@@ -216,6 +217,179 @@ const GradientText = ({ children }: { children: React.ReactNode }) => {
       {children}
     </span>
   );
+};
+
+// Program Card Component
+const ProgramCard = ({ 
+  title, 
+  description, 
+  icon, 
+  status,
+  stats,
+  onConfigure,
+  onView
+}: { 
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  status: 'active' | 'inactive' | 'not-configured';
+  stats?: { label: string; value: string | number }[];
+  onConfigure?: () => void;
+  onView?: () => void;
+}) => {
+  return (
+    <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
+      <div className="flex items-start gap-4 mb-4">
+        <div className="text-gray-600">
+          {icon}
+        </div>
+        
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-2">
+            <h3 className="text-sm font-medium text-gray-900">{title}</h3>
+            {status === 'active' && (
+              <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Active
+              </Badge>
+            )}
+            {status === 'inactive' && (
+              <Badge variant="outline" className="text-gray-600 border-gray-200 bg-gray-50">
+                <XCircle className="h-3 w-3 mr-1" />
+                Inactive
+              </Badge>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mb-4">{description}</p>
+          
+          {/* Stats section */}
+          {stats && stats.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              {stats.map((stat, index) => (
+                <div key={index} className="bg-white p-3 rounded-md border border-gray-200 text-xs">
+                  <span className="font-medium block text-gray-700 mb-1">{stat.label}</span>
+                  <span className="text-gray-900 font-mono">{stat.value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      
+      <div className="mt-auto flex gap-2">
+        {status === 'not-configured' ? (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={onConfigure}
+            className="flex-1 rounded-md"
+          >
+            Configure
+            <ChevronRight size={14} className="ml-1 opacity-70" />
+          </Button>
+        ) : (
+          <>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={onView}
+              className="flex-1 rounded-md"
+            >
+              View Details
+              <ChevronRight size={14} className="ml-1 opacity-70" />
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={onConfigure}
+              className="rounded-md"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const ProgramsTabContent = () => {
+  const router = useRouter()
+  
+  // Mock data - in real app, this would come from Firebase
+  const [programs, setPrograms] = useState([
+    {
+      id: 'coffee',
+      title: 'Coffee Loyalty Program',
+      description: 'Digital stamp card for coffee or beverages - customers buy X drinks, get 1 free',
+      icon: <Coffee className="h-8 w-8" />,
+      status: 'not-configured' as const,
+      stats: []
+    },
+    {
+      id: 'voucher',
+      title: 'Recurring Voucher',
+      description: 'Automatic dollar-value vouchers when customers reach spending thresholds',
+      icon: <Percent className="h-8 w-8" />,
+      status: 'not-configured' as const,
+      stats: []
+    },
+    {
+      id: 'transaction',
+      title: 'Transaction Reward',
+      description: 'Reward customers based on number of transactions at your business',
+      icon: <ShoppingBag className="h-8 w-8" />,
+      status: 'not-configured' as const,
+      stats: []
+    }
+  ])
+
+  const handleConfigure = (programId: string) => {
+    // Navigate to create page with specific tab
+    router.push(`/create?tab=${programId}`)
+  }
+
+  const handleView = (programId: string) => {
+    // Navigate to program details
+    router.push(`/store/programs/${programId}`)
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header section */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-lg font-medium">Recurring Programs</h2>
+          <p className="text-sm text-gray-600 mt-1">Set up automated loyalty programs that run continuously</p>
+        </div>
+        <Button 
+          className="gap-2 rounded-md"
+          onClick={() => router.push('/create')}
+        >
+          <Plus className="h-4 w-4" />
+          Create Program
+        </Button>
+      </div>
+
+      {/* Programs grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {programs.map((program) => (
+          <ProgramCard
+            key={program.id}
+            title={program.title}
+            description={program.description}
+            icon={program.icon}
+            status={program.status}
+            stats={program.stats}
+            onConfigure={() => handleConfigure(program.id)}
+            onView={() => handleView(program.id)}
+          />
+        ))}
+      </div>
+
+
+    </div>
+  )
 };
 
 // Full Rewards Tab Component
@@ -522,65 +696,65 @@ const RewardsTabContent = () => {
     <div>
       <Tabs defaultValue="all" onValueChange={(value) => setRewardCategory(value as typeof rewardCategory)}>
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
+          <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
             <button
               onClick={() => setRewardCategory("all")}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
                 rewardCategory === "all"
                   ? "text-gray-800 bg-white shadow-sm"
                   : "text-gray-600 hover:bg-gray-200/70"
               )}
             >
-              <Package className="h-4 w-4" />
+              <Package className="h-3 w-3" />
               All Rewards
             </button>
             <button
               onClick={() => setRewardCategory("individual")}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
                 rewardCategory === "individual"
                   ? "text-gray-800 bg-white shadow-sm"
                   : "text-gray-600 hover:bg-gray-200/70"
               )}
             >
-              <Gift className="h-4 w-4" />
+              <Gift className="h-3 w-3" />
               Individual
             </button>
             <button
               onClick={() => setRewardCategory("customer-specific")}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
                 rewardCategory === "customer-specific"
                   ? "text-gray-800 bg-white shadow-sm"
                   : "text-gray-600 hover:bg-gray-200/70"
               )}
             >
-              <Users className="h-4 w-4" />
+              <Users className="h-3 w-3" />
               Customer-Specific
             </button>
             <button
               onClick={() => setRewardCategory("programs")}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
                 rewardCategory === "programs"
                   ? "text-gray-800 bg-white shadow-sm"
                   : "text-gray-600 hover:bg-gray-200/70"
               )}
             >
-              <Award className="h-4 w-4" />
+              <Award className="h-3 w-3" />
               Programs
             </button>
             <button
               onClick={() => setRewardCategory("agent")}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
                 rewardCategory === "agent"
                   ? "text-gray-800 bg-white shadow-sm"
                   : "text-gray-600 hover:bg-gray-200/70"
               )}
             >
-              <Sparkles className="h-4 w-4 text-blue-500" />
+              <Sparkles className="h-3 w-3 text-blue-500" />
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-orange-500">
                 Agent
               </span>
@@ -1764,7 +1938,7 @@ export default function StoreOverviewPage() {
           </Button>
         </div>
         
-        <Tabs defaultValue="rewards" className="mt-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
           {/* TabsList hidden since we have navigation tabs in header */}
           
           <TabsContent value="rewards">
@@ -1773,133 +1947,7 @@ export default function StoreOverviewPage() {
           </TabsContent>
           
           <TabsContent value="programs">
-            <div className="space-y-6">
-              <Card className="rounded-lg overflow-hidden">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-medium flex items-center">
-                      <Sparkles className="h-5 w-5 mr-2 text-gray-600" />
-                      Loyalty Programs
-                    </CardTitle>
-                    <Button 
-                      className="gap-2 rounded-md"
-                      onClick={() => router.push('/create')}
-                    >
-                      <Plus className="h-4 w-4" />
-                      Create Program
-                    </Button>
-                  </div>
-                  <CardDescription>Manage your loyalty and rewards programs</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <div className="flex items-center justify-center h-48">
-                      <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : rewards.filter(r => r.category === "program").length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-48 text-center">
-                      <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                        <Sparkles className="h-6 w-6 text-muted-foreground" />
-                      </div>
-                      <h3 className="mt-4 text-lg font-medium">No programs found</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Create your first loyalty program to get started
-                      </p>
-                      <Button 
-                        className="mt-4 h-9 gap-2 rounded-md"
-                        onClick={() => router.push('/create')}
-                      >
-                        <Plus className="h-4 w-4" />
-                        Create Program
-                      </Button>
-                    </div>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[300px]">Program Name</TableHead>
-                          <TableHead className="text-center">Type</TableHead>
-                          <TableHead className="text-center">Rewards</TableHead>
-                          <TableHead className="text-center">Active Users</TableHead>
-                          <TableHead className="text-center">Created</TableHead>
-                          <TableHead className="text-center">Status</TableHead>
-                          <TableHead className="w-[50px]"></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {rewards.filter(r => r.category === "program").map((program) => (
-                          <TableRow 
-                            key={program.id}
-                            className="cursor-pointer hover:bg-gray-50"
-                            onClick={() => router.push(`/store/programs/${program.id}`)}
-                          >
-                            <TableCell className="font-medium">
-                              <div className="flex items-center gap-2">
-                                <div className="h-9 w-9 min-w-[36px] rounded-md bg-muted flex items-center justify-center">
-                                  <Award className="h-5 w-5 text-amber-600" />
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="truncate">{program.rewardName}</div>
-                                  <div className="text-xs text-muted-foreground line-clamp-1">
-                                    {program.description}
-                                  </div>
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <div className="font-medium text-amber-700">
-                                {program.programtype?.charAt(0).toUpperCase() + program.programtype?.slice(1) || "Program"}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <div className="font-medium text-blue-700">
-                                {program.redemptionCount || 0}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <div className="font-medium text-green-700">
-                                {program.redeemableCustomers || 0}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {program.createdAt ? formatDistanceToNow(program.createdAt, { addSuffix: true }) : "Unknown"}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <div className={cn(
-                                "font-medium",
-                                program.isActive ? "text-green-700" : "text-red-700"
-                              )}>
-                                {program.isActive ? "Live" : "Inactive"}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Button 
-                                variant="ghost" 
-                                className="h-8 w-8 p-0"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  router.push(`/store/programs/${program.id}`);
-                                }}
-                              >
-                                <ChevronRight className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-                <CardFooter className="flex justify-between pt-2">
-                  <div className="text-xs text-muted-foreground">
-                    Total: {rewards.filter(r => r.category === "program").length} programs
-                  </div>
-                  <Button variant="link" size="sm" className="px-0" asChild>
-                    <Link href="/store/programs">View all programs</Link>
-                  </Button>
-                </CardFooter>
-              </Card>
-            </div>
+            <ProgramsTabContent />
           </TabsContent>
           
           <TabsContent value="customers">

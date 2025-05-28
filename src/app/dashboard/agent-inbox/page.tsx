@@ -846,59 +846,6 @@ export default function AgentInboxPage() {
   return (
     <div className="h-screen flex flex-col bg-white">
       <style dangerouslySetInnerHTML={{ __html: transitionStyles }} />
-      <div className="border-b">
-        <div className="px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center">
-            <h1 className="text-xl font-semibold tracking-tight">
-              <GradientText>Agent</GradientText> Inbox
-            </h1>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            {/* Agents Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push('/dashboard/agents')}
-              className="rounded-md gap-2"
-            >
-              <Bot className="h-4 w-4" />
-              Agents
-            </Button>
-            
-            {/* Settings Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-md"
-                >
-                  <Settings className="h-6 w-6 text-gray-600" />
-                  <span className="sr-only">Settings</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40 rounded-md">
-                <DropdownMenuItem 
-                  onClick={() => setShowIntegrationsPopup(true)}
-                  className="cursor-pointer flex items-center gap-2"
-                >
-                  <LinkIcon className="h-4 w-4 text-blue-500" />
-                  <span>Integrations</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onClick={() => router.push('/tap-agent/setup')}
-                  className="cursor-pointer flex items-center gap-2"
-                >
-                  <Settings className="h-4 w-4 text-gray-500" />
-                  <span>Agent Settings</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </div>
-
       <div className="flex-1 flex min-h-0 h-[calc(100vh-5rem)]">
         {/* Left Column - Agent Requests List */}
         <div className="w-full lg:w-[45%] 2xl:w-[40%] border-r flex flex-col h-full overflow-hidden">

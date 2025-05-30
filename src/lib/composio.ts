@@ -4,6 +4,7 @@ import { OpenAIToolSet } from 'composio-core';
 const COMPOSIO_API_KEY = process.env.COMPOSIO_API_KEY || 'smwbexfl2lqlcy3wb0cq3';
 const GMAIL_INTEGRATION_ID = process.env.COMPOSIO_GMAIL_INTEGRATION_ID || '48ab3736-146c-4fdf-bd30-dda79973bd1d';
 const GOOGLE_CALENDAR_INTEGRATION_ID = process.env.COMPOSIO_GOOGLE_CALENDAR_INTEGRATION_ID || 'e4c1c614-421c-4ab2-9544-20b3b1b8c5d3';
+const GOOGLE_DOCS_INTEGRATION_ID = process.env.COMPOSIO_GOOGLE_DOCS_INTEGRATION_ID || 'b75caef3-ef36-4abd-893a-a350cc1d4a31';
 
 // Define the dynamic actions type for Composio
 type ComposioActions = {
@@ -386,6 +387,55 @@ export async function deleteGoogleCalendarEvent(
       event_id: eventId
     }
   }, {
+    connectedAccountId
+  });
+}
+
+// Google Docs Integration Functions
+
+/**
+ * Gets the Google Docs integration from Composio
+ * @returns The Google Docs integration object
+ */
+export async function getGoogleDocsIntegration() {
+  const toolset = getComposioToolset();
+  return await toolset.integrations.get({
+    integrationId: GOOGLE_DOCS_INTEGRATION_ID
+  });
+}
+
+/**
+ * Initiates a Google Docs integration connection for a merchant
+ * @param merchantId The merchant ID to connect
+ * @returns The connected account object with connection status and redirect URL
+ */
+export async function initiateGoogleDocsConnection(merchantId: string) {
+  if (!merchantId) {
+    throw new Error('Merchant ID is required');
+  }
+  
+  const toolset = getComposioToolset();
+  const integration = await getGoogleDocsIntegration();
+  
+  return await toolset.connectedAccounts.initiate({
+    integrationId: integration.id,
+    entityId: merchantId,
+    redirectUri: "https://app.taployalty.com.au"
+  });
+}
+
+/**
+ * Gets the status of a Google Docs connection for a merchant
+ * @param connectedAccountId The connected account ID to check
+ * @returns The connected account object with current status
+ */
+export async function getGoogleDocsConnectionStatus(connectedAccountId: string) {
+  if (!connectedAccountId) {
+    throw new Error('Connected account ID is required');
+  }
+  
+  const toolset = getComposioToolset();
+  return await toolset.connectedAccounts.get({
     connectedAccountId
   });
 } 

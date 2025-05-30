@@ -12,7 +12,7 @@ import Link from "next/link"
 import { PageTransition } from "@/components/page-transition"
 import { PageHeader } from "@/components/page-header"
 import { generateCodeVerifier, generateCodeChallenge } from "@/lib/pkce"
-import { CheckCircle, Globe, BarChart2, MessageSquare, Mail, Phone, Calculator, Calendar } from "lucide-react"
+import { CheckCircle, Globe, BarChart2, MessageSquare, Mail, Phone, Calculator, Calendar, FileText, Table } from "lucide-react"
 
 // Import icons for different POS systems
 import { LightspeedIcon } from "@/components/icons/lightspeed-icon"
@@ -34,6 +34,9 @@ interface IntegrationsState {
   lightspeed_new: IntegrationState;
   gmail: IntegrationState;
   google_calendar: IntegrationState;
+  google_docs: IntegrationState;
+  google_sheets: IntegrationState;
+  hubspot: IntegrationState;
 }
 
 export default function IntegrationsPage() {
@@ -45,7 +48,10 @@ export default function IntegrationsPage() {
     shopify: { connected: false, data: null },
     lightspeed_new: { connected: false, data: null },
     gmail: { connected: false, data: null },
-    google_calendar: { connected: false, data: null }
+    google_calendar: { connected: false, data: null },
+    google_docs: { connected: false, data: null },
+    google_sheets: { connected: false, data: null },
+    hubspot: { connected: false, data: null }
   })
   
   const [refreshing, setRefreshing] = useState(false)
@@ -132,6 +138,21 @@ export default function IntegrationsPage() {
         const googleCalendarConnected = googleCalendarDoc.exists() && googleCalendarDoc.data()?.connected === true;
         console.log('Google Calendar integration status:', googleCalendarConnected ? 'Connected' : 'Not connected');
         
+        // Check Google Docs integration status
+        const googleDocsDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/google_docs`));
+        const googleDocsConnected = googleDocsDoc.exists() && googleDocsDoc.data()?.connected === true;
+        console.log('Google Docs integration status:', googleDocsConnected ? 'Connected' : 'Not connected');
+        
+        // Check Google Sheets integration status
+        const googleSheetsDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/google_sheets`));
+        const googleSheetsConnected = googleSheetsDoc.exists() && googleSheetsDoc.data()?.connected === true;
+        console.log('Google Sheets integration status:', googleSheetsConnected ? 'Connected' : 'Not connected');
+        
+        // Check HubSpot integration status
+        const hubspotDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/hubspot`));
+        const hubspotConnected = hubspotDoc.exists() && hubspotDoc.data()?.connected === true;
+        console.log('HubSpot integration status:', hubspotConnected ? 'Connected' : 'Not connected');
+        
         setIntegrations(prev => ({
           ...prev,
           square: {
@@ -149,6 +170,18 @@ export default function IntegrationsPage() {
           google_calendar: {
             connected: googleCalendarConnected,
             data: googleCalendarDoc.exists() ? googleCalendarDoc.data() : null
+          },
+          google_docs: {
+            connected: googleDocsConnected,
+            data: googleDocsDoc.exists() ? googleDocsDoc.data() : null
+          },
+          google_sheets: {
+            connected: googleSheetsConnected,
+            data: googleSheetsDoc.exists() ? googleSheetsDoc.data() : null
+          },
+          hubspot: {
+            connected: hubspotConnected,
+            data: hubspotDoc.exists() ? hubspotDoc.data() : null
           }
         }));
       } else {
@@ -163,6 +196,21 @@ export default function IntegrationsPage() {
         const googleCalendarDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/google_calendar`));
         const googleCalendarConnected = googleCalendarDoc.exists() && googleCalendarDoc.data()?.connected === true;
         console.log('Google Calendar integration status:', googleCalendarConnected ? 'Connected' : 'Not connected');
+        
+        // Check Google Docs integration status even if Lightspeed is not found
+        const googleDocsDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/google_docs`));
+        const googleDocsConnected = googleDocsDoc.exists() && googleDocsDoc.data()?.connected === true;
+        console.log('Google Docs integration status:', googleDocsConnected ? 'Connected' : 'Not connected');
+        
+        // Check Google Sheets integration status even if Lightspeed is not found
+        const googleSheetsDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/google_sheets`));
+        const googleSheetsConnected = googleSheetsDoc.exists() && googleSheetsDoc.data()?.connected === true;
+        console.log('Google Sheets integration status:', googleSheetsConnected ? 'Connected' : 'Not connected');
+        
+        // Check HubSpot integration status
+        const hubspotDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/hubspot`));
+        const hubspotConnected = hubspotDoc.exists() && hubspotDoc.data()?.connected === true;
+        console.log('HubSpot integration status:', hubspotConnected ? 'Connected' : 'Not connected');
         
         setIntegrations(prev => ({
           ...prev,
@@ -181,6 +229,18 @@ export default function IntegrationsPage() {
           google_calendar: {
             connected: googleCalendarConnected,
             data: googleCalendarDoc.exists() ? googleCalendarDoc.data() : null
+          },
+          google_docs: {
+            connected: googleDocsConnected,
+            data: googleDocsDoc.exists() ? googleDocsDoc.data() : null
+          },
+          google_sheets: {
+            connected: googleSheetsConnected,
+            data: googleSheetsDoc.exists() ? googleSheetsDoc.data() : null
+          },
+          hubspot: {
+            connected: hubspotConnected,
+            data: hubspotDoc.exists() ? hubspotDoc.data() : null
           }
         }));
       }
@@ -262,6 +322,51 @@ export default function IntegrationsPage() {
           }))
         } else {
           console.log('Google Calendar integration not connected or not found')
+        }
+        
+        // Check Google Docs integration status
+        const googleDocsDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'google_docs'))
+        if (googleDocsDoc.exists() && googleDocsDoc.data().connected) {
+          console.log('Google Docs integration found:', googleDocsDoc.data())
+          setIntegrations(prev => ({
+            ...prev,
+            google_docs: { 
+              connected: true, 
+              data: googleDocsDoc.data() 
+            }
+          }))
+        } else {
+          console.log('Google Docs integration not connected or not found')
+        }
+
+        // Check Google Sheets integration status
+        const googleSheetsDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'google_sheets'))
+        if (googleSheetsDoc.exists() && googleSheetsDoc.data().connected) {
+          console.log('Google Sheets integration found:', googleSheetsDoc.data())
+          setIntegrations(prev => ({
+            ...prev,
+            google_sheets: { 
+              connected: true, 
+              data: googleSheetsDoc.data() 
+            }
+          }))
+        } else {
+          console.log('Google Sheets integration not connected or not found')
+        }
+
+        // Check HubSpot integration status
+        const hubspotDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'hubspot'))
+        if (hubspotDoc.exists() && hubspotDoc.data().connected) {
+          console.log('HubSpot integration found:', hubspotDoc.data())
+          setIntegrations(prev => ({
+            ...prev,
+            hubspot: { 
+              connected: true, 
+              data: hubspotDoc.data() 
+            }
+          }))
+        } else {
+          console.log('HubSpot integration not connected or not found')
         }
       } catch (error) {
         console.error("Error checking integrations:", error)
@@ -686,6 +791,366 @@ export default function IntegrationsPage() {
     }
   };
 
+  // Google Docs integration functions
+  const connectGoogleDocs = () => {
+    if (!user?.uid) return
+
+    setConnecting("google_docs")
+
+    try {
+      // Go directly to the Google Docs Composio connect route
+      window.location.href = `/api/auth/google-docs/composio?merchantId=${user.uid}`
+    } catch (error) {
+      console.error("Error redirecting to Google Docs connect route:", error)
+      toast({
+        title: "Connection Failed",
+        description: "Failed to initiate Google Docs connection. Please try again.",
+        variant: "destructive",
+      })
+      setConnecting(null)
+    }
+  }
+
+  // Disconnect Google Docs
+  const disconnectGoogleDocs = async () => {
+    if (!user) return
+    
+    try {
+      // Delete the integration from Firestore
+      const integrationRef = doc(db, `merchants/${user.uid}/integrations/google_docs`);
+      await deleteDoc(integrationRef);
+      
+      // Update local state
+      setIntegrations(prev => ({
+        ...prev,
+        google_docs: { connected: false, data: null }
+      }))
+      
+      toast({
+        title: "Disconnected",
+        description: "Your Google Docs account has been disconnected."
+      })
+    } catch (error) {
+      console.error("Error disconnecting Google Docs:", error)
+      toast({
+        title: "Error",
+        description: "Failed to disconnect Google Docs. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
+
+  // Manual Google Docs status check function
+  const checkGoogleDocsComposioStatus = async () => {
+    if (!user?.uid) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to check status",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setConnecting("google_docs");
+    
+    try {
+      const response = await fetch(`/api/auth/google-docs/composio/check-status?merchantId=${user.uid}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update local state based on the response
+        if (data.connection.connected) {
+          setIntegrations(prev => ({
+            ...prev,
+            google_docs: {
+              connected: true,
+              data: {
+                connectedAccountId: data.connection.id,
+                connectionStatus: data.connection.status,
+                provider: 'composio',
+                connectedAt: { toDate: () => new Date() } // Mock timestamp for display
+              }
+            }
+          }));
+          
+          toast({
+            title: "Success",
+            description: "Google Docs connection is active and updated successfully",
+          });
+        } else {
+          setIntegrations(prev => ({
+            ...prev,
+            google_docs: {
+              connected: false,
+              data: null
+            }
+          }));
+          
+          toast({
+            title: "Not Connected",
+            description: "No active Google Docs connection found",
+            variant: "destructive"
+          });
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Failed to check Google Docs status",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error checking Google Docs status:', error);
+      toast({
+        title: "Error", 
+        description: "Failed to check Google Docs connection status",
+        variant: "destructive"
+      });
+    } finally {
+      setConnecting(null);
+    }
+  };
+
+  // Google Sheets integration functions
+  const connectGoogleSheets = () => {
+    if (!user?.uid) return
+
+    setConnecting("google_sheets")
+
+    try {
+      // Go directly to the Google Sheets Composio connect route
+      window.location.href = `/api/auth/google-sheets/composio?merchantId=${user.uid}`
+    } catch (error) {
+      console.error("Error redirecting to Google Sheets connect route:", error)
+      toast({
+        title: "Connection Failed",
+        description: "Failed to initiate Google Sheets connection. Please try again.",
+        variant: "destructive",
+      })
+      setConnecting(null)
+    }
+  }
+
+  // Disconnect Google Sheets
+  const disconnectGoogleSheets = async () => {
+    if (!user) return
+    
+    try {
+      // Delete the integration from Firestore
+      const integrationRef = doc(db, `merchants/${user.uid}/integrations/google_sheets`);
+      await deleteDoc(integrationRef);
+      
+      // Update local state
+      setIntegrations(prev => ({
+        ...prev,
+        google_sheets: { connected: false, data: null }
+      }))
+      
+      toast({
+        title: "Disconnected",
+        description: "Your Google Sheets account has been disconnected."
+      })
+    } catch (error) {
+      console.error("Error disconnecting Google Sheets:", error)
+      toast({
+        title: "Error",
+        description: "Failed to disconnect Google Sheets. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
+
+  // Manual Google Sheets status check function
+  const checkGoogleSheetsComposioStatus = async () => {
+    if (!user?.uid) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to check status",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setConnecting("google_sheets");
+    
+    try {
+      const response = await fetch(`/api/auth/google-sheets/composio/check-status?merchantId=${user.uid}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update local state based on the response
+        if (data.connection.connected) {
+          setIntegrations(prev => ({
+            ...prev,
+            google_sheets: {
+              connected: true,
+              data: {
+                connectedAccountId: data.connection.id,
+                connectionStatus: data.connection.status,
+                provider: 'composio',
+                connectedAt: { toDate: () => new Date() } // Mock timestamp for display
+              }
+            }
+          }));
+          
+          toast({
+            title: "Success",
+            description: "Google Sheets connection is active and updated successfully",
+          });
+        } else {
+          setIntegrations(prev => ({
+            ...prev,
+            google_sheets: {
+              connected: false,
+              data: null
+            }
+          }));
+          
+          toast({
+            title: "Not Connected",
+            description: "No active Google Sheets connection found",
+            variant: "destructive"
+          });
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Failed to check Google Sheets status",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error checking Google Sheets status:', error);
+      toast({
+        title: "Error", 
+        description: "Failed to check Google Sheets connection status",
+        variant: "destructive"
+      });
+    } finally {
+      setConnecting(null);
+    }
+  };
+
+  // HubSpot integration functions
+  const connectHubSpot = () => {
+    if (!user?.uid) return
+
+    setConnecting("hubspot")
+
+    try {
+      // Go directly to the HubSpot Composio connect route
+      window.location.href = `/api/auth/hubspot/composio?merchantId=${user.uid}`
+    } catch (error) {
+      console.error("Error redirecting to HubSpot connect route:", error)
+      toast({
+        title: "Connection Failed",
+        description: "Failed to initiate HubSpot connection. Please try again.",
+        variant: "destructive",
+      })
+      setConnecting(null)
+    }
+  }
+
+  // Disconnect HubSpot
+  const disconnectHubSpot = async () => {
+    if (!user) return
+    
+    try {
+      // Delete the integration from Firestore
+      const integrationRef = doc(db, `merchants/${user.uid}/integrations/hubspot`);
+      await deleteDoc(integrationRef);
+      
+      // Update local state
+      setIntegrations(prev => ({
+        ...prev,
+        hubspot: { connected: false, data: null }
+      }))
+      
+      toast({
+        title: "Disconnected",
+        description: "Your HubSpot account has been disconnected."
+      })
+    } catch (error) {
+      console.error("Error disconnecting HubSpot:", error)
+      toast({
+        title: "Error",
+        description: "Failed to disconnect HubSpot. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
+
+  // Manual HubSpot status check function
+  const checkHubSpotComposioStatus = async () => {
+    if (!user?.uid) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to check status",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setConnecting("hubspot");
+    
+    try {
+      const response = await fetch(`/api/auth/hubspot/composio/check-status?merchantId=${user.uid}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update local state based on the response
+        if (data.connection.connected) {
+          setIntegrations(prev => ({
+            ...prev,
+            hubspot: {
+              connected: true,
+              data: {
+                connectedAccountId: data.connection.id,
+                connectionStatus: data.connection.status,
+                provider: 'composio',
+                connectedAt: { toDate: () => new Date() } // Mock timestamp for display
+              }
+            }
+          }));
+          
+          toast({
+            title: "Success",
+            description: "HubSpot connection is active and updated successfully",
+          });
+        } else {
+          setIntegrations(prev => ({
+            ...prev,
+            hubspot: {
+              connected: false,
+              data: null
+            }
+          }));
+          
+          toast({
+            title: "Not Connected",
+            description: "No active HubSpot connection found",
+            variant: "destructive"
+          });
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Failed to check HubSpot status",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error checking HubSpot status:', error);
+      toast({
+        title: "Error", 
+        description: "Failed to check HubSpot connection status",
+        variant: "destructive"
+      });
+    } finally {
+      setConnecting(null);
+    }
+  };
+
   return (
     <PageTransition>
       <div className="p-6 py-4">
@@ -995,418 +1460,440 @@ export default function IntegrationsPage() {
           </div>
         )}
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Gmail Integration Card */}
-          <Card className="rounded-md bg-gray-50">
-            <CardHeader className="pb-3">
+          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center">
-                    <img src="/gmail.png" alt="Gmail" className="w-8 h-8 object-contain" />
-                  </div>
-                  <div className="flex items-center">
-                    <div>
-                      <CardTitle className="text-base font-medium">Gmail</CardTitle>
-                      <CardDescription>Email Integration</CardDescription>
-                    </div>
-                    {integrations.gmail.connected && (
-                      <CheckCircle className="h-5 w-5 ml-2 text-green-500" />
-                    )}
+                <div className="flex items-center space-x-3">
+                  <img src="/gmailpro.png" alt="Gmail" className="w-8 h-8 object-contain" />
+                  <div>
+                    <CardTitle className="text-sm font-medium">Gmail</CardTitle>
+                    <CardDescription className="text-xs">Email Integration</CardDescription>
                   </div>
                 </div>
-                <div className="flex space-x-2">
-                  <Button 
-                    variant="outline"
-                    size="sm"
-                    className="rounded-md"
-                    onClick={checkGmailComposioStatus}
-                    disabled={connecting === "gmail" || !user?.uid}
-                    title="Check current Gmail connection status with Composio"
-                  >
-                    {connecting === "gmail" ? "Checking..." : "Check Status"}
-                  </Button>
-                  <Button 
-                    variant="outline"
-                    className="rounded-md"
-                    onClick={() => window.location.href = `/api/auth/gmail/composio/simplified?merchantId=${user?.uid}`}
-                    disabled={connecting === "gmail" || !user?.uid}
-                  >
-                    Connect with Composio
-                  </Button>
-                  <Button 
-                    variant={integrations.gmail.connected ? "outline" : "default"}
-                    className="rounded-md"
-                    onClick={integrations.gmail.connected ? disconnectGmail : connectGmail}
-                    disabled={connecting === "gmail"}
-                  >
-                    {connecting === "gmail" ? "Connecting..." : 
-                    integrations.gmail.connected ? "Disconnect" : "Connect"}
-                  </Button>
-                </div>
+                {integrations.gmail.connected && (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                )}
               </div>
             </CardHeader>
-            <CardContent className="pb-2">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Connect your Gmail account to enable automated email sending and communication with your customers. 
-                  Use Composio for enhanced Gmail capabilities.
-                </p>
-                {integrations.gmail.connected && integrations.gmail.data?.connectedAt && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Connected on {new Date(integrations.gmail.data.connectedAt.toDate()).toLocaleDateString()} at {new Date(integrations.gmail.data.connectedAt.toDate()).toLocaleTimeString()}
-                    {integrations.gmail.data?.provider && (
-                      <span className="ml-1">via {integrations.gmail.data.provider}</span>
-                    )}
-                    {integrations.gmail.data?.connectedAccountId && (
-                      <span className="ml-1 text-xs text-gray-500">
-                        (ID: {integrations.gmail.data.connectedAccountId.substring(0, 8)}...)
-                      </span>
-                    )}
-                  </p>
-                )}
+            <CardContent className="pt-0">
+              <div className="flex justify-between items-center">
+                <div className="text-xs text-muted-foreground">
+                  {integrations.gmail.connected ? (
+                    <span className="text-green-600 font-medium">Connected</span>
+                  ) : (
+                    <span className="text-gray-500">Not connected</span>
+                  )}
+                </div>
+                <Button 
+                  variant={integrations.gmail.connected ? "outline" : "default"}
+                  size="sm"
+                  className="rounded-md h-7 px-3 text-xs"
+                  onClick={integrations.gmail.connected ? disconnectGmail : connectGmail}
+                  disabled={connecting === "gmail"}
+                >
+                  {connecting === "gmail" ? "..." : 
+                  integrations.gmail.connected ? "Disconnect" : "Connect"}
+                </Button>
               </div>
             </CardContent>
           </Card>
           
           {/* Google Calendar Integration Card */}
-          <Card className="rounded-md bg-gray-50">
-            <CardHeader className="pb-3">
+          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center">
-                    <Calendar className="h-6 w-6 text-blue-600" />
+                <div className="flex items-center space-x-3">
+                  <img src="/cal.svg" alt="Google Calendar" className="w-8 h-8 object-contain" />
+                  <div>
+                    <CardTitle className="text-sm font-medium">Google Calendar</CardTitle>
+                    <CardDescription className="text-xs">Calendar Integration</CardDescription>
                   </div>
-                  <div className="flex items-center">
-                    <div>
-                      <CardTitle className="text-base font-medium">Google Calendar</CardTitle>
-                      <CardDescription>Calendar Integration</CardDescription>
-                    </div>
-                    {integrations.google_calendar.connected && (
-                      <CheckCircle className="h-5 w-5 ml-2 text-green-500" />
-                    )}
-                  </div>
+                </div>
+                {integrations.google_calendar.connected && (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="flex justify-between items-center">
+                <div className="text-xs text-muted-foreground">
+                  {integrations.google_calendar.connected ? (
+                    <span className="text-green-600 font-medium">Connected</span>
+                  ) : (
+                    <span className="text-gray-500">Not connected</span>
+                  )}
                 </div>
                 <Button 
                   variant={integrations.google_calendar.connected ? "outline" : "default"}
-                  className="rounded-md"
+                  size="sm"
+                  className="rounded-md h-7 px-3 text-xs"
                   onClick={integrations.google_calendar.connected ? disconnectGoogleCalendar : connectGoogleCalendar}
                   disabled={connecting === "google_calendar"}
                 >
-                  {connecting === "google_calendar" ? "Connecting..." : 
+                  {connecting === "google_calendar" ? "..." : 
                   integrations.google_calendar.connected ? "Disconnect" : "Connect"}
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent className="pb-2">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Connect your Google Calendar to manage appointments, schedule events, and sync calendar data with your business operations.
-                </p>
-                {integrations.google_calendar.connected && integrations.google_calendar.data?.connectedAt && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Connected on {new Date(integrations.google_calendar.data.connectedAt.toDate()).toLocaleDateString()} at {new Date(integrations.google_calendar.data.connectedAt.toDate()).toLocaleTimeString()}
-                    {integrations.google_calendar.data?.provider && (
-                      <span className="ml-1">via {integrations.google_calendar.data.provider}</span>
-                    )}
-                  </p>
+            </CardContent>
+          </Card>
+          
+          {/* Google Docs Integration Card */}
+          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <img src="/docspro.png" alt="Google Docs" className="w-8 h-8 object-contain" />
+                  <div>
+                    <CardTitle className="text-sm font-medium">Google Docs</CardTitle>
+                    <CardDescription className="text-xs">Document Management</CardDescription>
+                  </div>
+                </div>
+                {integrations.google_docs.connected && (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
                 )}
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="flex justify-between items-center">
+                <div className="text-xs text-muted-foreground">
+                  {integrations.google_docs.connected ? (
+                    <span className="text-green-600 font-medium">Connected</span>
+                  ) : (
+                    <span className="text-gray-500">Not connected</span>
+                  )}
+                </div>
+                <Button 
+                  variant={integrations.google_docs.connected ? "outline" : "default"}
+                  size="sm"
+                  className="rounded-md h-7 px-3 text-xs"
+                  onClick={integrations.google_docs.connected ? disconnectGoogleDocs : connectGoogleDocs}
+                  disabled={connecting === "google_docs"}
+                >
+                  {connecting === "google_docs" ? "..." : 
+                  integrations.google_docs.connected ? "Disconnect" : "Connect"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* Google Sheets Integration Card */}
+          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <img src="/sheetspro.png" alt="Google Sheets" className="w-8 h-8 object-contain" />
+                  <div>
+                    <CardTitle className="text-sm font-medium">Google Sheets</CardTitle>
+                    <CardDescription className="text-xs">Spreadsheet Integration</CardDescription>
+                  </div>
+                </div>
+                {integrations.google_sheets.connected && (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="flex justify-between items-center">
+                <div className="text-xs text-muted-foreground">
+                  {integrations.google_sheets.connected ? (
+                    <span className="text-green-600 font-medium">Connected</span>
+                  ) : (
+                    <span className="text-gray-500">Not connected</span>
+                  )}
+                </div>
+                <Button 
+                  variant={integrations.google_sheets.connected ? "outline" : "default"}
+                  size="sm"
+                  className="rounded-md h-7 px-3 text-xs"
+                  onClick={integrations.google_sheets.connected ? disconnectGoogleSheets : connectGoogleSheets}
+                  disabled={connecting === "google_sheets"}
+                >
+                  {connecting === "google_sheets" ? "..." : 
+                  integrations.google_sheets.connected ? "Disconnect" : "Connect"}
+                </Button>
               </div>
             </CardContent>
           </Card>
           
           {/* Lightspeed Retail Integration Card */}
-          <Card className="rounded-md bg-gray-50">
-            <CardHeader className="pb-3">
+          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center">
-                    <img src="/lslogo.png" alt="Lightspeed" className="w-8 h-8 object-contain" />
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gray-50 rounded-md flex items-center justify-center">
+                    <img src="/lslogo.png" alt="Lightspeed" className="w-6 h-6 object-contain" />
                   </div>
-                  <div className="flex items-center">
-                    <div>
-                      <CardTitle className="text-base font-medium">Lightspeed Retail</CardTitle>
-                      <CardDescription>Point of Sale Integration</CardDescription>
-                    </div>
-                    {integrations.lightspeed_new.connected && (
-                      <CheckCircle className="h-5 w-5 ml-2 text-green-500" />
-                    )}
+                  <div>
+                    <CardTitle className="text-sm font-medium">Lightspeed Retail</CardTitle>
+                    <CardDescription className="text-xs">Point of Sale</CardDescription>
                   </div>
+                </div>
+                {integrations.lightspeed_new.connected && (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="flex justify-between items-center">
+                <div className="text-xs text-muted-foreground">
+                  {integrations.lightspeed_new.connected ? (
+                    <span className="text-green-600 font-medium">Connected</span>
+                  ) : (
+                    <span className="text-gray-500">Not connected</span>
+                  )}
                 </div>
                 <Button 
                   variant={integrations.lightspeed_new.connected ? "outline" : "default"}
-                  className="rounded-md"
+                  size="sm"
+                  className="rounded-md h-7 px-3 text-xs"
                   onClick={integrations.lightspeed_new.connected ? disconnectLightspeedNew : connectLightspeedNew}
                   disabled={connecting === "lightspeed_new"}
                 >
-                  {connecting === "lightspeed_new" ? "Connecting..." : 
+                  {connecting === "lightspeed_new" ? "..." : 
                   integrations.lightspeed_new.connected ? "Disconnect" : "Connect"}
                 </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="pb-2">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Connect to Lightspeed Retail POS (R-Series) for advanced inventory and customer management.
-                </p>
-                {integrations.lightspeed_new.connected && integrations.lightspeed_new.data?.connectedAt && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Connected on {new Date(integrations.lightspeed_new.data.connectedAt.toDate()).toLocaleDateString()} at {new Date(integrations.lightspeed_new.data.connectedAt.toDate()).toLocaleTimeString()}
-                  </p>
-                )}
               </div>
             </CardContent>
           </Card>
           
           {/* Square Integration Card */}
-          <Card className="rounded-md bg-gray-50">
-            <CardHeader className="pb-3">
+          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center">
-                    <img src="/square.png" alt="Square" className="w-8 h-8 object-contain" />
+                <div className="flex items-center space-x-3">
+                  <img src="/squarepro.png" alt="Square" className="w-8 h-8 object-contain" />
+                  <div>
+                    <CardTitle className="text-sm font-medium">Square</CardTitle>
+                    <CardDescription className="text-xs">Point of Sale</CardDescription>
                   </div>
-                  <div className="flex items-center">
-                    <div>
-                      <CardTitle className="text-base font-medium">Square</CardTitle>
-                      <CardDescription>Point of Sale Integration</CardDescription>
-                    </div>
-                    {integrations.square.connected && (
-                      <CheckCircle className="h-5 w-5 ml-2 text-green-500" />
-                    )}
-                  </div>
+                </div>
+                {integrations.square.connected && (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="flex justify-between items-center">
+                <div className="text-xs text-muted-foreground">
+                  {integrations.square.connected ? (
+                    <span className="text-green-600 font-medium">Connected</span>
+                  ) : (
+                    <span className="text-gray-500">Not connected</span>
+                  )}
                 </div>
                 <Button 
                   variant={integrations.square.connected ? "outline" : "default"}
-                  className="rounded-md"
+                  size="sm"
+                  className="rounded-md h-7 px-3 text-xs"
                   onClick={integrations.square.connected ? disconnectSquare : connectSquare}
                   disabled={connecting === "square"}
                 >
-                  {connecting === "square" ? "Connecting..." : 
+                  {connecting === "square" ? "..." : 
                   integrations.square.connected ? "Disconnect" : "Connect"}
                 </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="pb-2">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Sync customer data, transactions, and inventory with your Square account for a seamless integration.
-                </p>
               </div>
             </CardContent>
           </Card>
 
           {/* Google Integration Card */}
-          <Card className="rounded-md bg-gray-50">
-            <CardHeader className="pb-3">
+          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60">
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center">
-                    <Globe className="h-6 w-6 text-blue-500" />
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gray-50 rounded-md flex items-center justify-center">
+                    <Globe className="h-5 w-5 text-blue-500" />
                   </div>
-                  <div className="flex items-center">
-                    <div>
-                      <CardTitle className="text-base font-medium">Google</CardTitle>
-                      <CardDescription>Business & Analytics Integration</CardDescription>
-                    </div>
+                  <div>
+                    <CardTitle className="text-sm font-medium">Google</CardTitle>
+                    <CardDescription className="text-xs">Business & Analytics</CardDescription>
                   </div>
                 </div>
-                <Button 
-                  variant="default"
-                  className="rounded-md"
-                  onClick={() => toast({
-                    title: "Coming Soon",
-                    description: "Google integration will be available soon",
-                  })}
-                >
-                  Connect
-                </Button>
               </div>
             </CardHeader>
-            <CardContent className="pb-2">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Connect with Google services including Google Analytics, Google Business Profile, and more.
-                </p>
+            <CardContent className="pt-0">
+              <div className="flex justify-between items-center">
+                <div className="text-xs text-muted-foreground">
+                  <span className="text-gray-400">Coming Soon</span>
+                </div>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  className="rounded-md h-7 px-3 text-xs"
+                  disabled
+                >
+                  Coming Soon
+                </Button>
               </div>
             </CardContent>
           </Card>
           
           {/* Lightspeed Restaurant Integration Card */}
-          <Card className="rounded-md bg-gray-50">
-            <CardHeader className="pb-3">
+          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60">
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center">
-                    <img src="/lslogo.png" alt="Lightspeed Restaurant" className="w-8 h-8 object-contain" />
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gray-50 rounded-md flex items-center justify-center">
+                    <img src="/lslogo.png" alt="Lightspeed Restaurant" className="w-6 h-6 object-contain" />
                   </div>
-                  <div className="flex items-center">
-                    <div>
-                      <CardTitle className="text-base font-medium">Lightspeed Restaurant</CardTitle>
-                      <CardDescription>Restaurant POS Integration</CardDescription>
-                    </div>
+                  <div>
+                    <CardTitle className="text-sm font-medium">Lightspeed Restaurant</CardTitle>
+                    <CardDescription className="text-xs">Restaurant POS</CardDescription>
                   </div>
                 </div>
-                <Button 
-                  variant="default"
-                  className="rounded-md"
-                  onClick={() => toast({
-                    title: "Coming Soon",
-                    description: "Lightspeed Restaurant integration will be available soon",
-                  })}
-                >
-                  Connect
-                </Button>
               </div>
             </CardHeader>
-            <CardContent className="pb-2">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Connect to Lightspeed Restaurant POS for specialized restaurant management and customer loyalty.
-                </p>
+            <CardContent className="pt-0">
+              <div className="flex justify-between items-center">
+                <div className="text-xs text-muted-foreground">
+                  <span className="text-gray-400">Coming Soon</span>
+                </div>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  className="rounded-md h-7 px-3 text-xs"
+                  disabled
+                >
+                  Coming Soon
+                </Button>
               </div>
             </CardContent>
           </Card>
           
           {/* HubSpot Integration Card */}
-          <Card className="rounded-md bg-gray-50">
-            <CardHeader className="pb-3">
+          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center">
-                    <BarChart2 className="h-6 w-6 text-orange-500" />
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gray-50 rounded-md flex items-center justify-center">
+                    <BarChart2 className="h-5 w-5 text-orange-500" />
                   </div>
-                  <div className="flex items-center">
-                    <div>
-                      <CardTitle className="text-base font-medium">HubSpot</CardTitle>
-                      <CardDescription>CRM Integration</CardDescription>
-                    </div>
+                  <div>
+                    <CardTitle className="text-sm font-medium">HubSpot</CardTitle>
+                    <CardDescription className="text-xs">CRM Integration</CardDescription>
                   </div>
                 </div>
-                <Button 
-                  variant="default"
-                  className="rounded-md"
-                  onClick={() => toast({
-                    title: "Coming Soon",
-                    description: "HubSpot integration will be available soon",
-                  })}
-                >
-                  Connect
-                </Button>
+                {integrations.hubspot.connected && (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                )}
               </div>
             </CardHeader>
-            <CardContent className="pb-2">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Sync customer data with HubSpot CRM for enhanced marketing, sales, and customer service.
-                </p>
+            <CardContent className="pt-0">
+              <div className="flex justify-between items-center">
+                <div className="text-xs text-muted-foreground">
+                  {integrations.hubspot.connected ? (
+                    <span className="text-green-600 font-medium">Connected</span>
+                  ) : (
+                    <span className="text-gray-500">Not connected</span>
+                  )}
+                </div>
+                <Button 
+                  variant={integrations.hubspot.connected ? "outline" : "default"}
+                  size="sm"
+                  className="rounded-md h-7 px-3 text-xs"
+                  onClick={integrations.hubspot.connected ? disconnectHubSpot : connectHubSpot}
+                  disabled={connecting === "hubspot"}
+                >
+                  {connecting === "hubspot" ? "..." : 
+                  integrations.hubspot.connected ? "Disconnect" : "Connect"}
+                </Button>
               </div>
             </CardContent>
           </Card>
           
           {/* Mailchimp Integration Card */}
-          <Card className="rounded-md bg-gray-50">
-            <CardHeader className="pb-3">
+          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60">
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center">
-                    <Mail className="h-6 w-6 text-yellow-500" />
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gray-50 rounded-md flex items-center justify-center">
+                    <Mail className="h-5 w-5 text-yellow-500" />
                   </div>
-                  <div className="flex items-center">
-                    <div>
-                      <CardTitle className="text-base font-medium">Mailchimp</CardTitle>
-                      <CardDescription>Email Marketing Integration</CardDescription>
-                    </div>
+                  <div>
+                    <CardTitle className="text-sm font-medium">Mailchimp</CardTitle>
+                    <CardDescription className="text-xs">Email Marketing</CardDescription>
                   </div>
                 </div>
-                <Button 
-                  variant="default"
-                  className="rounded-md"
-                  onClick={() => toast({
-                    title: "Coming Soon",
-                    description: "Mailchimp integration will be available soon",
-                  })}
-                >
-                  Connect
-                </Button>
               </div>
             </CardHeader>
-            <CardContent className="pb-2">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Sync contacts and create targeted email campaigns through Mailchimp integration.
-                </p>
+            <CardContent className="pt-0">
+              <div className="flex justify-between items-center">
+                <div className="text-xs text-muted-foreground">
+                  <span className="text-gray-400">Coming Soon</span>
+                </div>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  className="rounded-md h-7 px-3 text-xs"
+                  disabled
+                >
+                  Coming Soon
+                </Button>
               </div>
             </CardContent>
           </Card>
           
           {/* Twilio Integration Card */}
-          <Card className="rounded-md bg-gray-50">
-            <CardHeader className="pb-3">
+          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60">
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center">
-                    <Phone className="h-6 w-6 text-blue-600" />
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gray-50 rounded-md flex items-center justify-center">
+                    <Phone className="h-5 w-5 text-blue-600" />
                   </div>
-                  <div className="flex items-center">
-                    <div>
-                      <CardTitle className="text-base font-medium">Twilio</CardTitle>
-                      <CardDescription>SMS & Voice Integration</CardDescription>
-                    </div>
+                  <div>
+                    <CardTitle className="text-sm font-medium">Twilio</CardTitle>
+                    <CardDescription className="text-xs">SMS & Voice</CardDescription>
                   </div>
                 </div>
-                <Button 
-                  variant="default"
-                  className="rounded-md"
-                  onClick={() => toast({
-                    title: "Coming Soon",
-                    description: "Twilio integration will be available soon",
-                  })}
-                >
-                  Connect
-                </Button>
               </div>
             </CardHeader>
-            <CardContent className="pb-2">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Enable SMS notifications, appointment reminders, and communication with your customers.
-                </p>
+            <CardContent className="pt-0">
+              <div className="flex justify-between items-center">
+                <div className="text-xs text-muted-foreground">
+                  <span className="text-gray-400">Coming Soon</span>
+                </div>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  className="rounded-md h-7 px-3 text-xs"
+                  disabled
+                >
+                  Coming Soon
+                </Button>
               </div>
             </CardContent>
           </Card>
           
           {/* Xero Integration Card */}
-          <Card className="rounded-md bg-gray-50">
-            <CardHeader className="pb-3">
+          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60">
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center">
-                    <Calculator className="h-6 w-6 text-green-600" />
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gray-50 rounded-md flex items-center justify-center">
+                    <Calculator className="h-5 w-5 text-green-600" />
                   </div>
-                  <div className="flex items-center">
-                    <div>
-                      <CardTitle className="text-base font-medium">Xero</CardTitle>
-                      <CardDescription>Accounting Integration</CardDescription>
-                    </div>
+                  <div>
+                    <CardTitle className="text-sm font-medium">Xero</CardTitle>
+                    <CardDescription className="text-xs">Accounting</CardDescription>
                   </div>
                 </div>
-                <Button 
-                  variant="default"
-                  className="rounded-md"
-                  onClick={() => toast({
-                    title: "Coming Soon",
-                    description: "Xero integration will be available soon",
-                  })}
-                >
-                  Connect
-                </Button>
               </div>
             </CardHeader>
-            <CardContent className="pb-2">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Sync financial data with Xero for streamlined accounting and financial management.
-                </p>
+            <CardContent className="pt-0">
+              <div className="flex justify-between items-center">
+                <div className="text-xs text-muted-foreground">
+                  <span className="text-gray-400">Coming Soon</span>
+                </div>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  className="rounded-md h-7 px-3 text-xs"
+                  disabled
+                >
+                  Coming Soon
+                </Button>
               </div>
             </CardContent>
           </Card>

@@ -127,8 +127,10 @@ export default function AgentsPage() {
   // Create Agent Modal State
   const [createAgentForm, setCreateAgentForm] = useState({
     name: '',
-    steps: ['']
+    steps: [''],
+    smartGeneratePrompt: ''
   })
+  const [agentCreationMode, setAgentCreationMode] = useState<'smart' | 'manual'>('smart')
   const [showScheduleDropdown, setShowScheduleDropdown] = useState(false)
   const [createAgentSchedule, setCreateAgentSchedule] = useState({
     frequency: '',
@@ -1002,11 +1004,6 @@ export default function AgentsPage() {
       },
     },
   ]
-
-  const [isEditingAgentName, setIsEditingAgentName] = useState(false) // Add state for editing agent name
-  const [isGeneratingSteps, setIsGeneratingSteps] = useState(false) // Add state for generating steps
-  const [generatedStepsText, setGeneratedStepsText] = useState('') // Add state for generated steps text
-  const [isGeneratingAgentIdeas, setIsGeneratingAgentIdeas] = useState(false) // Add state for generating agent ideas
 
   return (
     <div className="px-6 py-6">
@@ -2765,23 +2762,21 @@ export default function AgentsPage() {
                     <DialogTitle className="text-xl font-semibold">Create New Agent</DialogTitle>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          // Placeholder function - will be implemented later
-                          toast({
-                            title: "Agent Ideas Generator",
-                            description: "This feature will analyse your available tools and suggest agent ideas based on your business needs.",
-                          })
-                        }}
-                        className="rounded-md gap-2"
-                      >
-                        <Brain className="h-4 w-4" />
-                        Agent Ideas
-                      </Button>
-                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        // Placeholder function - will be implemented later
+                        toast({
+                          title: "Agent Ideas Generator",
+                          description: "This feature will analyse your available tools and suggest agent ideas based on your business needs.",
+                        })
+                      }}
+                      className="rounded-md gap-2"
+                    >
+                      <Brain className="h-4 w-4" />
+                      Agent Ideas
+                    </Button>
                     <div className="relative">
                       <Button
                         variant="outline"
@@ -2909,56 +2904,6 @@ export default function AgentsPage() {
                   <Input
                     id="agent-name"
                     placeholder="e.g., Social Media Manager, Order Processing Agent"
-                    value={createAgentForm.name}
-                    onChange={(e) => 
-                      setCreateAgentForm(prev => ({ ...prev, name: e.target.value }))
-                    }
-                    className="rounded-md"
-                  />
-                </div>
-
-                {/* Agent Steps */}
-                <div>
-                  <Label className="text-base font-medium">Agent Steps</Label>
-                  <p className="text-sm text-gray-600 mb-3">Define what your agent should do, step by step</p>
-                  <div className="space-y-3">
-                    {createAgentForm.steps.map((step, index) => (
-                      <div key={index} className="flex gap-2">
-                        <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 mt-2">
-                          {index + 1}
-                        </div>
-                        <div className="flex-1">
-                          <Textarea
-                            placeholder={`Step ${index + 1}: Describe what the agent should do...`}
-                            value={step}
-                            onChange={(e) => {
-                              const newSteps = [...createAgentForm.steps]
-                              newSteps[index] = e.target.value
-                              setCreateAgentForm(prev => ({ ...prev, steps: newSteps }))
-                            }}
-                            className="rounded-md min-h-[80px]"
-                          />
-                        </div>
-                        {createAgentForm.steps.length > 1 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              const newSteps = createAgentForm.steps.filter((_, i) => i !== index)
-                              setCreateAgentForm(prev => ({ ...prev, steps: newSteps }))
-                            }}
-                            className="mt-2 h-6 w-6 p-0 text-gray-400 hover:text-red-500"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
                         setCreateAgentForm(prev => ({ ...prev, steps: [...prev.steps, ''] }))
                       }}
                       className="rounded-md gap-2 mt-2"
@@ -2967,6 +2912,124 @@ export default function AgentsPage() {
                       Add Step
                     </Button>
                   </div>
+                </div>
+
+                {/* Agent Steps with Tabs */}
+                <div>
+                  <Label className="text-base font-medium">Agent Steps</Label>
+                  <p className="text-sm text-gray-600 mb-3">Define what your agent should do</p>
+                  
+                  {/* Tab Selection */}
+                  <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit mb-4">
+                    <button
+                      onClick={() => setAgentCreationMode("smart")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        agentCreationMode === "smart"
+                          ? "text-gray-800 bg-white shadow-sm"
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
+                    >
+                      <Brain className="h-4 w-4" />
+                      Smart Generate
+                    </button>
+                    <button
+                      onClick={() => setAgentCreationMode("manual")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        agentCreationMode === "manual"
+                          ? "text-gray-800 bg-white shadow-sm"
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
+                    >
+                      <FileText className="h-4 w-4" />
+                      Manual
+                    </button>
+                  </div>
+                  
+                  {/* Smart Generate Tab */}
+                  {agentCreationMode === "smart" && (
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-sm text-gray-600 mb-2">Describe what you want this agent to do, and we'll generate the steps for you</p>
+                        <Textarea
+                          placeholder="e.g., Create an agent that monitors our inventory levels across all stores and automatically sends reorder alerts when stock is low"
+                          value={createAgentForm.smartGeneratePrompt}
+                          onChange={(e) => 
+                            setCreateAgentForm(prev => ({ ...prev, smartGeneratePrompt: e.target.value }))
+                          }
+                          className="rounded-md min-h-[120px]"
+                        />
+                      </div>
+                      
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => {
+                          // Placeholder function - will be implemented later
+                          toast({
+                            title: "Agent Steps Generator",
+                            description: "This feature will analyse your tools and generate agent steps based on your requirements.",
+                          })
+                        }}
+                        className="rounded-md"
+                        disabled={!createAgentForm.smartGeneratePrompt.trim()}
+                      >
+                        <Brain className="h-4 w-4 mr-2" />
+                        Generate Steps
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {/* Manual Tab */}
+                  {agentCreationMode === "manual" && (
+                    <div className="space-y-3">
+                      {createAgentForm.steps.map((step, index) => (
+                        <div key={index} className="flex gap-2">
+                          <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 mt-2">
+                            {index + 1}
+                          </div>
+                          <div className="flex-1">
+                            <Textarea
+                              placeholder={`Step ${index + 1}: Describe what the agent should do...`}
+                              value={step}
+                              onChange={(e) => {
+                                const newSteps = [...createAgentForm.steps]
+                                newSteps[index] = e.target.value
+                                setCreateAgentForm(prev => ({ ...prev, steps: newSteps }))
+                              }}
+                              className="rounded-md min-h-[80px]"
+                            />
+                          </div>
+                          {createAgentForm.steps.length > 1 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const newSteps = createAgentForm.steps.filter((_, i) => i !== index)
+                                setCreateAgentForm(prev => ({ ...prev, steps: newSteps }))
+                              }}
+                              className="mt-2 h-6 w-6 p-0 text-gray-400 hover:text-red-500"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setCreateAgentForm(prev => ({ ...prev, steps: [...prev.steps, ''] }))
+                        }}
+                        className="rounded-md gap-2 mt-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add Step
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -3202,6 +3265,8 @@ export default function AgentsPage() {
                       // Prepare agent data with selected tools
                       const agentData = {
                         name: createAgentForm.name,
+                        smartGeneratePrompt: createAgentForm.smartGeneratePrompt,
+                        creationMode: agentCreationMode,
                         steps: createAgentForm.steps.filter(s => s.trim()),
                         selectedTools: Array.from(selectedTools),
                         schedule: createAgentSchedule.frequency ? createAgentSchedule : null,
@@ -3217,14 +3282,14 @@ export default function AgentsPage() {
                       })
                       
                       // Reset form and close modal
-                      setCreateAgentForm({ name: '', steps: [''] })
+                      setCreateAgentForm({ name: '', steps: [''], smartGeneratePrompt: '' })
                       setCreateAgentSchedule({ frequency: '', time: '12:00', days: [], selectedDay: '' })
                       setSelectedTools(new Set())
                       setToolsSearchQuery('')
                       setIsCreateAgentModalOpen(false)
                     }}
                     className="w-full rounded-md"
-                    disabled={!createAgentForm.name.trim() || createAgentForm.steps.filter(s => s.trim()).length === 0}
+                    disabled={!createAgentForm.name.trim() || (agentCreationMode === "manual" && createAgentForm.steps.filter(s => s.trim()).length === 0) || (agentCreationMode === "smart" && !createAgentForm.smartGeneratePrompt.trim())}
                   >
                     Create Agent
                   </Button>
@@ -3232,7 +3297,7 @@ export default function AgentsPage() {
                   <Button
                     variant="outline"
                     onClick={() => {
-                      setCreateAgentForm({ name: '', steps: [''] })
+                      setCreateAgentForm({ name: '', steps: [''], smartGeneratePrompt: '' })
                       setCreateAgentSchedule({ frequency: '', time: '12:00', days: [], selectedDay: '' })
                       setSelectedTools(new Set())
                       setToolsSearchQuery('')

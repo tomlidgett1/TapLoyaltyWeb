@@ -1362,6 +1362,16 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   
   const [conversationId, setConversationId] = useState<string | null>(null)
   
+  // Add state for real conversations from Firestore
+  const [conversations, setConversations] = useState<{
+    id: string
+    title: string
+    lastMessage: string
+    timestamp: Date
+    messageCount: number
+  }[]>([])
+  const [conversationsLoading, setConversationsLoading] = useState(false)
+  
   // Add state for SSE streaming
   const [streamingStatus, setStreamingStatus] = useState<string>('')
   const [streamingStep, setStreamingStep] = useState<string>('')
@@ -1494,6 +1504,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       })
     }
   }, [showChatbotPanel, conversationId])
+  
+  // Fetch conversations when chat panel opens
+  useEffect(() => {
+    if (showChatbotPanel && user?.uid) {
+      fetchConversations()
+    }
+  }, [showChatbotPanel, user?.uid])
   
   // Cleanup EventSource when component unmounts
   useEffect(() => {
@@ -1880,6 +1897,45 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         setStreamingProgress(null)
         // Tool selection is now part of message history, no need to clear
       }, 3000)
+    }
+  }
+  
+  // Function to fetch conversations from Firestore/API
+  const fetchConversations = async () => {
+    if (!user?.uid) return
+    
+    setConversationsLoading(true)
+    try {
+      const response = await fetch(`/api/merchants/${user.uid}/agent/history/conversations`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
+      
+      if (response.ok) {
+        const conversationsData = await response.json()
+        console.log('Fetched conversations:', conversationsData)
+        
+        // Transform API data to match our state interface
+        const formattedConversations = conversationsData.map((conv: any) => ({
+          id: conv.conversationId || conv.id,
+          title: conv.title || `Conversation ${conv.conversationId?.slice(-6) || 'Unknown'}`,
+          lastMessage: conv.lastMessage || '',
+          timestamp: new Date(conv.updatedAt || conv.createdAt || Date.now()),
+          messageCount: conv.messageCount || 0
+        }))
+        
+        setConversations(formattedConversations)
+      } else {
+        console.error('Failed to fetch conversations:', response.status)
+        setConversations([])
+      }
+    } catch (error) {
+      console.error('Error fetching conversations:', error)
+      setConversations([])
+    } finally {
+      setConversationsLoading(false)
     }
   }
   

@@ -4,9 +4,10 @@ import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, query, getDocs, orderBy, limit, where, doc, getDoc } from "firebase/firestore"
+import { collection, query, getDocs, orderBy, limit, where, doc, getDoc, Timestamp } from "firebase/firestore"
 import { format, formatDistanceToNow } from "date-fns"
 import Link from "next/link"
+import { useCustomers } from "@/hooks/use-customers"
 
 // UI Components
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
@@ -36,6 +37,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { RewardDetailSheet } from "@/components/reward-detail-sheet"
+import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banner-preview"
+import { BannerScheduler } from "@/components/banner-scheduler"
 import { cn } from "@/lib/utils"
 import { updateDoc, deleteDoc } from "firebase/firestore"
 
@@ -80,8 +83,35 @@ import {
   ChevronUp,
   ChevronDown,
   HelpCircle,
-  Percent
+  Percent,
+  User,
+  Trash2,
+  Mail,
+  ArrowLeft,
+  Headphones,
+  Inbox,
+  Brain,
+  BarChart3,
+  Receipt,
+  ShoppingCart,
+  Calculator,
+  FileText,
+  X,
+  ArrowUpRight
 } from "lucide-react"
+
+// Kibo Table Components
+import {
+  TableBody as KiboTableBody,
+  TableCell as KiboTableCell,
+  TableColumnHeader,
+  TableHead as KiboTableHead,
+  TableHeader as KiboTableHeader,
+  TableHeaderGroup,
+  TableProvider,
+  TableRow as KiboTableRow,
+} from '@/components/ui/kibo-ui/table'
+import type { ColumnDef } from '@/components/ui/kibo-ui/table'
 
 // Component interfaces
 interface Reward {
@@ -130,6 +160,23 @@ interface Banner {
   clickCount?: number;
   viewCount?: number;
   isAgentGenerated?: boolean;
+  link?: string;
+  color?: string;
+  cssColor?: string;
+  isActive: boolean;
+  scheduleStartMinutes?: number;
+  scheduleEndMinutes?: number;
+  scheduleStartHour?: number;
+  scheduleEndHour?: number;
+  scheduled?: boolean;
+  buttonText?: string;
+  style?: string;
+  merchantName?: string;
+  visibilityType?: string;
+  endsNextDay?: boolean;
+  impressions?: number;
+  impressioncustomercount?: number;
+  bannerAction?: string;
 }
 
 interface PointsRule {
@@ -315,82 +362,632 @@ const ProgramCard = ({
 
 const ProgramsTabContent = () => {
   const router = useRouter()
+  const [activeProgramTab, setActiveProgramTab] = useState("coffee")
   
-  // Mock data - in real app, this would come from Firebase
-  const [programs, setPrograms] = useState([
+  // Sample data for top customers
+  const getTopCustomers = (programType: string) => {
+    const coffeeCustomers = [
+      {
+        id: 'top-1',
+        name: 'Sarah Johnson',
+        totalStamps: 47,
+        totalSpent: 0,
+        totalTransactions: 0,
+        redeemed: 4,
+        rank: 1
+      },
+      {
+        id: 'top-2', 
+        name: 'Emma Thompson',
+        totalStamps: 32,
+        totalSpent: 0,
+        totalTransactions: 0,
+        redeemed: 3,
+        rank: 2
+      },
+      {
+        id: 'top-3',
+        name: 'Michael Chen',
+        totalStamps: 28,
+        totalSpent: 0,
+        totalTransactions: 0,
+        redeemed: 2,
+        rank: 3
+      },
+      {
+        id: 'top-4',
+        name: 'Lisa Park',
+        totalStamps: 21,
+        totalSpent: 0,
+        totalTransactions: 0,
+        redeemed: 2,
+        rank: 4
+      },
+      {
+        id: 'top-5',
+        name: 'David Kim',
+        totalStamps: 18,
+        totalSpent: 0,
+        totalTransactions: 0,
+        redeemed: 1,
+        rank: 5
+      }
+    ]
+    
+    const voucherCustomers = [
+      {
+        id: 'top-6',
+        name: 'David Wilson',
+        totalStamps: 0,
+        totalSpent: 1250,
+        totalTransactions: 0,
+        redeemed: 12,
+        rank: 1
+      },
+      {
+        id: 'top-7',
+        name: 'Lisa Anderson',
+        totalStamps: 0,
+        totalSpent: 980,
+        totalTransactions: 0,
+        redeemed: 9,
+        rank: 2
+      },
+      {
+        id: 'top-8',
+        name: 'James Roberts',
+        totalStamps: 0,
+        totalSpent: 750,
+        totalTransactions: 0,
+        redeemed: 7,
+        rank: 3
+      },
+      {
+        id: 'top-9',
+        name: 'Maria Garcia',
+        totalStamps: 0,
+        totalSpent: 650,
+        totalTransactions: 0,
+        redeemed: 6,
+        rank: 4
+      },
+      {
+        id: 'top-10',
+        name: 'Alex Turner',
+        totalStamps: 0,
+        totalSpent: 520,
+        totalTransactions: 0,
+        redeemed: 5,
+        rank: 5
+      }
+    ]
+    
+    const transactionCustomers = [
     {
-      id: 'coffee',
-      title: 'Coffee Loyalty Program',
-      description: 'Digital stamp card for coffee or beverages - customers buy X drinks, get 1 free',
-      icon: <Coffee className="h-8 w-8" />,
-      status: 'not-configured' as const,
-      stats: []
-    },
-    {
-      id: 'voucher',
-      title: 'Recurring Voucher',
-      description: 'Automatic dollar-value vouchers when customers reach spending thresholds',
-      icon: <Percent className="h-8 w-8" />,
-      status: 'not-configured' as const,
-      stats: []
-    },
-    {
-      id: 'transaction',
-      title: 'Transaction Reward',
-      description: 'Reward customers based on number of transactions at your business',
-      icon: <ShoppingBag className="h-8 w-8" />,
-      status: 'not-configured' as const,
-      stats: []
+        id: 'top-11',
+        name: 'John Brown',
+        totalStamps: 0,
+        totalSpent: 0,
+        totalTransactions: 84,
+        redeemed: 8,
+        rank: 1
+      },
+      {
+        id: 'top-12',
+        name: 'Anna Martinez',
+        totalStamps: 0,
+        totalSpent: 0,
+        totalTransactions: 67,
+        redeemed: 6,
+        rank: 2
+      },
+      {
+        id: 'top-13',
+        name: 'Chris Lee',
+        totalStamps: 0,
+        totalSpent: 0,
+        totalTransactions: 52,
+        redeemed: 5,
+        rank: 3
+      },
+      {
+        id: 'top-14',
+        name: 'Sophie Chen',
+        totalStamps: 0,
+        totalSpent: 0,
+        totalTransactions: 43,
+        redeemed: 4,
+        rank: 4
+      },
+      {
+        id: 'top-15',
+        name: 'Tom Wilson',
+        totalStamps: 0,
+        totalSpent: 0,
+        totalTransactions: 38,
+        redeemed: 3,
+        rank: 5
+      }
+    ]
+    
+    switch(programType) {
+      case 'coffee': return coffeeCustomers
+      case 'voucher': return voucherCustomers  
+      case 'transaction': return transactionCustomers
+      default: return []
     }
-  ])
-
-  const handleConfigure = (programId: string) => {
-    // Navigate to create page with specific tab
-    router.push(`/create?tab=${programId}`)
   }
-
-  const handleView = (programId: string) => {
-    // Navigate to program details
-    router.push(`/store/programs/${programId}`)
+  
+  // Sample data for recent transactions
+  const getRecentTransactions = (programType: string) => {
+    const coffeeTransactions = [
+      {
+        id: 'trans-1',
+        customerName: 'Sarah Johnson',
+        type: 'stamp_earned',
+        description: 'Stamp earned - Large Latte',
+        amount: 5.50,
+        progress: '+1 stamp',
+        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        status: 'completed'
+      },
+      {
+        id: 'trans-2',
+        customerName: 'Emma Thompson', 
+        type: 'reward_redeemed',
+        description: 'Free coffee redeemed',
+        amount: 0,
+        progress: 'Used 10 stamps',
+        timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
+        status: 'completed'
+    },
+    {
+        id: 'trans-3',
+        customerName: 'Michael Chen',
+        type: 'stamp_earned',
+        description: 'Stamp earned - Cappuccino',
+        amount: 4.75,
+        progress: '+1 stamp',
+        timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+        status: 'completed'
+      },
+      {
+        id: 'trans-4',
+        customerName: 'Lisa Park',
+        type: 'stamp_earned',
+        description: 'Stamp earned - Americano',
+        amount: 3.25,
+        progress: '+1 stamp',
+        timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+        status: 'completed'
+      },
+      {
+        id: 'trans-5',
+        customerName: 'David Kim',
+        type: 'reward_redeemed',
+        description: 'Free coffee redeemed',
+        amount: 0,
+        progress: 'Used 10 stamps',
+        timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        status: 'completed'
+      }
+    ]
+    
+    const voucherTransactions = [
+      {
+        id: 'trans-6',
+        customerName: 'David Wilson',
+        type: 'progress_made',
+        description: 'Purchase towards voucher',
+        amount: 25.00,
+        progress: '+$25 progress',
+        timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000),
+        status: 'completed'
+      },
+      {
+        id: 'trans-7',
+        customerName: 'Lisa Anderson',
+        type: 'voucher_redeemed',
+        description: '$10 voucher redeemed',
+        amount: 45.00,
+        progress: 'Used $100 spend',
+        timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000),
+        status: 'completed'
+      },
+      {
+        id: 'trans-8',
+        customerName: 'James Roberts',
+        type: 'progress_made',
+        description: 'Purchase towards voucher',
+        amount: 15.75,
+        progress: '+$15.75 progress',
+        timestamp: new Date(Date.now() - 8 * 60 * 60 * 1000),
+        status: 'completed'
+      },
+      {
+        id: 'trans-9',
+        customerName: 'Maria Garcia',
+        type: 'voucher_redeemed',
+        description: '$10 voucher redeemed',
+        amount: 32.50,
+        progress: 'Used $100 spend',
+        timestamp: new Date(Date.now() - 12 * 60 * 60 * 1000),
+        status: 'completed'
+      }
+    ]
+    
+    const transactionTransactions = [
+      {
+        id: 'trans-10',
+        customerName: 'John Brown',
+        type: 'transaction_counted',
+        description: 'Transaction counted',
+        amount: 12.50,
+        progress: '+1 transaction',
+        timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000),
+        status: 'completed'
+    },
+    {
+        id: 'trans-11',
+        customerName: 'Anna Martinez',
+        type: 'reward_earned',
+        description: 'Transaction reward earned',
+        amount: 0,
+        progress: 'Completed 10 transactions',
+        timestamp: new Date(Date.now() - 8 * 60 * 60 * 1000),
+        status: 'completed'
+      },
+      {
+        id: 'trans-12',
+        customerName: 'Chris Lee',
+        type: 'transaction_counted',
+        description: 'Transaction counted',
+        amount: 18.75,
+        progress: '+1 transaction',
+        timestamp: new Date(Date.now() - 10 * 60 * 60 * 1000),
+        status: 'completed'
+      },
+      {
+        id: 'trans-13',
+        customerName: 'Sophie Chen',
+        type: 'transaction_counted',
+        description: 'Transaction counted',
+        amount: 8.25,
+        progress: '+1 transaction',
+        timestamp: new Date(Date.now() - 14 * 60 * 60 * 1000),
+        status: 'completed'
+      }
+    ]
+    
+    switch(programType) {
+      case 'coffee': return coffeeTransactions
+      case 'voucher': return voucherTransactions
+      case 'transaction': return transactionTransactions
+      default: return []
+    }
   }
+  
+  // Get KPIs based on program type
+  const getKPIs = (programType: string) => {
+    switch(programType) {
+      case 'coffee':
+        return [
+          { label: 'Total Enrolled', value: '847', change: '+12%', icon: Users, color: 'text-blue-600' },
+          { label: 'Stamps Earned', value: '12,450', change: '+8%', icon: Coffee, color: 'text-amber-600' },
+          { label: 'Free Coffees', value: '1,245', change: '+15%', icon: Award, color: 'text-green-600' },
+          { label: 'Redemption Rate', value: '68%', change: '+3%', icon: BarChart, color: 'text-purple-600' }
+        ]
+      case 'voucher':
+        return [
+          { label: 'Total Enrolled', value: '523', change: '+18%', icon: Users, color: 'text-blue-600' },
+          { label: 'Total Spent', value: '$87,450', change: '+22%', icon: DollarSign, color: 'text-green-600' },
+          { label: 'Vouchers Issued', value: '874', change: '+25%', icon: Ticket, color: 'text-purple-600' },
+          { label: 'Avg Order Value', value: '$47.50', change: '+12%', icon: BarChart, color: 'text-amber-600' }
+        ]
+      case 'transaction':
+        return [
+          { label: 'Total Enrolled', value: '692', change: '+9%', icon: Users, color: 'text-blue-600' },
+          { label: 'Total Transactions', value: '8,934', change: '+14%', icon: ShoppingBag, color: 'text-green-600' },
+          { label: 'Rewards Earned', value: '893', change: '+16%', icon: Award, color: 'text-purple-600' },
+          { label: 'Avg Frequency', value: '2.8/week', change: '+8%', icon: Activity, color: 'text-amber-600' }
+        ]
+      default:
+        return []
+    }
+  }
+  
+  // Column definitions for top customers table
+  const topCustomersColumns: ColumnDef<ReturnType<typeof getTopCustomers>[number]>[] = [
+    {
+      accessorKey: 'rank',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Rank" />
+      ),
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <div className={cn(
+            "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
+            row.original.rank === 1 ? "bg-yellow-100 text-yellow-800" :
+            row.original.rank === 2 ? "bg-gray-100 text-gray-800" :
+            row.original.rank === 3 ? "bg-amber-100 text-amber-800" :
+            "bg-blue-100 text-blue-800"
+          )}>
+            {row.original.rank}
+          </div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'name',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Customer" />
+      ),
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <Avatar className="size-6">
+            <AvatarFallback className="bg-blue-100 text-blue-600 text-xs">
+              {row.original.name.split(' ').map(n => n[0]).join('')}
+            </AvatarFallback>
+          </Avatar>
+          <div className="font-medium text-sm">{row.original.name}</div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'metric',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title={
+          activeProgramTab === 'coffee' ? 'Stamps' :
+          activeProgramTab === 'voucher' ? 'Spent' : 'Transactions'
+        } />
+      ),
+      cell: ({ row }) => (
+        <div className="text-sm font-medium">
+          {activeProgramTab === 'coffee' ? row.original.totalStamps :
+           activeProgramTab === 'voucher' ? `$${row.original.totalSpent}` :
+           row.original.totalTransactions}
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'redeemed',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Redeemed" />
+      ),
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1">
+          <Award className="h-3 w-3 text-amber-500" />
+          <span className="text-sm font-medium">{row.original.redeemed}</span>
+        </div>
+      ),
+    },
+  ]
+  
+  // Column definitions for transactions table
+  const transactionsColumns: ColumnDef<ReturnType<typeof getRecentTransactions>[number]>[] = [
+    {
+      accessorKey: 'customerName',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Customer" />
+      ),
+      cell: ({ row }) => (
+        <div className="flex items-center gap-3">
+          <Avatar className="size-8">
+            <AvatarFallback className="bg-orange-100 text-orange-600">
+              {row.original.customerName.split(' ').map(n => n[0]).join('')}
+            </AvatarFallback>
+          </Avatar>
+          <div className="font-medium text-sm">{row.original.customerName}</div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'description',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Transaction" />
+      ),
+      cell: ({ row }) => (
+        <div>
+          <div className="font-medium text-sm">{row.original.description}</div>
+          <div className="text-xs text-muted-foreground capitalize">{row.original.type.replace('_', ' ')}</div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'amount',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Amount" />
+      ),
+      cell: ({ row }) => (
+        <div className="text-sm font-medium">
+          {row.original.amount > 0 ? `$${row.original.amount.toFixed(2)}` : 'Free'}
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'progress',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Progress" />
+      ),
+      cell: ({ row }) => (
+        <Badge 
+          variant="outline" 
+          className={cn(
+            "rounded-md",
+            row.original.type.includes('earned') || row.original.type.includes('progress') 
+              ? "bg-blue-50 text-blue-700 border-blue-200"
+              : "bg-purple-50 text-purple-700 border-purple-200"
+          )}
+        >
+          {row.original.progress}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: 'timestamp',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Time" />
+      ),
+      cell: ({ row }) => (
+        <div className="text-sm">
+          <div>{format(row.original.timestamp, 'MMM d')}</div>
+          <div className="text-xs text-muted-foreground">
+            {format(row.original.timestamp, 'h:mm a')}
+          </div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'status',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Status" />
+      ),
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <div className="h-2 w-2 bg-green-500 rounded-full" />
+          <span className="text-sm font-medium capitalize">{row.original.status}</span>
+        </div>
+      ),
+    },
+  ]
 
   return (
     <div className="space-y-6">
-      {/* Header section */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-lg font-medium">Recurring Programs</h2>
-          <p className="text-sm text-gray-600 mt-1">Set up automated loyalty programs that run continuously</p>
-        </div>
-        <Button 
-          className="gap-2 rounded-md"
-          onClick={() => router.push('/create')}
+      {/* Small Tabs */}
+      <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+        <button
+          onClick={() => setActiveProgramTab("coffee")}
+          className={cn(
+            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+            activeProgramTab === "coffee"
+              ? "text-gray-800 bg-white shadow-sm"
+              : "text-gray-600 hover:bg-gray-200/70"
+          )}
         >
-          <Plus className="h-4 w-4" />
-          Create Program
-        </Button>
-      </div>
+          <Coffee className="h-3 w-3" />
+          Coffee Program
+        </button>
+        <button
+          onClick={() => setActiveProgramTab("voucher")}
+          className={cn(
+            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+            activeProgramTab === "voucher"
+              ? "text-gray-800 bg-white shadow-sm"
+              : "text-gray-600 hover:bg-gray-200/70"
+          )}
+        >
+          <Percent className="h-3 w-3" />
+          Recurring Voucher
+        </button>
+        <button
+          onClick={() => setActiveProgramTab("transaction")}
+          className={cn(
+            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+            activeProgramTab === "transaction"
+              ? "text-gray-800 bg-white shadow-sm"
+              : "text-gray-600 hover:bg-gray-200/70"
+          )}
+        >
+          <ShoppingBag className="h-3 w-3" />
+          Transaction Program
+        </button>
+        </div>
 
-      {/* Programs grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {programs.map((program) => (
-          <ProgramCard
-            key={program.id}
-            title={program.title}
-            description={program.description}
-            icon={program.icon}
-            status={program.status}
-            stats={program.stats}
-            onConfigure={() => handleConfigure(program.id)}
-            onView={() => handleView(program.id)}
-          />
+      {/* KPIs Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {getKPIs(activeProgramTab).map((kpi, index) => (
+          <div key={index} className="bg-white border border-gray-200 rounded-md p-5 flex flex-col hover:border-gray-300 transition-colors">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-gray-600 mb-1">{kpi.label}</h3>
+                <p className="text-2xl font-bold text-gray-900">{kpi.value}</p>
+                <p className="text-xs text-green-600 font-medium mt-1">{kpi.change}</p>
+              </div>
+              <div className="text-gray-400">
+                <kpi.icon className="h-6 w-6" />
+              </div>
+            </div>
+          </div>
         ))}
       </div>
 
+      {/* Tables Row - 2/3 + 1/3 Layout */}
+      <div className="grid grid-cols-12 gap-6">
+        {/* Left - Transactions Table (2/3) */}
+        <div className="col-span-8">
+          <div className="flex items-start justify-between mb-4">
+            <h3 className="text-lg font-medium text-gray-900">Recent Transactions</h3>
+        <Button 
+              size="sm" 
+              variant="outline"
+              className="rounded-md text-xs px-3 py-1 h-7"
+              onClick={() => router.push('/programs')}
+        >
+              View All
+              <ChevronRight size={14} className="ml-1 opacity-70" />
+        </Button>
+      </div>
 
+          {/* Table Container */}
+          <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
+            <TableProvider columns={transactionsColumns} data={getRecentTransactions(activeProgramTab)}>
+              <KiboTableHeader>
+                {({ headerGroup }) => (
+                  <TableHeaderGroup key={headerGroup.id} headerGroup={headerGroup}>
+                    {({ header }) => <KiboTableHead key={header.id} header={header} />}
+                  </TableHeaderGroup>
+                )}
+              </KiboTableHeader>
+              <KiboTableBody>
+                {({ row }) => (
+                  <KiboTableRow key={row.id} row={row}>
+                    {({ cell }) => <KiboTableCell key={cell.id} cell={cell} />}
+                  </KiboTableRow>
+                )}
+              </KiboTableBody>
+            </TableProvider>
+          </div>
+      </div>
+
+        {/* Right - Top Customers Table (1/3) */}
+        <div className="col-span-4">
+          <div className="flex items-start justify-between mb-4">
+            <h3 className="text-lg font-medium text-gray-900">Top Customers</h3>
+            <Button 
+              size="sm" 
+              variant="outline"
+              className="rounded-md text-xs px-3 py-1 h-7"
+              onClick={() => router.push('/customers')}
+            >
+              View All
+              <ChevronRight size={14} className="ml-1 opacity-70" />
+            </Button>
+          </div>
+          
+          {/* Table Container */}
+          <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
+            <TableProvider columns={topCustomersColumns} data={getTopCustomers(activeProgramTab)}>
+              <KiboTableHeader>
+                {({ headerGroup }) => (
+                  <TableHeaderGroup key={headerGroup.id} headerGroup={headerGroup}>
+                    {({ header }) => <KiboTableHead key={header.id} header={header} />}
+                  </TableHeaderGroup>
+                )}
+              </KiboTableHeader>
+              <KiboTableBody>
+                {({ row }) => (
+                  <KiboTableRow key={row.id} row={row}>
+                    {({ cell }) => <KiboTableCell key={cell.id} cell={cell} />}
+                  </KiboTableRow>
+                )}
+              </KiboTableBody>
+            </TableProvider>
+          </div>
+        </div>
+      </div>
     </div>
   )
-};
+}
 
 // Full Rewards Tab Component
 const RewardsTabContent = () => {
@@ -473,9 +1070,9 @@ const RewardsTabContent = () => {
           }
         });
         
-        setRewardsData(fetchedRewards);
+        setRewardsData(fetchedRewards)
       } catch (error) {
-        console.error("Error fetching rewards:", error);
+        console.error("Error fetching rewards:", error)
       } finally {
         setLoadingRewards(false);
       }
@@ -900,7 +1497,7 @@ const RewardsTabContent = () => {
         </div>
         
         <TabsContent value="all" className="mt-0">
-          <Card className="rounded-lg overflow-hidden">
+          <Card className="rounded-md overflow-hidden">
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
@@ -1161,7 +1758,7 @@ const RewardsTabContent = () => {
 
         {/* Add other tab contents for individual, customer-specific, programs, agent */}
         <TabsContent value="individual" className="mt-0">
-          <Card className="rounded-lg overflow-hidden">
+          <Card className="rounded-md overflow-hidden">
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
@@ -1294,7 +1891,7 @@ const RewardsTabContent = () => {
 
         {/* Similar structure for other tabs... */}
         <TabsContent value="customer-specific" className="mt-0">
-          <Card className="rounded-lg overflow-hidden">
+          <Card className="rounded-md overflow-hidden">
             <CardContent className="p-0">
               <div className="p-8 text-center">
                 <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
@@ -1308,7 +1905,7 @@ const RewardsTabContent = () => {
         </TabsContent>
 
         <TabsContent value="programs" className="mt-0">
-          <Card className="rounded-lg overflow-hidden">
+          <Card className="rounded-md overflow-hidden">
             <CardContent className="p-0">
               <div className="p-8 text-center">
                 <Award className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
@@ -1322,7 +1919,7 @@ const RewardsTabContent = () => {
         </TabsContent>
 
         <TabsContent value="agent" className="mt-0">
-          <Card className="rounded-lg overflow-hidden">
+          <Card className="rounded-md overflow-hidden">
             <CardContent className="p-0">
               <div className="p-8 text-center">
                 <Sparkles className="h-12 w-12 mx-auto mb-4 text-blue-500" />
@@ -1366,6 +1963,1588 @@ const RewardsTabContent = () => {
           rewardId={selectedRewardId}
         />
       )}
+    </div>
+  );
+};
+
+// Full Customers Tab Component
+const CustomersTabContent = () => {
+  const router = useRouter()
+  const { customers, loading } = useCustomers()
+  const [search, setSearch] = useState("")
+  const [sortField, setSortField] = useState<'fullName' | 'lastTransactionDate' | 'totalLifetimeSpend' | 'redemptionCount' | 'pointsBalance' | 'lifetimeTransactionCount'>('lastTransactionDate')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [cohort, setCohort] = useState<'all' | 'active' | 'engaged' | 'at-risk' | 'dormant' | 'new' | 'loyal' | 'vip'>('all')
+
+  // Filter and sort customers
+  const filteredCustomers = useMemo(() => {
+    let result = [...customers]
+
+    // Search filter
+    if (search) {
+      const searchLower = search.toLowerCase()
+      result = result.filter(customer => 
+        customer.fullName.toLowerCase().includes(searchLower)
+      )
+    }
+
+    // Cohort filter
+    switch (cohort) {
+      case 'active':
+        result = result.filter(c => c.daysSinceLastVisit <= 30)
+        break
+      case 'engaged':
+        result = result.filter(c => c.daysSinceLastVisit <= 90)
+        break
+      case 'at-risk':
+        result = result.filter(c => 
+          c.daysSinceLastVisit > 90 && c.daysSinceLastVisit <= 180
+        )
+        break
+      case 'dormant':
+        result = result.filter(c => c.daysSinceLastVisit > 180)
+        break
+      case 'new':
+        result = result.filter(c => c.daysSinceFirstPurchase <= 30)
+        break
+      case 'loyal':
+        result = result.filter(c => c.lifetimeTransactionCount >= 10)
+        break
+      case 'vip':
+        // Get top 10% by spend
+        const sortedBySpend = [...customers].sort((a, b) => 
+          b.totalLifetimeSpend - a.totalLifetimeSpend
+        )
+        const topCount = Math.max(1, Math.ceil(customers.length * 0.1))
+        const threshold = sortedBySpend[topCount - 1]?.totalLifetimeSpend
+        result = result.filter(c => c.totalLifetimeSpend >= threshold)
+        break
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      let comparison = 0
+      switch (sortField) {
+        case 'fullName':
+          comparison = a.fullName.localeCompare(b.fullName)
+          break
+        case 'lastTransactionDate':
+          comparison = b.lastTransactionDate - a.lastTransactionDate
+          break
+        case 'totalLifetimeSpend':
+          comparison = b.totalLifetimeSpend - a.totalLifetimeSpend
+          break
+        case 'redemptionCount':
+          comparison = (b.redemptionCount || 0) - (a.redemptionCount || 0)
+          break
+        case 'pointsBalance':
+          comparison = b.pointsBalance - a.pointsBalance
+          break
+        case 'lifetimeTransactionCount':
+          comparison = b.lifetimeTransactionCount - a.lifetimeTransactionCount
+          break
+      }
+      return sortDirection === 'desc' ? comparison : -comparison
+    })
+
+    return result
+  }, [customers, search, sortField, sortDirection, cohort])
+
+  const handleSort = (field: typeof sortField) => {
+    if (field === sortField) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('desc')
+    }
+  }
+
+  const SortButton = ({ field, children }: { field: typeof sortField, children: React.ReactNode }) => (
+    <button
+      onClick={() => handleSort(field)}
+      className="flex items-center gap-1 hover:text-foreground"
+    >
+      {children}
+      {sortField === field && (
+        sortDirection === 'desc' ? 
+          <ChevronDown className="h-4 w-4" /> : 
+          <ChevronUp className="h-4 w-4" />
+      )}
+    </button>
+  )
+
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return 'N/A'
+    
+    try {
+      // Handle Firestore Timestamp
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
+      return formatDistanceToNow(date, { addSuffix: true })
+    } catch (error) {
+      console.error('Error formatting date:', error)
+      return 'Invalid date'
+    }
+  }
+
+  // Check if any filters are active
+  const hasActiveFilters = () => {
+    return sortField !== 'lastTransactionDate' || 
+           sortDirection !== 'desc' || 
+           cohort !== 'all' ||
+           search.length > 0
+  }
+
+  // Get cohort badge color
+  const getCohortBadge = (customer: any) => {
+    if (customer.daysSinceLastVisit <= 30) {
+      return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 rounded-md">Active</Badge>
+    } else if (customer.daysSinceLastVisit <= 90) {
+      return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 rounded-md">Engaged</Badge>
+    } else if (customer.daysSinceLastVisit <= 180) {
+      return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 rounded-md">At Risk</Badge>
+    } else {
+      return <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 rounded-md">Dormant</Badge>
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+        <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+          <button
+            onClick={() => setCohort("all")}
+            className={cn(
+              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+              cohort === "all"
+                ? "text-gray-800 bg-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-200/70"
+            )}
+          >
+            <Users className="h-3 w-3" />
+            All Customers
+          </button>
+          <button
+            onClick={() => setCohort("active")}
+            className={cn(
+              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+              cohort === "active"
+                ? "text-gray-800 bg-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-200/70"
+            )}
+          >
+            <CheckCircle className="h-3 w-3" />
+            Active
+          </button>
+          <button
+            onClick={() => setCohort("at-risk")}
+            className={cn(
+              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+              cohort === "at-risk"
+                ? "text-gray-800 bg-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-200/70"
+            )}
+          >
+            <Clock className="h-3 w-3" />
+            At Risk
+          </button>
+          <button
+            onClick={() => setCohort("dormant")}
+            className={cn(
+              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+              cohort === "dormant"
+                ? "text-gray-800 bg-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-200/70"
+            )}
+          >
+            <XCircle className="h-3 w-3" />
+            Dormant
+          </button>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input 
+              type="search" 
+              placeholder="Search customers..." 
+              className="pl-9 h-9 w-[250px] rounded-md"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-9 gap-2 rounded-md">
+                <ArrowRight className="h-4 w-4 rotate-90" />
+                Sort
+                {sortField !== 'lastTransactionDate' && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    ({sortField.replace(/([A-Z])/g, ' $1').toLowerCase()})
+                  </span>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 rounded-md">
+              <Label className="px-2 py-1.5 text-sm font-medium">Sort by</Label>
+              <Separator />
+              <div className="p-1">
+                <button
+                  onClick={() => {
+                    setSortField('fullName')
+                    setSortDirection('asc')
+                  }}
+                  className={cn(
+                    "flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
+                    sortField === 'fullName' && sortDirection === 'asc' && "bg-accent"
+                  )}
+                >
+                  Name (A to Z)
+                </button>
+                <button
+                  onClick={() => {
+                    setSortField('fullName')
+                    setSortDirection('desc')
+                  }}
+                  className={cn(
+                    "flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
+                    sortField === 'fullName' && sortDirection === 'desc' && "bg-accent"
+                  )}
+                >
+                  Name (Z to A)
+                </button>
+                <Separator className="my-1" />
+                <button
+                  onClick={() => {
+                    setSortField('lastTransactionDate')
+                    setSortDirection('desc')
+                  }}
+                  className={cn(
+                    "flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
+                    sortField === 'lastTransactionDate' && sortDirection === 'desc' && "bg-accent"
+                  )}
+                >
+                  <Clock className="mr-2 h-4 w-4" />
+                  Most Recent Visit
+                </button>
+                <button
+                  onClick={() => {
+                    setSortField('totalLifetimeSpend')
+                    setSortDirection('desc')
+                  }}
+                  className={cn(
+                    "flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
+                    sortField === 'totalLifetimeSpend' && sortDirection === 'desc' && "bg-accent"
+                  )}
+                >
+                  <DollarSign className="mr-2 h-4 w-4" />
+                  Highest Spend
+                </button>
+                <button
+                  onClick={() => {
+                    setSortField('lifetimeTransactionCount')
+                    setSortDirection('desc')
+                  }}
+                  className={cn(
+                    "flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
+                    sortField === 'lifetimeTransactionCount' && sortDirection === 'desc' && "bg-accent"
+                  )}
+                >
+                  <ShoppingBag className="mr-2 h-4 w-4" />
+                  Most Transactions
+                </button>
+                <button
+                  onClick={() => {
+                    setSortField('pointsBalance')
+                    setSortDirection('desc')
+                  }}
+                  className={cn(
+                    "flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
+                    sortField === 'pointsBalance' && sortDirection === 'desc' && "bg-accent"
+                  )}
+                >
+                  <Gift className="mr-2 h-4 w-4" />
+                  Highest Points
+                </button>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-9 gap-2 rounded-md">
+                <Filter className="h-4 w-4" />
+                Filter
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 rounded-md">
+              <Label className="px-2 py-1.5 text-sm font-medium">Customer Cohorts</Label>
+              <Separator />
+              <div className="p-1">
+                <button
+                  onClick={() => setCohort('all')}
+                  className={cn(
+                    "flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
+                    cohort === 'all' && "bg-accent"
+                  )}
+                >
+                  <Users className="mr-2 h-4 w-4" />
+                  All Customers
+                </button>
+                <button
+                  onClick={() => setCohort('active')}
+                  className={cn(
+                    "flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
+                    cohort === 'active' && "bg-accent"
+                  )}
+                >
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Active (30d)
+                </button>
+                <button
+                  onClick={() => setCohort('engaged')}
+                  className={cn(
+                    "flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
+                    cohort === 'engaged' && "bg-accent"
+                  )}
+                >
+                  <Activity className="mr-2 h-4 w-4" />
+                  Engaged (90d)
+                </button>
+                <button
+                  onClick={() => setCohort('at-risk')}
+                  className={cn(
+                    "flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
+                    cohort === 'at-risk' && "bg-accent"
+                  )}
+                >
+                  <Clock className="mr-2 h-4 w-4" />
+                  At Risk (90-180d)
+                </button>
+                <button
+                  onClick={() => setCohort('dormant')}
+                  className={cn(
+                    "flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
+                    cohort === 'dormant' && "bg-accent"
+                  )}
+                >
+                  <XCircle className="mr-2 h-4 w-4" />
+                  Dormant (180d+)
+                </button>
+                <Separator className="my-1" />
+                <button
+                  onClick={() => setCohort('new')}
+                  className={cn(
+                    "flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
+                    cohort === 'new' && "bg-accent"
+                  )}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Customers
+                </button>
+                <button
+                  onClick={() => setCohort('loyal')}
+                  className={cn(
+                    "flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
+                    cohort === 'loyal' && "bg-accent"
+                  )}
+                >
+                  <Award className="mr-2 h-4 w-4" />
+                  Loyal (10+ visits)
+                </button>
+                <button
+                  onClick={() => setCohort('vip')}
+                  className={cn(
+                    "flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
+                    cohort === 'vip' && "bg-accent"
+                  )}
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  VIP (Top 10%)
+                </button>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          {hasActiveFilters() && (
+            <Button 
+              variant="ghost" 
+              className="h-9 gap-2 rounded-md px-3 text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setSortField('lastTransactionDate')
+                setSortDirection('desc')
+                setCohort('all')
+                setSearch('')
+              }}
+            >
+              <XCircle className="h-4 w-4" />
+              Clear
+            </Button>
+          )}
+        </div>
+      </div>
+      
+      <Card className="rounded-md overflow-hidden">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>
+                  <SortButton field="fullName">Customer</SortButton>
+                </TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>
+                  <SortButton field="pointsBalance">Points</SortButton>
+                </TableHead>
+                <TableHead>
+                  <SortButton field="lifetimeTransactionCount">Transactions</SortButton>
+                </TableHead>
+                <TableHead>
+                  <SortButton field="totalLifetimeSpend">Lifetime Spend</SortButton>
+                </TableHead>
+                <TableHead>
+                  <SortButton field="lastTransactionDate">Last Visit</SortButton>
+                </TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-24 text-center">
+                    <div className="flex justify-center">
+                      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : filteredCustomers.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-24 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                        <Users className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                      <h3 className="mt-4 text-lg font-medium">
+                        No customers found
+                      </h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {search ? "Try adjusting your search query" : 
+                         `No ${cohort === "all" ? "" : cohort + " "}customers available`}
+                      </p>
+                      {!search && (
+                        <Button 
+                          className="mt-4 h-9 gap-2 rounded-md"
+                          onClick={() => router.push('/customers/invite')}
+                        >
+                          <Users className="h-4 w-4" />
+                          Invite Customers
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredCustomers.map((customer) => (
+                  <TableRow 
+                    key={customer.customerId} 
+                    className="hover:bg-muted/50 cursor-pointer"
+                    onClick={() => router.push(`/customers/id?customerId=${customer.customerId}`)}
+                  >
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-md bg-[#007AFF]/10 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                          {customer.profileData?.shareProfileWithMerchants && customer.profileData?.profilePictureUrl ? (
+                            <img 
+                              src={customer.profileData.profilePictureUrl} 
+                              alt={customer.fullName}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <User className="h-5 w-5 text-[#007AFF]" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="font-medium">{customer.fullName}</div>
+                          {customer.membershipTier && (
+                            <div className="text-xs text-muted-foreground">
+                              {customer.membershipTier}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {getCohortBadge(customer)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Gift className="h-4 w-4 text-blue-600" />
+                        <span>{customer.pointsBalance.toLocaleString()}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+                        <span>{customer.lifetimeTransactionCount}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <DollarSign className="h-4 w-4 text-green-600" />
+                        <span>${customer.totalLifetimeSpend}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDate(customer.lastTransactionDate)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0 rounded-md">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="rounded-md">
+                            <DropdownMenuItem onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/customers/id?customerId=${customer.customerId}`);
+                            }}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              className="text-red-600"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // Handle delete
+                              }}
+                            >
+                              <XCircle className="h-4 w-4 mr-2" />
+                              Delete Customer
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+// Full Banners Tab Component
+const BannersTabContent = () => {
+  const router = useRouter()
+  const { user } = useAuth()
+  const [banners, setBanners] = useState<Banner[]>([])
+  const [searchQuery, setSearchQuery] = useState("")
+  const [showFilters, setShowFilters] = useState(false)
+  const [statusFilters, setStatusFilters] = useState({
+    active: true,
+    draft: true,
+    expired: true
+  })
+  const [dateFilter, setDateFilter] = useState("all")
+  const [loading, setLoading] = useState(true)
+  const [bannerToDelete, setBannerToDelete] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState("all")
+
+  // Fetch banners from Firestore
+  useEffect(() => {
+    const fetchBanners = async () => {
+      if (!user?.uid) return
+      
+      try {
+        setLoading(true)
+        
+        const bannersRef = collection(db, 'merchants', user.uid, 'banners')
+        const bannersQuery = query(bannersRef, orderBy('createdAt', 'desc'))
+        const bannersSnapshot = await getDocs(bannersQuery)
+        
+        const bannersData: Banner[] = []
+        bannersSnapshot.forEach((doc) => {
+          const data = doc.data();
+          
+          bannersData.push({
+            id: doc.id,
+            ...data as Omit<Banner, 'id'>,
+            // Use the actual isActive field if it exists, otherwise derive from status
+            isActive: data.isActive !== undefined ? data.isActive : data.status === "active"
+          })
+        })
+        
+        setBanners(bannersData)
+      } catch (error) {
+        console.error("Error fetching banners:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchBanners()
+  }, [user])
+
+  // Filtering function
+  const filteredBanners = banners.filter(banner => {
+    const matchesSearch = !searchQuery
+      ? true
+      : banner.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (banner.description && banner.description.toLowerCase().includes(searchQuery.toLowerCase()))
+
+    // Handle undefined or null status values
+    const status = banner.status?.toLowerCase() || 'unknown';
+    const matchesStatus = statusFilters[status as keyof typeof statusFilters] || 
+                          (status === 'unknown' && statusFilters.draft);
+
+    // For demonstration only (no custom start/end date range here)
+    if (dateFilter === "all") {
+      return matchesSearch && matchesStatus
+    }
+
+    // Example: filter only today's banners
+    if (dateFilter === "today") {
+      const bannerDate = banner.createdAt ? 
+        (typeof banner.createdAt === 'object' && 'seconds' in banner.createdAt) ? 
+          new Date(banner.createdAt.seconds * 1000) : 
+          new Date(banner.createdAt) : 
+        new Date();
+        
+      const now = new Date()
+      const isToday =
+        bannerDate.getDate() === now.getDate() &&
+        bannerDate.getMonth() === now.getMonth() &&
+        bannerDate.getFullYear() === now.getFullYear()
+      return matchesSearch && matchesStatus && isToday
+    }
+
+    return matchesSearch && matchesStatus
+  })
+
+  // Format date for display - handle both string dates and Firestore timestamps
+  const formatDate = (dateValue: Timestamp | string | undefined) => {
+    if (!dateValue) return "N/A"
+    
+    try {
+      // Handle Firestore Timestamp
+      if (typeof dateValue === 'object' && 'seconds' in dateValue) {
+        const date = new Date(dateValue.seconds * 1000)
+        return format(date, 'MMM d, yyyy h:mm a')
+      }
+      
+      // Handle string date
+      if (typeof dateValue === 'string') {
+        const date = new Date(dateValue)
+        return format(date, 'MMM d, yyyy h:mm a')
+      }
+      
+      return "Invalid date"
+    } catch (e) {
+      console.error("Error formatting date:", e)
+      return "Invalid date"
+    }
+  }
+
+  const handleStatusFilterChange = (status: string, checked: boolean) => {
+    setStatusFilters(prev => ({
+      ...prev,
+      [status.toLowerCase()]: checked
+    }))
+  }
+
+  const handleToggleActive = async (bannerId: string, newActiveState: boolean) => {
+    try {
+      if (!user?.uid) return;
+      
+      const bannerRef = doc(db, 'merchants', user.uid, 'banners', bannerId);
+      await updateDoc(bannerRef, {
+        isActive: newActiveState,
+        updatedAt: new Date()
+      });
+      
+      // Update local state
+      setBanners(prev => prev.map(banner => 
+        banner.id === bannerId 
+          ? {...banner, isActive: newActiveState} 
+          : banner
+      ));
+      
+    } catch (error) {
+      console.error("Error toggling banner active state:", error);
+    }
+  };
+
+  const handleBannerScheduleUpdate = async (bannerId: string, updates: any) => {
+    try {
+      if (!user?.uid) return;
+      
+      const bannerRef = doc(db, 'merchants', user.uid, 'banners', bannerId);
+      
+      // If we're setting scheduled to false, also set isActive to false
+      if (updates.scheduled === false) {
+        updates.isActive = false;
+      }
+      
+      await updateDoc(bannerRef, {
+        ...updates,
+        updatedAt: new Date()
+      });
+      
+      // Update local state
+      setBanners(prev => prev.map(banner => 
+        banner.id === bannerId 
+          ? {...banner, ...updates} 
+          : banner
+      ));
+      
+    } catch (error) {
+      console.error("Error updating banner:", error);
+    }
+  };
+
+  const formatTime = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60)
+    const mins = minutes % 60
+    
+    const period = hours < 12 ? 'AM' : 'PM'
+    const displayHours = hours === 0 || hours === 12 ? 12 : hours % 12
+    
+    return `${displayHours}:${mins.toString().padStart(2, '0')} ${period}`
+  }
+
+  // Add a delete function to handle banner deletion
+  const handleDeleteBanner = (bannerId: string) => {
+    setBannerToDelete(bannerId);
+  };
+
+  // Add a function to handle the actual deletion when confirmed
+  const confirmDeleteBanner = async () => {
+    if (!bannerToDelete || !user?.uid) {
+      setBannerToDelete(null);
+      return;
+    }
+    
+    try {
+      const bannerRef = doc(db, 'merchants', user.uid, 'banners', bannerToDelete);
+      await deleteDoc(bannerRef);
+      
+      setBanners(prev => prev.filter(banner => banner.id !== bannerToDelete));
+    } catch (error) {
+      console.error("Error deleting banner:", error);
+    } finally {
+      setBannerToDelete(null);
+    }
+  };
+
+  const handleScheduleBanner = (bannerId: string) => {
+    // Check if there are already 4 scheduled banners
+    const scheduledCount = banners.filter((b: Banner) => b.scheduled).length
+    if (scheduledCount >= 4) {
+      return
+    }
+
+    // Simple scheduling - could be enhanced with conflict detection
+    const startMinutes = 0; // Start of day
+    const endMinutes = 240; // 4 hours
+    
+    handleBannerScheduleUpdate(bannerId, {
+      scheduled: true,
+      scheduleStartMinutes: startMinutes,
+      scheduleEndMinutes: endMinutes
+    })
+  };
+
+  const handleExportPDF = () => {
+    // Mock PDF export functionality
+    console.log("Exporting banners to PDF");
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center">
+          <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+            <button
+              className={cn(
+                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                activeTab === "all"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+              onClick={() => setActiveTab("all")}
+            >
+              <Image className="h-3 w-3" />
+              All Banners
+            </button>
+            <button
+              className={cn(
+                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                activeTab === "active"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+              onClick={() => setActiveTab("active")}
+            >
+              <Eye className="h-3 w-3" />
+              Active
+            </button>
+            <button
+              className={cn(
+                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                activeTab === "inactive"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+              onClick={() => setActiveTab("inactive")}
+            >
+              <Eye className="h-3 w-3 opacity-50" />
+              Inactive
+            </button>
+          </div>
+          
+          {/* Vertical divider */}
+          <div className="h-8 w-px bg-gray-200 mx-2"></div>
+          
+          <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+            <button
+              className={cn(
+                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                activeTab === "schedule"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+              onClick={() => setActiveTab("schedule")}
+            >
+              <Clock className="h-3 w-3" />
+              Schedule
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="relative w-[250px]">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search banners..."
+              className="pl-8"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+
+          <Popover open={showFilters} onOpenChange={setShowFilters}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="gap-1">
+                <Filter className="h-4 w-4" />
+                Filters
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-4" align="end">
+              <div className="space-y-4">
+                <h4 className="font-medium">Filter Banners</h4>
+
+                <div className="space-y-2">
+                  <Label>Date Range</Label>
+                  <select 
+                    value={dateFilter} 
+                    onChange={(e) => setDateFilter(e.target.value)}
+                    className="w-full p-2 border rounded-md"
+                  >
+                    <option value="all">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="thisWeek">This Week</option>
+                    <option value="thisMonth">This Month</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
+                        id="status-active" 
+                        checked={statusFilters.active}
+                        onCheckedChange={(checked) => handleStatusFilterChange("active", !!checked)}
+                      />
+                      <Label htmlFor="status-active" className="cursor-pointer">Active</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
+                        id="status-draft" 
+                        checked={statusFilters.draft}
+                        onCheckedChange={(checked) => handleStatusFilterChange("draft", !!checked)}
+                      />
+                      <Label htmlFor="status-draft" className="cursor-pointer">Draft</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
+                        id="status-expired" 
+                        checked={statusFilters.expired}
+                        onCheckedChange={(checked) => handleStatusFilterChange("expired", !!checked)}
+                      />
+                      <Label htmlFor="status-expired" className="cursor-pointer">Expired</Label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-between pt-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setDateFilter("all")
+                      setStatusFilters({ active: true, draft: true, expired: true })
+                    }}
+                  >
+                    Reset
+                  </Button>
+                  <Button onClick={() => setShowFilters(false)}>
+                    Apply
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+          
+          <Button 
+            variant="outline" 
+            className="h-9 gap-2 rounded-lg"
+            onClick={handleExportPDF}
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
+          
+          <Button 
+            onClick={() => router.push('/store/banner/create')}
+            className="flex items-center gap-1"
+          >
+            <Plus className="h-4 w-4" />
+            Create Banner
+          </Button>
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === "all" && (
+        <>
+          {loading ? (
+            <div className="h-24 flex items-center justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
+            </div>
+          ) : filteredBanners.length === 0 ? (
+            <div className="h-24 flex flex-col items-center justify-center space-y-2">
+              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                <BellRing className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-medium">No banners found</h3>
+              <p className="text-sm text-muted-foreground">
+                {searchQuery
+                  ? "Try adjusting your search query"
+                  : "Create your first banner to get started"}
+              </p>
+              <Button
+                variant="default"
+                className="mt-2 gap-2"
+                onClick={() => router.push("/store/banner/create")}
+              >
+                <Plus className="h-4 w-4" />
+                Create Banner
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredBanners.map((banner) => (
+                <div key={banner.id} className="flex flex-col bg-gray-50 rounded-lg overflow-hidden">
+                  {/* Banner Preview with status badges */}
+                  <div className="relative">
+                    {/* Status Badge */}
+                    <div className="absolute top-2 right-2 z-10 flex space-x-2">
+                      {banner.isActive && (
+                        <div className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full flex items-center">
+                          <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                          Live
+                        </div>
+                      )}
+                      {banner.scheduled && (
+                        <div className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center">
+                          <Clock className="h-3 w-3 mr-1" />
+                          Scheduled
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Banner preview */}
+                    <div className="rounded-t-lg overflow-hidden shadow-sm">
+                      <BannerPreview
+                        title={banner.title}
+                        description={banner.description}
+                        color={banner.color ?? "#0ea5e9"}
+                        styleType={
+                          banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
+                          banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
+                          banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
+                          BannerStyle.LIGHT
+                        }
+                        merchantName={banner.merchantName ?? "My Store"}
+                        visibilityType={BannerVisibility.ALL}
+                        isActive={banner.isActive}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Content section */}
+                  <div className="p-4">
+                    {/* Banner title and description */}
+                    <h4 className="font-medium text-sm mb-1">{banner.title}</h4>
+                    <p className="text-xs text-gray-500 mb-2 line-clamp-2">{banner.description}</p>
+                    
+                    {/* Stats in a row format */}
+                    <div className="flex flex-wrap gap-x-4 gap-y-2 mb-3">
+                      <div className="flex items-center text-xs text-gray-600">
+                        <BarChart className="h-3 w-3 mr-1 text-gray-400" />
+                        <span className="font-medium">{banner.impressions || 0}</span>
+                        <span className="text-gray-400 ml-1">views</span>
+                      </div>
+                      <div className="flex items-center text-xs text-gray-600">
+                        <Users className="h-3 w-3 mr-1 text-gray-400" />
+                        <span className="font-medium">{banner.impressioncustomercount || 0}</span>
+                        <span className="text-gray-400 ml-1">customers</span>
+                      </div>
+                    </div>
+                    
+                    {/* Schedule information */}
+                    <div className="flex items-center gap-1 mb-3 text-xs">
+                      <Clock className="h-3.5 w-3.5 text-gray-400" />
+                      {banner.scheduled ? (
+                        <span className="text-blue-600">
+                          {banner.scheduleStartMinutes !== undefined && banner.scheduleEndMinutes !== undefined ? (
+                            <>
+                              {banner.isActive ? "Showing: " : "Scheduled: "}
+                              {formatTime(banner.scheduleStartMinutes)} - {formatTime(banner.scheduleEndMinutes % (24 * 60))}
+                              {banner.endsNextDay && <span className="ml-1 text-xs bg-blue-100 px-1 py-0.5 rounded">Next day</span>}
+                            </>
+                          ) : (
+                            banner.isActive ? "Showing all day" : "Scheduled all day"
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-amber-600 font-medium">Not currently scheduled</span>
+                      )}
+                    </div>
+                    
+                    {/* Action buttons */}
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1"
+                        onClick={() => router.push(`/store/banner/${banner.id}/edit`)}
+                      >
+                        <Edit className="h-3.5 w-3.5 mr-1.5" />
+                        Edit
+                      </Button>
+                      
+                      {banner.scheduled ? (
+                        <Button 
+                          variant="outline"
+                          size="sm" 
+                          className="flex-1 text-red-600 hover:bg-red-50 border-red-200"
+                          onClick={() => {
+                            handleBannerScheduleUpdate(banner.id, {
+                              scheduled: false
+                            })
+                          }}
+                        >
+                          <Clock className="h-3.5 w-3.5 mr-1.5" />
+                          Remove
+                        </Button>
+                      ) : (
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => handleScheduleBanner(banner.id)}
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1.5" />
+                          Schedule
+                        </Button>
+                      )}
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1 text-red-600 hover:bg-red-50 border-red-200"
+                        onClick={() => handleDeleteBanner(banner.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeTab === "active" && (
+        <div className="space-y-8">
+          {/* Currently Live section */}
+          <div>
+            <h3 className="text-lg font-medium mb-4 flex items-center">
+              <Eye className="h-5 w-5 mr-2 text-green-500" />
+              Currently Live
+              <Badge variant="outline" className="ml-2">
+                {filteredBanners.filter(banner => banner.scheduled && banner.isActive).length}
+              </Badge>
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              These banners are currently visible to customers based on their schedule.
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredBanners
+                .filter(banner => banner.scheduled && banner.isActive)
+                .map((banner) => (
+                  <div key={banner.id} className="flex flex-col bg-gray-50 rounded-lg overflow-hidden">
+                    {/* Banner content similar to above */}
+                    <div className="relative">
+                      <div className="absolute top-2 right-2 z-10 flex space-x-2">
+                        <div className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full flex items-center">
+                          <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                          Live
+                        </div>
+                      </div>
+                      
+                      <div className="rounded-t-lg overflow-hidden shadow-sm">
+                        <BannerPreview
+                          title={banner.title}
+                          description={banner.description}
+                          color={banner.color ?? "#0ea5e9"}
+                          styleType={
+                            banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
+                            banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
+                            banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
+                            BannerStyle.LIGHT
+                          }
+                          merchantName={banner.merchantName ?? "My Store"}
+                          visibilityType={BannerVisibility.ALL}
+                          isActive={banner.isActive}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="p-4">
+                      <h4 className="font-medium text-sm mb-1">{banner.title}</h4>
+                      <p className="text-xs text-gray-500 mb-2 line-clamp-2">{banner.description}</p>
+                      
+                      <div className="flex flex-wrap gap-x-4 gap-y-2 mb-3">
+                        <div className="flex items-center text-xs text-gray-600">
+                          <BarChart className="h-3 w-3 mr-1 text-gray-400" />
+                          <span className="font-medium">{banner.impressions || 0}</span>
+                          <span className="text-gray-400 ml-1">views</span>
+                        </div>
+                        <div className="flex items-center text-xs text-gray-600">
+                          <Users className="h-3 w-3 mr-1 text-gray-400" />
+                          <span className="font-medium">{banner.impressioncustomercount || 0}</span>
+                          <span className="text-gray-400 ml-1">customers</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-1 mb-3 text-xs">
+                        <Clock className="h-3.5 w-3.5 text-gray-400" />
+                        <span className="text-blue-600">
+                          {banner.scheduleStartMinutes !== undefined && banner.scheduleEndMinutes !== undefined ? (
+                            <>
+                              Showing: {formatTime(banner.scheduleStartMinutes)} - {formatTime(banner.scheduleEndMinutes % (24 * 60))}
+                              {banner.endsNextDay && <span className="ml-1 text-xs bg-blue-100 px-1 py-0.5 rounded">Next day</span>}
+                            </>
+                          ) : (
+                            "Showing all day"
+                          )}
+                        </span>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => router.push(`/store/banner/${banner.id}/edit`)}>
+                          <Edit className="h-3.5 w-3.5 mr-1.5" />
+                          Edit
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          size="sm" 
+                          className="flex-1 text-red-600 hover:bg-red-50 border-red-200"
+                          onClick={() => handleBannerScheduleUpdate(banner.id, { scheduled: false })}
+                        >
+                          <Clock className="h-3.5 w-3.5 mr-1.5" />
+                          Remove
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="flex-1 text-red-600 hover:bg-red-50 border-red-200"
+                          onClick={() => handleDeleteBanner(banner.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+          
+          {/* Scheduled for Later section */}
+          <div className="mt-8">
+            <h3 className="text-lg font-medium mb-4 flex items-center">
+              <Clock className="h-5 w-5 mr-2 text-blue-500" />
+              Scheduled for Later
+              <Badge variant="outline" className="ml-2">
+                {filteredBanners.filter(banner => banner.scheduled && !banner.isActive).length}
+              </Badge>
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              These banners are scheduled but not currently active.
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredBanners
+                .filter(banner => banner.scheduled && !banner.isActive)
+                .map((banner) => (
+                  <div key={banner.id} className="flex flex-col bg-gray-50 rounded-lg overflow-hidden">
+                    {/* Similar banner content */}
+                    <div className="relative">
+                      <div className="absolute top-2 right-2 z-10">
+                        <div className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center">
+                          <Clock className="h-3 w-3 mr-1" />
+                          Scheduled
+                        </div>
+                      </div>
+                      
+                      <div className="rounded-t-lg overflow-hidden shadow-sm">
+                        <BannerPreview
+                          title={banner.title}
+                          description={banner.description}
+                          color={banner.color ?? "#0ea5e9"}
+                          styleType={
+                            banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
+                            banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
+                            banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
+                            BannerStyle.LIGHT
+                          }
+                          merchantName={banner.merchantName ?? "My Store"}
+                          visibilityType={BannerVisibility.ALL}
+                          isActive={banner.isActive}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="p-4">
+                      <h4 className="font-medium text-sm mb-1">{banner.title}</h4>
+                      <p className="text-xs text-gray-500 mb-2 line-clamp-2">{banner.description}</p>
+                      
+                      <div className="flex flex-wrap gap-x-4 gap-y-2 mb-3">
+                        <div className="flex items-center text-xs text-gray-600">
+                          <BarChart className="h-3 w-3 mr-1 text-gray-400" />
+                          <span className="font-medium">{banner.impressions || 0}</span>
+                          <span className="text-gray-400 ml-1">views</span>
+                        </div>
+                        <div className="flex items-center text-xs text-gray-600">
+                          <Users className="h-3 w-3 mr-1 text-gray-400" />
+                          <span className="font-medium">{banner.impressioncustomercount || 0}</span>
+                          <span className="text-gray-400 ml-1">customers</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-1 mb-3 text-xs">
+                        <Clock className="h-3.5 w-3.5 text-gray-400" />
+                        <span className="text-blue-600">
+                          {banner.scheduleStartMinutes !== undefined && banner.scheduleEndMinutes !== undefined ? (
+                            <>
+                              Scheduled: {formatTime(banner.scheduleStartMinutes)} - {formatTime(banner.scheduleEndMinutes % (24 * 60))}
+                              {banner.endsNextDay && <span className="ml-1 text-xs bg-blue-100 px-1 py-0.5 rounded">Next day</span>}
+                            </>
+                          ) : (
+                            "Scheduled all day"
+                          )}
+                        </span>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => router.push(`/store/banner/${banner.id}/edit`)}>
+                          <Edit className="h-3.5 w-3.5 mr-1.5" />
+                          Edit
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          size="sm" 
+                          className="flex-1 text-red-600 hover:bg-red-50 border-red-200"
+                          onClick={() => handleBannerScheduleUpdate(banner.id, { scheduled: false })}
+                        >
+                          <Clock className="h-3.5 w-3.5 mr-1.5" />
+                          Remove
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="flex-1 text-red-600 hover:bg-red-50 border-red-200"
+                          onClick={() => handleDeleteBanner(banner.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "inactive" && (
+        <div className="space-y-8">
+          <div>
+            <h3 className="text-lg font-medium mb-4 flex items-center">
+              <XCircle className="h-5 w-5 mr-2 text-gray-500" />
+              Unscheduled Banners
+              <Badge variant="outline" className="ml-2">
+                {filteredBanners.filter(banner => !banner.scheduled).length}
+              </Badge>
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              These banners are not scheduled. Schedule them to make them available for display.
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredBanners
+                .filter(banner => !banner.scheduled)
+                .map((banner) => (
+                  <div key={banner.id} className="flex flex-col bg-gray-50 rounded-lg overflow-hidden">
+                    <div className="relative">
+                      <div className="absolute top-2 right-2 z-10">
+                        <div className="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded-full flex items-center">
+                          <XCircle className="h-3 w-3 mr-1" />
+                          Unscheduled
+                        </div>
+                      </div>
+                      
+                      <div className="rounded-t-lg overflow-hidden shadow-sm">
+                        <BannerPreview
+                          title={banner.title}
+                          description={banner.description}
+                          color={banner.color ?? "#0ea5e9"}
+                          styleType={
+                            banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
+                            banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
+                            banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
+                            BannerStyle.LIGHT
+                          }
+                          merchantName={banner.merchantName ?? "My Store"}
+                          visibilityType={BannerVisibility.ALL}
+                          isActive={banner.isActive}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="p-4">
+                      <h4 className="font-medium text-sm mb-1">{banner.title}</h4>
+                      <p className="text-xs text-gray-500 mb-2 line-clamp-2">{banner.description}</p>
+                      
+                      <div className="flex flex-wrap gap-x-4 gap-y-2 mb-3">
+                        <div className="flex items-center text-xs text-gray-600">
+                          <BarChart className="h-3 w-3 mr-1 text-gray-400" />
+                          <span className="font-medium">{banner.impressions || 0}</span>
+                          <span className="text-gray-400 ml-1">views</span>
+                        </div>
+                        <div className="flex items-center text-xs text-gray-600">
+                          <Users className="h-3 w-3 mr-1 text-gray-400" />
+                          <span className="font-medium">{banner.impressioncustomercount || 0}</span>
+                          <span className="text-gray-400 ml-1">customers</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-1 mb-3 text-xs">
+                        <Clock className="h-3.5 w-3.5 text-gray-400" />
+                        <span className="text-amber-600 font-medium">Not currently scheduled</span>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => router.push(`/store/banner/${banner.id}/edit`)}>
+                          <Edit className="h-3.5 w-3.5 mr-1.5" />
+                          Edit
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => handleScheduleBanner(banner.id)}
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1.5" />
+                          Schedule
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="flex-1 text-red-600 hover:bg-red-50 border-red-200"
+                          onClick={() => handleDeleteBanner(banner.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "schedule" && (
+        <div className="space-y-8">
+          {/* Banner Scheduler Component */}
+          <BannerScheduler 
+            banners={banners} 
+            onBannerUpdate={handleBannerScheduleUpdate} 
+          />
+          
+          {/* Banner Library Section */}
+          <div className="bg-white rounded-lg shadow-sm border p-6">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-lg font-medium flex items-center">
+                <Package className="h-5 w-5 mr-2 text-gray-500" />
+                Banner Library
+              </h3>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredBanners.map((banner) => (
+                <div key={banner.id} className="flex flex-col bg-gray-50 rounded-lg overflow-hidden">
+                  <div className="relative">
+                    <div className="absolute top-2 right-2 z-10">
+                      {banner.scheduled ? (
+                        <div className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center">
+                          <Clock className="h-3 w-3 mr-1" />
+                          Scheduled
+                        </div>
+                      ) : (
+                        <div className="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded-full flex items-center">
+                          <XCircle className="h-3 w-3 mr-1" />
+                          Unscheduled
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="rounded-t-lg overflow-hidden shadow-sm">
+                      <BannerPreview
+                        title={banner.title}
+                        description={banner.description}
+                        color={banner.color ?? "#0ea5e9"}
+                        styleType={
+                          banner.style?.toLowerCase() === "light" ? BannerStyle.LIGHT :
+                          banner.style?.toLowerCase() === "glass" ? BannerStyle.GLASS :
+                          banner.style?.toLowerCase() === "dark" ? BannerStyle.DARK :
+                          BannerStyle.LIGHT
+                        }
+                        merchantName={banner.merchantName ?? "My Store"}
+                        visibilityType={BannerVisibility.ALL}
+                        isActive={banner.isActive}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="p-4">
+                    <h4 className="font-medium text-sm mb-1">{banner.title}</h4>
+                    <p className="text-xs text-gray-500 mb-3 line-clamp-2">{banner.description}</p>
+                    
+                    <div className="flex flex-wrap gap-x-4 gap-y-2 mb-3">
+                      <div className="flex items-center text-xs text-gray-600">
+                        <BarChart className="h-3 w-3 mr-1 text-gray-400" />
+                        <span className="font-medium">{banner.impressions || 0}</span>
+                        <span className="text-gray-400 ml-1">views</span>
+                      </div>
+                      <div className="flex items-center text-xs text-gray-600">
+                        <Users className="h-3 w-3 mr-1 text-gray-400" />
+                        <span className="font-medium">{banner.impressioncustomercount || 0}</span>
+                        <span className="text-gray-400 ml-1">customers</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-1 mb-3 text-xs">
+                      <Clock className="h-3.5 w-3.5 text-gray-400" />
+                      {banner.scheduled ? (
+                        <span className="text-blue-600">
+                          {banner.scheduleStartMinutes !== undefined && banner.scheduleEndMinutes !== undefined ? (
+                            <>
+                              {banner.isActive ? "Showing: " : "Scheduled: "}
+                              {formatTime(banner.scheduleStartMinutes)} - {formatTime(banner.scheduleEndMinutes % (24 * 60))}
+                              {banner.endsNextDay && <span className="ml-1 text-xs bg-blue-100 px-1 py-0.5 rounded">Next day</span>}
+                            </>
+                          ) : (
+                            banner.isActive ? "Showing all day" : "Scheduled all day"
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-amber-600 font-medium">Not currently scheduled</span>
+                      )}
+                    </div>
+                    
+                    {banner.scheduled ? (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-red-600 hover:bg-red-50 border-red-200"
+                        onClick={() => handleBannerScheduleUpdate(banner.id, { scheduled: false })}
+                      >
+                        <Clock className="h-3.5 w-3.5 mr-1.5" />
+                        Remove from Schedule
+                      </Button>
+                    ) : (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleScheduleBanner(banner.id)}
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1.5" />
+                        Add to Schedule
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!bannerToDelete} onOpenChange={() => setBannerToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Delete Banner</DialogTitle>
+            <DialogDescription className="text-red-500">
+              Are you sure you want to delete this banner? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end space-x-2 mt-5">
+            <Button variant="outline" onClick={() => setBannerToDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteBanner}>
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -1479,8 +3658,24 @@ export default function StoreOverviewPage() {
           expiryDate: data.expiryDate,
           clickCount: data.clickCount || 0,
           viewCount: data.viewCount || 0,
-          isAgentGenerated: data.isAgentGenerated || false
-        }
+          isAgentGenerated: data.isAgentGenerated || false,
+          link: data.link,
+          color: data.color,
+          cssColor: data.cssColor,
+          isActive: data.isActive,
+          scheduleStartMinutes: data.scheduleStartMinutes,
+          scheduleEndMinutes: data.scheduleEndMinutes,
+          scheduleStartHour: data.scheduleStartHour,
+          scheduleEndHour: data.scheduleEndHour,
+          scheduled: data.scheduled,
+          buttonText: data.buttonText,
+          style: data.style,
+          merchantName: data.merchantName,
+          visibilityType: data.visibilityType,
+          endsNextDay: data.endsNextDay,
+          impressioncustomercount: data.impressioncustomercount,
+          bannerAction: data.bannerAction
+        } as Banner
       })
       
       setBanners(fetchedBanners)
@@ -1861,6 +4056,264 @@ export default function StoreOverviewPage() {
     return banners.some(banner => banner.isAgentGenerated === true);
   }, [banners]);
   
+  // Helper function to combine messages and notifications for the table
+  const getAllMessages = (): Array<{
+    id: string;
+    title: string;
+    content: string;
+    sent: boolean;
+    sentAt?: any;
+    recipients: number;
+    openRate?: number;
+    type: 'email' | 'push';
+    status: 'sent' | 'draft';
+    engagement: number;
+    body?: string;
+    clickRate?: number;
+  }> => {
+    // Add sample data for demonstration
+    const sampleMessages = [
+      {
+        id: 'msg-1',
+        title: 'Welcome to Our Store!',
+        content: 'Thank you for joining our loyalty program. Here\'s a special 10% discount code: WELCOME10',
+        sent: true,
+        sentAt: { toDate: () => new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) },
+        recipients: 245,
+        openRate: 68.5,
+        type: 'email' as const,
+        status: 'sent' as const,
+        engagement: 68.5
+      },
+      {
+        id: 'msg-2',
+        title: 'Weekend Sale - 30% Off',
+        content: 'Don\'t miss our weekend flash sale! 30% off all items. Valid until Sunday midnight.',
+        sent: true,
+        sentAt: { toDate: () => new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) },
+        recipients: 892,
+        openRate: 45.2,
+        type: 'email' as const,
+        status: 'sent' as const,
+        engagement: 45.2
+      },
+      {
+        id: 'msg-3',
+        title: 'Monthly Newsletter Draft',
+        content: 'Our monthly newsletter featuring new products, customer stories, and upcoming events.',
+        sent: false,
+        sentAt: null,
+        recipients: 1200,
+        openRate: 0,
+        type: 'email' as const,
+        status: 'draft' as const,
+        engagement: 0
+      }
+    ]
+
+    const sampleNotifications = [
+      {
+        id: 'notif-1',
+        title: 'Flash Sale Alert!',
+        body: 'Your favourite items are now 25% off! Limited time only.',
+        sent: true,
+        sentAt: { toDate: () => new Date(Date.now() - 1 * 24 * 60 * 60 * 1000) },
+        recipients: 567,
+        clickRate: 12.8,
+        type: 'push' as const,
+        content: 'Your favourite items are now 25% off! Limited time only.',
+        status: 'sent' as const,
+        engagement: 12.8
+      },
+      {
+        id: 'notif-2',
+        title: 'New Loyalty Points Earned',
+        body: 'You\'ve earned 150 new loyalty points! Check out your rewards.',
+        sent: true,
+        sentAt: { toDate: () => new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
+        recipients: 1034,
+        clickRate: 8.9,
+        type: 'push' as const,
+        content: 'You\'ve earned 150 new loyalty points! Check out your rewards.',
+        status: 'sent' as const,
+        engagement: 8.9
+      },
+      {
+        id: 'notif-3',
+        title: 'Order Ready for Pickup',
+        body: 'Your order #12345 is ready for pickup at our Collins Street location.',
+        sent: false,
+        sentAt: null,
+        recipients: 1,
+        clickRate: 0,
+        type: 'push' as const,
+        content: 'Your order #12345 is ready for pickup at our Collins Street location.',
+        status: 'draft' as const,
+        engagement: 0
+      }
+    ]
+
+    // Combine actual data with sample data
+    const allMessages = [
+      ...messages.map(msg => ({
+        ...msg,
+        type: 'email' as const,
+        content: msg.content,
+        status: msg.sent ? 'sent' as const : 'draft' as const,
+        engagement: msg.openRate || 0
+      })),
+      ...notifications.map(notif => ({
+        ...notif,
+        type: 'push' as const,
+        content: notif.body,
+        title: notif.title,
+        status: notif.sent ? 'sent' as const : 'draft' as const,
+        engagement: notif.clickRate || 0,
+        openRate: notif.clickRate
+      })),
+      ...sampleMessages,
+      ...sampleNotifications
+    ].sort((a, b) => {
+      const aTime = a.sentAt ? (a.sentAt.toDate ? a.sentAt.toDate().getTime() : new Date(a.sentAt).getTime()) : 0
+      const bTime = b.sentAt ? (b.sentAt.toDate ? b.sentAt.toDate().getTime() : new Date(b.sentAt).getTime()) : 0
+      return bTime - aTime
+    })
+    
+    return allMessages
+  }
+
+  // Define table columns for messages
+  const messageColumns: ColumnDef<ReturnType<typeof getAllMessages>[number]>[] = [
+    {
+      accessorKey: 'title',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Message" />
+      ),
+      cell: ({ row }) => (
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Avatar className="size-8">
+              <AvatarFallback className={
+                row.original.type === 'email' 
+                  ? "bg-blue-100 text-blue-600" 
+                  : "bg-orange-100 text-orange-600"
+              }>
+                {row.original.type === 'email' ? (
+                  <Mail className="h-4 w-4" />
+                ) : (
+                  <BellRing className="h-4 w-4" />
+                )}
+              </AvatarFallback>
+            </Avatar>
+            <div
+              className="absolute right-0 bottom-0 h-2 w-2 rounded-full ring-2 ring-background"
+              style={{
+                backgroundColor: row.original.status === 'sent' ? '#10B981' : '#6B7280',
+              }}
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-medium text-sm">{row.original.title}</div>
+            <div className="text-xs text-muted-foreground line-clamp-1 max-w-xs">
+              {row.original.content}
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'type',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Type" />
+      ),
+      cell: ({ row }) => (
+        <Badge 
+          variant="outline" 
+          className={cn(
+            "capitalize rounded-md",
+            row.original.type === 'email' 
+              ? "bg-blue-50 text-blue-700 border-blue-200" 
+              : "bg-orange-50 text-orange-700 border-orange-200"
+          )}
+        >
+          {row.original.type === 'email' ? 'Email' : 'Push Notification'}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: 'recipients',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Recipients" />
+      ),
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1">
+          <Users className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">{row.original.recipients.toLocaleString()}</span>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'status',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Status" />
+      ),
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <div
+            className="h-2 w-2 rounded-full"
+            style={{ 
+              backgroundColor: row.original.status === 'sent' ? '#10B981' : '#6B7280' 
+            }}
+          />
+          <span className="text-sm font-medium capitalize">{row.original.status}</span>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'sentAt',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Sent Date" />
+      ),
+      cell: ({ row }) => {
+        if (!row.original.sentAt) {
+          return <span className="text-sm text-muted-foreground">Not sent</span>
+        }
+        
+        const date = row.original.sentAt.toDate ? row.original.sentAt.toDate() : new Date(row.original.sentAt)
+        return (
+          <div className="text-sm">
+            <div>{format(date, 'MMM d, yyyy')}</div>
+            <div className="text-xs text-muted-foreground">{format(date, 'h:mm a')}</div>
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: 'engagement',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Engagement" />
+      ),
+      cell: ({ row }) => {
+        if (row.original.status !== 'sent') {
+          return <span className="text-sm text-muted-foreground">-</span>
+        }
+        
+        const rate = row.original.engagement || 0
+        return (
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              <BarChart className="h-3 w-3 text-muted-foreground" />
+              <span className="text-sm font-medium">{rate.toFixed(1)}%</span>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {row.original.type === 'email' ? 'open' : 'click'} rate
+            </span>
+          </div>
+        )
+      },
+    },
+  ]
+  
   return (
     <PageTransition>
       <div className="p-6 py-4">
@@ -1951,360 +4404,50 @@ export default function StoreOverviewPage() {
           </TabsContent>
           
           <TabsContent value="customers">
-            <div className="space-y-6">
-              <Card className="rounded-lg overflow-hidden">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-medium flex items-center">
-                      <Users className="h-5 w-5 mr-2 text-gray-600" />
-                      Customer Management
-                    </CardTitle>
-                    <Button 
-                      className="gap-2 rounded-md"
-                      onClick={() => router.push('/customers')}
-                    >
-                      <Users className="h-4 w-4" />
-                      View All Customers
-                    </Button>
-                  </div>
-                  <CardDescription>Overview of your customer base and engagement</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                    <div className="flex flex-col space-y-1.5">
-                      <h3 className="text-sm font-medium text-muted-foreground">Total Customers</h3>
-                      <div className="text-2xl font-bold">2,847</div>
-                      <div className="text-xs text-green-600">+12% from last month</div>
-                    </div>
-                    <div className="flex flex-col space-y-1.5">
-                      <h3 className="text-sm font-medium text-muted-foreground">Active This Month</h3>
-                      <div className="text-2xl font-bold">1,234</div>
-                      <div className="text-xs text-green-600">+8% from last month</div>
-                    </div>
-                    <div className="flex flex-col space-y-1.5">
-                      <h3 className="text-sm font-medium text-muted-foreground">Avg. Points Balance</h3>
-                      <div className="text-2xl font-bold">156</div>
-                      <div className="text-xs text-blue-600">+5% from last month</div>
-                    </div>
-                  </div>
-                  
-                  <Separator className="my-6" />
-                  
-                  <div className="space-y-4">
-                    <h4 className="font-medium">Recent Customer Activity</h4>
-                    <div className="space-y-3">
-                      {[
-                        { name: "Sarah Johnson", action: "Redeemed 50 points", time: "2 minutes ago", avatar: "SJ" },
-                        { name: "Mike Chen", action: "Earned 25 points", time: "15 minutes ago", avatar: "MC" },
-                        { name: "Emma Wilson", action: "Joined loyalty program", time: "1 hour ago", avatar: "EW" },
-                        { name: "David Brown", action: "Redeemed free coffee", time: "2 hours ago", avatar: "DB" },
-                        { name: "Lisa Garcia", action: "Earned 15 points", time: "3 hours ago", avatar: "LG" }
-                      ].map((activity, index) => (
-                        <div key={index} className="flex items-center gap-3 p-3 rounded-md bg-gray-50">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="text-xs">{activity.avatar}</AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm">{activity.name}</div>
-                            <div className="text-xs text-muted-foreground">{activity.action}</div>
-                          </div>
-                          <div className="text-xs text-muted-foreground">{activity.time}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-                <CardFooter className="flex justify-between pt-2">
-                  <div className="text-xs text-muted-foreground">
-                    Last updated: {format(new Date(), 'MMM d, yyyy h:mm a')}
-                  </div>
-                  <Button variant="link" size="sm" className="px-0" asChild>
-                    <Link href="/customers">View all customers</Link>
-                  </Button>
-                </CardFooter>
-              </Card>
-            </div>
+            <CustomersTabContent />
           </TabsContent>
           
           <TabsContent value="messages">
-            <div className="space-y-6">
-              <Card className="rounded-lg overflow-hidden">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-medium flex items-center">
-                      <MessageSquare className="h-5 w-5 mr-2 text-gray-600" />
-                      Messages & Notifications
-                    </CardTitle>
-                    <Button 
-                      className="gap-2 rounded-md"
-                      onClick={() => router.push('/store/messages')}
-                    >
-                      <Plus className="h-4 w-4" />
-                      Create Message
-                    </Button>
-                  </div>
-                  <CardDescription>Manage customer communications and push notifications</CardDescription>
-                </CardHeader>
-                <CardContent>
                   {loading ? (
                     <div className="flex items-center justify-center h-48">
                       <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
                     </div>
-                  ) : messages.length === 0 && notifications.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-48 text-center">
+            ) : getAllMessages().length === 0 ? (
+              <div className="border border-gray-200 rounded-md bg-white p-8">
+                <div className="flex flex-col items-center justify-center text-center">
                       <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                        <MessageSquare className="h-6 w-6 text-muted-foreground" />
+                    <Mail className="h-6 w-6 text-muted-foreground" />
                       </div>
                       <h3 className="mt-4 text-lg font-medium">No messages found</h3>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Create your first message to engage with customers
+                    Create your first message or notification to get started
                       </p>
-                      <Button 
-                        className="mt-4 h-9 gap-2 rounded-md"
-                        onClick={() => router.push('/store/messages')}
-                      >
-                        <Plus className="h-4 w-4" />
-                        Create Message
-                      </Button>
                     </div>
-                  ) : (
-                    <div className="space-y-6">
-                      {/* Messages Section */}
-                      {messages.length > 0 && (
-                        <div>
-                          <h4 className="font-medium mb-3 flex items-center gap-2">
-                            <MessageSquare className="h-4 w-4" />
-                            Recent Messages
-                          </h4>
-                          <div className="space-y-3">
-                            {messages.slice(0, 3).map((message) => (
-                              <div key={message.id} className="flex items-center gap-3 p-3 rounded-md bg-gray-50">
-                                <div className="h-8 w-8 rounded-md bg-blue-100 flex items-center justify-center">
-                                  <MessageSquare className="h-4 w-4 text-blue-600" />
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-medium text-sm">{message.title}</div>
-                                  <div className="text-xs text-muted-foreground line-clamp-1">{message.content}</div>
+            ) : (
+              <div className="border border-gray-200 rounded-md bg-white">
+                <TableProvider columns={messageColumns} data={getAllMessages()}>
+                  <KiboTableHeader>
+                    {({ headerGroup }) => (
+                      <TableHeaderGroup key={headerGroup.id} headerGroup={headerGroup}>
+                        {({ header }) => <KiboTableHead key={header.id} header={header} />}
+                      </TableHeaderGroup>
+                    )}
+                  </KiboTableHeader>
+                  <KiboTableBody>
+                    {({ row }) => (
+                      <KiboTableRow key={row.id} row={row}>
+                        {({ cell }) => <KiboTableCell key={cell.id} cell={cell} />}
+                      </KiboTableRow>
+                    )}
+                  </KiboTableBody>
+                </TableProvider>
                                 </div>
-                                <div className="text-right">
-                                  <div className="text-xs text-muted-foreground">
-                                    {message.sent ? `Sent to ${message.recipients}` : 'Draft'}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {message.sentAt ? getTimeAgo(message.sentAt) : 'Not sent'}
-                                  </div>
-                                </div>
-                                {message.sent && (
-                                  <Badge className="bg-green-100 text-green-800 hover:bg-green-100 rounded-md">
-                                    Sent
-                                  </Badge>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Notifications Section */}
-                      {notifications.length > 0 && (
-                        <div>
-                          <h4 className="font-medium mb-3 flex items-center gap-2">
-                            <BellRing className="h-4 w-4" />
-                            Push Notifications
-                          </h4>
-                          <div className="space-y-3">
-                            {notifications.slice(0, 3).map((notification) => (
-                              <div key={notification.id} className="flex items-center gap-3 p-3 rounded-md bg-gray-50">
-                                <div className="h-8 w-8 rounded-md bg-orange-100 flex items-center justify-center">
-                                  <BellRing className="h-4 w-4 text-orange-600" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-medium text-sm">{notification.title}</div>
-                                  <div className="text-xs text-muted-foreground line-clamp-1">{notification.body}</div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="text-xs text-muted-foreground">
-                                    {notification.sent ? `Sent to ${notification.recipients}` : 'Draft'}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {notification.sentAt ? getTimeAgo(notification.sentAt) : 'Not sent'}
-                                  </div>
-                                </div>
-                                {notification.sent && (
-                                  <Badge className="bg-green-100 text-green-800 hover:bg-green-100 rounded-md">
-                                    Sent
-                                  </Badge>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-                <CardFooter className="flex justify-between pt-2">
-                  <div className="text-xs text-muted-foreground">
-                    {messages.length} messages, {notifications.length} notifications
-                  </div>
-                  <Button variant="link" size="sm" className="px-0" asChild>
-                    <Link href="/store/messages">View all messages</Link>
-                  </Button>
-                </CardFooter>
-              </Card>
-            </div>
+            )}
           </TabsContent>
           
           <TabsContent value="banners">
-            <div className="space-y-6">
-              <Card className="rounded-lg overflow-hidden">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-medium flex items-center">
-                      <Image className="h-5 w-5 mr-2 text-gray-600" />
-                      Marketing Banners
-                    </CardTitle>
-                    <Button 
-                      className="gap-2 rounded-md"
-                      onClick={() => router.push('/store/banners')}
-                    >
-                      <Plus className="h-4 w-4" />
-                      Create Banner
-                    </Button>
-                  </div>
-                  <CardDescription>Manage promotional banners and marketing content</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <div className="flex items-center justify-center h-48">
-                      <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : banners.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-48 text-center">
-                      <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                        <Image className="h-6 w-6 text-muted-foreground" />
-                      </div>
-                      <h3 className="mt-4 text-lg font-medium">No banners found</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Create your first marketing banner to promote offers
-                      </p>
-                      <Button 
-                        className="mt-4 h-9 gap-2 rounded-md"
-                        onClick={() => router.push('/store/banners')}
-                      >
-                        <Plus className="h-4 w-4" />
-                        Create Banner
-                      </Button>
-                    </div>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[300px]">Banner Title</TableHead>
-                          <TableHead className="text-center">Views</TableHead>
-                          <TableHead className="text-center">Clicks</TableHead>
-                          <TableHead className="text-center">CTR</TableHead>
-                          <TableHead className="text-center">Created</TableHead>
-                          <TableHead className="text-center">Status</TableHead>
-                          <TableHead className="w-[50px]"></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {banners.slice(0, 5).map((banner) => {
-                          const ctr = banner.viewCount && banner.viewCount > 0 
-                            ? ((banner.clickCount || 0) / banner.viewCount * 100).toFixed(1)
-                            : '0.0';
-                          
-                          return (
-                            <TableRow 
-                              key={banner.id}
-                              className="cursor-pointer hover:bg-gray-50"
-                              onClick={() => router.push(`/store/banners/${banner.id}`)}
-                            >
-                              <TableCell className="font-medium">
-                                <div className="flex items-center gap-2">
-                                  <div className="h-9 w-9 min-w-[36px] rounded-md bg-muted flex items-center justify-center overflow-hidden">
-                                    {banner.imageUrl ? (
-                                      <img 
-                                        src={banner.imageUrl} 
-                                        alt={banner.title}
-                                        className="h-full w-full object-cover"
-                                      />
-                                    ) : (
-                                      <Image className="h-5 w-5 text-muted-foreground" />
-                                    )}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <div className="truncate flex items-center gap-1">
-                                      {banner.title}
-                                      {banner.isAgentGenerated && (
-                                        <Badge variant="outline" className="ml-1 py-0 h-4 text-[10px] px-1.5 bg-gradient-to-r from-blue-50 to-orange-50 text-blue-700 border-blue-200">
-                                          <Sparkles className="h-2.5 w-2.5 mr-0.5" />
-                                          Agent
-                                        </Badge>
-                                      )}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground line-clamp-1">
-                                      {banner.description}
-                                    </div>
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <div className="font-medium text-blue-700">
-                                  {(banner.viewCount || 0).toLocaleString()}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <div className="font-medium text-green-700">
-                                  {(banner.clickCount || 0).toLocaleString()}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <div className="font-medium text-purple-700">
-                                  {ctr}%
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-center">
-                                {banner.createdAt ? formatDistanceToNow(banner.createdAt.toDate(), { addSuffix: true }) : "Unknown"}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                {getStatusBadge(banner.status)}
-                              </TableCell>
-                              <TableCell>
-                                <Button 
-                                  variant="ghost" 
-                                  className="h-8 w-8 p-0"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    router.push(`/store/banners/${banner.id}`);
-                                  }}
-                                >
-                                  <ChevronRight className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-                <CardFooter className="flex justify-between pt-2">
-                  <div className="text-xs text-muted-foreground">
-                    Total: {banners.length} banners
-                    {hasAiBanners && (
-                      <span className="ml-2 text-blue-600">
-                        • {banners.filter(b => b.isAgentGenerated).length} AI-generated
-                      </span>
-                    )}
-                  </div>
-                  <Button variant="link" size="sm" className="px-0" asChild>
-                    <Link href="/store/banners">View all banners</Link>
-                  </Button>
-                </CardFooter>
-              </Card>
-            </div>
+            <BannersTabContent />
           </TabsContent>
           
           <TabsContent value="inventory">

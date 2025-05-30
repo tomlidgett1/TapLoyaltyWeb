@@ -37,6 +37,7 @@ import {
   TableRow,
 } from '@/components/ui/kibo-ui/table'
 import type { ColumnDef } from '@/components/ui/kibo-ui/table'
+import { getFunctions, httpsCallable } from 'firebase/functions'
 
 export default function AgentsPage() {
   const router = useRouter()
@@ -140,6 +141,14 @@ export default function AgentsPage() {
   const [toolsLoading, setToolsLoading] = useState(false)
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set())
   const [toolsSearchQuery, setToolsSearchQuery] = useState('')
+  const [createAgentStepsTab, setCreateAgentStepsTab] = useState('smart') // Add tab state for agent steps
+  const [smartCreatePrompt, setSmartCreatePrompt] = useState('') // Add state for smart create prompt
+  const [isEditingAgentName, setIsEditingAgentName] = useState(false) // Add state for editing agent name
+  const [isGeneratingSteps, setIsGeneratingSteps] = useState(false) // Add state for generating steps
+  const [generatedStepsText, setGeneratedStepsText] = useState('') // Add state for generated steps text
+  const [agentIdeas, setAgentIdeas] = useState<any>(null) // Add state for agent ideas response
+  const [isLoadingAgentIdeas, setIsLoadingAgentIdeas] = useState(false) // Add state for loading agent ideas
+  const [expandedAgentIdeas, setExpandedAgentIdeas] = useState<Set<string>>(new Set()) // Add state for expanded agent ideas
 
   // Define agent type
   type Agent = {
@@ -1003,11 +1012,6 @@ export default function AgentsPage() {
     },
   ]
 
-  const [isEditingAgentName, setIsEditingAgentName] = useState(false) // Add state for editing agent name
-  const [isGeneratingSteps, setIsGeneratingSteps] = useState(false) // Add state for generating steps
-  const [generatedStepsText, setGeneratedStepsText] = useState('') // Add state for generated steps text
-  const [isGeneratingAgentIdeas, setIsGeneratingAgentIdeas] = useState(false) // Add state for generating agent ideas
-
   return (
     <div className="px-6 py-6">
       {/* Header */}
@@ -1100,35 +1104,49 @@ export default function AgentsPage() {
                   <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2 flex-1">
                             <h3 className="text-base font-medium text-gray-900">{agent.name}</h3>
-                            {enrolledAgents[agent.id]?.status === 'active' && (
-                              <div className="flex items-center gap-1">
-                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                <span className="text-xs text-green-600 font-medium">Connected</span>
-                              </div>
-                            )}
                           </div>
-                    {(() => {
-                      const isEnrolled = enrolledAgents[agent.id]?.status === 'active'
-                      const isConnecting = connectingAgents.has(agent.id)
-                      const isComingSoon = agent.status === 'coming-soon'
-                      
-                      return (
-                        <Button 
-                          size="sm" 
-                                variant={isEnrolled ? 'outline' : (agent.status === 'active' ? 'default' : 'outline')}
-                          disabled={isComingSoon || isConnecting || !user}
-                          className="rounded-md text-xs px-3 py-1 h-7 ml-3"
-                          onClick={() => handleAgentAction(agent)}
-                        >
-                          {isConnecting 
-                                  ? (isEnrolled ? 'Connecting...' : 'Connecting...') 
-                            : isEnrolled 
-                                    ? 'Configure' 
-                              : (agent.status === 'active' ? 'Connect' : 'Coming Soon')
-                          }
-                        </Button>
-                      )
-                    })()}
+                    <div className="flex items-center gap-2 ml-3">
+                      {(() => {
+                        const isEnrolled = enrolledAgents[agent.id]?.status === 'active'
+                        const isConnecting = connectingAgents.has(agent.id)
+                        const isComingSoon = agent.status === 'coming-soon'
+                        
+                        return (
+                          <>
+                            {/* Configure button - only show when enrolled */}
+                            {isEnrolled && (
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                className="rounded-md h-7 w-7 p-0"
+                                onClick={() => handleAgentAction(agent)}
+                              >
+                                <Settings className="h-3 w-3" />
+                              </Button>
+                            )}
+                            
+                            {/* Main connect/connected button */}
+                            <Button 
+                              size="sm" 
+                              variant={isEnrolled ? 'outline' : (agent.status === 'active' ? 'default' : 'outline')}
+                              disabled={isComingSoon || isConnecting || !user}
+                              className={cn(
+                                "rounded-md text-xs px-3 py-1 h-7",
+                                isEnrolled && "bg-green-50 hover:bg-green-100 border-green-200 text-green-700"
+                              )}
+                              onClick={() => !isEnrolled ? handleAgentAction(agent) : undefined}
+                            >
+                              {isConnecting 
+                                      ? 'Connecting...' 
+                                : isEnrolled 
+                                        ? 'Connected'
+                                  : (agent.status === 'active' ? 'Connect' : 'Coming Soon')
+                              }
+                            </Button>
+                          </>
+                        )
+                      })()}
+                    </div>
                   </div>
 
                   {/* Description */}
@@ -2762,24 +2780,102 @@ export default function AgentsPage() {
               <DialogHeader className="mb-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <DialogTitle className="text-xl font-semibold">Create New Agent</DialogTitle>
+                    {isEditingAgentName ? (
+                      <Input
+                        value={createAgentForm.name || 'New Agent'}
+                        onChange={(e) => setCreateAgentForm(prev => ({ ...prev, name: e.target.value }))}
+                        onBlur={() => setIsEditingAgentName(false)}
+                        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                          if (e.key === 'Enter') {
+                            setIsEditingAgentName(false)
+                          }
+                        }}
+                        className="text-xl font-semibold border-0 p-0 h-auto focus:ring-0 bg-transparent"
+                        autoFocus
+                      />
+                    ) : (
+                      <DialogTitle 
+                        className="text-xl font-semibold cursor-text hover:bg-gray-100 px-2 py-1 rounded-md"
+                        onDoubleClick={() => setIsEditingAgentName(true)}
+                      >
+                        {createAgentForm.name || 'New Agent'}
+                      </DialogTitle>
+                    )}
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="relative">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                          // Placeholder function - will be implemented later
+                        onClick={async () => {
+                          if (!user?.uid) {
                           toast({
-                            title: "Agent Ideas Generator",
-                            description: "This feature will analyse your available tools and suggest agent ideas based on your business needs.",
-                          })
+                              title: "Authentication Required",
+                              description: "Please sign in to generate agent ideas.",
+                              variant: "destructive"
+                            })
+                            return
+                          }
+
+                          try {
+                            setIsLoadingAgentIdeas(true) // Start loading
+                            console.log('🚀 [Agent Ideas] Starting agent ideas generation...')
+                            
+                            toast({
+                              title: "Generating Agent Ideas",
+                              description: "AI is analysing your business and available tools...",
+                            })
+
+                            // Call Firebase function
+                            const functions = getFunctions()
+                            const generateAgentIdeas = httpsCallable(functions, 'generateAgentIdeas')
+                            
+                            const result = await generateAgentIdeas({
+                              merchantId: user.uid
+                            })
+
+                            console.log('✅ [Agent Ideas] Full Firebase function result:', result)
+                            const data = result.data as any
+                            console.log('✅ [Agent Ideas] Firebase function response data:', data)
+                            console.log('✅ [Agent Ideas] Full response structure:', JSON.stringify(data, null, 2))
+
+                            // Store the agent ideas response
+                            setAgentIdeas(data)
+
+                            // Handle the response - you can customize this based on what the function returns
+                            if (data && data.agentIdeas) {
+                              toast({
+                                title: "Agent Ideas Generated!",
+                                description: `Found ${data.agentIdeas.length} agent ideas for your business.`,
+                              })
+                              
+                              // You can add logic here to display the ideas in a modal or update the UI
+                              console.log('Generated agent ideas:', data.agentIdeas)
+                            } else {
+                              toast({
+                                title: "Ideas Generated",
+                                description: "Agent ideas have been generated successfully.",
+                              })
+                            }
+                          } catch (error) {
+                            console.error('❌ [Agent Ideas] Error generating agent ideas:', error)
+                            toast({
+                              title: "Generation Failed",
+                              description: error instanceof Error ? error.message : "Failed to generate agent ideas. Please try again.",
+                              variant: "destructive"
+                            })
+                          } finally {
+                            setIsLoadingAgentIdeas(false) // Stop loading
+                          }
                         }}
+                        disabled={isLoadingAgentIdeas}
                         className="rounded-md gap-2"
                       >
-                        <Brain className="h-4 w-4" />
-                        Agent Ideas
+                        {isLoadingAgentIdeas ? (
+                          <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
+                        ) : (
+                          <Brain className="h-4 w-4" />
+                        )}
                       </Button>
                     </div>
                     <div className="relative">
@@ -2790,7 +2886,6 @@ export default function AgentsPage() {
                         className="rounded-md gap-2"
                       >
                         <Clock className="h-4 w-4" />
-                        Schedule
                       </Button>
                       
                       {/* Schedule Dropdown */}
@@ -2902,71 +2997,310 @@ export default function AgentsPage() {
 
               {/* Main Content */}
               <div className="space-y-6">
-                {/* Agent Name */}
-                <div>
-                  <Label htmlFor="agent-name" className="text-base font-medium">Agent Name</Label>
-                  <p className="text-sm text-gray-600 mb-3">Give your agent a descriptive name</p>
-                  <Input
-                    id="agent-name"
-                    placeholder="e.g., Social Media Manager, Order Processing Agent"
-                    value={createAgentForm.name}
-                    onChange={(e) => 
-                      setCreateAgentForm(prev => ({ ...prev, name: e.target.value }))
-                    }
-                    className="rounded-md"
-                  />
-                </div>
-
                 {/* Agent Steps */}
                 <div>
-                  <Label className="text-base font-medium">Agent Steps</Label>
-                  <p className="text-sm text-gray-600 mb-3">Define what your agent should do, step by step</p>
-                  <div className="space-y-3">
-                    {createAgentForm.steps.map((step, index) => (
-                      <div key={index} className="flex gap-2">
-                        <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 mt-2">
-                          {index + 1}
-                        </div>
-                        <div className="flex-1">
+                  
+                  {/* Small Tabs for Smart Create and Manual Create */}
+                  <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit mb-4">
+                    <button
+                      onClick={() => setCreateAgentStepsTab('smart')}
+                      className={cn(
+                        "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                        createAgentStepsTab === 'smart'
+                          ? "text-gray-800 bg-white shadow-sm"
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
+                    >
+                      Smart Create
+                    </button>
+                    <button
+                      onClick={() => setCreateAgentStepsTab('manual')}
+                      className={cn(
+                        "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                        createAgentStepsTab === 'manual'
+                          ? "text-gray-800 bg-white shadow-sm"
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
+                    >
+                      Manual Create
+                    </button>
+                  </div>
+
+                  {/* Tab Content */}
+                  {createAgentStepsTab === 'smart' ? (
+                    <div className="space-y-4">
+                      <div>
+                        <Textarea
+                          placeholder="Describe what you want the agent to do..."
+                          value={smartCreatePrompt}
+                          onChange={(e) => setSmartCreatePrompt(e.target.value)}
+                          className="rounded-md min-h-[120px]"
+                        />
+                      </div>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          if (!user?.uid) {
+                            toast({
+                              title: "Authentication Required",
+                              description: "Please sign in to create agents.",
+                              variant: "destructive"
+                            })
+                            return
+                          }
+
+                          if (!smartCreatePrompt.trim()) {
+                            toast({
+                              title: "Prompt Required",
+                              description: "Please describe what you want the agent to do.",
+                              variant: "destructive"
+                            })
+                            return
+                          }
+
+                          try {
+                            setIsGeneratingSteps(true)
+                            console.log('🚀 [Smart Create] Starting agent plan generation...')
+                            
+                            toast({
+                              title: "Generating Agent Steps",
+                              description: "AI is analysing your request...",
+                            })
+
+                            // Call Firebase function
+                            const functions = getFunctions()
+                            const createAgentExecutionPlan = httpsCallable(functions, 'createAgentExecutionPlan')
+                            
+                            const result = await createAgentExecutionPlan({
+                              prompt: smartCreatePrompt,
+                              merchantId: user.uid
+                            })
+
+                            const data = result.data as any
+                            console.log('✅ [Smart Create] Firebase function response:', data)
+                            
+                            // 🔍 COMPREHENSIVE DEBUGGING - Full Response Structure
+                            console.group('🔍 [DEBUG] Complete createAgentExecutionPlan Response')
+                            console.log('📦 Raw result object:', result)
+                            console.log('📊 Response data:', data)
+                            console.log('🔢 Data type:', typeof data)
+                            console.log('📋 Data keys:', data ? Object.keys(data) : 'No data')
+                            
+                            if (data) {
+                              console.log('✨ Steps property:', data.steps)
+                              console.log('🔢 Steps type:', typeof data.steps)
+                              console.log('📏 Steps length:', Array.isArray(data.steps) ? data.steps.length : 'Not array')
+                              
+                              if (Array.isArray(data.steps)) {
+                                console.log('📝 Individual steps:')
+                                data.steps.forEach((step: any, index: number) => {
+                                  console.log(`   Step ${index + 1}:`, step)
+                                  console.log(`   Step ${index + 1} type:`, typeof step)
+                                  if (typeof step === 'object' && step !== null) {
+                                    console.log(`   Step ${index + 1} keys:`, Object.keys(step))
+                                  }
+                                })
+                              }
+                              
+                              // Log any other properties in the response
+                              Object.keys(data).forEach(key => {
+                                if (key !== 'steps') {
+                                  console.log(`🔑 ${key}:`, data[key])
+                                }
+                              })
+                            }
+                            
+                            console.log('📄 Full response JSON:', JSON.stringify(data, null, 2))
+                            console.groupEnd()
+
+                            // Process the response and display in text area
+                            if (data && data.steps) {
+                              let formattedSteps = ""
+                              
+                              if (Array.isArray(data.steps)) {
+                                formattedSteps = data.steps.map((step: any, index: number) => {
+                                  if (typeof step === 'string') {
+                                    try {
+                                      // Check if it's a JSON string
+                                      if (step.trim().startsWith('{') && step.trim().endsWith('}')) {
+                                        const parsedStep = JSON.parse(step)
+                                        if (parsedStep.stepNumber && parsedStep.action) {
+                                          const toolInfo = parsedStep.toolName ? ` (${parsedStep.toolName})` : ''
+                                          return `Step ${parsedStep.stepNumber}: ${parsedStep.action}${toolInfo}`
+                                        }
+                                      }
+                                    } catch (e) {
+                                      // Use step as is if not JSON
+                                    }
+                                    return step
+                                  } else if (typeof step === 'object' && step !== null) {
+                                    if (step.stepNumber && step.action) {
+                                      const toolInfo = step.toolName ? ` (${step.toolName})` : ''
+                                      return `Step ${step.stepNumber}: ${step.action}${toolInfo}`
+                                    }
+                                    return step.description || step.text || step.step || JSON.stringify(step)
+                                  }
+                                  return String(step)
+                                }).join('\n\n')
+                              } else {
+                                formattedSteps = String(data.steps)
+                              }
+
+                              setGeneratedStepsText(formattedSteps)
+                              
+                              toast({
+                                title: "Steps Generated!",
+                                description: "Review and edit the generated steps as needed.",
+                              })
+                            } else {
+                              throw new Error('No steps found in response')
+                            }
+                          } catch (error) {
+                            console.error('❌ [Smart Create] Error generating agent steps:', error)
+                            toast({
+                              title: "Generation Failed",
+                              description: error instanceof Error ? error.message : "Failed to generate agent steps. Please try again.",
+                              variant: "destructive"
+                            })
+                          } finally {
+                            setIsGeneratingSteps(false)
+                          }
+                        }}
+                        disabled={!smartCreatePrompt.trim() || isGeneratingSteps}
+                        className="rounded-md gap-2"
+                      >
+                        {isGeneratingSteps ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <Brain className="h-4 w-4" />
+                            Generate Steps
+                          </>
+                        )}
+                      </Button>
+
+                      {/* Generated Steps Display */}
+                      {generatedStepsText && (
+                        <div>
+                          <Label className="text-sm font-medium">Generated Steps</Label>
+                          <p className="text-xs text-gray-600 mb-2">Review and edit the steps as needed</p>
                           <Textarea
-                            placeholder={`Step ${index + 1}: Describe what the agent should do...`}
-                            value={step}
-                            onChange={(e) => {
-                              const newSteps = [...createAgentForm.steps]
-                              newSteps[index] = e.target.value
-                              setCreateAgentForm(prev => ({ ...prev, steps: newSteps }))
-                            }}
-                            className="rounded-md min-h-[80px]"
+                            value={generatedStepsText}
+                            onChange={(e) => setGeneratedStepsText(e.target.value)}
+                            className="rounded-md min-h-[200px]"
+                            placeholder="Generated steps will appear here..."
                           />
                         </div>
-                        {createAgentForm.steps.length > 1 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              const newSteps = createAgentForm.steps.filter((_, i) => i !== index)
-                              setCreateAgentForm(prev => ({ ...prev, steps: newSteps }))
-                            }}
-                            className="mt-2 h-6 w-6 p-0 text-gray-400 hover:text-red-500"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setCreateAgentForm(prev => ({ ...prev, steps: [...prev.steps, ''] }))
-                      }}
-                      className="rounded-md gap-2 mt-2"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add Step
-                    </Button>
-                  </div>
+                      )}
+
+                      {/* Agent Ideas Display - Below Generated Steps */}
+                      {agentIdeas && (
+                        <div className="animate-in fade-in-0 duration-500">
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-medium text-gray-900">AI Generated Agent Ideas</h3>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setAgentIdeas(null)}
+                              className="h-5 w-5 p-0 text-gray-400 hover:text-gray-600"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          
+                          {/* Agent Ideas Grid - Minimal styling */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                            {agentIdeas.agentIdeas?.map((idea: any, index: number) => (
+                              <div 
+                                key={idea.id}
+                                className="bg-gray-50 border border-gray-200 rounded-md p-2 flex flex-col hover:border-gray-300 transition-colors animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
+                                style={{ animationDelay: `${index * 50}ms` }}
+                              >
+                                {/* Just title */}
+                                <div className="mb-2">
+                                  <h3 className="text-xs font-medium text-gray-900 leading-tight">{idea.name}</h3>
+                                </div>
+                                
+                                {/* Use button */}
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  onClick={() => {
+                                    // Pre-fill the agent form with this idea
+                                    setCreateAgentForm({
+                                      name: idea.name,
+                                      steps: idea.workflow.split(/\d+\./).filter((step: string) => step.trim()).map((step: string) => step.trim())
+                                    })
+                                    setAgentIdeas(null) // Hide ideas to show the form
+                                    setExpandedAgentIdeas(new Set()) // Reset expanded state
+                                    toast({
+                                      title: "Agent Idea Applied",
+                                      description: `${idea.name} has been loaded into the form.`
+                                    })
+                                  }}
+                                  className="rounded-md text-xs px-2 py-1 h-5 w-full"
+                                >
+                                  Use
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {createAgentForm.steps.map((step, index) => (
+                        <div key={index} className="flex gap-2">
+                          <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 mt-2">
+                            {index + 1}
+                          </div>
+                          <div className="flex-1">
+                            <Textarea
+                              placeholder={`Step ${index + 1}: Describe what the agent should do...`}
+                              value={step}
+                              onChange={(e) => {
+                                const newSteps = [...createAgentForm.steps]
+                                newSteps[index] = e.target.value
+                                setCreateAgentForm(prev => ({ ...prev, steps: newSteps }))
+                              }}
+                              className="rounded-md min-h-[80px]"
+                            />
+                          </div>
+                          {createAgentForm.steps.length > 1 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const newSteps = createAgentForm.steps.filter((_, i) => i !== index)
+                                setCreateAgentForm(prev => ({ ...prev, steps: newSteps }))
+                              }}
+                              className="mt-2 h-6 w-6 p-0 text-gray-400 hover:text-red-500"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setCreateAgentForm(prev => ({ ...prev, steps: [...prev.steps, ''] }))
+                        }}
+                        className="rounded-md gap-2 mt-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add Step
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2975,273 +3309,268 @@ export default function AgentsPage() {
             <div className="w-px bg-gray-200"></div>
 
             {/* Right Sidebar */}
-            <div className="w-80 p-6 pl-4 bg-gray-50 flex flex-col">
-              {/* Agent Preview */}
-              <div className="mb-6">
-                <h3 className="text-sm font-medium mb-3 text-gray-600">Agent Preview</h3>
-                <div className="bg-white border border-gray-200 rounded-md p-3 shadow-sm">
-                  <div className="space-y-3">
-                    <div>
-                      <span className="text-xs text-gray-600">Name:</span>
-                      <p className="text-sm font-medium">{createAgentForm.name || 'Untitled Agent'}</p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-gray-600">Steps:</span>
-                      <p className="text-sm">{createAgentForm.steps.filter(s => s.trim()).length} step{createAgentForm.steps.filter(s => s.trim()).length !== 1 ? 's' : ''}</p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-gray-600">Tools:</span>
-                      <p className="text-sm">{selectedTools.size} tool{selectedTools.size !== 1 ? 's' : ''} selected</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
+            <div className="w-80 p-6 pl-4 bg-gray-50 flex flex-col h-full">
               {/* Available Tools - Right Panel */}
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-medium text-gray-600">Available Tools</h3>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => router.push('/dashboard/integrations')}
-                    className="rounded-md text-xs h-6 px-2"
-                  >
-                    <Plus className="h-3 w-3 mr-1" />
-                    Connect
-                  </Button>
-                </div>
-                
-                {/* Tools Search */}
-                <div className="mb-3">
-                  <Input
-                    placeholder="Search tools..."
-                    value={toolsSearchQuery}
-                    onChange={(e) => setToolsSearchQuery(e.target.value)}
-                    className="rounded-md h-8 text-sm"
-                  />
-                </div>
-                
-                {/* Tools Grid */}
-                <div className="bg-white border border-gray-200 rounded-md shadow-sm max-h-60 overflow-y-auto">
-                  {toolsLoading ? (
-                    <div className="flex items-center justify-center py-6">
-                      <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
-                      <span className="ml-2 text-xs text-gray-600">Loading...</span>
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 overflow-y-auto">
+                  {/* Available Tools - Right Panel */}
+                  <div className="mb-6">
+                    <div className="flex items-center mb-3">
+                      <h3 className="text-sm font-medium text-gray-600">Available Tools</h3>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => router.push('/dashboard/integrations')}
+                        className="rounded-md h-6 w-6 ml-1"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
-                  ) : composioTools.length === 0 ? (
-                    <div className="text-center py-6">
-                      <p className="text-xs text-gray-500 mb-2">No connected tools</p>
-                      <p className="text-xs text-gray-400">Connect integrations first</p>
+                    {/* Tools Search */}
+                    <div className="mb-3">
+                      <Input
+                        placeholder="Search tools..."
+                        value={toolsSearchQuery}
+                        onChange={(e) => setToolsSearchQuery(e.target.value)}
+                        className="rounded-md h-8 text-sm"
+                      />
                     </div>
-                  ) : (
-                    <div className="p-2">
-                      <div className="space-y-1">
-                        {composioTools.map((tool) => (
-                          <TooltipProvider key={tool.slug}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  onClick={() => {
-                                    const newSelected = new Set(selectedTools)
-                                    if (newSelected.has(tool.slug)) {
-                                      newSelected.delete(tool.slug)
-                                    } else {
-                                      newSelected.add(tool.slug)
-                                    }
-                                    setSelectedTools(newSelected)
-                                  }}
-                                  className={`w-full p-2 rounded-md border transition-all duration-200 hover:shadow-sm ${
-                                    selectedTools.has(tool.slug)
-                                      ? 'border-blue-500 bg-blue-50 shadow-sm'
-                                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    {tool.deprecated?.toolkit?.logo ? (
-                                      <img
-                                        src={tool.deprecated.toolkit.logo}
-                                        alt={tool.toolkit?.name || tool.name}
-                                        className="w-5 h-5 rounded flex-shrink-0"
-                                        onError={(e) => {
-                                          e.currentTarget.style.display = 'none'
-                                        }}
-                                      />
-                                    ) : (
-                                      <div className="w-5 h-5 bg-gray-100 rounded flex items-center justify-center flex-shrink-0">
-                                        <span className="text-xs font-medium text-gray-600">
-                                          {tool.name.charAt(0)}
+                    {/* Tools Grid */}
+                    <div className="bg-white border border-gray-200 rounded-md shadow-sm overflow-y-auto scrollbar-hide" style={{ maxHeight: 'calc(100vh - 400px)' }}>
+                      {toolsLoading ? (
+                        <div className="flex items-center justify-center py-6">
+                          <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
+                          <span className="ml-2 text-xs text-gray-600">Loading...</span>
+                        </div>
+                      ) : composioTools.length === 0 ? (
+                        <div className="text-center py-6">
+                          <p className="text-xs text-gray-500 mb-2">No connected tools</p>
+                          <p className="text-xs text-gray-400">Connect integrations first</p>
+                        </div>
+                      ) : (
+                        <div className="p-2">
+                          <div className="space-y-1">
+                            {composioTools.map((tool) => (
+                              <TooltipProvider key={tool.slug}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      onClick={() => {
+                                        const newSelected = new Set(selectedTools)
+                                        if (newSelected.has(tool.slug)) {
+                                          newSelected.delete(tool.slug)
+                                        } else {
+                                          newSelected.add(tool.slug)
+                                        }
+                                        setSelectedTools(newSelected)
+                                      }}
+                                      className={`w-full p-2 rounded-md border transition-all duration-200 hover:shadow-sm ${
+                                        selectedTools.has(tool.slug)
+                                          ? 'border-blue-500 bg-blue-50 shadow-sm'
+                                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        {tool.deprecated?.toolkit?.logo ? (
+                                          <img
+                                            src={tool.deprecated.toolkit.logo}
+                                            alt={tool.toolkit?.name || tool.name}
+                                            className="w-5 h-5 rounded flex-shrink-0"
+                                            onError={(e) => {
+                                              e.currentTarget.style.display = 'none'
+                                            }}
+                                          />
+                                        ) : (
+                                          <div className="w-5 h-5 bg-gray-100 rounded flex items-center justify-center flex-shrink-0">
+                                            <span className="text-xs font-medium text-gray-600">
+                                              {tool.name.charAt(0)}
+                                            </span>
+                                          </div>
+                                        )}
+                                        <span className="text-xs font-medium text-left truncate flex-1">
+                                          {tool.name.replace(/^(GMAIL_|GOOGLECALENDAR_)/i, '').toLowerCase().replace(/_/g, ' ').split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                                         </span>
                                       </div>
-                                    )}
-                                    <span className="text-xs font-medium text-left truncate flex-1">
-                                      {tool.name.replace(/^(GMAIL_|GOOGLECALENDAR_)/i, '').toLowerCase().replace(/_/g, ' ').split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-                                    </span>
-                                  </div>
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent className="bg-gray-900 text-white border-gray-700 max-w-xs">
-                                <div className="space-y-1">
-                                  <div className="font-medium">{tool.name}</div>
-                                  <div className="text-gray-300 text-xs">{tool.description}</div>
-                                  {tool.toolkit && (
-                                    <div className="flex items-center gap-1 text-blue-300 text-xs">
-                                      {tool.deprecated?.toolkit?.logo && (
-                                        <img
-                                          src={tool.deprecated.toolkit.logo}
-                                          alt={tool.toolkit.name}
-                                          className="w-3 h-3 rounded"
-                                        />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="bg-gray-900 text-white border-gray-700 max-w-xs">
+                                    <div className="space-y-1">
+                                      <div className="font-medium">{tool.name}</div>
+                                      <div className="text-gray-300 text-xs">{tool.description}</div>
+                                      {tool.toolkit && (
+                                        <div className="flex items-center gap-1 text-blue-300 text-xs">
+                                          {tool.deprecated?.toolkit?.logo && (
+                                            <img
+                                              src={tool.deprecated.toolkit.logo}
+                                              alt={tool.toolkit.name}
+                                              className="w-3 h-3 rounded"
+                                            />
+                                          )}
+                                          <span>{tool.toolkit.name}</span>
+                                        </div>
                                       )}
-                                      <span>{tool.toolkit.name}</span>
                                     </div>
-                                  )}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Selected Tools Details */}
+                  {selectedTools.size > 0 && (
+                    <div className="mb-6">
+                      <h3 className="text-sm font-medium mb-3 text-gray-600">Selected Tools</h3>
+                      <div className="bg-white border border-gray-200 rounded-md shadow-sm max-h-40 overflow-y-auto">
+                        {Array.from(selectedTools).map(toolSlug => {
+                          const tool = composioTools.find(t => t.slug === toolSlug)
+                          if (!tool) return null
+                          
+                          return (
+                            <div key={toolSlug} className="flex items-center gap-2 p-2 border-b border-gray-100 last:border-b-0">
+                              {tool.deprecated?.toolkit?.logo ? (
+                                <img
+                                  src={tool.deprecated.toolkit.logo}
+                                  alt={tool.toolkit?.name || tool.name}
+                                  className="w-4 h-4 rounded flex-shrink-0"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none'
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-4 h-4 bg-gray-100 rounded flex items-center justify-center flex-shrink-0">
+                                  <span className="text-xs font-medium text-gray-600">
+                                    {tool.name.charAt(0)}
+                                  </span>
                                 </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        ))}
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-medium truncate">{tool.name}</p>
+                                <p className="text-xs text-gray-500 truncate">{tool.toolkit?.name}</p>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Schedule Information */}
+                  {createAgentSchedule.frequency && (
+                    <div className="mb-6">
+                      <h3 className="text-sm font-medium mb-3 text-gray-600">Schedule</h3>
+                      <div className="bg-white border border-gray-200 rounded-md p-3 shadow-sm">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-gray-600">Frequency:</span>
+                            <span className="text-xs font-medium capitalize">{createAgentSchedule.frequency}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-gray-600">Time:</span>
+                            <span className="text-xs font-medium">{createAgentSchedule.time}</span>
+                          </div>
+                          {createAgentSchedule.frequency === 'weekly' && createAgentSchedule.selectedDay && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-gray-600">Day:</span>
+                              <span className="text-xs font-medium capitalize">{createAgentSchedule.selectedDay}</span>
+                            </div>
+                          )}
+                          {createAgentSchedule.frequency === 'monthly' && createAgentSchedule.days[0] && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-gray-600">Day of Month:</span>
+                              <span className="text-xs font-medium">{createAgentSchedule.days[0]}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
                 </div>
-              </div>
 
-              {/* Selected Tools Details */}
-              {selectedTools.size > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-sm font-medium mb-3 text-gray-600">Selected Tools</h3>
-                  <div className="bg-white border border-gray-200 rounded-md shadow-sm max-h-40 overflow-y-auto">
-                    {Array.from(selectedTools).map(toolSlug => {
-                      const tool = composioTools.find(t => t.slug === toolSlug)
-                      if (!tool) return null
-                      
-                      return (
-                        <div key={toolSlug} className="flex items-center gap-2 p-2 border-b border-gray-100 last:border-b-0">
-                          {tool.deprecated?.toolkit?.logo ? (
-                            <img
-                              src={tool.deprecated.toolkit.logo}
-                              alt={tool.toolkit?.name || tool.name}
-                              className="w-4 h-4 rounded flex-shrink-0"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none'
-                              }}
-                            />
-                          ) : (
-                            <div className="w-4 h-4 bg-gray-100 rounded flex items-center justify-center flex-shrink-0">
-                              <span className="text-xs font-medium text-gray-600">
-                                {tool.name.charAt(0)}
-                              </span>
-                            </div>
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-medium truncate">{tool.name}</p>
-                            <p className="text-xs text-gray-500 truncate">{tool.toolkit?.name}</p>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Schedule Information */}
-              {createAgentSchedule.frequency && (
-                <div className="mb-6">
-                  <h3 className="text-sm font-medium mb-3 text-gray-600">Schedule</h3>
-                  <div className="bg-white border border-gray-200 rounded-md p-3 shadow-sm">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-600">Frequency:</span>
-                        <span className="text-xs font-medium capitalize">{createAgentSchedule.frequency}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-600">Time:</span>
-                        <span className="text-xs font-medium">{createAgentSchedule.time}</span>
-                      </div>
-                      {createAgentSchedule.frequency === 'weekly' && createAgentSchedule.selectedDay && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-gray-600">Day:</span>
-                          <span className="text-xs font-medium capitalize">{createAgentSchedule.selectedDay}</span>
-                        </div>
-                      )}
-                      {createAgentSchedule.frequency === 'monthly' && createAgentSchedule.days[0] && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-gray-600">Day of Month:</span>
-                          <span className="text-xs font-medium">{createAgentSchedule.days[0]}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Create Button Section */}
-              <div className="border-t border-gray-200 pt-4 mt-auto">
-                <div className="space-y-3">
-                  <Button
-                    onClick={() => {
-                      if (!createAgentForm.name.trim()) {
+                {/* Create Button Section - Fixed at bottom */}
+                <div className="border-t border-gray-200 pt-4 mt-auto sticky bottom-0 bg-gray-50">
+                  <div className="space-y-3">
+                    <Button
+                      onClick={() => {
+                        if (!createAgentForm.name.trim()) {
+                          toast({
+                            title: "Agent Name Required",
+                            description: "Please provide a name for your agent.",
+                            variant: "destructive"
+                          })
+                          return
+                        }
+                        
+                        if (createAgentForm.steps.filter(s => s.trim()).length === 0) {
+                          toast({
+                            title: "Steps Required",
+                            description: "Please define at least one step for your agent.",
+                            variant: "destructive"
+                          })
+                          return
+                        }
+                        
+                        // Prepare agent data with selected tools
+                        const agentData = {
+                          name: createAgentForm.name,
+                          steps: createAgentForm.steps.filter(s => s.trim()),
+                          selectedTools: Array.from(selectedTools),
+                          schedule: createAgentSchedule.frequency ? createAgentSchedule : null,
+                          merchantId: user?.uid
+                        }
+                        
+                        console.log('Creating agent with data:', agentData)
+                        
+                        // Here you would save the agent to your backend
                         toast({
-                          title: "Agent Name Required",
-                          description: "Please provide a name for your agent.",
-                          variant: "destructive"
+                          title: "Agent Created!",
+                          description: `${createAgentForm.name} has been created with ${selectedTools.size} tools.`
                         })
-                        return
-                      }
-                      
-                      if (createAgentForm.steps.filter(s => s.trim()).length === 0) {
-                        toast({
-                          title: "Steps Required",
-                          description: "Please define at least one step for your agent.",
-                          variant: "destructive"
-                        })
-                        return
-                      }
-                      
-                      // Prepare agent data with selected tools
-                      const agentData = {
-                        name: createAgentForm.name,
-                        steps: createAgentForm.steps.filter(s => s.trim()),
-                        selectedTools: Array.from(selectedTools),
-                        schedule: createAgentSchedule.frequency ? createAgentSchedule : null,
-                        merchantId: user?.uid
-                      }
-                      
-                      console.log('Creating agent with data:', agentData)
-                      
-                      // Here you would save the agent to your backend
-                      toast({
-                        title: "Agent Created!",
-                        description: `${createAgentForm.name} has been created with ${selectedTools.size} tools.`
-                      })
-                      
-                      // Reset form and close modal
-                      setCreateAgentForm({ name: '', steps: [''] })
-                      setCreateAgentSchedule({ frequency: '', time: '12:00', days: [], selectedDay: '' })
-                      setSelectedTools(new Set())
-                      setToolsSearchQuery('')
-                      setIsCreateAgentModalOpen(false)
-                    }}
-                    className="w-full rounded-md"
-                    disabled={!createAgentForm.name.trim() || createAgentForm.steps.filter(s => s.trim()).length === 0}
-                  >
-                    Create Agent
-                  </Button>
-                  
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setCreateAgentForm({ name: '', steps: [''] })
-                      setCreateAgentSchedule({ frequency: '', time: '12:00', days: [], selectedDay: '' })
-                      setSelectedTools(new Set())
-                      setToolsSearchQuery('')
-                      setIsCreateAgentModalOpen(false)
-                    }}
-                    className="w-full rounded-md"
-                  >
-                    Cancel
-                  </Button>
+                        
+                        // Reset form and close modal
+                        setCreateAgentForm({ name: '', steps: [''] })
+                        setCreateAgentSchedule({ frequency: '', time: '12:00', days: [], selectedDay: '' })
+                        setSelectedTools(new Set())
+                        setToolsSearchQuery('')
+                        setSmartCreatePrompt('') // Reset smart create prompt
+                        setCreateAgentStepsTab('smart') // Reset to smart tab
+                        setIsEditingAgentName(false) // Reset editing state
+                        setIsGeneratingSteps(false) // Reset generating state
+                        setGeneratedStepsText('') // Reset generated steps
+                        setAgentIdeas(null) // Reset agent ideas
+                        setIsLoadingAgentIdeas(false) // Reset loading state
+                        setIsCreateAgentModalOpen(false)
+                      }}
+                      className="w-full rounded-md"
+                      disabled={!createAgentForm.name.trim() || createAgentForm.steps.filter(s => s.trim()).length === 0}
+                    >
+                      Create Agent
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setCreateAgentForm({ name: '', steps: [''] })
+                        setCreateAgentSchedule({ frequency: '', time: '12:00', days: [], selectedDay: '' })
+                        setSelectedTools(new Set())
+                        setToolsSearchQuery('')
+                        setSmartCreatePrompt('') // Reset smart create prompt
+                        setCreateAgentStepsTab('smart') // Reset to smart tab
+                        setIsEditingAgentName(false) // Reset editing state
+                        setIsGeneratingSteps(false) // Reset generating state
+                        setGeneratedStepsText('') // Reset generated steps
+                        setAgentIdeas(null) // Reset agent ideas
+                        setIsLoadingAgentIdeas(false) // Reset loading state
+                        setIsCreateAgentModalOpen(false)
+                      }}
+                      className="w-full rounded-md"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>

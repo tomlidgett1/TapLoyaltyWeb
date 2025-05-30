@@ -615,6 +615,77 @@ export default function IntegrationsPage() {
     }
   };
 
+  // Manual Gmail status check function
+  const checkGmailComposioStatus = async () => {
+    if (!user?.uid) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to check status",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setConnecting("gmail");
+    
+    try {
+      const response = await fetch(`/api/auth/gmail/composio/check-status?merchantId=${user.uid}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update local state based on the response
+        if (data.connection.connected) {
+          setIntegrations(prev => ({
+            ...prev,
+            gmail: {
+              connected: true,
+              data: {
+                connectedAccountId: data.connection.id,
+                connectionStatus: data.connection.status,
+                provider: 'composio',
+                connectedAt: { toDate: () => new Date() } // Mock timestamp for display
+              }
+            }
+          }));
+          
+          toast({
+            title: "Success",
+            description: "Gmail connection is active and updated successfully",
+          });
+        } else {
+          setIntegrations(prev => ({
+            ...prev,
+            gmail: {
+              connected: false,
+              data: null
+            }
+          }));
+          
+          toast({
+            title: "Not Connected",
+            description: "No active Gmail connection found",
+            variant: "destructive"
+          });
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Failed to check Gmail status",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error checking Gmail status:', error);
+      toast({
+        title: "Error", 
+        description: "Failed to check Gmail connection status",
+        variant: "destructive"
+      });
+    } finally {
+      setConnecting(null);
+    }
+  };
+
   return (
     <PageTransition>
       <div className="p-6 py-4">
@@ -946,6 +1017,16 @@ export default function IntegrationsPage() {
                 <div className="flex space-x-2">
                   <Button 
                     variant="outline"
+                    size="sm"
+                    className="rounded-md"
+                    onClick={checkGmailComposioStatus}
+                    disabled={connecting === "gmail" || !user?.uid}
+                    title="Check current Gmail connection status with Composio"
+                  >
+                    {connecting === "gmail" ? "Checking..." : "Check Status"}
+                  </Button>
+                  <Button 
+                    variant="outline"
                     className="rounded-md"
                     onClick={() => window.location.href = `/api/auth/gmail/composio/simplified?merchantId=${user?.uid}`}
                     disabled={connecting === "gmail" || !user?.uid}
@@ -975,6 +1056,11 @@ export default function IntegrationsPage() {
                     Connected on {new Date(integrations.gmail.data.connectedAt.toDate()).toLocaleDateString()} at {new Date(integrations.gmail.data.connectedAt.toDate()).toLocaleTimeString()}
                     {integrations.gmail.data?.provider && (
                       <span className="ml-1">via {integrations.gmail.data.provider}</span>
+                    )}
+                    {integrations.gmail.data?.connectedAccountId && (
+                      <span className="ml-1 text-xs text-gray-500">
+                        (ID: {integrations.gmail.data.connectedAccountId.substring(0, 8)}...)
+                      </span>
                     )}
                   </p>
                 )}

@@ -37,6 +37,7 @@ interface IntegrationsState {
   google_docs: IntegrationState;
   google_sheets: IntegrationState;
   hubspot: IntegrationState;
+  outlook: IntegrationState;
 }
 
 export default function IntegrationsPage() {
@@ -51,7 +52,8 @@ export default function IntegrationsPage() {
     google_calendar: { connected: false, data: null },
     google_docs: { connected: false, data: null },
     google_sheets: { connected: false, data: null },
-    hubspot: { connected: false, data: null }
+    hubspot: { connected: false, data: null },
+    outlook: { connected: false, data: null }
   })
   
   const [refreshing, setRefreshing] = useState(false)
@@ -153,6 +155,11 @@ export default function IntegrationsPage() {
         const hubspotConnected = hubspotDoc.exists() && hubspotDoc.data()?.connected === true;
         console.log('HubSpot integration status:', hubspotConnected ? 'Connected' : 'Not connected');
         
+        // Check Microsoft Outlook integration status
+        const outlookDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/outlook`));
+        const outlookConnected = outlookDoc.exists() && outlookDoc.data()?.connected === true;
+        console.log('Microsoft Outlook integration status:', outlookConnected ? 'Connected' : 'Not connected');
+        
         setIntegrations(prev => ({
           ...prev,
           square: {
@@ -182,6 +189,10 @@ export default function IntegrationsPage() {
           hubspot: {
             connected: hubspotConnected,
             data: hubspotDoc.exists() ? hubspotDoc.data() : null
+          },
+          outlook: {
+            connected: outlookConnected,
+            data: outlookDoc.exists() ? outlookDoc.data() : null
           }
         }));
       } else {
@@ -212,6 +223,11 @@ export default function IntegrationsPage() {
         const hubspotConnected = hubspotDoc.exists() && hubspotDoc.data()?.connected === true;
         console.log('HubSpot integration status:', hubspotConnected ? 'Connected' : 'Not connected');
         
+        // Check Microsoft Outlook integration status
+        const outlookDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/outlook`));
+        const outlookConnected = outlookDoc.exists() && outlookDoc.data()?.connected === true;
+        console.log('Microsoft Outlook integration status:', outlookConnected ? 'Connected' : 'Not connected');
+        
         setIntegrations(prev => ({
           ...prev,
           square: {
@@ -241,6 +257,10 @@ export default function IntegrationsPage() {
           hubspot: {
             connected: hubspotConnected,
             data: hubspotDoc.exists() ? hubspotDoc.data() : null
+          },
+          outlook: {
+            connected: outlookConnected,
+            data: outlookDoc.exists() ? outlookDoc.data() : null
           }
         }));
       }
@@ -367,6 +387,21 @@ export default function IntegrationsPage() {
           }))
         } else {
           console.log('HubSpot integration not connected or not found')
+        }
+
+        // Check Microsoft Outlook integration status
+        const outlookDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'outlook'))
+        if (outlookDoc.exists() && outlookDoc.data().connected) {
+          console.log('Microsoft Outlook integration found:', outlookDoc.data())
+          setIntegrations(prev => ({
+            ...prev,
+            outlook: { 
+              connected: true, 
+              data: outlookDoc.data() 
+            }
+          }))
+        } else {
+          console.log('Microsoft Outlook integration not connected or not found')
         }
       } catch (error) {
         console.error("Error checking integrations:", error)
@@ -1151,45 +1186,132 @@ export default function IntegrationsPage() {
     }
   };
 
+  // Microsoft Outlook integration functions
+  const connectOutlook = () => {
+    if (!user?.uid) return
+
+    setConnecting("outlook")
+
+    try {
+      // Go directly to the Microsoft Outlook Composio connect route
+      window.location.href = `/api/auth/outlook/composio?merchantId=${user.uid}`
+    } catch (error) {
+      console.error("Error redirecting to Microsoft Outlook connect route:", error)
+      toast({
+        title: "Connection Failed",
+        description: "Failed to initiate Microsoft Outlook connection. Please try again.",
+        variant: "destructive",
+      })
+      setConnecting(null)
+    }
+  }
+
+  // Disconnect Microsoft Outlook
+  const disconnectOutlook = async () => {
+    if (!user) return
+    
+    try {
+      // Delete the integration from Firestore
+      const integrationRef = doc(db, `merchants/${user.uid}/integrations/outlook`);
+      await deleteDoc(integrationRef);
+      
+      // Update local state
+      setIntegrations(prev => ({
+        ...prev,
+        outlook: { connected: false, data: null }
+      }))
+      
+      toast({
+        title: "Disconnected",
+        description: "Your Microsoft Outlook account has been disconnected."
+      })
+    } catch (error) {
+      console.error("Error disconnecting Microsoft Outlook:", error)
+      toast({
+        title: "Error",
+        description: "Failed to disconnect Microsoft Outlook. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
+
+  // Manual Microsoft Outlook status check function
+  const checkOutlookComposioStatus = async () => {
+    if (!user?.uid) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to check status",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setConnecting("outlook");
+    
+    try {
+      const response = await fetch(`/api/auth/outlook/composio/check-status?merchantId=${user.uid}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update local state based on the response
+        if (data.connection.connected) {
+          setIntegrations(prev => ({
+            ...prev,
+            outlook: {
+              connected: true,
+              data: {
+                connectedAccountId: data.connection.id,
+                connectionStatus: data.connection.status,
+                provider: 'composio',
+                connectedAt: { toDate: () => new Date() } // Mock timestamp for display
+              }
+            }
+          }));
+          
+          toast({
+            title: "Success",
+            description: "Microsoft Outlook connection is active and updated successfully",
+          });
+        } else {
+          setIntegrations(prev => ({
+            ...prev,
+            outlook: {
+              connected: false,
+              data: null
+            }
+          }));
+          
+          toast({
+            title: "Not Connected",
+            description: "No active Microsoft Outlook connection found",
+            variant: "destructive"
+          });
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Failed to check Microsoft Outlook status",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error checking Microsoft Outlook status:', error);
+      toast({
+        title: "Error", 
+        description: "Failed to check Microsoft Outlook connection status",
+        variant: "destructive"
+      });
+    } finally {
+      setConnecting(null);
+    }
+  };
+
   return (
     <PageTransition>
       <div className="p-6 py-4">
         <PageHeader
           title="Integrations"
-        >
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              onClick={refreshIntegrationStatus}
-              disabled={refreshing}
-            >
-              {refreshing ? (
-                <>
-                  <svg className="mr-2 h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Refreshing...
-                </>
-              ) : (
-                <>
-                  <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Refresh Status
-                </>
-              )}
-            </Button>
-            
-            <Button 
-              variant={debugMode ? "default" : "outline"}
-              className="rounded-md"
-              onClick={() => setDebugMode(!debugMode)}
-            >
-              {debugMode ? "Hide Debug Tools" : "Show Debug Tools"}
-            </Button>
-          </div>
-        </PageHeader>
+        />
         
         {/* Debug Tools */}
         {debugMode && (
@@ -1461,243 +1583,549 @@ export default function IntegrationsPage() {
         )}
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Gmail Integration Card */}
-          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <img src="/gmailpro.png" alt="Gmail" className="w-8 h-8 object-contain" />
-                  <div>
-                    <CardTitle className="text-sm font-medium">Gmail</CardTitle>
-                    <CardDescription className="text-xs">Email Integration</CardDescription>
+          {/* Connected Apps First */}
+          {[
+            // Gmail
+            integrations.gmail.connected && (
+              <Card key="gmail" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img src="/gmailpro.png" alt="Gmail" className="w-8 h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium">Gmail</CardTitle>
+                        <CardDescription className="text-xs">Email Integration</CardDescription>
+                      </div>
+                    </div>
+                    <CheckCircle className="h-4 w-4 text-green-500" />
                   </div>
-                </div>
-                {integrations.gmail.connected && (
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="flex justify-between items-center">
-                <div className="text-xs text-muted-foreground">
-                  {integrations.gmail.connected ? (
-                    <span className="text-green-600 font-medium">Connected</span>
-                  ) : (
-                    <span className="text-gray-500">Not connected</span>
-                  )}
-                </div>
-                <Button 
-                  variant={integrations.gmail.connected ? "outline" : "default"}
-                  size="sm"
-                  className="rounded-md h-7 px-3 text-xs"
-                  onClick={integrations.gmail.connected ? disconnectGmail : connectGmail}
-                  disabled={connecting === "gmail"}
-                >
-                  {connecting === "gmail" ? "..." : 
-                  integrations.gmail.connected ? "Disconnect" : "Connect"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-green-600 font-medium">Connected</span>
+                    </div>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md h-7 px-3 text-xs"
+                      onClick={disconnectGmail}
+                      disabled={connecting === "gmail"}
+                    >
+                      {connecting === "gmail" ? "..." : "Disconnect"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+            
+            // Google Calendar
+            integrations.google_calendar.connected && (
+              <Card key="google_calendar" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img src="/cal.svg" alt="Google Calendar" className="w-8 h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium">Google Calendar</CardTitle>
+                        <CardDescription className="text-xs">Calendar Integration</CardDescription>
+                      </div>
+                    </div>
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-green-600 font-medium">Connected</span>
+                    </div>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md h-7 px-3 text-xs"
+                      onClick={disconnectGoogleCalendar}
+                      disabled={connecting === "google_calendar"}
+                    >
+                      {connecting === "google_calendar" ? "..." : "Disconnect"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+            
+            // Google Docs
+            integrations.google_docs.connected && (
+              <Card key="google_docs" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img src="/docspro.png" alt="Google Docs" className="w-8 h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium">Google Docs</CardTitle>
+                        <CardDescription className="text-xs">Document Management</CardDescription>
+                      </div>
+                    </div>
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-green-600 font-medium">Connected</span>
+                    </div>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md h-7 px-3 text-xs"
+                      onClick={disconnectGoogleDocs}
+                      disabled={connecting === "google_docs"}
+                    >
+                      {connecting === "google_docs" ? "..." : "Disconnect"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+            
+            // Google Sheets
+            integrations.google_sheets.connected && (
+              <Card key="google_sheets" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img src="/sheetspro.png" alt="Google Sheets" className="w-8 h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium">Google Sheets</CardTitle>
+                        <CardDescription className="text-xs">Spreadsheet Integration</CardDescription>
+                      </div>
+                    </div>
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-green-600 font-medium">Connected</span>
+                    </div>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md h-7 px-3 text-xs"
+                      onClick={disconnectGoogleSheets}
+                      disabled={connecting === "google_sheets"}
+                    >
+                      {connecting === "google_sheets" ? "..." : "Disconnect"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+            
+            // Lightspeed Retail
+            integrations.lightspeed_new.connected && (
+              <Card key="lightspeed_new" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img src="/lslogo.png" alt="Lightspeed" className="w-8 h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium">Lightspeed Retail</CardTitle>
+                        <CardDescription className="text-xs">Point of Sale</CardDescription>
+                      </div>
+                    </div>
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-green-600 font-medium">Connected</span>
+                    </div>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md h-7 px-3 text-xs"
+                      onClick={disconnectLightspeedNew}
+                      disabled={connecting === "lightspeed_new"}
+                    >
+                      {connecting === "lightspeed_new" ? "..." : "Disconnect"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+            
+            // Square
+            integrations.square.connected && (
+              <Card key="square" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img src="/squarepro.png" alt="Square" className="w-8 h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium">Square</CardTitle>
+                        <CardDescription className="text-xs">Point of Sale</CardDescription>
+                      </div>
+                    </div>
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-green-600 font-medium">Connected</span>
+                    </div>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md h-7 px-3 text-xs"
+                      onClick={disconnectSquare}
+                      disabled={connecting === "square"}
+                    >
+                      {connecting === "square" ? "..." : "Disconnect"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+            
+            // HubSpot
+            integrations.hubspot.connected && (
+              <Card key="hubspot" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img src="/hubspot.png" alt="HubSpot" className="w-8 h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium">HubSpot</CardTitle>
+                        <CardDescription className="text-xs">CRM Integration</CardDescription>
+                      </div>
+                    </div>
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-green-600 font-medium">Connected</span>
+                    </div>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md h-7 px-3 text-xs"
+                      onClick={disconnectHubSpot}
+                      disabled={connecting === "hubspot"}
+                    >
+                      {connecting === "hubspot" ? "..." : "Disconnect"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+            
+            // Microsoft Outlook
+            integrations.outlook.connected && (
+              <Card key="outlook" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img src="/outlook.png" alt="Microsoft Outlook" className="w-8 h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium">Microsoft Outlook</CardTitle>
+                        <CardDescription className="text-xs">Email Integration</CardDescription>
+                      </div>
+                    </div>
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-green-600 font-medium">Connected</span>
+                    </div>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md h-7 px-3 text-xs"
+                      onClick={disconnectOutlook}
+                      disabled={connecting === "outlook"}
+                    >
+                      {connecting === "outlook" ? "..." : "Disconnect"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          ].filter(Boolean)}
           
-          {/* Google Calendar Integration Card */}
-          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <img src="/cal.svg" alt="Google Calendar" className="w-8 h-8 object-contain" />
-                  <div>
-                    <CardTitle className="text-sm font-medium">Google Calendar</CardTitle>
-                    <CardDescription className="text-xs">Calendar Integration</CardDescription>
+          {/* Available Apps (Not Connected) */}
+          {[
+            // Gmail
+            !integrations.gmail.connected && (
+              <Card key="gmail" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img src="/gmailpro.png" alt="Gmail" className="w-8 h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium">Gmail</CardTitle>
+                        <CardDescription className="text-xs">Email Integration</CardDescription>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                {integrations.google_calendar.connected && (
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="flex justify-between items-center">
-                <div className="text-xs text-muted-foreground">
-                  {integrations.google_calendar.connected ? (
-                    <span className="text-green-600 font-medium">Connected</span>
-                  ) : (
-                    <span className="text-gray-500">Not connected</span>
-                  )}
-                </div>
-                <Button 
-                  variant={integrations.google_calendar.connected ? "outline" : "default"}
-                  size="sm"
-                  className="rounded-md h-7 px-3 text-xs"
-                  onClick={integrations.google_calendar.connected ? disconnectGoogleCalendar : connectGoogleCalendar}
-                  disabled={connecting === "google_calendar"}
-                >
-                  {connecting === "google_calendar" ? "..." : 
-                  integrations.google_calendar.connected ? "Disconnect" : "Connect"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          
-          {/* Google Docs Integration Card */}
-          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <img src="/docspro.png" alt="Google Docs" className="w-8 h-8 object-contain" />
-                  <div>
-                    <CardTitle className="text-sm font-medium">Google Docs</CardTitle>
-                    <CardDescription className="text-xs">Document Management</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-gray-500">Not connected</span>
+                    </div>
+                    <Button 
+                      variant="default"
+                      size="sm"
+                      className="rounded-md h-7 px-3 text-xs"
+                      onClick={connectGmail}
+                      disabled={connecting === "gmail"}
+                    >
+                      {connecting === "gmail" ? "..." : "Connect"}
+                    </Button>
                   </div>
-                </div>
-                {integrations.google_docs.connected && (
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="flex justify-between items-center">
-                <div className="text-xs text-muted-foreground">
-                  {integrations.google_docs.connected ? (
-                    <span className="text-green-600 font-medium">Connected</span>
-                  ) : (
-                    <span className="text-gray-500">Not connected</span>
-                  )}
-                </div>
-                <Button 
-                  variant={integrations.google_docs.connected ? "outline" : "default"}
-                  size="sm"
-                  className="rounded-md h-7 px-3 text-xs"
-                  onClick={integrations.google_docs.connected ? disconnectGoogleDocs : connectGoogleDocs}
-                  disabled={connecting === "google_docs"}
-                >
-                  {connecting === "google_docs" ? "..." : 
-                  integrations.google_docs.connected ? "Disconnect" : "Connect"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          
-          {/* Google Sheets Integration Card */}
-          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <img src="/sheetspro.png" alt="Google Sheets" className="w-8 h-8 object-contain" />
-                  <div>
-                    <CardTitle className="text-sm font-medium">Google Sheets</CardTitle>
-                    <CardDescription className="text-xs">Spreadsheet Integration</CardDescription>
+                </CardContent>
+              </Card>
+            ),
+            
+            // Google Calendar
+            !integrations.google_calendar.connected && (
+              <Card key="google_calendar" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img src="/cal.svg" alt="Google Calendar" className="w-8 h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium">Google Calendar</CardTitle>
+                        <CardDescription className="text-xs">Calendar Integration</CardDescription>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                {integrations.google_sheets.connected && (
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="flex justify-between items-center">
-                <div className="text-xs text-muted-foreground">
-                  {integrations.google_sheets.connected ? (
-                    <span className="text-green-600 font-medium">Connected</span>
-                  ) : (
-                    <span className="text-gray-500">Not connected</span>
-                  )}
-                </div>
-                <Button 
-                  variant={integrations.google_sheets.connected ? "outline" : "default"}
-                  size="sm"
-                  className="rounded-md h-7 px-3 text-xs"
-                  onClick={integrations.google_sheets.connected ? disconnectGoogleSheets : connectGoogleSheets}
-                  disabled={connecting === "google_sheets"}
-                >
-                  {connecting === "google_sheets" ? "..." : 
-                  integrations.google_sheets.connected ? "Disconnect" : "Connect"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          
-          {/* Lightspeed Retail Integration Card */}
-          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gray-50 rounded-md flex items-center justify-center">
-                    <img src="/lslogo.png" alt="Lightspeed" className="w-6 h-6 object-contain" />
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-gray-500">Not connected</span>
+                    </div>
+                    <Button 
+                      variant="default"
+                      size="sm"
+                      className="rounded-md h-7 px-3 text-xs"
+                      onClick={connectGoogleCalendar}
+                      disabled={connecting === "google_calendar"}
+                    >
+                      {connecting === "google_calendar" ? "..." : "Connect"}
+                    </Button>
                   </div>
-                  <div>
-                    <CardTitle className="text-sm font-medium">Lightspeed Retail</CardTitle>
-                    <CardDescription className="text-xs">Point of Sale</CardDescription>
+                </CardContent>
+              </Card>
+            ),
+            
+            // Google Docs
+            !integrations.google_docs.connected && (
+              <Card key="google_docs" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img src="/docspro.png" alt="Google Docs" className="w-8 h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium">Google Docs</CardTitle>
+                        <CardDescription className="text-xs">Document Management</CardDescription>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                {integrations.lightspeed_new.connected && (
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="flex justify-between items-center">
-                <div className="text-xs text-muted-foreground">
-                  {integrations.lightspeed_new.connected ? (
-                    <span className="text-green-600 font-medium">Connected</span>
-                  ) : (
-                    <span className="text-gray-500">Not connected</span>
-                  )}
-                </div>
-                <Button 
-                  variant={integrations.lightspeed_new.connected ? "outline" : "default"}
-                  size="sm"
-                  className="rounded-md h-7 px-3 text-xs"
-                  onClick={integrations.lightspeed_new.connected ? disconnectLightspeedNew : connectLightspeedNew}
-                  disabled={connecting === "lightspeed_new"}
-                >
-                  {connecting === "lightspeed_new" ? "..." : 
-                  integrations.lightspeed_new.connected ? "Disconnect" : "Connect"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          
-          {/* Square Integration Card */}
-          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <img src="/squarepro.png" alt="Square" className="w-8 h-8 object-contain" />
-                  <div>
-                    <CardTitle className="text-sm font-medium">Square</CardTitle>
-                    <CardDescription className="text-xs">Point of Sale</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-gray-500">Not connected</span>
+                    </div>
+                    <Button 
+                      variant="default"
+                      size="sm"
+                      className="rounded-md h-7 px-3 text-xs"
+                      onClick={connectGoogleDocs}
+                      disabled={connecting === "google_docs"}
+                    >
+                      {connecting === "google_docs" ? "..." : "Connect"}
+                    </Button>
                   </div>
-                </div>
-                {integrations.square.connected && (
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="flex justify-between items-center">
-                <div className="text-xs text-muted-foreground">
-                  {integrations.square.connected ? (
-                    <span className="text-green-600 font-medium">Connected</span>
-                  ) : (
-                    <span className="text-gray-500">Not connected</span>
-                  )}
-                </div>
-                <Button 
-                  variant={integrations.square.connected ? "outline" : "default"}
-                  size="sm"
-                  className="rounded-md h-7 px-3 text-xs"
-                  onClick={integrations.square.connected ? disconnectSquare : connectSquare}
-                  disabled={connecting === "square"}
-                >
-                  {connecting === "square" ? "..." : 
-                  integrations.square.connected ? "Disconnect" : "Connect"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            ),
+            
+            // Google Sheets
+            !integrations.google_sheets.connected && (
+              <Card key="google_sheets" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img src="/sheetspro.png" alt="Google Sheets" className="w-8 h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium">Google Sheets</CardTitle>
+                        <CardDescription className="text-xs">Spreadsheet Integration</CardDescription>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-gray-500">Not connected</span>
+                    </div>
+                    <Button 
+                      variant="default"
+                      size="sm"
+                      className="rounded-md h-7 px-3 text-xs"
+                      onClick={connectGoogleSheets}
+                      disabled={connecting === "google_sheets"}
+                    >
+                      {connecting === "google_sheets" ? "..." : "Connect"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+            
+            // Lightspeed Retail
+            !integrations.lightspeed_new.connected && (
+              <Card key="lightspeed_new" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img src="/lslogo.png" alt="Lightspeed" className="w-8 h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium">Lightspeed Retail</CardTitle>
+                        <CardDescription className="text-xs">Point of Sale</CardDescription>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-gray-500">Not connected</span>
+                    </div>
+                    <Button 
+                      variant="default"
+                      size="sm"
+                      className="rounded-md h-7 px-3 text-xs"
+                      onClick={connectLightspeedNew}
+                      disabled={connecting === "lightspeed_new"}
+                    >
+                      {connecting === "lightspeed_new" ? "..." : "Connect"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+            
+            // Square
+            !integrations.square.connected && (
+              <Card key="square" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img src="/squarepro.png" alt="Square" className="w-8 h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium">Square</CardTitle>
+                        <CardDescription className="text-xs">Point of Sale</CardDescription>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-gray-500">Not connected</span>
+                    </div>
+                    <Button 
+                      variant="default"
+                      size="sm"
+                      className="rounded-md h-7 px-3 text-xs"
+                      onClick={connectSquare}
+                      disabled={connecting === "square"}
+                    >
+                      {connecting === "square" ? "..." : "Connect"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+            
+            // HubSpot
+            !integrations.hubspot.connected && (
+              <Card key="hubspot" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img src="/hubspot.png" alt="HubSpot" className="w-8 h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium">HubSpot</CardTitle>
+                        <CardDescription className="text-xs">CRM Integration</CardDescription>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-gray-500">Not connected</span>
+                    </div>
+                    <Button 
+                      variant="default"
+                      size="sm"
+                      className="rounded-md h-7 px-3 text-xs"
+                      onClick={connectHubSpot}
+                      disabled={connecting === "hubspot"}
+                    >
+                      {connecting === "hubspot" ? "..." : "Connect"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+            
+            // Microsoft Outlook
+            !integrations.outlook.connected && (
+              <Card key="outlook" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img src="/outlook.png" alt="Microsoft Outlook" className="w-8 h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium">Microsoft Outlook</CardTitle>
+                        <CardDescription className="text-xs">Email Integration</CardDescription>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-gray-500">Not connected</span>
+                    </div>
+                    <Button 
+                      variant="default"
+                      size="sm"
+                      className="rounded-md h-7 px-3 text-xs"
+                      onClick={connectOutlook}
+                      disabled={connecting === "outlook"}
+                    >
+                      {connecting === "outlook" ? "..." : "Connect"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          ].filter(Boolean)}
 
-          {/* Google Integration Card */}
+          {/* Coming Soon Apps */}
           <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
@@ -1729,14 +2157,11 @@ export default function IntegrationsPage() {
             </CardContent>
           </Card>
           
-          {/* Lightspeed Restaurant Integration Card */}
           <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gray-50 rounded-md flex items-center justify-center">
-                    <img src="/lslogo.png" alt="Lightspeed Restaurant" className="w-6 h-6 object-contain" />
-                  </div>
+                  <img src="/lslogo.png" alt="Lightspeed Restaurant" className="w-8 h-8 object-contain" />
                   <div>
                     <CardTitle className="text-sm font-medium">Lightspeed Restaurant</CardTitle>
                     <CardDescription className="text-xs">Restaurant POS</CardDescription>
@@ -1761,48 +2186,6 @@ export default function IntegrationsPage() {
             </CardContent>
           </Card>
           
-          {/* HubSpot Integration Card */}
-          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gray-50 rounded-md flex items-center justify-center">
-                    <BarChart2 className="h-5 w-5 text-orange-500" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-sm font-medium">HubSpot</CardTitle>
-                    <CardDescription className="text-xs">CRM Integration</CardDescription>
-                  </div>
-                </div>
-                {integrations.hubspot.connected && (
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="flex justify-between items-center">
-                <div className="text-xs text-muted-foreground">
-                  {integrations.hubspot.connected ? (
-                    <span className="text-green-600 font-medium">Connected</span>
-                  ) : (
-                    <span className="text-gray-500">Not connected</span>
-                  )}
-                </div>
-                <Button 
-                  variant={integrations.hubspot.connected ? "outline" : "default"}
-                  size="sm"
-                  className="rounded-md h-7 px-3 text-xs"
-                  onClick={integrations.hubspot.connected ? disconnectHubSpot : connectHubSpot}
-                  disabled={connecting === "hubspot"}
-                >
-                  {connecting === "hubspot" ? "..." : 
-                  integrations.hubspot.connected ? "Disconnect" : "Connect"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          
-          {/* Mailchimp Integration Card */}
           <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
@@ -1834,7 +2217,6 @@ export default function IntegrationsPage() {
             </CardContent>
           </Card>
           
-          {/* Twilio Integration Card */}
           <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
@@ -1866,7 +2248,6 @@ export default function IntegrationsPage() {
             </CardContent>
           </Card>
           
-          {/* Xero Integration Card */}
           <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
@@ -1897,6 +2278,45 @@ export default function IntegrationsPage() {
               </div>
             </CardContent>
           </Card>
+        </div>
+
+        {/* Debug and Management Tools - Hidden at Bottom */}
+        <div className="mt-12 pt-8 border-t border-gray-100">
+          <div className="flex justify-center gap-3">
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={refreshIntegrationStatus}
+              disabled={refreshing}
+              className="text-gray-400 hover:text-gray-600 text-xs"
+            >
+              {refreshing ? (
+                <>
+                  <svg className="mr-1 h-3 w-3 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Refreshing...
+                </>
+              ) : (
+                <>
+                  <svg className="mr-1 h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh Status
+                </>
+              )}
+            </Button>
+            
+            <Button 
+              variant="ghost"
+              size="sm"
+              onClick={() => setDebugMode(!debugMode)}
+              className="text-gray-400 hover:text-gray-600 text-xs"
+            >
+              {debugMode ? "Hide Debug" : "Debug Tools"}
+            </Button>
+          </div>
         </div>
       </div>
     </PageTransition>

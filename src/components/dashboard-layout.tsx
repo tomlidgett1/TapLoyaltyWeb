@@ -1411,6 +1411,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   // Add state for integrations popup
   const [showIntegrationsPopup, setShowIntegrationsPopup] = useState(false)
   
+  // Add state for integrations panel (replacing popup)
+  const [showIntegrationsPanel, setShowIntegrationsPanel] = useState(false)
+  
   // Define available integrations
   const availableIntegrations = [
     { id: 'xero', name: 'Xero', description: 'Accounting and bookkeeping', logo: 'xero.png', status: 'active' },
@@ -1447,7 +1450,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   // Auto-collapse sidebar when chat panel opens/closes
   useEffect(() => {
     setSidebarCollapsed(showChatbotPanel)
-  }, [showChatbotPanel])
+    // Close integrations panel when chat panel opens
+    if (showChatbotPanel && showIntegrationsPanel) {
+      setShowIntegrationsPanel(false)
+    }
+  }, [showChatbotPanel, showIntegrationsPanel])
   
   // Define integration items
   const integrations = [
@@ -2060,857 +2067,884 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <style jsx global>{scrollbarStyles}</style>
         
         {/* Main Content with Chatbot Panel */}
-        <main className="flex-1 overflow-hidden p-2 flex">
-          {/* Main content area - no animation */}
-          <motion.div 
-            className="bg-white rounded-md overflow-hidden border border-gray-200 flex flex-col"
-            animate={{
-              width: showChatbotPanel ? '68%' : '100%'
-            }}
-            transition={{
-              type: "tween",
-              ease: "easeInOut",
-              duration: 0.35
-            }}
-            style={{
-              width: showChatbotPanel ? '68%' : '100%'
-            }}
-          >
-            {/* Header moved inside main content */}
-            <header className="h-16 flex items-center justify-between px-4 border-b border-gray-200 bg-white">
-              <div className="flex items-center gap-4 flex-grow mr-4">
-                {/* Title removed from setup page header */}
-                <h1 className="text-lg font-medium ml-2">{getPageTitle()}</h1>
-              </div>
-              
-              <div className="flex items-center gap-4 shrink-0">
-                <div className="flex items-center gap-2">
-                  {/* Quick Note button with dropdown - now text style */}
-                  <div className="relative">
-                    <DropdownMenu open={quickNoteOpen} onOpenChange={setQuickNoteOpen}>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-9 gap-2 text-gray-600 hover:text-gray-900 hover:bg-transparent font-normal px-2"
-                          disabled={isSavingQuickNote || audioProcessing || recording || showQuickNoteInput}
-                        >
-                          {isSavingQuickNote ? (
-                            <>
-                              <span className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mr-1.5"></span>
-                              Saving...
-                            </>
-                          ) : audioProcessing ? (
-                            <>
-                              <span className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mr-1.5"></span>
-                              Processing...
-                            </>
-                          ) : recording ? (
-                            <>
-                              <Mic className="h-4 w-4 text-red-500 mr-1.5 animate-pulse" />
-                              {formatDuration(recordingDuration)}
-                            </>
-                          ) : (
-                            <>Quick Note</>
-                          )}
-                        </Button>
-                      </DropdownMenuTrigger>
-                      {/* Dropdown content */}
-                      <DropdownMenuContent align="start" className="w-56 rounded-md">
-                        <DropdownMenuItem 
-                          onClick={() => {
-                            setQuickNoteOpen(false);
-                            handleVoiceNoteClick();
-                          }}
-                          disabled={recording || audioProcessing}
-                          className="flex items-center gap-2 cursor-pointer"
-                        >
-                          <Mic className="h-4 w-4 text-gray-500" />
-                          <span>Voice Note</span>
-                        </DropdownMenuItem>
-                        
-                        <DropdownMenuItem 
-                          onClick={() => {
-                            setQuickNoteOpen(false);
-                            setShowQuickNoteInput(true);
-                          }}
-                          disabled={showQuickNoteInput}
-                          className="flex items-center gap-2 cursor-pointer"
-                        >
-                          <Pencil className="h-4 w-4 text-gray-500" />
-                          <span>Standard Note</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    
-                    {/* Quick Note Input Popup */}
-                    {showQuickNoteInput && (
-                      <div 
-                        ref={quickNoteContainerRef}
-                        className="absolute top-full mt-1 left-0 z-50 w-80 max-w-[90vw] bg-white shadow-lg rounded-md border border-gray-200 overflow-hidden"
-                      >
-                        <div className="p-3 flex flex-col">
-                          <div className="flex justify-between items-center mb-2">
-                            <h3 className="text-sm font-medium">Quick Note</h3>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setShowQuickNoteInput(false);
-                                setQuickNoteText("");
-                              }}
-                              className="h-6 w-6 p-0 rounded-full"
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                          <Textarea
-                            ref={quickNoteInputRef}
-                            value={quickNoteText}
-                            onChange={(e) => {
-                              setQuickNoteText(e.target.value);
-                              // Auto-resize is handled by the event listener
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                saveQuickNote();
-                              } else if (e.key === 'Escape') {
-                                setShowQuickNoteInput(false);
-                                setQuickNoteText("");
-                              }
-                            }}
-                            placeholder="Type a quick note and press Enter..."
-                            className="w-full min-h-[80px] max-h-[200px] rounded-md resize-none text-sm"
-                            disabled={isSavingQuickNote}
-                          />
-                          <div className="flex justify-between items-center mt-2.5">
-                            <div className="text-xs text-gray-500 flex items-center">
-                              <span className={`${quickNoteText.length > 300 ? 'text-amber-500 font-medium' : ''}`}>
-                                {quickNoteText.length}
-                              </span>
-                              <span className="mx-1">/</span>
-                              <span>500 characters</span>
-                            </div>
-                            <Button
-                              size="sm"
-                              onClick={saveQuickNote}
-                              disabled={!quickNoteText.trim() || isSavingQuickNote || quickNoteText.length > 500}
-                              className="h-8 text-xs rounded-md px-3"
-                            >
-                              {isSavingQuickNote ? (
-                                <>
-                                  <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
-                                  Saving
-                                </>
-                              ) : (
-                                <>Save Note</>
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Tap Agent button - now text style */}
-                  {/* <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-9 gap-2 text-gray-600 hover:text-gray-900 hover:bg-transparent font-normal px-2"
-                    onClick={() => setShowTapAgentSheet(true)}
-                  >
-                    <div className="flex items-center">
-                      <span className="font-bold text-blue-500">Tap</span>
-                      <span className="ml-0.5 bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent font-bold animate-gradient-x">
-                        Agent
-                      </span>
-                    </div>
-                  </Button> */}
-                  
-                  {/* Docs button - now text style */}
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-9 gap-2 text-gray-600 hover:text-gray-900 hover:bg-transparent font-normal px-2"
-                    asChild
-                  >
-                    <Link href="/docs">
-                      Help Guide
-                    </Link>
-                  </Button>
-                  
-                  {/* Integrations button */}
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-9 gap-2 text-gray-600 hover:text-gray-900 hover:bg-transparent font-normal px-2"
-                    onClick={() => setShowIntegrationsPopup(true)}
-                  >
-                    Integrations
-                  </Button>
+        <main className="flex-1 overflow-hidden p-2 relative">
+          <div className="flex h-full">
+            {/* Main content area - no width animation, just translate */}
+            <div 
+              className="bg-white rounded-md overflow-hidden border border-gray-200 flex flex-col flex-1"
+              style={{
+                marginRight: showChatbotPanel ? '488px' : showIntegrationsPanel ? '408px' : '0', // Chat: 480px + 8px gap, Integrations: 400px + 8px gap
+                transition: 'margin-right 0.4s ease-in-out'
+              }}
+            >
+              {/* Header moved inside main content */}
+              <header className="h-16 flex items-center justify-between px-4 border-b border-gray-200 bg-white">
+                <div className="flex items-center gap-4 flex-grow mr-4">
+                  {/* Title removed from setup page header */}
+                  <h1 className="text-lg font-medium ml-2">{getPageTitle()}</h1>
                 </div>
                 
-                {/* Search button with popup */}
-                <div className="relative">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      setShowSearchPopup(!showSearchPopup)
-                      // Focus the input after a short delay to ensure it's rendered
-                      setTimeout(() => {
-                        if (searchInputRef.current) {
-                          searchInputRef.current.focus()
-                        }
-                      }, 100)
-                    }}
-                    className="relative"
-                  >
-                    <Search className="h-5 w-5" />
-                  </Button>
-                  
-                  {/* Search popup */}
-                  {showSearchPopup && (
-                    <div 
-                      ref={searchPopupRef}
-                      className="absolute top-full right-0 mt-2 w-96 bg-white shadow-lg rounded-md border border-gray-200 overflow-hidden z-50"
-                    >
-                      <div className="p-3">
-                        <form onSubmit={(e) => {
-                          e.preventDefault()
-                          if (searchQuery.trim()) {
-                            handleSearch(searchQuery)
-                            setShowSearchPopup(false)
-                          }
-                        }}>
-                          <div className="relative">
-                            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                              <Search className="h-4 w-4 text-gray-400" />
-                            </div>
-                            <Input
-                              ref={searchInputRef}
-                              type="text"
-                              value={searchQuery}
-                              onChange={(e) => setSearchQuery(e.target.value)}
-                              className="h-10 pl-10 pr-4 w-full rounded-md border border-gray-300 bg-white text-sm"
-                              placeholder="Ask something..."
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  if (searchQuery.trim()) {
-                                    handleSearch(searchQuery)
-                                    setShowSearchPopup(false)
-                                  }
-                                } else if (e.key === 'Escape') {
-                                  setShowSearchPopup(false)
-                                  setSearchQuery('')
-                                }
-                              }}
-                            />
-                          </div>
-                        </form>
-                        
-                        {/* Search suggestions */}
-                        <div className="mt-3 space-y-1">
-                          <div className="text-xs font-medium text-gray-500 mb-2">Quick searches:</div>
-                          {searchPlaceholders.slice(0, 4).map((placeholder, index) => (
-                            <button
-                              key={index}
-                              className="w-full text-left px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-50 rounded-md transition-colors"
-                              onClick={() => {
-                                setSearchQuery(placeholder)
-                                handleSearch(placeholder)
-                                setShowSearchPopup(false)
-                              }}
-                            >
-                              {placeholder}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Notifications button moved to be before chat button */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="relative">
-                      <Bell className="h-5 w-5" />
-                      {unreadCount > 0 && (
-                        <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
-                      )}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-96 rounded-md">
-                    <div className="flex items-center justify-between px-4 py-2 border-b">
-                      <h3 className="font-medium">Notifications</h3>
-                      {unreadCount > 0 && (
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-8 text-xs rounded-md"
-                          onClick={markAllAsRead}
-                        >
-                          Mark all as read
-                        </Button>
-                      )}
-                    </div>
-                    <div className="max-h-[400px] overflow-y-auto">
-                      {notificationsLoading ? (
-                        <div className="py-6 text-center">
-                          <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto mb-2"></div>
-                          <p className="text-sm text-muted-foreground">Loading notifications...</p>
-                        </div>
-                      ) : notifications.length === 0 ? (
-                        <div className="py-6 text-center">
-                          <Bell className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                          <p className="text-sm text-muted-foreground">No notifications yet</p>
-                        </div>
-                      ) : (
-                        notifications.map((notification) => (
-                          <div 
-                            key={notification.id} 
-                            className={cn(
-                              "px-4 py-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors cursor-pointer",
-                              !notification.read && "bg-blue-50/50"
-                            )}
-                            onClick={() => markAsRead(notification.id)}
-                          >
-                            <div className="flex gap-3">
-                              <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
-                                {getNotificationIcon(notification.type)}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-start">
-                                  <p className="text-sm font-medium">
-                                    {notification.type === "AGENT_ACTION" ? (
-                                      <>
-                                        <span className="agent-notification-gradient">
-                                          Agent Notification:
-                                        </span>{' '}
-                                        {notification.message}
-                                      </>
-                                    ) : (
-                                      notification.message
-                                    )}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {formatTimeAgo(notification.dateCreated || notification.timestamp)}
-                                  </p>
-                                </div>
-                                {notification.customerId && (
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    Customer: {notification.customerFullName || notification.customerId.substring(0, 8)}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="justify-center" asChild>
-                      <a href="/notifications" className="w-full text-center cursor-pointer">
-                        View all notifications
-                      </a>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                {/* Chat button moved to be after notifications */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setShowChatbotPanel(!showChatbotPanel)}
-                  className="relative"
-                  title={showChatbotPanel ? "Collapse chat panel" : "Expand chat panel"}
-                >
-                  <PanelRight className="h-5 w-5" />
-                </Button>
-              </div>
-            </header>
-            
-            {/* Page content */}
-            <div className="flex-1 overflow-auto main-content-scrollbar">
-              {children}
-            </div>
-          </motion.div>
-
-          {/* Chatbot Panel - clean width animation with fixed right edge */}
-          <AnimatePresence mode="sync">
-            {showChatbotPanel && (
-              <motion.div 
-                className="bg-white rounded-md border border-gray-200 overflow-hidden flex flex-col"
-                style={{ marginLeft: '8px' }} // 8px gap (equivalent to ml-2)
-                initial={{ 
-                  width: 0, 
-                  opacity: 0
-                }}
-                animate={{ 
-                  width: "32%", 
-                  opacity: 1
-                }}
-                exit={{ 
-                  width: 0, 
-                  opacity: 0
-                }}
-                transition={{
-                  type: "tween",
-                  ease: "easeInOut",
-                  duration: 0.3,
-                  opacity: { 
-                    duration: showChatbotPanel ? 0.15 : 0.1 // Fade out faster when closing
-                  }
-                }}
-              >
-                {/* Chat header */}
-                <motion.div 
-                  className="h-16 px-4 border-b flex items-center justify-between"
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ 
-                    type: "tween", 
-                    ease: "easeOut", 
-                    duration: 0.25, 
-                    delay: 0.1 
-                  }}
-                >
+                <div className="flex items-center gap-4 shrink-0">
                   <div className="flex items-center gap-2">
-                    <div className="font-semibold text-sm bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent">
-                      Tap Agent
-                    </div>
-                  </div>
-                  
-                  {/* Rest of header content */}
-                  <div className="flex items-center gap-1">
-                    {/* Debug button - show when there's a tool response */}
-                    {toolResponse && (
-                      <DropdownMenu>
+                    {/* Quick Note button with dropdown - now text style */}
+                    <div className="relative">
+                      <DropdownMenu open={quickNoteOpen} onOpenChange={setQuickNoteOpen}>
                         <DropdownMenuTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
-                            title="Debug Response"
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-9 gap-2 text-gray-600 hover:text-gray-900 hover:bg-transparent font-normal px-2"
+                            disabled={isSavingQuickNote || audioProcessing || recording || showQuickNoteInput}
                           >
-                            <span className="text-xs font-mono text-yellow-600">🐛</span>
+                            {isSavingQuickNote ? (
+                              <>
+                                <span className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mr-1.5"></span>
+                                Saving...
+                              </>
+                            ) : audioProcessing ? (
+                              <>
+                                <span className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mr-1.5"></span>
+                                Processing...
+                              </>
+                            ) : recording ? (
+                              <>
+                                <Mic className="h-4 w-4 text-red-500 mr-1.5 animate-pulse" />
+                                {formatDuration(recordingDuration)}
+                              </>
+                            ) : (
+                              <>Quick Note</>
+                            )}
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-96 rounded-md">
-                          <div className="p-3">
-                            <div className="text-xs font-semibold text-yellow-800 mb-2">
-                              🐛 Debug: Full Function Response
-                            </div>
-                            <div className="text-xs text-yellow-700 font-mono bg-yellow-100 p-2 rounded border max-h-60 overflow-y-auto">
-                              <pre className="whitespace-pre-wrap break-words">
-                                {JSON.stringify(toolResponse, null, 2)}
-                              </pre>
-                            </div>
-                            <div className="mt-2 text-xs text-yellow-600">
-                              <strong>Response Type:</strong> {typeof toolResponse}<br/>
-                              <strong>Has text:</strong> {toolResponse?.text ? 'Yes' : 'No'}<br/>
-                              <strong>Has step:</strong> {toolResponse?.step ? 'Yes' : 'No'}<br/>
-                              <strong>Has action:</strong> {toolResponse?.action ? 'Yes' : 'No'}<br/>
-                              <strong>Has result.action:</strong> {toolResponse?.result?.action ? 'Yes' : 'No'}<br/>
-                              <strong>Has actionUsed:</strong> {toolResponse?.actionUsed ? 'Yes' : 'No'}<br/>
-                              <strong>Has tool:</strong> {toolResponse?.tool ? 'Yes' : 'No'}<br/>
-                              <strong>Result Type:</strong> {typeof toolResponse?.result}<br/>
-                              <strong>All Keys:</strong> {Object.keys(toolResponse || {}).join(', ')}
-                            </div>
-                          </div>
+                        {/* Dropdown content */}
+                        <DropdownMenuContent align="start" className="w-56 rounded-md">
+                          <DropdownMenuItem 
+                            onClick={() => {
+                              setQuickNoteOpen(false);
+                              handleVoiceNoteClick();
+                            }}
+                            disabled={recording || audioProcessing}
+                            className="flex items-center gap-2 cursor-pointer"
+                          >
+                            <Mic className="h-4 w-4 text-gray-500" />
+                            <span>Voice Note</span>
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuItem 
+                            onClick={() => {
+                              setQuickNoteOpen(false);
+                              setShowQuickNoteInput(true);
+                            }}
+                            disabled={showQuickNoteInput}
+                            className="flex items-center gap-2 cursor-pointer"
+                          >
+                            <Pencil className="h-4 w-4 text-gray-500" />
+                            <span>Standard Note</span>
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    )}
+                      
+                      {/* Quick Note Input Popup */}
+                      {showQuickNoteInput && (
+                        <div 
+                          ref={quickNoteContainerRef}
+                          className="absolute top-full mt-1 left-0 z-50 w-80 max-w-[90vw] bg-white shadow-lg rounded-md border border-gray-200 overflow-hidden"
+                        >
+                          <div className="p-3 flex flex-col">
+                            <div className="flex justify-between items-center mb-2">
+                              <h3 className="text-sm font-medium">Quick Note</h3>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setShowQuickNoteInput(false);
+                                  setQuickNoteText("");
+                                }}
+                                className="h-6 w-6 p-0 rounded-full"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            <Textarea
+                              ref={quickNoteInputRef}
+                              value={quickNoteText}
+                              onChange={(e) => {
+                                setQuickNoteText(e.target.value);
+                                // Auto-resize is handled by the event listener
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault();
+                                  saveQuickNote();
+                                } else if (e.key === 'Escape') {
+                                  setShowQuickNoteInput(false);
+                                  setQuickNoteText("");
+                                }
+                              }}
+                              placeholder="Type a quick note and press Enter..."
+                              className="w-full min-h-[80px] max-h-[200px] rounded-md resize-none text-sm"
+                              disabled={isSavingQuickNote}
+                            />
+                            <div className="flex justify-between items-center mt-2.5">
+                              <div className="text-xs text-gray-500 flex items-center">
+                                <span className={`${quickNoteText.length > 300 ? 'text-amber-500 font-medium' : ''}`}>
+                                  {quickNoteText.length}
+                                </span>
+                                <span className="mx-1">/</span>
+                                <span>500 characters</span>
+                              </div>
+                              <Button
+                                size="sm"
+                                onClick={saveQuickNote}
+                                disabled={!quickNoteText.trim() || isSavingQuickNote || quickNoteText.length > 500}
+                                className="h-8 text-xs rounded-md px-3"
+                              >
+                                {isSavingQuickNote ? (
+                                  <>
+                                    <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                                    Saving
+                                  </>
+                                ) : (
+                                  <>Save Note</>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     
-                    {/* New conversation button - plus icon */}
+                    {/* Tap Agent button - now text style */}
+                    {/* <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 gap-2 text-gray-600 hover:text-gray-900 hover:bg-transparent font-normal px-2"
+                      onClick={() => setShowTapAgentSheet(true)}
+                    >
+                      <div className="flex items-center">
+                        <span className="font-bold text-blue-500">Tap</span>
+                        <span className="ml-0.5 bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent font-bold animate-gradient-x">
+                          Agent
+                        </span>
+                      </div>
+                    </Button> */}
+                    
+                    {/* Docs button - now text style */}
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
-                      onClick={async () => {
-                        // Create a new conversation
-                        const newConversationId = await createNewConversation()
-                        setConversationId(newConversationId)
-                        
-                        // Reset chat state
-                        setChatMessages([])
-                        setUserInput('')
-                        setIsTyping(false)
-                        setToolResponse(null) // Clear debug response
-                        setShowTypewriter(false)
-                        setTypewriterText('')
-                      }}
+                      className="h-9 gap-2 text-gray-600 hover:text-gray-900 hover:bg-transparent font-normal px-2"
+                      asChild
                     >
-                      <PlusCircle className="h-3 w-3 text-gray-500" />
+                      <Link href="/docs">
+                        Help Guide
+                      </Link>
                     </Button>
                     
-                    {/* Integrations dropdown */}
+                    {/* Integrations button */}
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-9 gap-2 text-gray-600 hover:text-gray-900 hover:bg-transparent font-normal px-2"
+                      onClick={() => setShowIntegrationsPanel(true)}
+                    >
+                      Integrations
+                    </Button>
+                  </div>
+                  
+                  {/* Search button with popup */}
+                  <div className="relative">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setShowSearchPopup(!showSearchPopup)
+                        // Focus the input after a short delay to ensure it's rendered
+                        setTimeout(() => {
+                          if (searchInputRef.current) {
+                            searchInputRef.current.focus()
+                          }
+                        }, 100)
+                      }}
+                      className="relative"
+                    >
+                      <Search className="h-5 w-5" />
+                    </Button>
+                    
+                    {/* Search popup */}
+                    {showSearchPopup && (
+                      <div 
+                        ref={searchPopupRef}
+                        className="absolute top-full right-0 mt-2 w-96 bg-white shadow-lg rounded-md border border-gray-200 overflow-hidden z-50"
+                      >
+                        <div className="p-3">
+                          <form onSubmit={(e) => {
+                            e.preventDefault()
+                            if (searchQuery.trim()) {
+                              handleSearch(searchQuery)
+                              setShowSearchPopup(false)
+                            }
+                          }}>
+                            <div className="relative">
+                              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                                <Search className="h-4 w-4 text-gray-400" />
+                              </div>
+                              <Input
+                                ref={searchInputRef}
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="h-10 pl-10 pr-4 w-full rounded-md border border-gray-300 bg-white text-sm"
+                                placeholder="Ask something..."
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault()
+                                    if (searchQuery.trim()) {
+                                      handleSearch(searchQuery)
+                                      setShowSearchPopup(false)
+                                    }
+                                  } else if (e.key === 'Escape') {
+                                    setShowSearchPopup(false)
+                                    setSearchQuery('')
+                                  }
+                                }}
+                              />
+                            </div>
+                          </form>
+                          
+                          {/* Search suggestions */}
+                          <div className="mt-3 space-y-1">
+                            <div className="text-xs font-medium text-gray-500 mb-2">Quick searches:</div>
+                            {searchPlaceholders.slice(0, 4).map((placeholder, index) => (
+                              <button
+                                key={index}
+                                className="w-full text-left px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-50 rounded-md transition-colors"
+                                onClick={() => {
+                                  setSearchQuery(placeholder)
+                                  handleSearch(placeholder)
+                                  setShowSearchPopup(false)
+                                }}
+                              >
+                                {placeholder}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Notifications button moved to be before chat button */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="relative">
+                        <Bell className="h-5 w-5" />
+                        {unreadCount > 0 && (
+                          <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+                        )}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-96 rounded-md">
+                      <div className="flex items-center justify-between px-4 py-2 border-b">
+                        <h3 className="font-medium">Notifications</h3>
+                        {unreadCount > 0 && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 text-xs rounded-md"
+                            onClick={markAllAsRead}
+                          >
+                            Mark all as read
+                          </Button>
+                        )}
+                      </div>
+                      <div className="max-h-[400px] overflow-y-auto">
+                        {notificationsLoading ? (
+                          <div className="py-6 text-center">
+                            <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto mb-2"></div>
+                            <p className="text-sm text-muted-foreground">Loading notifications...</p>
+                          </div>
+                        ) : notifications.length === 0 ? (
+                          <div className="py-6 text-center">
+                            <Bell className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                            <p className="text-sm text-muted-foreground">No notifications yet</p>
+                          </div>
+                        ) : (
+                          notifications.map((notification) => (
+                            <div 
+                              key={notification.id} 
+                              className={cn(
+                                "px-4 py-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors cursor-pointer",
+                                !notification.read && "bg-blue-50/50"
+                              )}
+                              onClick={() => markAsRead(notification.id)}
+                            >
+                              <div className="flex gap-3">
+                                <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+                                  {getNotificationIcon(notification.type)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex justify-between items-start">
+                                    <p className="text-sm font-medium">
+                                      {notification.type === "AGENT_ACTION" ? (
+                                        <>
+                                          <span className="agent-notification-gradient">
+                                            Agent Notification:
+                                          </span>{' '}
+                                          {notification.message}
+                                        </>
+                                      ) : (
+                                        notification.message
+                                      )}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {formatTimeAgo(notification.dateCreated || notification.timestamp)}
+                                    </p>
+                                  </div>
+                                  {notification.customerId && (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      Customer: {notification.customerFullName || notification.customerId.substring(0, 8)}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="justify-center" asChild>
+                        <a href="/notifications" className="w-full text-center cursor-pointer">
+                          View all notifications
+                        </a>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  {/* Chat button moved to be after notifications */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowChatbotPanel(!showChatbotPanel)}
+                    className="relative"
+                    title={showChatbotPanel ? "Collapse chat panel" : "Expand chat panel"}
+                  >
+                    <PanelRight className="h-5 w-5" />
+                  </Button>
+                </div>
+              </header>
+              
+              {/* Page content */}
+              <div className="flex-1 overflow-auto main-content-scrollbar">
+                {children}
+              </div>
+            </div>
+
+            {/* Chatbot Panel - positioned absolutely with transform animation */}
+            <div 
+              className="absolute right-2 top-2 bottom-2 bg-white rounded-md border border-gray-200 overflow-hidden flex flex-col"
+              style={{
+                width: '480px',
+                transform: showChatbotPanel ? 'translateX(0)' : 'translateX(calc(100% + 8px))',
+                opacity: showChatbotPanel ? 1 : 0,
+                transition: 'transform 0.4s ease-in-out, opacity 0.4s ease-in-out'
+              }}
+            >
+              {/* Chat header */}
+              <div className="h-16 px-4 border-b flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="font-semibold text-sm bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent">
+                    Tap Agent
+                  </div>
+                </div>
+                
+                {/* Rest of header content */}
+                <div className="flex items-center gap-1">
+                  {/* Debug button - show when there's a tool response */}
+                  {toolResponse && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button 
                           variant="ghost" 
                           size="sm" 
                           className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
-                          title="Integrations"
+                          title="Debug Response"
                         >
-                          <Plug className="h-3 w-3 text-gray-500" />
+                          <span className="text-xs font-mono text-yellow-600">🐛</span>
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48 rounded-md">
-                        <div className="px-2 py-1.5 text-xs font-medium text-gray-500 border-b">
-                          Integrations
+                      <DropdownMenuContent align="end" className="w-96 rounded-md">
+                        <div className="p-3">
+                          <div className="text-xs font-semibold text-yellow-800 mb-2">
+                            🐛 Debug: Full Function Response
+                          </div>
+                          <div className="text-xs text-yellow-700 font-mono bg-yellow-100 p-2 rounded border max-h-60 overflow-y-auto">
+                            <pre className="whitespace-pre-wrap break-words">
+                              {JSON.stringify(toolResponse, null, 2)}
+                            </pre>
+                          </div>
+                          <div className="mt-2 text-xs text-yellow-600">
+                            <strong>Response Type:</strong> {typeof toolResponse}<br/>
+                            <strong>Has text:</strong> {toolResponse?.text ? 'Yes' : 'No'}<br/>
+                            <strong>Has step:</strong> {toolResponse?.step ? 'Yes' : 'No'}<br/>
+                            <strong>Has action:</strong> {toolResponse?.action ? 'Yes' : 'No'}<br/>
+                            <strong>Has result.action:</strong> {toolResponse?.result?.action ? 'Yes' : 'No'}<br/>
+                            <strong>Has actionUsed:</strong> {toolResponse?.actionUsed ? 'Yes' : 'No'}<br/>
+                            <strong>Has tool:</strong> {toolResponse?.tool ? 'Yes' : 'No'}<br/>
+                            <strong>Result Type:</strong> {typeof toolResponse?.result}<br/>
+                            <strong>All Keys:</strong> {Object.keys(toolResponse || {}).join(', ')}
+                          </div>
                         </div>
-                        {integrations.map((integration, index) => (
-                          <DropdownMenuItem key={index} className="py-1.5 px-2">
-                            <div className="flex items-center justify-between w-full text-xs">
-                              <div className="flex items-center gap-2">
-                                <img 
-                                  src={integration.icon} 
-                                  alt={integration.name} 
-                                  className="h-4 w-4"
-                                  onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-                                    const target = e.currentTarget;
-                                    target.src = "data:image/svg+xml;charset=UTF-8,%3Csvg width='16' height='16' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23ccc'/%3E%3C/svg%3E";
-                                  }}
-                                />
-                                <span>{integration.name}</span>
-                              </div>
-                              <div className={`h-2 w-2 rounded-full ${integration.connected ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                            </div>
-                          </DropdownMenuItem>
-                        ))}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="py-1.5 px-2 text-xs text-blue-500">
-                          Manage integrations
-                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    
-                    {/* Stop button - show when streaming or typing */}
-                    {(isStreaming || isTyping) && (
+                  )}
+                  
+                  {/* New conversation button - plus icon */}
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
+                    onClick={async () => {
+                      // Create a new conversation
+                      const newConversationId = await createNewConversation()
+                      setConversationId(newConversationId)
+                      
+                      // Reset chat state
+                      setChatMessages([])
+                      setUserInput('')
+                      setIsTyping(false)
+                      setToolResponse(null) // Clear debug response
+                      setShowTypewriter(false)
+                      setTypewriterText('')
+                    }}
+                  >
+                    <PlusCircle className="h-3 w-3 text-gray-500" />
+                  </Button>
+                  
+                  {/* Integrations dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
                       <Button 
                         variant="ghost" 
                         size="sm" 
                         className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
-                        onClick={() => {
-                          // Stop streaming
-                          if (eventSourceRef.current) {
-                            eventSourceRef.current.close()
-                          }
-                          setIsStreaming(false)
-                          setIsTyping(false)
-                          setStreamingStatus('')
-                          setStreamingStep('')
-                          setStreamingProgress(null)
-                        }}
-                        title="Stop"
+                        title="Integrations"
                       >
-                        <X className="h-3 w-3 text-gray-500" />
+                        <Plug className="h-3 w-3 text-gray-500" />
                       </Button>
-                    )}
-                    
-                    {/* Close button */}
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48 rounded-md">
+                      <div className="px-2 py-1.5 text-xs font-medium text-gray-500 border-b">
+                        Integrations
+                      </div>
+                      {integrations.map((integration, index) => (
+                        <DropdownMenuItem key={index} className="py-1.5 px-2">
+                          <div className="flex items-center justify-between w-full text-xs">
+                            <div className="flex items-center gap-2">
+                              <img 
+                                src={integration.icon} 
+                                alt={integration.name} 
+                                className="h-4 w-4"
+                                onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                                  const target = e.currentTarget;
+                                  target.src = "data:image/svg+xml;charset=UTF-8,%3Csvg width='16' height='16' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23ccc'/%3E%3C/svg%3E";
+                                }}
+                              />
+                              <span>{integration.name}</span>
+                            </div>
+                            <div className={`h-2 w-2 rounded-full ${integration.connected ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                          </div>
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="py-1.5 px-2 text-xs text-blue-500">
+                        Manage integrations
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  
+                  {/* Stop button - show when streaming or typing */}
+                  {(isStreaming || isTyping) && (
                     <Button 
                       variant="ghost" 
                       size="sm" 
                       className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
-                      onClick={() => setShowChatbotPanel(false)}
-                      title="Close chat"
+                      onClick={() => {
+                        // Stop streaming
+                        if (eventSourceRef.current) {
+                          eventSourceRef.current.close()
+                        }
+                        setIsStreaming(false)
+                        setIsTyping(false)
+                        setStreamingStatus('')
+                        setStreamingStep('')
+                        setStreamingProgress(null)
+                      }}
+                      title="Stop"
                     >
                       <X className="h-3 w-3 text-gray-500" />
                     </Button>
-                  </div>
-                </motion.div>
+                  )}
                   
-                {/* Chat messages */}
-                <motion.div 
-                  ref={chatContainerRef}
-                  className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  transition={{ 
-                    type: "tween", 
-                    ease: "easeOut", 
-                    duration: 0.25, 
-                    delay: 0.15 
-                  }}
-                >
-                  <div className="space-y-4">
-                    {/* Display all messages with smooth transitions */}
-                    {chatMessages.map((msg, index) => {
-                      const isLastUserMessage = msg.role === 'user' && index === chatMessages.length - 1
-                      const isLastAssistantMessage = msg.role === 'assistant' && index === chatMessages.length - 1
-                      
-                      if (msg.role === 'tool_selection') {
-                        // Tool selection message
-                        return (
-                          <motion.div 
-                            key={`tool-${index}`}
-                            className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3 py-2 mb-3 text-sm"
-                            initial={{ 
-                              opacity: 0, 
-                              y: 20,
-                              scale: 0.95
-                            }}
-                            animate={{ 
-                              opacity: 1, 
-                              y: 0,
-                              scale: 1
-                            }}
-                            transition={{ 
-                              type: "spring",
-                              damping: 20,
-                              stiffness: 300,
-                              duration: 0.4
-                            }}
-                          >
-                            {/* Loading animation, success tick, or failure cross */}
-                            {msg.toolCompleted ? (
-                              msg.toolSuccess ? (
-                                <Check className="h-3 w-3 text-green-600 flex-shrink-0" />
-                              ) : (
-                                <X className="h-3 w-3 text-red-600 flex-shrink-0" />
-                              )
-                            ) : (
-                              <div className="h-3 w-3 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin flex-shrink-0"></div>
-                            )}
-                            
-                            <span className="text-gray-700 font-medium text-xs">
-                              {msg.toolCompleted ? (msg.toolSuccess ? 'Completed:' : 'Failed:') : 'Using:'}
-                            </span>
-                            
-                            {/* Tool icons and names */}
-                            <div className="flex items-center gap-1.5">
-                              {msg.toolNames?.map((toolName, toolIndex) => {
-                                const toolIcon = getToolIcon(toolName)
-                                return (
-                                  <div key={toolIndex} className="flex items-center gap-1">
-                                    {toolIcon && (
-                                      <img 
-                                        src={toolIcon} 
-                                        alt={`${toolName} icon`}
-                                        className="w-3 h-3 object-contain"
-                                      />
-                                    )}
-                                    <span className={`text-xs font-medium ${
-                                      msg.toolCompleted 
-                                        ? (msg.toolSuccess ? 'text-green-700' : 'text-red-700')
-                                        : 'text-gray-600'
-                                    }`}>
-                                      {toolName}
-                                    </span>
-                                    {toolIndex < (msg.toolNames?.length || 0) - 1 && <span className="text-gray-400">,</span>}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          </motion.div>
-                        )
-                      } else if (msg.role === 'user') {
-                        // User messages - show in gray box when it's the last message and streaming, otherwise show normally
-                        if (isLastUserMessage && (isStreaming || streamingStatus)) {
-                          return (
-                            <motion.div 
-                              key={`user-${index}`} 
-                              data-message-index={index}
-                              className="bg-gray-100 border border-gray-200 rounded-md p-2 relative min-h-fit flex items-start gap-2"
-                              initial={{ 
-                                opacity: 0,
-                                y: 60,
-                                scale: 0.95
-                              }}
-                              animate={{ 
-                                opacity: 1,
-                                y: 0,
-                                scale: 1,
-                                height: "auto"
-                              }}
-                              transition={{ 
-                                type: "spring",
-                                damping: 25,
-                                stiffness: 300,
-                                duration: 0.6
-                              }}
-                            >
-                              {/* Merchant logo in top-left corner - fixed position */}
-                              {merchant?.logoUrl && (
-                                <div className="flex-shrink-0 mt-0.5">
-                                  <img 
-                                    src={merchant.logoUrl} 
-                                    alt="Merchant logo"
-                                    className="w-5 h-5 rounded-md object-cover"
-                                  />
-                                </div>
-                              )}
-                              
-                              <div className="text-sm text-gray-800 leading-relaxed flex-1 pb-8 pt-0 flex items-center min-h-[20px]">
-                                {msg.content}
-                              </div>
+                  {/* Close button */}
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
+                    onClick={() => setShowChatbotPanel(false)}
+                    title="Close chat"
+                  >
+                    <X className="h-3 w-3 text-gray-500" />
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Chat messages */}
+              <div 
+                ref={chatContainerRef}
+                className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
+              >
+                <div className="space-y-4">
+                  {/* Display all messages with smooth transitions */}
+                  {chatMessages.map((msg, index) => {
+                    const isLastUserMessage = msg.role === 'user' && index === chatMessages.length - 1
+                    const isLastAssistantMessage = msg.role === 'assistant' && index === chatMessages.length - 1
                     
-                              {/* SSE updates in bottom left corner */}
-                              <div className="absolute bottom-2 left-2">
-                                <div className="flex items-center gap-2">
-                                  <div className="h-3 w-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
-                                  <span 
-                                    key={streamingStatus} 
-                                    className="text-xs text-gray-600 font-medium animate-in fade-in duration-300"
-                                  >
-                                    {streamingStatus || 'Processing...'}
+                    if (msg.role === 'tool_selection') {
+                      // Tool selection message
+                      return (
+                        <motion.div 
+                          key={`tool-${index}`}
+                          className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3 py-2 mb-3 text-sm"
+                          initial={{ 
+                            opacity: 0, 
+                            y: 20,
+                            scale: 0.95
+                          }}
+                          animate={{ 
+                            opacity: 1, 
+                            y: 0,
+                            scale: 1
+                          }}
+                          transition={{ 
+                            type: "spring",
+                            damping: 20,
+                            stiffness: 300,
+                            duration: 0.4
+                          }}
+                        >
+                          {/* Loading animation, success tick, or failure cross */}
+                          {msg.toolCompleted ? (
+                            msg.toolSuccess ? (
+                              <Check className="h-3 w-3 text-green-600 flex-shrink-0" />
+                            ) : (
+                              <X className="h-3 w-3 text-red-600 flex-shrink-0" />
+                            )
+                          ) : (
+                            <div className="h-3 w-3 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin flex-shrink-0"></div>
+                          )}
+                          
+                          <span className="text-gray-700 font-medium text-xs">
+                            {msg.toolCompleted ? (msg.toolSuccess ? 'Completed:' : 'Failed:') : 'Using:'}
+                          </span>
+                          
+                          {/* Tool icons and names */}
+                          <div className="flex items-center gap-1.5">
+                            {msg.toolNames?.map((toolName, toolIndex) => {
+                              const toolIcon = getToolIcon(toolName)
+                              return (
+                                <div key={toolIndex} className="flex items-center gap-1">
+                                  {toolIcon && (
+                                    <img 
+                                      src={toolIcon} 
+                                      alt={`${toolName} icon`}
+                                      className="w-3 h-3 object-contain"
+                                    />
+                                  )}
+                                  <span className={`text-xs font-medium ${
+                                    msg.toolCompleted 
+                                      ? (msg.toolSuccess ? 'text-green-700' : 'text-red-700')
+                                      : 'text-gray-600'
+                                  }`}>
+                                    {toolName}
                                   </span>
+                                  {toolIndex < (msg.toolNames?.length || 0) - 1 && <span className="text-gray-400">,</span>}
                                 </div>
-                              </div>
-                            </motion.div>
-                          )
-                        } else {
-                          // Regular user message display - collapsed state after streaming
-                          return (
-                            <motion.div 
-                              key={`user-${index}`} 
-                              data-message-index={index}
-                              className="bg-gray-100 border border-gray-200 rounded-md p-2 min-h-fit flex items-start gap-2"
-                              initial={{ 
-                                opacity: 0,
-                                y: 60,
-                                scale: 0.95
-                              }}
-                              animate={{ 
-                                opacity: 1,
-                                y: 0,
-                                scale: 1,
-                                height: "auto"
-                              }}
-                              transition={{ 
-                                type: "spring",
-                                damping: 25,
-                                stiffness: 300,
-                                duration: 0.6
-                              }}
-                              layout
-                            >
-                              {/* Merchant logo in top-left corner - fixed position */}
-                              {merchant?.logoUrl && (
-                                <div className="flex-shrink-0 mt-0.5">
-                                  <img 
-                                    src={merchant.logoUrl} 
-                                    alt="Merchant logo"
-                                    className="w-5 h-5 rounded-md object-cover"
-                                  />
-                                </div>
-                              )}
-                              
-                              <div className="text-sm text-gray-800 leading-relaxed flex-1 pt-0 flex items-center min-h-[20px]">
-                                {msg.content}
-                              </div>
-                            </motion.div>
-                          )
-                        }
-                      } else {
-                        // Assistant messages - show using kibo-ui AIResponse component
+                              )
+                            })}
+                          </div>
+                        </motion.div>
+                      )
+                    } else if (msg.role === 'user') {
+                      // User messages - show in gray box when it's the last message and streaming, otherwise show normally
+                      if (isLastUserMessage && (isStreaming || streamingStatus)) {
                         return (
                           <motion.div 
-                            key={`assistant-${index}`} 
-                            className="text-sm text-gray-800 leading-relaxed"
+                            key={`user-${index}`} 
+                            data-message-index={index}
+                            className="bg-gray-100 border border-gray-200 rounded-md p-2 relative min-h-fit flex items-start gap-2"
                             initial={{ 
                               opacity: 0,
-                              y: 20,
-                              scale: 0.98
+                              y: 60,
+                              scale: 0.95
                             }}
                             animate={{ 
                               opacity: 1,
                               y: 0,
-                              scale: 1
+                              scale: 1,
+                              height: "auto"
                             }}
                             transition={{ 
                               type: "spring",
-                              damping: 20,
+                              damping: 25,
                               stiffness: 300,
-                              duration: 0.5
+                              duration: 0.6
                             }}
                           >
-                            <AIResponse className="prose prose-sm max-w-none prose-headings:text-gray-800 prose-p:text-gray-800 prose-li:text-gray-800 prose-strong:text-gray-800">
+                            {/* Merchant logo in top-left corner - fixed position */}
+                            {merchant?.logoUrl && (
+                              <div className="flex-shrink-0 mt-0.5">
+                                <img 
+                                  src={merchant.logoUrl} 
+                                  alt="Merchant logo"
+                                  className="w-5 h-5 rounded-md object-cover"
+                                />
+                              </div>
+                            )}
+                            
+                            <div className="text-sm text-gray-800 leading-relaxed flex-1 pb-8 pt-0 flex items-center min-h-[20px]">
                               {msg.content}
-                            </AIResponse>
+                            </div>
+                  
+                            {/* SSE updates in bottom left corner */}
+                            <div className="absolute bottom-2 left-2">
+                              <div className="flex items-center gap-2">
+                                <div className="h-3 w-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                                <span 
+                                  key={streamingStatus} 
+                                  className="text-xs text-gray-600 font-medium animate-in fade-in duration-300"
+                                >
+                                  {streamingStatus || 'Processing...'}
+                                </span>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )
+                      } else {
+                        // Regular user message display - collapsed state after streaming
+                        return (
+                          <motion.div 
+                            key={`user-${index}`} 
+                            data-message-index={index}
+                            className="bg-gray-100 border border-gray-200 rounded-md p-2 min-h-fit flex items-start gap-2"
+                            initial={{ 
+                              opacity: 0,
+                              y: 60,
+                              scale: 0.95
+                            }}
+                            animate={{ 
+                              opacity: 1,
+                              y: 0,
+                              scale: 1,
+                              height: "auto"
+                            }}
+                            transition={{ 
+                              type: "spring",
+                              damping: 25,
+                              stiffness: 300,
+                              duration: 0.6
+                            }}
+                            layout
+                          >
+                            {/* Merchant logo in top-left corner - fixed position */}
+                            {merchant?.logoUrl && (
+                              <div className="flex-shrink-0 mt-0.5">
+                                <img 
+                                  src={merchant.logoUrl} 
+                                  alt="Merchant logo"
+                                  className="w-5 h-5 rounded-md object-cover"
+                                />
+                              </div>
+                            )}
+                            
+                            <div className="text-sm text-gray-800 leading-relaxed flex-1 pt-0 flex items-center min-h-[20px]">
+                              {msg.content}
+                            </div>
                           </motion.div>
                         )
                       }
-                    })}
-                    
-                    {/* Typewriter Animation - show when done event is received */}
-                    {showTypewriter && typewriterText && (
-                      <motion.div 
-                        className="text-sm text-gray-800 leading-relaxed"
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ 
-                          type: "tween",
-                          duration: 0.2,
-                          ease: "easeOut"
-                        }}
-                      >
-                        <StreamingMarkdown text={typewriterText} />
-                      </motion.div>
-                    )}
-                  </div>
-                </motion.div>
-                  
-                {/* Chat input at bottom - fixed position */}
-                <motion.div 
-                  className="p-4 bg-white"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  transition={{ 
-                    type: "tween", 
-                    ease: "easeOut", 
-                    duration: 0.25, 
-                    delay: 0.2 
-                  }}
-                >
-                  <AIInput onSubmit={(e: React.FormEvent) => {
-                    e.preventDefault()
-                    if (!isStreaming && userInput.trim()) {
-                      handleSendMessage()
-                    }
-                  }}>
-                    <AIInputTextarea
-                      value={userInput}
-                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setUserInput(e.target.value)}
-                      placeholder={isStreaming ? "Processing..." : isTyping ? "" : "Ask something..."}
-                      disabled={isStreaming}
-                      minHeight={56}
-                      maxHeight={164}
-                    />
-                    <AIInputToolbar>
-                      <AIInputTools>
-                        <AIInputButton
-                          className={`transition-all duration-200 ${
-                            deepThoughtActive 
-                              ? 'bg-white text-gray-700 border border-gray-300 shadow-sm' 
-                              : 'text-gray-500 hover:bg-white hover:text-gray-700 hover:shadow-sm'
-                          }`}
-                          onClick={() => {
-                            setDeepThoughtActive(!deepThoughtActive)
-                            console.log('Deep Thought clicked', !deepThoughtActive)
+                    } else {
+                      // Assistant messages - show using kibo-ui AIResponse component
+                      return (
+                        <motion.div 
+                          key={`assistant-${index}`} 
+                          className="text-sm text-gray-800 leading-relaxed"
+                          initial={{ 
+                            opacity: 0,
+                            y: 20,
+                            scale: 0.98
+                          }}
+                          animate={{ 
+                            opacity: 1,
+                            y: 0,
+                            scale: 1
+                          }}
+                          transition={{ 
+                            type: "spring",
+                            damping: 20,
+                            stiffness: 300,
+                            duration: 0.5
                           }}
                         >
-                          <Brain className="h-3 w-3" />
-                          <span>Deep Thought</span>
-                        </AIInputButton>
-                      </AIInputTools>
-                      <AIInputSubmit disabled={isStreaming || !userInput.trim()}>
-                        <Send className="h-4 w-4" />
-                      </AIInputSubmit>
-                    </AIInputToolbar>
-                  </AIInput>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                          <AIResponse className="prose prose-sm max-w-none prose-headings:text-gray-800 prose-p:text-gray-800 prose-li:text-gray-800 prose-strong:text-gray-800">
+                            {msg.content}
+                          </AIResponse>
+                        </motion.div>
+                      )
+                    }
+                  })}
+                  
+                  {/* Typewriter Animation - show when done event is received */}
+                  {showTypewriter && typewriterText && (
+                    <motion.div 
+                      className="text-sm text-gray-800 leading-relaxed"
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ 
+                        type: "tween",
+                        duration: 0.2,
+                        ease: "easeOut"
+                      }}
+                    >
+                      <StreamingMarkdown text={typewriterText} />
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Chat input at bottom - fixed position */}
+              <div className="p-4 bg-white">
+                <AIInput onSubmit={(e: React.FormEvent) => {
+                  e.preventDefault()
+                  if (!isStreaming && userInput.trim()) {
+                    handleSendMessage()
+                  }
+                }}>
+                  <AIInputTextarea
+                    value={userInput}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setUserInput(e.target.value)}
+                    placeholder={isStreaming ? "Processing..." : isTyping ? "" : "Ask something..."}
+                    disabled={isStreaming}
+                    minHeight={56}
+                    maxHeight={164}
+                  />
+                  <AIInputToolbar>
+                    <AIInputTools>
+                      <AIInputButton
+                        className={`transition-all duration-200 ${
+                          deepThoughtActive 
+                            ? 'bg-white text-gray-700 border border-gray-300 shadow-sm' 
+                            : 'text-gray-500 hover:bg-white hover:text-gray-700 hover:shadow-sm'
+                        }`}
+                        onClick={() => {
+                          setDeepThoughtActive(!deepThoughtActive)
+                          console.log('Deep Thought clicked', !deepThoughtActive)
+                        }}
+                      >
+                        <Brain className="h-3 w-3" />
+                        <span>Deep Thought</span>
+                      </AIInputButton>
+                    </AIInputTools>
+                    <AIInputSubmit disabled={isStreaming || !userInput.trim()}>
+                      <Send className="h-4 w-4" />
+                    </AIInputSubmit>
+                  </AIInputToolbar>
+                </AIInput>
+              </div>
+            </div>
+            
+            {/* NEW Integrations Panel - positioned with higher z-index to appear over chat */}
+            <div 
+              className="absolute right-2 top-2 bottom-2 bg-white rounded-md border border-gray-200 overflow-hidden flex flex-col"
+              style={{
+                width: '400px',
+                transform: showIntegrationsPanel ? 'translateX(0)' : 'translateX(calc(100% + 8px))',
+                opacity: showIntegrationsPanel ? 1 : 0,
+                transition: 'transform 0.4s ease-in-out, opacity 0.4s ease-in-out',
+                zIndex: 35,
+                pointerEvents: showIntegrationsPanel ? 'auto' : 'none'
+              }}
+            >
+              {/* Integrations header */}
+              <div className="h-16 px-4 border-b flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="font-semibold text-sm text-gray-800">
+                    Integrations
+                  </div>
+                </div>
+                
+                {/* Header controls */}
+                <div className="flex items-center gap-1">
+                  {/* Close button */}
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
+                    onClick={() => setShowIntegrationsPanel(false)}
+                    title="Close integrations"
+                  >
+                    <X className="h-3 w-3 text-gray-500" />
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Integrations content */}
+              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                <div className="space-y-3">
+                  <div className="text-sm text-gray-600 mb-4">
+                    Connect your tools and services to unlock powerful automation capabilities.
+                  </div>
+                  
+                  {availableIntegrations.map((integration) => (
+                    <div key={integration.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-white rounded-md border border-gray-200 shadow-sm flex items-center justify-center">
+                          <NextImage
+                            src={`/${integration.logo}`}
+                            alt={integration.name}
+                            width={20}
+                            height={20}
+                            className="object-contain"
+                          />
+                        </div>
+                        <div>
+                          <h3 className="font-medium text-gray-900 text-sm">{integration.name}</h3>
+                          <p className="text-xs text-gray-600">{integration.description}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {integration.status === 'active' && (
+                          <div className="h-2 w-2 rounded-full bg-green-500" title="Connected"></div>
+                        )}
+                        <Button
+                          size="sm"
+                          variant={integration.status === 'active' ? 'default' : 'outline'}
+                          disabled={integration.status === 'coming-soon'}
+                          onClick={() => {
+                            handleIntegrationConnect(integration)
+                            setShowIntegrationsPanel(false)
+                          }}
+                          className="rounded-md text-xs px-3 py-1"
+                        >
+                          {integration.status === 'active' ? 'Connect' : 'Coming Soon'}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </main>
       </div>
       

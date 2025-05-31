@@ -47,6 +47,7 @@ export default function AgentsPage() {
   const [isRequestAgentOpen, setIsRequestAgentOpen] = useState(false)
   const [isCustomerServiceModalOpen, setIsCustomerServiceModalOpen] = useState(false)
   const [isEmailSummaryModalOpen, setIsEmailSummaryModalOpen] = useState(false)
+  const [isEmailExecutiveModalOpen, setIsEmailExecutiveModalOpen] = useState(false)
   const [isCreateAgentModalOpen, setIsCreateAgentModalOpen] = useState(false)
   const [connectingAgents, setConnectingAgents] = useState<Set<string>>(new Set())
   const [enrolledAgents, setEnrolledAgents] = useState<Record<string, any>>({})
@@ -90,6 +91,7 @@ export default function AgentsPage() {
   })
   const [showConfiguration, setShowConfiguration] = useState(false)
   const [showEmailSummaryConfiguration, setShowEmailSummaryConfiguration] = useState(false)
+  const [showEmailExecutiveConfiguration, setShowEmailExecutiveConfiguration] = useState(false)
   const [integrationStatuses, setIntegrationStatuses] = useState({
     gmail: true,
     mailchimp: false,
@@ -120,6 +122,28 @@ export default function AgentsPage() {
     emailFormat: 'summary',
     priorityOnly: true,
     includeAttachments: true
+  })
+  const [emailExecutiveSettings, setEmailExecutiveSettings] = useState({
+    enabled: true,
+    integration: 'gmail', // 'gmail' or 'outlook'
+    categories: [
+      { name: 'Urgent', keywords: ['urgent', 'asap', 'immediately'], color: '#EF4444' },
+      { name: 'Customer Inquiries', keywords: ['question', 'help', 'support'], color: '#3B82F6' },
+      { name: 'Meetings', keywords: ['meeting', 'call', 'appointment'], color: '#10B981' },
+      { name: 'Invoices', keywords: ['invoice', 'payment', 'billing'], color: '#F59E0B' }
+    ],
+    draftSettings: {
+      enabled: true,
+      mode: 'all', // 'all', 'selected', 'none'
+      selectedCategories: [] as string[],
+      autoSend: false,
+      approvalRequired: true,
+      template: 'professional'
+    },
+    schedule: {
+      frequency: 'realtime', // 'realtime', 'hourly', 'daily'
+      time: '09:00'
+    }
   })
   const [showLogsView, setShowLogsView] = useState(false)
   const [agentLogs, setAgentLogs] = useState<any[]>([])
@@ -157,6 +181,7 @@ export default function AgentsPage() {
   const [selectedToolIndex, setSelectedToolIndex] = useState(0) // Add state for selected tool index
   const [filteredTools, setFilteredTools] = useState<any[]>([]) // Add state for filtered tools
   const [atMentionPosition, setAtMentionPosition] = useState(0) // Add state for @ mention position
+  const [createAgentDebugResponse, setCreateAgentDebugResponse] = useState<string | null>(null) // Add state for debugging
 
   // Custom Agents State
   const [customAgents, setCustomAgents] = useState<any[]>([])
@@ -196,6 +221,16 @@ export default function AgentsPage() {
         status: 'active' as const,
         features: ['Daily summaries', 'Priority detection', 'Action items', 'Thread analysis'],
         integrations: ['gmail.png']
+      },
+      {
+        id: 'email-executive',
+        name: 'Email Executive Assistant',
+        description: 'Automatically categorise incoming emails and draft professional responses based on your custom categories',
+        status: 'active' as const,
+        features: ['Email categorisation', 'Auto-draft responses', 'Custom categories', 'Multi-platform support'],
+        integrations: ['gmail.png'],
+        requiredIntegrations: ['gmail.png'],
+        optionalIntegrations: ['outlook.png']
       }
     ]
   }
@@ -207,7 +242,8 @@ export default function AgentsPage() {
     'xero.png': 'Xero',
     'square.png': 'Square',
     'lslogo.png': 'Lightspeed',
-    'vault.png': 'Vault'
+    'vault.png': 'Vault',
+    'outlook.png': 'Outlook'
   }
 
   // Define available integrations
@@ -256,6 +292,23 @@ export default function AgentsPage() {
           // Update local settings if they exist
           if (agentData.settings) {
             setEmailSummarySettings(agentData.settings)
+          }
+        }
+
+        // Load email-executive agent
+        const emailExecutiveRef = doc(db, 'merchants', user.uid, 'agentsenrolled', 'email-executive')
+        const emailExecutiveDoc = await getDoc(emailExecutiveRef)
+        
+        if (emailExecutiveDoc.exists()) {
+          const agentData = emailExecutiveDoc.data()
+          setEnrolledAgents(prev => ({
+            ...prev,
+            'email-executive': agentData
+          }))
+          
+          // Update local settings if they exist
+          if (agentData.settings) {
+            setEmailExecutiveSettings(agentData.settings)
           }
         }
       } catch (error) {
@@ -497,6 +550,8 @@ export default function AgentsPage() {
   const handleAgentAction = async (agent: Agent) => {
     if (agent.id === 'email-summary') {
       setIsEmailSummaryModalOpen(true)
+    } else if (agent.id === 'email-executive') {
+      setIsEmailExecutiveModalOpen(true)
     } else if (agent.id === 'insights') {
       router.push('/insights')
     } else if (agent.id === 'customer-service') {
@@ -799,6 +854,127 @@ export default function AgentsPage() {
       }
     } catch (error) {
       console.error('Error handling Email Summary agent action:', error)
+      toast({
+        title: "Action Failed",
+        description: error instanceof Error ? error.message : "Failed to perform agent action. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      // Remove loading state
+      setConnectingAgents(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(agent.id)
+        return newSet
+      })
+    }
+  }
+
+  const handleEmailExecutiveConnect = async () => {
+    const agent = agentSections['Customer Service'].find(a => a.id === 'email-executive')
+    if (!agent) return
+
+    // Set loading state
+    setConnectingAgents(prev => new Set([...prev, agent.id]))
+    
+    try {
+      // Get merchantId from authenticated user
+      if (!user?.uid) {
+        throw new Error('User not authenticated')
+      }
+      
+      const merchantId = user.uid
+      const isEnrolled = enrolledAgents['email-executive']?.status === 'active'
+      
+      if (isEnrolled) {
+        // Handle disconnect
+        const agentEnrollmentRef = doc(db, 'merchants', merchantId, 'agentsenrolled', 'email-executive')
+        await updateDoc(agentEnrollmentRef, {
+          status: 'inactive',
+          deactivatedAt: serverTimestamp(),
+          lastUpdated: serverTimestamp()
+        })
+        
+        // Update local state
+        setEnrolledAgents(prev => ({
+          ...prev,
+          'email-executive': {
+            ...prev['email-executive'],
+            status: 'inactive'
+          }
+        }))
+        
+        toast({
+          title: "Email Executive Assistant Disconnected",
+          description: "Agent has been deactivated successfully."
+        })
+      } else {
+        // Handle connect
+        const agentEnrollmentRef = doc(db, 'merchants', merchantId, 'agentsenrolled', 'email-executive')
+        const existingDoc = await getDoc(agentEnrollmentRef)
+        
+        // Generate a unique schedule ID
+        const scheduleId = `${merchantId}_email-executive_${Date.now()}`
+        
+        // Prepare the base agent data
+        const baseAgentData = {
+          agentId: 'email-executive',
+          agentName: 'Email Executive Assistant',
+          agentType: 'email-executive',
+          status: 'active',
+          enrolledAt: serverTimestamp(),
+          description: 'Automatically categorise incoming emails and draft professional responses based on your custom categories',
+          features: ['Email categorisation', 'Auto-draft responses', 'Custom categories', 'Multi-platform support'],
+          integrations: [emailExecutiveSettings.integration],
+          lastUpdated: serverTimestamp(),
+          scheduleId: scheduleId // Store reference to schedule document
+        }
+        
+        // If document exists, preserve existing settings, otherwise use defaults
+        const agentData = existingDoc.exists() 
+          ? {
+              ...baseAgentData,
+              settings: existingDoc.data().settings || emailExecutiveSettings
+            }
+          : {
+              ...baseAgentData,
+              settings: emailExecutiveSettings
+            }
+        
+        await setDoc(agentEnrollmentRef, agentData)
+        
+        // Also save schedule data to top-level agentschedule collection if not realtime
+        if (emailExecutiveSettings.schedule.frequency !== 'realtime') {
+          const scheduleRef = doc(db, 'agentschedule', scheduleId)
+          const scheduleData = {
+            merchantId: merchantId,
+            agentname: 'email-executive',
+            agentId: 'email-executive',
+            agentName: 'Email Executive Assistant',
+            schedule: agentData.settings.schedule,
+            enabled: agentData.settings.enabled,
+            createdAt: serverTimestamp(),
+            lastUpdated: serverTimestamp()
+          }
+          
+          await setDoc(scheduleRef, scheduleData)
+        }
+        
+        // Update local state
+        setEnrolledAgents(prev => ({
+          ...prev,
+          'email-executive': agentData
+        }))
+        
+        toast({
+          title: "Email Executive Assistant Connected!",
+          description: "Agent has been activated successfully."
+        })
+        
+        // Close the modal
+        setIsEmailExecutiveModalOpen(false)
+      }
+    } catch (error) {
+      console.error('Error handling Email Executive assistant action:', error)
       toast({
         title: "Action Failed",
         description: error instanceof Error ? error.message : "Failed to perform agent action. Please try again.",
@@ -2825,6 +3001,635 @@ export default function AgentsPage() {
         </DialogPortal>
       </Dialog>
 
+      {/* Email Executive Assistant Details Modal */}
+      <Dialog open={isEmailExecutiveModalOpen} onOpenChange={setIsEmailExecutiveModalOpen}>
+        <DialogPortal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+          <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-5xl h-[90vh] translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg overflow-hidden p-0">
+            <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground z-10">
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </DialogPrimitive.Close>
+          <div className="flex h-full">
+            {/* Main Content - Left Section */}
+            <div className="flex-1 flex flex-col h-full p-6 pr-4 overflow-y-auto">
+              <DialogHeader className="mb-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <DialogTitle className="text-xl font-semibold">Email Executive Assistant</DialogTitle>
+                    {enrolledAgents['email-executive']?.status === 'active' && (
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span className="text-xs text-green-600 font-medium">Connected</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowEmailExecutiveConfiguration(!showEmailExecutiveConfiguration)}
+                      className="rounded-md"
+                    >
+                      {showEmailExecutiveConfiguration ? 'Back to Overview' : 'Configuration'}
+                    </Button>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              {/* Main Content */}
+              <div className="space-y-6">
+                {!showEmailExecutiveConfiguration ? (
+                  <>
+                    {/* Objective Section */}
+                    <div>
+                      <h3 className="text-base font-medium mb-3">Objective</h3>
+                      <p className="text-sm text-gray-600 leading-relaxed">
+                        Automatically categorise incoming emails based on your custom categories and draft professional responses to streamline your email management workflow and improve response times.
+                      </p>
+                    </div>
+
+                    {/* How it works */}
+                    <div>
+                      <h3 className="text-base font-medium mb-3">How this agent works</h3>
+                      <div className="text-sm text-gray-600 leading-relaxed space-y-2">
+                        <div className="flex gap-3">
+                          <span className="font-medium text-gray-900">1.</span>
+                          <span>Monitors your email inbox (Gmail or Outlook) for new incoming messages</span>
+                        </div>
+                        <div className="flex gap-3">
+                          <span className="font-medium text-gray-900">2.</span>
+                          <span>Analyses email content, subject lines, and sender information against your custom categories</span>
+                        </div>
+                        <div className="flex gap-3">
+                          <span className="font-medium text-gray-900">3.</span>
+                          <span>Automatically categorises emails and applies appropriate labels or tags</span>
+                        </div>
+                        <div className="flex gap-3">
+                          <span className="font-medium text-gray-900">4.</span>
+                          <span>Drafts professional responses based on category-specific templates and sends them for approval or automatically (based on your settings)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Current Categories Preview */}
+                    <div>
+                      <h3 className="text-base font-medium mb-3">Current Categories</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        {emailExecutiveSettings.categories.map((category, index) => (
+                          <div key={index} className="bg-gray-50 border border-gray-200 rounded-md p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div 
+                                className="w-3 h-3 rounded-full" 
+                                style={{ backgroundColor: category.color }}
+                              ></div>
+                              <span className="text-sm font-medium">{category.name}</span>
+                            </div>
+                            <p className="text-xs text-gray-600">
+                              Keywords: {category.keywords.join(', ')}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Configuration Settings */}
+                    <div className="space-y-4 max-h-[calc(100vh-300px)] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                      <h3 className="text-base font-medium">Agent Configuration</h3>
+                      
+                      {/* Configuration Tabs */}
+                      <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit mb-6">
+                        <button
+                          onClick={() => setActiveConfigTab("general")}
+                          className={cn(
+                            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                            activeConfigTab === "general"
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                        >
+                          <Settings className="h-3 w-3" />
+                          General
+                        </button>
+                        <button
+                          onClick={() => setActiveConfigTab("categories")}
+                          className={cn(
+                            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                            activeConfigTab === "categories"
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                        >
+                          <Inbox className="h-3 w-3" />
+                          Categories
+                        </button>
+                        <button
+                          onClick={() => setActiveConfigTab("drafting")}
+                          className={cn(
+                            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                            activeConfigTab === "drafting"
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                        >
+                          <Mail className="h-3 w-3" />
+                          Drafting
+                        </button>
+                        <button
+                          onClick={() => setActiveConfigTab("schedule")}
+                          className={cn(
+                            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                            activeConfigTab === "schedule"
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                        >
+                          <Clock className="h-3 w-3" />
+                          Schedule
+                        </button>
+                      </div>
+                      
+                      <div className="bg-gray-50 p-4 rounded-md space-y-4">
+                        {activeConfigTab === "general" ? (
+                          <>
+                            {/* Enable/Disable */}
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label htmlFor="email-executive-enabled" className="text-sm font-medium">Enable Email Executive Assistant</Label>
+                                <p className="text-xs text-gray-600">
+                                  {emailExecutiveSettings.enabled 
+                                    ? "Agent will categorise and draft emails according to your settings" 
+                                    : "Email executive assistant is disabled"
+                                  }
+                                </p>
+                              </div>
+                              <Switch
+                                id="email-executive-enabled"
+                                checked={emailExecutiveSettings.enabled}
+                                onCheckedChange={(checked) => 
+                                  setEmailExecutiveSettings(prev => ({ ...prev, enabled: checked }))
+                                }
+                              />
+                            </div>
+
+                            <Separator />
+
+                            {/* Integration Selection */}
+                            <div>
+                              <Label htmlFor="integration-type" className="text-sm font-medium">Email Platform</Label>
+                              <p className="text-xs text-gray-600 mb-3">Choose which email platform to integrate with</p>
+                              <Select
+                                value={emailExecutiveSettings.integration}
+                                onValueChange={(value) => 
+                                  setEmailExecutiveSettings(prev => ({ ...prev, integration: value }))
+                                }
+                              >
+                                <SelectTrigger className="w-full rounded-md">
+                                  <SelectValue placeholder="Select email platform" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="gmail">Gmail</SelectItem>
+                                  <SelectItem value="outlook">Outlook</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </>
+                        ) : activeConfigTab === "categories" ? (
+                          <>
+                            {/* Email Categories Management */}
+                            <div>
+                              <Label className="text-sm font-medium">Email Categories</Label>
+                              <p className="text-xs text-gray-600 mb-3">Define categories for automatic email classification</p>
+                              
+                              <div className="space-y-3">
+                                {emailExecutiveSettings.categories.map((category, index) => (
+                                  <div key={index} className="bg-white border border-gray-200 rounded-md p-3">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="color"
+                                          value={category.color}
+                                          onChange={(e) => {
+                                            const newCategories = [...emailExecutiveSettings.categories]
+                                            newCategories[index].color = e.target.value
+                                            setEmailExecutiveSettings(prev => ({ ...prev, categories: newCategories }))
+                                          }}
+                                          className="w-6 h-6 rounded border border-gray-300"
+                                        />
+                                        <Input
+                                          value={category.name}
+                                          onChange={(e) => {
+                                            const newCategories = [...emailExecutiveSettings.categories]
+                                            newCategories[index].name = e.target.value
+                                            setEmailExecutiveSettings(prev => ({ ...prev, categories: newCategories }))
+                                          }}
+                                          className="font-medium text-sm rounded-md"
+                                          placeholder="Category name"
+                                        />
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          const newCategories = emailExecutiveSettings.categories.filter((_, i) => i !== index)
+                                          setEmailExecutiveSettings(prev => ({ ...prev, categories: newCategories }))
+                                        }}
+                                        className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                    <Input
+                                      value={category.keywords.join(', ')}
+                                      onChange={(e) => {
+                                        const newCategories = [...emailExecutiveSettings.categories]
+                                        newCategories[index].keywords = e.target.value.split(',').map(k => k.trim()).filter(k => k)
+                                        setEmailExecutiveSettings(prev => ({ ...prev, categories: newCategories }))
+                                      }}
+                                      placeholder="Keywords (comma-separated)"
+                                      className="text-xs rounded-md"
+                                    />
+                                  </div>
+                                ))}
+                                
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const newCategory = {
+                                      name: 'New Category',
+                                      keywords: [],
+                                      color: '#6B7280'
+                                    }
+                                    setEmailExecutiveSettings(prev => ({ 
+                                      ...prev, 
+                                      categories: [...prev.categories, newCategory] 
+                                    }))
+                                  }}
+                                  className="w-full rounded-md"
+                                >
+                                  <Plus className="h-3 w-3 mr-2" />
+                                  Add Category
+                                </Button>
+                              </div>
+                            </div>
+                          </>
+                        ) : activeConfigTab === "drafting" ? (
+                          <>
+                            {/* Draft Settings */}
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label htmlFor="drafting-enabled" className="text-sm font-medium">Enable Email Drafting</Label>
+                                <p className="text-xs text-gray-600">Automatically draft responses to categorised emails</p>
+                              </div>
+                              <Switch
+                                id="drafting-enabled"
+                                checked={emailExecutiveSettings.draftSettings.enabled}
+                                onCheckedChange={(checked) => 
+                                  setEmailExecutiveSettings(prev => ({ 
+                                    ...prev, 
+                                    draftSettings: { ...prev.draftSettings, enabled: checked }
+                                  }))
+                                }
+                              />
+                            </div>
+
+                            {emailExecutiveSettings.draftSettings.enabled && (
+                              <>
+                                <Separator />
+
+                                {/* Draft Mode */}
+                                <div>
+                                  <Label className="text-sm font-medium">Draft Mode</Label>
+                                  <p className="text-xs text-gray-600 mb-3">Choose which emails to draft responses for</p>
+                                  <Select
+                                    value={emailExecutiveSettings.draftSettings.mode}
+                                    onValueChange={(value) => 
+                                      setEmailExecutiveSettings(prev => ({ 
+                                        ...prev, 
+                                        draftSettings: { ...prev.draftSettings, mode: value }
+                                      }))
+                                    }
+                                  >
+                                    <SelectTrigger className="w-full rounded-md">
+                                      <SelectValue placeholder="Select draft mode" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="all">All categorised emails</SelectItem>
+                                      <SelectItem value="selected">Selected categories only</SelectItem>
+                                      <SelectItem value="none">No automatic drafting</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+
+                                {/* Selected Categories for Drafting */}
+                                {emailExecutiveSettings.draftSettings.mode === 'selected' && (
+                                  <>
+                                    <Separator />
+                                    <div>
+                                      <Label className="text-sm font-medium">Categories to Draft For</Label>
+                                      <p className="text-xs text-gray-600 mb-3">Select which categories should have draft responses</p>
+                                      <div className="space-y-2">
+                                        {emailExecutiveSettings.categories.map((category, index) => (
+                                          <label key={index} className="flex items-center space-x-2 text-sm">
+                                            <input
+                                              type="checkbox"
+                                              checked={emailExecutiveSettings.draftSettings.selectedCategories.includes(category.name)}
+                                              onChange={(e) => {
+                                                const selectedCategories = e.target.checked
+                                                  ? [...emailExecutiveSettings.draftSettings.selectedCategories, category.name]
+                                                  : emailExecutiveSettings.draftSettings.selectedCategories.filter(name => name !== category.name)
+                                                setEmailExecutiveSettings(prev => ({ 
+                                                  ...prev, 
+                                                  draftSettings: { ...prev.draftSettings, selectedCategories }
+                                                }))
+                                              }}
+                                              className="rounded"
+                                            />
+                                            <div className="flex items-center gap-2">
+                                              <div 
+                                                className="w-3 h-3 rounded-full" 
+                                                style={{ backgroundColor: category.color }}
+                                              ></div>
+                                              <span>{category.name}</span>
+                                            </div>
+                                          </label>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+
+                                <Separator />
+
+                                {/* Response Template */}
+                                <div>
+                                  <Label className="text-sm font-medium">Response Template Style</Label>
+                                  <p className="text-xs text-gray-600 mb-3">Choose the tone and style for drafted responses</p>
+                                  <Select
+                                    value={emailExecutiveSettings.draftSettings.template}
+                                    onValueChange={(value) => 
+                                      setEmailExecutiveSettings(prev => ({ 
+                                        ...prev, 
+                                        draftSettings: { ...prev.draftSettings, template: value }
+                                      }))
+                                    }
+                                  >
+                                    <SelectTrigger className="w-full rounded-md">
+                                      <SelectValue placeholder="Select template style" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="professional">Professional</SelectItem>
+                                      <SelectItem value="friendly">Friendly</SelectItem>
+                                      <SelectItem value="formal">Formal</SelectItem>
+                                      <SelectItem value="casual">Casual</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+
+                                <Separator />
+
+                                {/* Approval Settings */}
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <Label htmlFor="approval-required" className="text-sm font-medium">Require Approval</Label>
+                                    <p className="text-xs text-gray-600">
+                                      {emailExecutiveSettings.draftSettings.approvalRequired 
+                                        ? "Drafted emails will be sent to your inbox for review before sending" 
+                                        : "Drafted emails will be sent automatically"
+                                      }
+                                    </p>
+                                  </div>
+                                  <Switch
+                                    id="approval-required"
+                                    checked={emailExecutiveSettings.draftSettings.approvalRequired}
+                                    onCheckedChange={(checked) => 
+                                      setEmailExecutiveSettings(prev => ({ 
+                                        ...prev, 
+                                        draftSettings: { ...prev.draftSettings, approvalRequired: checked }
+                                      }))
+                                    }
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {/* Schedule Configuration */}
+                            {emailExecutiveSettings.enabled ? (
+                              <>
+                                {/* Processing Frequency */}
+                                <div>
+                                  <Label htmlFor="processing-frequency" className="text-sm font-medium">Processing Frequency</Label>
+                                  <p className="text-xs text-gray-600 mb-3">How often to check and process emails</p>
+                                  <Select
+                                    value={emailExecutiveSettings.schedule.frequency}
+                                    onValueChange={(value) => 
+                                      setEmailExecutiveSettings(prev => ({ 
+                                        ...prev, 
+                                        schedule: { ...prev.schedule, frequency: value }
+                                      }))
+                                    }
+                                  >
+                                    <SelectTrigger className="w-full rounded-md">
+                                      <SelectValue placeholder="Select frequency" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="realtime">Real-time (as emails arrive)</SelectItem>
+                                      <SelectItem value="hourly">Every hour</SelectItem>
+                                      <SelectItem value="daily">Daily</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+
+                                {/* Time Selection for scheduled processing */}
+                                {(emailExecutiveSettings.schedule.frequency === 'hourly' || emailExecutiveSettings.schedule.frequency === 'daily') && (
+                                  <>
+                                    <Separator />
+                                    <div>
+                                      <Label htmlFor="processing-time" className="text-sm font-medium">Processing Time</Label>
+                                      <p className="text-xs text-gray-600 mb-3">
+                                        {emailExecutiveSettings.schedule.frequency === 'hourly' 
+                                          ? 'Starting time for hourly processing'
+                                          : 'Daily processing time'
+                                        }
+                                      </p>
+                                      <Input
+                                        id="processing-time"
+                                        type="time"
+                                        value={emailExecutiveSettings.schedule.time}
+                                        onChange={(e) => 
+                                          setEmailExecutiveSettings(prev => ({ 
+                                            ...prev, 
+                                            schedule: { ...prev.schedule, time: e.target.value }
+                                          }))
+                                        }
+                                        className="w-32 rounded-md"
+                                      />
+                                    </div>
+                                  </>
+                                )}
+                              </>
+                            ) : (
+                              <div className="text-center py-8">
+                                <p className="text-sm text-gray-500">Enable the Email Executive Assistant in the General tab to configure scheduling options.</p>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Vertical Separator */}
+            <div className="w-px bg-gray-200"></div>
+
+            {/* Right Sidebar */}
+            <div className="w-80 p-6 pl-4 bg-gray-50 flex flex-col">
+              {/* Integrations Section */}
+              <div className="mb-8">
+                <h3 className="text-sm font-medium mb-3 text-gray-600">Integrations</h3>
+                <div className="space-y-1">
+                  <div className="bg-white border border-gray-200 rounded-md p-3 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="w-6 h-6 bg-white rounded border border-gray-200 flex items-center justify-center">
+                        <Image
+                          src={emailExecutiveSettings.integration === 'outlook' ? '/outlook.png' : '/gmail.png'}
+                          alt={emailExecutiveSettings.integration === 'outlook' ? 'Outlook' : 'Gmail'}
+                          width={16}
+                          height={16}
+                          className="object-contain"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-medium capitalize">{emailExecutiveSettings.integration}</p>
+                      </div>
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Settings Summary */}
+              {emailExecutiveSettings.enabled && (
+                <div className="mb-8">
+                  <h3 className="text-sm font-medium mb-3 text-gray-600">Current Settings</h3>
+                  <div className="bg-white border border-gray-200 rounded-md p-3 shadow-sm space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-600">Categories:</span>
+                      <span className="text-xs font-medium">{emailExecutiveSettings.categories.length}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-600">Draft Mode:</span>
+                      <span className="text-xs font-medium capitalize">{emailExecutiveSettings.draftSettings.mode}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-600">Processing:</span>
+                      <span className="text-xs font-medium capitalize">{emailExecutiveSettings.schedule.frequency}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-600">Approval:</span>
+                      <span className="text-xs font-medium">{emailExecutiveSettings.draftSettings.approvalRequired ? 'Required' : 'Auto-send'}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Connect Button Section */}
+              <div className="border-t border-gray-200 pt-4 mt-auto">
+                <div className="space-y-3">
+                  {showEmailExecutiveConfiguration ? (
+                    <Button
+                      type="button"
+                      onClick={async (e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        
+                        if (!user?.uid) return
+                        
+                        try {
+                          const agentRef = doc(db, 'merchants', user.uid, 'agentsenrolled', 'email-executive')
+                          
+                          // Get the current document to preserve other fields
+                          const currentDoc = await getDoc(agentRef)
+                          const currentData = currentDoc.exists() ? currentDoc.data() : {}
+                          
+                          // Completely overwrite the document with new settings
+                          await setDoc(agentRef, {
+                            ...currentData,
+                            settings: emailExecutiveSettings, // This will completely replace the settings object
+                            lastUpdated: serverTimestamp()
+                          })
+                          
+                          // Also update the schedule in the top-level agentschedule collection if it exists and not realtime
+                          if (currentData.scheduleId && emailExecutiveSettings.schedule.frequency !== 'realtime') {
+                            const scheduleRef = doc(db, 'agentschedule', currentData.scheduleId)
+                            await setDoc(scheduleRef, {
+                              merchantId: user.uid,
+                              agentname: 'email-executive',
+                              agentId: 'email-executive',
+                              agentName: 'Email Executive Assistant',
+                              schedule: emailExecutiveSettings.schedule,
+                              enabled: emailExecutiveSettings.enabled,
+                              createdAt: serverTimestamp(),
+                              lastUpdated: serverTimestamp()
+                            })
+                          }
+                          
+                          toast({
+                            title: "Configuration Saved",
+                            description: "Email Executive Assistant settings have been updated successfully."
+                          })
+                          setShowEmailExecutiveConfiguration(false)
+                        } catch (error) {
+                          console.error('Error saving Email Executive configuration:', error)
+                          toast({
+                            title: "Save Failed",
+                            description: "Failed to save configuration. Please try again.",
+                            variant: "destructive"
+                          })
+                        }
+                      }}
+                      className="w-full rounded-md"
+                    >
+                      Save Configuration
+                    </Button>
+                  ) : null}
+                  
+                  {enrolledAgents['email-executive']?.status === 'active' ? (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={handleEmailExecutiveConnect}
+                      disabled={connectingAgents.has('email-executive')}
+                      className="w-full rounded-md"
+                    >
+                      {connectingAgents.has('email-executive') ? 'Disconnecting...' : 'Disconnect Agent'}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      onClick={handleEmailExecutiveConnect}
+                      disabled={connectingAgents.has('email-executive')}
+                      className="w-full rounded-md"
+                    >
+                      {connectingAgents.has('email-executive') ? 'Connecting...' : 'Connect Agent'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+          </DialogPrimitive.Content>
+        </DialogPortal>
+      </Dialog>
+
       {/* Create Agent Modal */}
       <Dialog open={isCreateAgentModalOpen} onOpenChange={setIsCreateAgentModalOpen}>
         <DialogPortal>
@@ -3137,6 +3942,10 @@ export default function AgentsPage() {
                           try {
                             setIsGeneratingSteps(true)
                             
+                            console.log('🔧 [CreateAgent] Starting createAgentExecutionPlan call')
+                            console.log('🔧 [CreateAgent] User ID:', user.uid)
+                            console.log('🔧 [CreateAgent] Smart prompt:', smartCreatePrompt)
+                            
                             toast({
                                 title: "Generating Agent Definition",
                                 description: "AI is creating your agent definition...",
@@ -3145,14 +3954,30 @@ export default function AgentsPage() {
                             const functions = getFunctions()
                             const createAgentExecutionPlan = httpsCallable(functions, 'createAgentExecutionPlan')
                             
+                            console.log('🔧 [CreateAgent] Calling function with params:', {
+                              prompt: smartCreatePrompt,
+                              merchantId: user.uid
+                            })
+                            
                             const result = await createAgentExecutionPlan({
                               prompt: smartCreatePrompt,
                               merchantId: user.uid
                             })
 
+                            console.log('🔧 [CreateAgent] Function call completed')
+                            console.log('🔧 [CreateAgent] Raw result:', result)
+                            
                             const data = result.data as any
+                            console.log('🔧 [CreateAgent] Extracted data:', data)
+                            console.log('🔧 [CreateAgent] Data type:', typeof data)
+                            console.log('🔧 [CreateAgent] Data keys:', data ? Object.keys(data) : 'No data')
+                              
+                            // Store the full response for debugging
+                            setCreateAgentDebugResponse(JSON.stringify(data, null, 2))
+                            console.log('🔧 [CreateAgent] Debug response stored in UI')
                               
                             if (data && data.structuredPrompt) {
+                                console.log('✅ [CreateAgent] Found structuredPrompt:', data.structuredPrompt)
                                 setAgentCanvasContent(data.structuredPrompt)
                                 setShowSmartCreateInput(false)
                                 setSmartCreatePrompt('')
@@ -3162,16 +3987,22 @@ export default function AgentsPage() {
                                   description: "Review and edit the generated definition below.",
                               })
                             } else {
+                              console.error('❌ [CreateAgent] No structuredPrompt found in response')
+                              console.error('❌ [CreateAgent] Available fields:', data ? Object.keys(data) : 'No data object')
                               throw new Error('No structured prompt found in response')
                             }
                           } catch (error) {
-                              console.error('Error generating agent definition:', error)
+                              console.error('❌ [CreateAgent] Error in createAgentExecutionPlan:', error)
+                              console.error('❌ [CreateAgent] Error type:', error instanceof Error ? error.constructor.name : typeof error)
+                              console.error('❌ [CreateAgent] Error message:', error instanceof Error ? error.message : String(error))
+                              console.error('❌ [CreateAgent] Error stack:', error instanceof Error ? error.stack : 'No stack trace')
                             toast({
                               title: "Generation Failed",
                                 description: error instanceof Error ? error.message : "Failed to generate agent definition. Please try again.",
                               variant: "destructive"
                             })
                           } finally {
+                            console.log('🔧 [CreateAgent] Cleaning up, setting isGeneratingSteps to false')
                             setIsGeneratingSteps(false)
                             }
                           }
@@ -3465,6 +4296,31 @@ Describe the main purpose and goal of your agent...
                       </div>
                     </div>
                   )}
+
+                  {/* Debug Response Section */}
+                  {createAgentDebugResponse && (
+                    <div className="mb-6">
+                      <h3 className="text-sm font-medium mb-3 text-gray-600">Debug Response</h3>
+                      <div className="bg-white border border-gray-200 rounded-md shadow-sm">
+                        <div className="p-3 border-b border-gray-100">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-gray-700">createAgentExecutionPlan Response</span>
+                            <button
+                              onClick={() => setCreateAgentDebugResponse(null)}
+                              className="text-gray-400 hover:text-gray-600"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="p-3">
+                          <pre className="text-xs overflow-auto bg-gray-50 p-2 rounded-md max-h-64 text-gray-700 whitespace-pre-wrap">
+                            {createAgentDebugResponse}
+                          </pre>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Create Button Section - Fixed at bottom */}
@@ -3595,6 +4451,7 @@ Describe the main purpose and goal of your agent...
                           setSelectedToolIndex(0)
                           setFilteredTools([])
                           setAtMentionPosition(0)
+                          setCreateAgentDebugResponse(null)
                         setIsCreateAgentModalOpen(false)
                           
                         } catch (error) {
@@ -3627,6 +4484,7 @@ Describe the main purpose and goal of your agent...
                         setSelectedToolIndex(0)
                         setFilteredTools([])
                         setAtMentionPosition(0)
+                        setCreateAgentDebugResponse(null)
                         setIsCreateAgentModalOpen(false)
                       }}
                       className="w-full rounded-md"

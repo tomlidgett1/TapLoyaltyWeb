@@ -2229,15 +2229,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       </div>
                     </Button> */}
                     
-                    {/* Docs button - now text style */}
+                    {/* Get Started button - now text style */}
                     <Button 
                       variant="ghost" 
                       size="sm" 
                       className="h-9 gap-2 text-gray-600 hover:text-gray-900 hover:bg-transparent font-normal px-2"
                       asChild
                     >
-                      <Link href="/docs">
-                        Help Guide
+                      <Link href="/setup">
+                        Get Started
                       </Link>
                     </Button>
                     

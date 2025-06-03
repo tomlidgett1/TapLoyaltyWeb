@@ -667,35 +667,6 @@ const ProgramsTabContent = () => {
     }
   }
   
-  // Get KPIs based on program type
-  const getKPIs = (programType: string) => {
-    switch(programType) {
-      case 'coffee':
-        return [
-          { label: 'Total Enrolled', value: '847', change: '+12%', icon: Users, color: 'text-blue-600' },
-          { label: 'Stamps Earned', value: '12,450', change: '+8%', icon: Coffee, color: 'text-amber-600' },
-          { label: 'Free Coffees', value: '1,245', change: '+15%', icon: Award, color: 'text-green-600' },
-          { label: 'Redemption Rate', value: '68%', change: '+3%', icon: BarChart, color: 'text-purple-600' }
-        ]
-      case 'voucher':
-        return [
-          { label: 'Total Enrolled', value: '523', change: '+18%', icon: Users, color: 'text-blue-600' },
-          { label: 'Total Spent', value: '$87,450', change: '+22%', icon: DollarSign, color: 'text-green-600' },
-          { label: 'Vouchers Issued', value: '874', change: '+25%', icon: Ticket, color: 'text-purple-600' },
-          { label: 'Avg Order Value', value: '$47.50', change: '+12%', icon: BarChart, color: 'text-amber-600' }
-        ]
-      case 'transaction':
-        return [
-          { label: 'Total Enrolled', value: '692', change: '+9%', icon: Users, color: 'text-blue-600' },
-          { label: 'Total Transactions', value: '8,934', change: '+14%', icon: ShoppingBag, color: 'text-green-600' },
-          { label: 'Rewards Earned', value: '893', change: '+16%', icon: Award, color: 'text-purple-600' },
-          { label: 'Avg Frequency', value: '2.8/week', change: '+8%', icon: Activity, color: 'text-amber-600' }
-        ]
-      default:
-        return []
-    }
-  }
-  
   // Column definitions for top customers table
   const topCustomersColumns: ColumnDef<ReturnType<typeof getTopCustomers>[number]>[] = [
     {
@@ -892,24 +863,6 @@ const ProgramsTabContent = () => {
           Transaction Program
         </button>
         </div>
-
-      {/* KPIs Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {getKPIs(activeProgramTab).map((kpi, index) => (
-          <div key={index} className="bg-white border border-gray-200 rounded-md p-5 flex flex-col hover:border-gray-300 transition-colors">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex-1">
-                <h3 className="text-sm font-medium text-gray-600 mb-1">{kpi.label}</h3>
-                <p className="text-2xl font-bold text-gray-900">{kpi.value}</p>
-                <p className="text-xs text-green-600 font-medium mt-1">{kpi.change}</p>
-              </div>
-              <div className="text-gray-400">
-                <kpi.icon className="h-6 w-6" />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
 
       {/* Tables Row - 2/3 + 1/3 Layout */}
       <div className="grid grid-cols-12 gap-6">

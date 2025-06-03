@@ -127,11 +127,6 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   {
-    title: "Get Started",
-    href: "/setup",
-    icon: Rocket
-  },
-  {
     title: "Dashboard",
     href: "/dashboard",
     icon: Home
@@ -801,6 +796,12 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                     <span>Integrations</span>
                   </Link>
                 </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/docs" className="cursor-pointer flex items-center">
+                    <FileText className="h-4 w-4 mr-2" />
+                    <span>Help Guide</span>
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
                   <LogOut className="h-4 w-4 mr-2" />
@@ -864,6 +865,12 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                   <Link href="/dashboard/integrations" className="cursor-pointer flex items-center">
                     <Layers className="h-4 w-4 mr-2" />
                     <span>Integrations</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/docs" className="cursor-pointer flex items-center">
+                    <FileText className="h-4 w-4 mr-2" />
+                    <span>Help Guide</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

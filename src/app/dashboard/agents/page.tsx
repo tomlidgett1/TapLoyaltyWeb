@@ -127,10 +127,48 @@ export default function AgentsPage() {
     enabled: true,
     integration: 'gmail', // 'gmail' or 'outlook'
     categories: [
-      { name: 'Urgent', keywords: ['urgent', 'asap', 'immediately'], color: '#EF4444' },
-      { name: 'Customer Inquiries', keywords: ['question', 'help', 'support'], color: '#3B82F6' },
-      { name: 'Meetings', keywords: ['meeting', 'call', 'appointment'], color: '#10B981' },
-      { name: 'Invoices', keywords: ['invoice', 'payment', 'billing'], color: '#F59E0B' }
+      { 
+        id: 'to-respond',
+        name: 'To respond', 
+        description: 'Emails you need to respond to',
+        color: '#EF4444',
+        enabled: true
+      },
+      { 
+        id: 'fyi',
+        name: 'FYI', 
+        description: 'Emails that don\'t require your response, but are important',
+        color: '#3B82F6',
+        enabled: true
+      },
+      { 
+        id: 'actioned',
+        name: 'Actioned', 
+        description: 'Emails you\'ve sent that you\'re not expecting a reply to',
+        color: '#6B7280',
+        enabled: true
+      },
+      { 
+        id: 'invoices',
+        name: 'Invoices', 
+        description: 'Billing and payment related emails',
+        color: '#10B981',
+        enabled: true
+      },
+      { 
+        id: 'customer-inquiries',
+        name: 'Customer inquiries', 
+        description: 'Questions and support requests from customers',
+        color: '#F59E0B',
+        enabled: true
+      },
+      { 
+        id: 'notifications',
+        name: 'Notifications', 
+        description: 'Automated updates from tools and services',
+        color: '#8B5CF6',
+        enabled: true
+      }
     ],
     draftSettings: {
       enabled: true,
@@ -143,7 +181,14 @@ export default function AgentsPage() {
     schedule: {
       frequency: 'realtime', // 'realtime', 'hourly', 'daily'
       time: '09:00'
-    }
+    },
+    rules: [] as Array<{
+      id: string;
+      emailAddresses: string;
+      domains: string;
+      subjects: string;
+      categoryId: string;
+    }>
   })
   const [showLogsView, setShowLogsView] = useState(false)
   const [agentLogs, setAgentLogs] = useState<any[]>([])
@@ -182,6 +227,14 @@ export default function AgentsPage() {
   const [filteredTools, setFilteredTools] = useState<any[]>([]) // Add state for filtered tools
   const [atMentionPosition, setAtMentionPosition] = useState(0) // Add state for @ mention position
   const [createAgentDebugResponse, setCreateAgentDebugResponse] = useState<string | null>(null) // Add state for debugging
+
+  // Email Rule State for adding new rules
+  const [emailRule, setEmailRule] = useState({
+    emailAddresses: '',
+    domains: '',
+    subjects: '',
+    categoryId: ''
+  })
 
   // Custom Agents State
   const [customAgents, setCustomAgents] = useState<any[]>([])
@@ -308,7 +361,15 @@ export default function AgentsPage() {
           
           // Update local settings if they exist
           if (agentData.settings) {
-            setEmailExecutiveSettings(agentData.settings)
+            // Preserve the new predefined categories but load other settings
+            setEmailExecutiveSettings(prev => ({
+              ...prev,
+              enabled: agentData.settings.enabled ?? prev.enabled,
+              integration: agentData.settings.integration ?? prev.integration,
+              draftSettings: agentData.settings.draftSettings ?? prev.draftSettings,
+              schedule: agentData.settings.schedule ?? prev.schedule,
+              rules: agentData.settings.rules ?? prev.rules
+            }))
           }
         }
       } catch (error) {
@@ -929,15 +990,18 @@ export default function AgentsPage() {
           scheduleId: scheduleId // Store reference to schedule document
         }
         
+        // Prepare settings with capitalised category IDs for Firestore
+        const settingsForFirestore = prepareSettingsForFirestore(emailExecutiveSettings)
+        
         // If document exists, preserve existing settings, otherwise use defaults
         const agentData = existingDoc.exists() 
           ? {
               ...baseAgentData,
-              settings: existingDoc.data().settings || emailExecutiveSettings
+              settings: existingDoc.data().settings || settingsForFirestore
             }
           : {
               ...baseAgentData,
-              settings: emailExecutiveSettings
+              settings: settingsForFirestore
             }
         
         await setDoc(agentEnrollmentRef, agentData)
@@ -964,6 +1028,21 @@ export default function AgentsPage() {
           ...prev,
           'email-executive': agentData
         }))
+        
+        // Call categorizeEmails Firebase function
+        try {
+          const functions = getFunctions()
+          const categorizeEmails = httpsCallable(functions, 'categorizeEmails')
+          
+          await categorizeEmails({
+            merchantId: merchantId
+          })
+          
+          console.log('✅ categorizeEmails function called successfully')
+        } catch (functionError) {
+          console.error('❌ Error calling categorizeEmails function:', functionError)
+          // Don't fail the whole connection process if the function call fails
+        }
         
         toast({
           title: "Email Executive Assistant Connected!",
@@ -1186,6 +1265,32 @@ export default function AgentsPage() {
     setAgentCanvasContent(newContent)
     setShowToolsDropdown(false)
     setSelectedToolIndex(0)
+  }
+
+  // Helper function to capitalise the first letter of a string
+  const capitaliseFirstLetter = (str: string) => {
+    return str.charAt(0).toUpperCase() + str.slice(1)
+  }
+
+  // Helper function to prepare settings for Firestore with capitalised category IDs
+  const prepareSettingsForFirestore = (settings: typeof emailExecutiveSettings) => {
+    return {
+      ...settings,
+      categories: settings.categories.map(category => ({
+        ...category,
+        id: capitaliseFirstLetter(category.id)
+      })),
+      rules: settings.rules.map(rule => ({
+        ...rule,
+        categoryId: capitaliseFirstLetter(rule.categoryId)
+      })),
+      draftSettings: {
+        ...settings.draftSettings,
+        selectedCategories: settings.draftSettings.selectedCategories.map(categoryId => 
+          capitaliseFirstLetter(categoryId)
+        )
+      }
+    }
   }
 
   return (
@@ -3071,27 +3176,6 @@ export default function AgentsPage() {
                         </div>
                       </div>
                     </div>
-
-                    {/* Current Categories Preview */}
-                    <div>
-                      <h3 className="text-base font-medium mb-3">Current Categories</h3>
-                      <div className="grid grid-cols-2 gap-3">
-                        {emailExecutiveSettings.categories.map((category, index) => (
-                          <div key={index} className="bg-gray-50 border border-gray-200 rounded-md p-3">
-                            <div className="flex items-center gap-2 mb-2">
-                              <div 
-                                className="w-3 h-3 rounded-full" 
-                                style={{ backgroundColor: category.color }}
-                              ></div>
-                              <span className="text-sm font-medium">{category.name}</span>
-                            </div>
-                            <p className="text-xs text-gray-600">
-                              Keywords: {category.keywords.join(', ')}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
                   </>
                 ) : (
                   <>
@@ -3180,20 +3264,73 @@ export default function AgentsPage() {
                             <div>
                               <Label htmlFor="integration-type" className="text-sm font-medium">Email Platform</Label>
                               <p className="text-xs text-gray-600 mb-3">Choose which email platform to integrate with</p>
-                              <Select
-                                value={emailExecutiveSettings.integration}
-                                onValueChange={(value) => 
-                                  setEmailExecutiveSettings(prev => ({ ...prev, integration: value }))
-                                }
-                              >
-                                <SelectTrigger className="w-full rounded-md">
-                                  <SelectValue placeholder="Select email platform" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="gmail">Gmail</SelectItem>
-                                  <SelectItem value="outlook">Outlook</SelectItem>
-                                </SelectContent>
-                              </Select>
+                              
+                              {/* Icon Selection */}
+                              <div className="flex gap-4">
+                                <button
+                                  onClick={() => setEmailExecutiveSettings(prev => ({ ...prev, integration: 'gmail' }))}
+                                  className={cn(
+                                    "group relative flex items-center gap-3 p-3 rounded-lg border transition-all duration-200 min-w-[140px]",
+                                    emailExecutiveSettings.integration === 'gmail'
+                                      ? "border-blue-500 bg-blue-50 shadow-md"
+                                      : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
+                                  )}
+                                >
+                                  <div className={cn(
+                                    "w-10 h-10 rounded-lg flex items-center justify-center transition-colors",
+                                    emailExecutiveSettings.integration === 'gmail'
+                                      ? "bg-white shadow-sm"
+                                      : "bg-gray-50 group-hover:bg-white"
+                                  )}>
+                                    <Image
+                                      src="/gmail.png"
+                                      alt="Gmail"
+                                      width={28}
+                                      height={28}
+                                      className="object-contain"
+                                    />
+                                  </div>
+                                  <div className="flex-1 text-left">
+                                    <div className="text-sm font-semibold text-gray-900">Gmail</div>
+                                    <div className="text-xs text-gray-500">Google Email</div>
+                                  </div>
+                                  {emailExecutiveSettings.integration === 'gmail' && (
+                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full border-2 border-white"></div>
+                                  )}
+                                </button>
+                                
+                                <button
+                                  onClick={() => setEmailExecutiveSettings(prev => ({ ...prev, integration: 'outlook' }))}
+                                  className={cn(
+                                    "group relative flex items-center gap-3 p-3 rounded-lg border transition-all duration-200 min-w-[140px]",
+                                    emailExecutiveSettings.integration === 'outlook'
+                                      ? "border-blue-500 bg-blue-50 shadow-md"
+                                      : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
+                                  )}
+                                >
+                                  <div className={cn(
+                                    "w-10 h-10 rounded-lg flex items-center justify-center transition-colors",
+                                    emailExecutiveSettings.integration === 'outlook'
+                                      ? "bg-white shadow-sm"
+                                      : "bg-gray-50 group-hover:bg-white"
+                                  )}>
+                                    <Image
+                                      src="/outlook.png"
+                                      alt="Outlook"
+                                      width={28}
+                                      height={28}
+                                      className="object-contain"
+                                    />
+                                  </div>
+                                  <div className="flex-1 text-left">
+                                    <div className="text-sm font-semibold text-gray-900">Outlook</div>
+                                    <div className="text-xs text-gray-500">Microsoft Email</div>
+                                  </div>
+                                  {emailExecutiveSettings.integration === 'outlook' && (
+                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full border-2 border-white"></div>
+                                  )}
+                                </button>
+                              </div>
                             </div>
                           </>
                         ) : activeConfigTab === "categories" ? (
@@ -3201,78 +3338,145 @@ export default function AgentsPage() {
                             {/* Email Categories Management */}
                             <div>
                               <Label className="text-sm font-medium">Email Categories</Label>
-                              <p className="text-xs text-gray-600 mb-3">Define categories for automatic email classification</p>
+                              <p className="text-xs text-gray-600 mb-3">Enable or disable categories for automatic email classification.</p>
                               
-                              <div className="space-y-3">
+                              {/* Simple Category List - More Condensed */}
+                              <div className="grid grid-cols-2 gap-2 mb-4">
                                 {emailExecutiveSettings.categories.map((category, index) => (
-                                  <div key={index} className="bg-white border border-gray-200 rounded-md p-3">
-                                    <div className="flex items-center justify-between mb-2">
-                                      <div className="flex items-center gap-2">
-                                        <input
-                                          type="color"
-                                          value={category.color}
-                                          onChange={(e) => {
-                                            const newCategories = [...emailExecutiveSettings.categories]
-                                            newCategories[index].color = e.target.value
-                                            setEmailExecutiveSettings(prev => ({ ...prev, categories: newCategories }))
-                                          }}
-                                          className="w-6 h-6 rounded border border-gray-300"
-                                        />
-                                        <Input
-                                          value={category.name}
-                                          onChange={(e) => {
-                                            const newCategories = [...emailExecutiveSettings.categories]
-                                            newCategories[index].name = e.target.value
-                                            setEmailExecutiveSettings(prev => ({ ...prev, categories: newCategories }))
-                                          }}
-                                          className="font-medium text-sm rounded-md"
-                                          placeholder="Category name"
-                                        />
-                                      </div>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                          const newCategories = emailExecutiveSettings.categories.filter((_, i) => i !== index)
-                                          setEmailExecutiveSettings(prev => ({ ...prev, categories: newCategories }))
-                                        }}
-                                        className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
-                                      >
-                                        <X className="h-3 w-3" />
-                                      </Button>
+                                  <div key={category.id} className="flex items-center justify-between p-2 bg-white border border-gray-200 rounded-md">
+                                    <div className="flex items-center gap-2">
+                                      <div 
+                                        className="w-3 h-3 rounded-full" 
+                                        style={{ backgroundColor: category.color }}
+                                      ></div>
+                                      <span className="font-medium text-xs text-gray-900">{category.name}</span>
                                     </div>
-                                    <Input
-                                      value={category.keywords.join(', ')}
-                                      onChange={(e) => {
+                                    <Switch
+                                      checked={category.enabled}
+                                      onCheckedChange={(checked) => {
                                         const newCategories = [...emailExecutiveSettings.categories]
-                                        newCategories[index].keywords = e.target.value.split(',').map(k => k.trim()).filter(k => k)
+                                        newCategories[index] = { ...newCategories[index], enabled: checked }
                                         setEmailExecutiveSettings(prev => ({ ...prev, categories: newCategories }))
                                       }}
-                                      placeholder="Keywords (comma-separated)"
-                                      className="text-xs rounded-md"
                                     />
                                   </div>
                                 ))}
+                              </div>
+
+                              <Separator className="my-4" />
+
+                              {/* Add Rules Section - Simplified */}
+                              <div>
+                                <Label className="text-sm font-medium">Add Rules</Label>
+                                <p className="text-xs text-gray-600 mb-3">Enter email addresses, domains, or subject keywords to automatically assign to a category.</p>
                                 
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    const newCategory = {
-                                      name: 'New Category',
-                                      keywords: [],
-                                      color: '#6B7280'
-                                    }
-                                    setEmailExecutiveSettings(prev => ({ 
-                                      ...prev, 
-                                      categories: [...prev.categories, newCategory] 
-                                    }))
-                                  }}
-                                  className="w-full rounded-md"
-                                >
-                                  <Plus className="h-3 w-3 mr-2" />
-                                  Add Category
-                                </Button>
+                                <div className="space-y-3">
+                                  {/* Single Input for all rule types */}
+                                  <div>
+                                    <Input
+                                      value={emailRule.emailAddresses}
+                                      onChange={(e) => setEmailRule(prev => ({ ...prev, emailAddresses: e.target.value, domains: '', subjects: '' }))}
+                                      placeholder="user@example.com, example.com, subject keywords, etc."
+                                      className="text-xs rounded-md"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Separate multiple entries with commas</p>
+                                  </div>
+
+                                  {/* Category Selection and Add Button in same row */}
+                                  <div className="flex gap-2">
+                                    <Select
+                                      value={emailRule.categoryId}
+                                      onValueChange={(value) => setEmailRule(prev => ({ ...prev, categoryId: value }))}
+                                    >
+                                      <SelectTrigger className="flex-1 rounded-md">
+                                        <SelectValue placeholder="Select category" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {emailExecutiveSettings.categories.filter(cat => cat.enabled).map((category) => (
+                                          <SelectItem key={category.id} value={category.id}>
+                                            <div className="flex items-center gap-2">
+                                              <div 
+                                                className="w-3 h-3 rounded-full" 
+                                                style={{ backgroundColor: category.color }}
+                                              ></div>
+                                              {category.name}
+                                            </div>
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    
+                                    <Button
+                                      size="sm"
+                                      onClick={() => {
+                                        if (emailRule.categoryId && emailRule.emailAddresses.trim()) {
+                                          const newRule = {
+                                            id: Date.now().toString(),
+                                            emailAddresses: emailRule.emailAddresses,
+                                            domains: '',
+                                            subjects: '',
+                                            categoryId: emailRule.categoryId
+                                          }
+                                          setEmailExecutiveSettings(prev => ({
+                                            ...prev,
+                                            rules: [...(prev.rules || []), newRule]
+                                          }))
+                                          setEmailRule({
+                                            emailAddresses: '',
+                                            domains: '',
+                                            subjects: '',
+                                            categoryId: ''
+                                          })
+                                        }
+                                      }}
+                                      disabled={!emailRule.categoryId || !emailRule.emailAddresses.trim()}
+                                      className="rounded-md"
+                                    >
+                                      Add
+                                    </Button>
+                                  </div>
+                                </div>
+
+                                {/* Existing Rules List */}
+                                {emailExecutiveSettings.rules && emailExecutiveSettings.rules.length > 0 && (
+                                  <div className="mt-4">
+                                    <Label className="text-xs font-medium text-gray-600 mb-2 block">Current Rules</Label>
+                                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                                      {emailExecutiveSettings.rules.map((rule) => {
+                                        const category = emailExecutiveSettings.categories.find(cat => cat.id === rule.categoryId)
+                                        return (
+                                          <div key={rule.id} className="flex items-center justify-between p-2 bg-white border border-gray-200 rounded-md">
+                                            <div className="flex-1 min-w-0">
+                                              <div className="flex items-center gap-2 mb-1">
+                                                <div 
+                                                  className="w-2 h-2 rounded-full flex-shrink-0" 
+                                                  style={{ backgroundColor: category?.color }}
+                                                ></div>
+                                                <span className="text-xs font-medium">{category?.name}</span>
+                                              </div>
+                                              <div className="text-xs text-gray-600 truncate">
+                                                {rule.emailAddresses}
+                                              </div>
+                                            </div>
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              onClick={() => {
+                                                setEmailExecutiveSettings(prev => ({
+                                                  ...prev,
+                                                  rules: (prev.rules || []).filter(r => r.id !== rule.id)
+                                                }))
+                                              }}
+                                              className="h-6 w-6 p-0 text-gray-400 hover:text-red-500 ml-2 flex-shrink-0"
+                                            >
+                                              <X className="h-3 w-3" />
+                                            </Button>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </>
@@ -3560,10 +3764,13 @@ export default function AgentsPage() {
                           const currentDoc = await getDoc(agentRef)
                           const currentData = currentDoc.exists() ? currentDoc.data() : {}
                           
+                          // Prepare settings with capitalised category IDs for Firestore
+                          const settingsForFirestore = prepareSettingsForFirestore(emailExecutiveSettings)
+                          
                           // Completely overwrite the document with new settings
                           await setDoc(agentRef, {
                             ...currentData,
-                            settings: emailExecutiveSettings, // This will completely replace the settings object
+                            settings: settingsForFirestore, // Use the prepared settings with capitalised IDs
                             lastUpdated: serverTimestamp()
                           })
                           
@@ -3575,8 +3782,8 @@ export default function AgentsPage() {
                               agentname: 'email-executive',
                               agentId: 'email-executive',
                               agentName: 'Email Executive Assistant',
-                              schedule: emailExecutiveSettings.schedule,
-                              enabled: emailExecutiveSettings.enabled,
+                              schedule: settingsForFirestore.schedule,
+                              enabled: settingsForFirestore.enabled,
                               createdAt: serverTimestamp(),
                               lastUpdated: serverTimestamp()
                             })

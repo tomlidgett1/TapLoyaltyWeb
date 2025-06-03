@@ -1360,6 +1360,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const [toolResponse, setToolResponse] = useState<any>(null)
   
+  // Add state for logs panel
+  const [showLogsPanel, setShowLogsPanel] = useState(false)
+  const [selectedLogData, setSelectedLogData] = useState<any>(null)
+  const [logsLoading, setLogsLoading] = useState(false)
+  
   const [conversationId, setConversationId] = useState<string | null>(null)
   
   // Add state for real conversations from Firestore
@@ -1449,12 +1454,16 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   
   // Auto-collapse sidebar when chat panel opens/closes
   useEffect(() => {
-    setSidebarCollapsed(showChatbotPanel)
-    // Close integrations panel when chat panel opens
-    if (showChatbotPanel && showIntegrationsPanel) {
+    setSidebarCollapsed(showChatbotPanel || showLogsPanel)
+    // Close integrations panel when chat panel or logs panel opens
+    if ((showChatbotPanel || showLogsPanel) && showIntegrationsPanel) {
       setShowIntegrationsPanel(false)
     }
-  }, [showChatbotPanel, showIntegrationsPanel])
+    // Close chat panel when logs panel opens and vice versa
+    if (showChatbotPanel && showLogsPanel) {
+      setShowChatbotPanel(false)
+    }
+  }, [showChatbotPanel, showLogsPanel, showIntegrationsPanel])
   
   // Define integration items
   const integrations = [
@@ -1540,6 +1549,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       setStreamingProgress(null)
     }
   }, [showChatbotPanel])
+  
+  // Expose handleLogClick function globally
+  useEffect(() => {
+    (window as any).handleLogClick = handleLogClick
+    return () => {
+      delete (window as any).handleLogClick
+    }
+  }, [])
   
   // Handle typewriter animation completion
   useEffect(() => {
@@ -1909,40 +1926,65 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   
   // Function to fetch conversations from Firestore/API
   const fetchConversations = async () => {
-    if (!user?.uid) return
+    if (!user?.uid || conversationsLoading) return
     
     setConversationsLoading(true)
     try {
-      const response = await fetch(`/api/merchants/${user.uid}/agent/history/conversations`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
+      const conversationsRef = collection(db, 'merchants', user.uid, 'conversations')
+      const conversationsQuery = query(conversationsRef, orderBy('updatedAt', 'desc'), limit(10))
+      const querySnapshot = await getDocs(conversationsQuery)
+      
+      const conversations = querySnapshot.docs.map(doc => {
+        const data = doc.data()
+        return {
+          id: doc.id,
+          title: data.title || 'Untitled',
+          lastMessage: data.lastMessage || '',
+          timestamp: data.updatedAt?.toDate() || new Date(),
+          messageCount: data.messageCount || 0
         }
       })
       
-      if (response.ok) {
-        const conversationsData = await response.json()
-        console.log('Fetched conversations:', conversationsData)
-        
-        // Transform API data to match our state interface
-        const formattedConversations = conversationsData.map((conv: any) => ({
-          id: conv.conversationId || conv.id,
-          title: conv.title || `Conversation ${conv.conversationId?.slice(-6) || 'Unknown'}`,
-          lastMessage: conv.lastMessage || '',
-          timestamp: new Date(conv.updatedAt || conv.createdAt || Date.now()),
-          messageCount: conv.messageCount || 0
-        }))
-        
-        setConversations(formattedConversations)
-      } else {
-        console.error('Failed to fetch conversations:', response.status)
-        setConversations([])
-      }
+      setConversations(conversations)
     } catch (error) {
       console.error('Error fetching conversations:', error)
-      setConversations([])
     } finally {
       setConversationsLoading(false)
+    }
+  }
+
+  // Add function to handle logs panel
+  const handleLogClick = async (executionId: string, merchantId: string) => {
+    setShowLogsPanel(true)
+    setLogsLoading(true)
+    setSelectedLogData(null)
+    
+    try {
+      const logRef = doc(db, 'agentlogs', merchantId, 'executions', executionId)
+      const logSnapshot = await getDoc(logRef)
+      
+      if (logSnapshot.exists()) {
+        const logData = {
+          id: logSnapshot.id,
+          ...logSnapshot.data()
+        }
+        setSelectedLogData(logData)
+      } else {
+        toast({
+          title: "Log Not Found",
+          description: "The selected log execution could not be found.",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching log details:', error)
+      toast({
+        title: "Error Loading Log",
+        description: "Failed to load log execution details. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setLogsLoading(false)
     }
   }
   
@@ -2073,7 +2115,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <div 
               className="bg-white rounded-md overflow-hidden border border-gray-200 flex flex-col flex-1"
               style={{
-                marginRight: showChatbotPanel ? '488px' : showIntegrationsPanel ? '408px' : '0', // Chat: 480px + 8px gap, Integrations: 400px + 8px gap
+                marginRight: showChatbotPanel ? '488px' : showLogsPanel ? '488px' : showIntegrationsPanel ? '408px' : '0', // Chat/Logs: 480px + 8px gap, Integrations: 400px + 8px gap
                 transition: 'margin-right 0.4s ease-in-out'
               }}
             >
@@ -2942,6 +2984,296 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+            
+            {/* Logs Panel - positioned with transform animation */}
+            <div 
+              className="absolute right-2 top-2 bottom-2 bg-white rounded-md border border-gray-200 overflow-hidden flex flex-col"
+              style={{
+                width: '480px',
+                transform: showLogsPanel ? 'translateX(0)' : 'translateX(calc(100% + 8px))',
+                opacity: showLogsPanel ? 1 : 0,
+                transition: 'transform 0.4s ease-in-out, opacity 0.4s ease-in-out',
+                zIndex: 30
+              }}
+            >
+              {/* Logs header */}
+              <div className="h-16 px-4 border-b flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="font-semibold text-sm text-gray-800">
+                    Agent Execution Log
+                  </div>
+                </div>
+                
+                {/* Header controls */}
+                <div className="flex items-center gap-1">
+                  {/* Close button */}
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
+                    onClick={() => setShowLogsPanel(false)}
+                    title="Close logs"
+                  >
+                    <X className="h-3 w-3 text-gray-500" />
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Logs content */}
+              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                {logsLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="w-6 h-6 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
+                    <span className="ml-2 text-sm text-gray-600">Loading log details...</span>
+                  </div>
+                ) : selectedLogData ? (
+                  <div className="space-y-6">
+                    {/* Execution Summary */}
+                    <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-medium text-gray-900">Execution Summary</h3>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="h-2 w-2 rounded-full"
+                            style={{ backgroundColor: selectedLogData.status === 'success' ? '#10B981' : selectedLogData.status === 'failed' ? '#EF4444' : '#6B7280' }}
+                          />
+                          <span className="text-sm font-medium capitalize">{selectedLogData.status || 'Unknown'}</span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-600">Agent:</span>
+                          <div className="font-medium">{selectedLogData.agentname || 'Unknown Agent'}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Executed At:</span>
+                          <div className="font-medium">
+                            {selectedLogData.executedAt ? 
+                              new Intl.DateTimeFormat('en-AU', {
+                                dateStyle: 'medium',
+                                timeStyle: 'short',
+                              }).format(selectedLogData.executedAt.toDate ? selectedLogData.executedAt.toDate() : new Date(selectedLogData.executedAt))
+                              : 'Unknown'
+                            }
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Tools Executed:</span>
+                          <div className="font-medium">{selectedLogData.toolsExecuted || 0}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Successful Tools:</span>
+                          <div className="font-medium text-green-600">{selectedLogData.successfulTools || 0}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Failed Tools:</span>
+                          <div className="font-medium text-red-600">{selectedLogData.failedTools || 0}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Duration:</span>
+                          <div className="font-medium">{selectedLogData.details?.duration || selectedLogData.duration || 'N/A'} seconds</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Agent Response */}
+                    {selectedLogData.agentResponse && (
+                      <div className="bg-white border border-gray-200 rounded-md">
+                        <div className="p-3 border-b border-gray-200">
+                          <h4 className="font-medium text-gray-900">Agent Summary</h4>
+                        </div>
+                        <div className="p-4">
+                          <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                            {selectedLogData.agentResponse}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Tools Called */}
+                    {selectedLogData.details?.toolsCalled && selectedLogData.details.toolsCalled.length > 0 && (
+                      <div className="bg-white border border-gray-200 rounded-md">
+                        <div className="p-3 border-b border-gray-200">
+                          <h4 className="font-medium text-gray-900">Tools Called</h4>
+                        </div>
+                        <div className="p-4 space-y-3">
+                          {selectedLogData.details.toolsCalled.map((tool: any, index: number) => (
+                            <div key={index} className="border border-gray-100 rounded-md p-3 bg-gray-50">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-medium text-sm">{tool.name}</span>
+                                <span className="text-xs text-gray-500">
+                                  {tool.timestamp ? new Date(tool.timestamp).toLocaleTimeString('en-AU') : ''}
+                                </span>
+                              </div>
+                              {tool.arguments && (
+                                <div className="text-xs">
+                                  <span className="text-gray-600">Arguments:</span>
+                                  <pre className="mt-1 bg-white p-2 rounded border text-gray-700 overflow-auto">
+                                    {JSON.stringify(JSON.parse(tool.arguments), null, 2)}
+                                  </pre>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Executed Actions */}
+                    {selectedLogData.details?.executedActions && selectedLogData.details.executedActions.length > 0 && (
+                      <div className="bg-white border border-gray-200 rounded-md">
+                        <div className="p-3 border-b border-gray-200">
+                          <h4 className="font-medium text-gray-900">Executed Actions</h4>
+                        </div>
+                        <div className="p-4 space-y-4">
+                          {selectedLogData.details.executedActions.map((action: any, index: number) => (
+                            <div key={index} className="border border-gray-100 rounded-md p-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className="h-2 w-2 rounded-full"
+                                    style={{ backgroundColor: action.successful ? '#10B981' : '#EF4444' }}
+                                  />
+                                  <span className="font-medium text-sm">{action.tool}</span>
+                                </div>
+                                <span className="text-xs text-gray-500">
+                                  {action.successful ? 'Success' : 'Failed'}
+                                </span>
+                              </div>
+                              
+                              {action.arguments && (
+                                <div className="mb-2">
+                                  <div className="text-xs font-medium text-gray-600 mb-1">Arguments:</div>
+                                  <pre className="text-xs bg-gray-50 p-2 rounded border overflow-auto">
+                                    {JSON.stringify(action.arguments, null, 2)}
+                                  </pre>
+                                </div>
+                              )}
+                              
+                              {action.result && (
+                                <div>
+                                  <div className="text-xs font-medium text-gray-600 mb-1">Result:</div>
+                                  <pre className="text-xs bg-blue-50 p-2 rounded border overflow-auto max-h-32">
+                                    {typeof action.result === 'string' ? action.result : JSON.stringify(action.result, null, 2)}
+                                  </pre>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Conversation History */}
+                    {selectedLogData.details?.conversations && selectedLogData.details.conversations.length > 0 && (
+                      <div className="bg-white border border-gray-200 rounded-md">
+                        <div className="p-3 border-b border-gray-200">
+                          <h4 className="font-medium text-gray-900">Conversation History</h4>
+                        </div>
+                        <div className="p-4 space-y-3">
+                          {selectedLogData.details.conversations.map((message: any, index: number) => (
+                            <div key={index} className={`p-3 rounded-md ${
+                              message.role === 'user' ? 'bg-blue-50 border border-blue-200' :
+                              message.role === 'assistant' ? 'bg-green-50 border border-green-200' :
+                              message.role === 'system' ? 'bg-yellow-50 border border-yellow-200' :
+                              'bg-gray-50 border border-gray-200'
+                            }`}>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-medium uppercase tracking-wide text-gray-600">
+                                  {message.role}
+                                </span>
+                              </div>
+                              <div className="text-sm leading-relaxed">
+                                {message.content && (
+                                  <div className="whitespace-pre-wrap">{message.content}</div>
+                                )}
+                                {message.tool_calls && message.tool_calls.length > 0 && (
+                                  <div className="mt-2 space-y-2">
+                                    <div className="text-xs font-medium text-gray-600">Tool Calls:</div>
+                                    {message.tool_calls.map((toolCall: any, toolIndex: number) => (
+                                      <div key={toolIndex} className="bg-white p-2 rounded border text-xs">
+                                        <div className="font-medium">{toolCall.function?.name}</div>
+                                        {toolCall.function?.arguments && (
+                                          <pre className="mt-1 text-gray-600 overflow-auto">
+                                            {JSON.stringify(JSON.parse(toolCall.function.arguments), null, 2)}
+                                          </pre>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Connected Apps */}
+                    {selectedLogData.details?.connectedApps && selectedLogData.details.connectedApps.length > 0 && (
+                      <div className="bg-white border border-gray-200 rounded-md">
+                        <div className="p-3 border-b border-gray-200">
+                          <h4 className="font-medium text-gray-900">Connected Apps</h4>
+                        </div>
+                        <div className="p-4">
+                          <div className="flex flex-wrap gap-2">
+                            {selectedLogData.details.connectedApps.map((app: string, index: number) => (
+                              <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 capitalize">
+                                {app}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Original Prompt */}
+                    {selectedLogData.details?.prompt && (
+                      <div className="bg-white border border-gray-200 rounded-md">
+                        <div className="p-3 border-b border-gray-200">
+                          <h4 className="font-medium text-gray-900">Original Prompt</h4>
+                        </div>
+                        <div className="p-4">
+                          <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap bg-gray-50 p-3 rounded-md border">
+                            {selectedLogData.details.prompt}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Final Message */}
+                    {selectedLogData.details?.fullMessage && (
+                      <div className="bg-white border border-gray-200 rounded-md">
+                        <div className="p-3 border-b border-gray-200">
+                          <h4 className="font-medium text-gray-900">Final Response</h4>
+                        </div>
+                        <div className="p-4">
+                          <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                            {selectedLogData.details.fullMessage}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Debug: Raw Data */}
+                    <div className="bg-white border border-gray-200 rounded-md">
+                      <div className="p-3 border-b border-gray-200">
+                        <h4 className="font-medium text-gray-900">Debug: Raw Log Data</h4>
+                      </div>
+                      <div className="p-4">
+                        <pre className="text-xs overflow-auto bg-gray-50 p-3 rounded-md max-h-96 text-gray-700 whitespace-pre-wrap border border-gray-100">
+                          {JSON.stringify(selectedLogData, null, 2)}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-sm text-gray-500">No log selected</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

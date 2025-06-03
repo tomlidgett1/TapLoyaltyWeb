@@ -5,18 +5,19 @@ import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/use-toast'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogOverlay, DialogPortal } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogOverlay, DialogPortal, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ArrowLeft, Headphones, Inbox, Brain, BarChart3, Receipt, Users, ShoppingCart, DollarSign, Calculator, Settings, Plus, FileText, Mail, MessageSquare, Clock, CheckCircle, X, ArrowUpRight, ChevronRightIcon, ChevronDown, Calendar, Wand2 } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { ArrowLeft, Bell, Headphones, Inbox, Brain, BarChart3, Receipt, Users, ShoppingCart, DollarSign, Calculator, Settings, Plus, FileText, Mail, MessageSquare, Clock, CheckCircle, X, ArrowUpRight, ChevronRightIcon, ChevronDown, Calendar, Wand2, Terminal, Puzzle, AlignLeft, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import Image from 'next/image'
 import { useAuth } from '@/contexts/auth-context'
-import { doc, setDoc, serverTimestamp, getDoc, updateDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore'
+import { doc, setDoc, serverTimestamp, getDoc, updateDoc, collection, getDocs, query, orderBy, limit, addDoc, deleteDoc, where } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -38,6 +39,18 @@ import {
 } from '@/components/ui/kibo-ui/table'
 import type { ColumnDef } from '@/components/ui/kibo-ui/table'
 import { getFunctions, httpsCallable } from 'firebase/functions'
+import { Loader2 } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 
 export default function AgentsPage() {
   const router = useRouter()
@@ -193,6 +206,14 @@ export default function AgentsPage() {
   const [showLogsView, setShowLogsView] = useState(false)
   const [agentLogs, setAgentLogs] = useState<any[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
+  
+  // Notification settings state
+  const [notificationSettings, setNotificationSettings] = useState({
+    sendToInbox: true,
+    sendViaEmail: false,
+    emailAddress: "",
+    emailFormat: "professional" // "professional" or "simple"
+  })
 
   // Create Agent Modal State
   const [createAgentForm, setCreateAgentForm] = useState({
@@ -200,16 +221,18 @@ export default function AgentsPage() {
     steps: ['']
   })
   const [showScheduleDropdown, setShowScheduleDropdown] = useState(false)
+  const [showToolsInLeftPanel, setShowToolsInLeftPanel] = useState(false) // Control tools visibility in left panel
   const [createAgentSchedule, setCreateAgentSchedule] = useState({
     frequency: '',
     time: '12:00',
     days: [] as string[],
     selectedDay: '' // for weekly
   })
+  const [isCreatingAgent, setIsCreatingAgent] = useState(false) // Add state for creating agent loading
   const [composioTools, setComposioTools] = useState<any[]>([])
   const [toolsLoading, setToolsLoading] = useState(false)
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set())
-  const [toolsSearchQuery, setToolsSearchQuery] = useState('')
+  const [toolsSearchQuery, setToolsSearchQuery] = useState('') // Search query for tools in left panel
   const [createAgentStepsTab, setCreateAgentStepsTab] = useState('smart') // Add tab state for agent steps
   const [smartCreatePrompt, setSmartCreatePrompt] = useState('') // Add state for smart create prompt
   const [isEditingAgentName, setIsEditingAgentName] = useState(false) // Add state for editing agent name
@@ -227,6 +250,8 @@ export default function AgentsPage() {
   const [filteredTools, setFilteredTools] = useState<any[]>([]) // Add state for filtered tools
   const [atMentionPosition, setAtMentionPosition] = useState(0) // Add state for @ mention position
   const [createAgentDebugResponse, setCreateAgentDebugResponse] = useState<string | null>(null) // Add state for debugging
+  const [isEditingCanvas, setIsEditingCanvas] = useState(false) // Add state for canvas edit mode
+  const [showDebugDialog, setShowDebugDialog] = useState(false) // Control debug dialog visibility
 
   // Email Rule State for adding new rules
   const [emailRule, setEmailRule] = useState({
@@ -239,6 +264,7 @@ export default function AgentsPage() {
   // Custom Agents State
   const [customAgents, setCustomAgents] = useState<any[]>([])
   const [customAgentsLoading, setCustomAgentsLoading] = useState(false)
+  const [selectedCustomAgent, setSelectedCustomAgent] = useState<any>(null) // Add state for selected custom agent
 
   // Define agent type
   type Agent = {
@@ -412,37 +438,38 @@ export default function AgentsPage() {
     loadAgentLogs()
   }, [showLogsView, user?.uid, toast])
 
+  // Load custom agents function
+  const loadCustomAgents = async () => {
+    if (!user?.uid) return
+    
+    setCustomAgentsLoading(true)
+    try {
+      const agentsRef = collection(db, 'merchants', user.uid, 'agentsenrolled')
+      const customAgentsQuery = query(agentsRef, orderBy('enrolledAt', 'desc'))
+      const querySnapshot = await getDocs(customAgentsQuery)
+      
+      const customAgentsList = querySnapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        .filter((agent: any) => agent.type === 'custom')
+      
+      setCustomAgents(customAgentsList)
+    } catch (error) {
+      console.error('Error loading custom agents:', error)
+      toast({
+        title: "Failed to Load Custom Agents",
+        description: "Could not load your custom agents. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setCustomAgentsLoading(false)
+    }
+  }
+
   // Load custom agents when component mounts
   useEffect(() => {
-    const loadCustomAgents = async () => {
-      if (!user?.uid) return
-      
-      setCustomAgentsLoading(true)
-      try {
-        const agentsRef = collection(db, 'merchants', user.uid, 'agentsenrolled')
-        const customAgentsQuery = query(agentsRef, orderBy('enrolledAt', 'desc'))
-        const querySnapshot = await getDocs(customAgentsQuery)
-        
-        const customAgentsList = querySnapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }))
-          .filter((agent: any) => agent.type === 'custom')
-        
-        setCustomAgents(customAgentsList)
-      } catch (error) {
-        console.error('Error loading custom agents:', error)
-        toast({
-          title: "Failed to Load Custom Agents",
-          description: "Could not load your custom agents. Please try again.",
-          variant: "destructive"
-        })
-      } finally {
-        setCustomAgentsLoading(false)
-      }
-    }
-
     loadCustomAgents()
   }, [user?.uid, toast])
 
@@ -463,6 +490,19 @@ export default function AgentsPage() {
       
       setToolsLoading(true)
       try {
+        // Fetch merchant's primary email for notification settings
+        try {
+          const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
+          if (merchantDoc.exists() && merchantDoc.data().primaryemail) {
+            setNotificationSettings(prev => ({
+              ...prev,
+              emailAddress: merchantDoc.data().primaryemail
+            }))
+          }
+        } catch (error) {
+          console.error('Error fetching merchant data:', error)
+        }
+        
         const params = new URLSearchParams({
           merchantId: user.uid
         })
@@ -1255,7 +1295,7 @@ export default function AgentsPage() {
 
   // Helper function to insert tool mention
   const insertToolMention = (tool: any) => {
-    const toolName = tool.name.replace(/^(GMAIL_|GOOGLECALENDAR_)/i, '').toLowerCase().replace(/_/g, ' ')
+    const toolName = tool.name.replace(/^(GMAIL_|GOOGLECALENDAR_|GOOGLEDOCS_|GOOGLESHEETS_)/i, '').toLowerCase().replace(/_/g, ' ')
     const beforeAt = agentCanvasContent.substring(0, atMentionPosition)
     const afterMention = agentCanvasContent.substring(agentCanvasContent.indexOf(' ', atMentionPosition) === -1 
       ? agentCanvasContent.length 
@@ -1293,6 +1333,245 @@ export default function AgentsPage() {
     }
   }
 
+  // Helper function to get tool logo for a given tool name
+  const getToolLogo = (toolName: string) => {
+    // Map tool names to their corresponding integration logos
+    const toolLogoMap: Record<string, string> = {
+      'gmail_send_email': '/gmail.png',
+      'gmail_create_email_draft': '/gmail.png',
+      'gmail_fetch_emails': '/gmail.png',
+      'gmail_reply_to_thread': '/gmail.png',
+      'googlecalendar_create_event': '/gmail.png', // Using gmail as fallback for calendar
+      'googlecalendar_find_event': '/gmail.png',
+      'googlecalendar_sync_events': '/gmail.png',
+      'googlesheets_create_google_sheet1': '/gmail.png', // Using gmail as fallback for sheets
+      'googlesheets_batch_update': '/gmail.png',
+      'googledocs_create_document': '/gmail.png', // Using gmail as fallback for docs
+      'googledocs_update_existing_document': '/gmail.png',
+      // Add more mappings as needed
+    }
+
+    // Try to find a logo for the specific tool
+    if (toolLogoMap[toolName.toLowerCase()]) {
+      return toolLogoMap[toolName.toLowerCase()]
+    }
+
+    // Fallback to general service logos based on tool prefix
+    if (toolName.toLowerCase().startsWith('gmail')) return '/gmail.png'
+    if (toolName.toLowerCase().startsWith('googlecalendar')) return '/gmail.png'
+    if (toolName.toLowerCase().startsWith('googlesheets')) return '/gmail.png'
+    if (toolName.toLowerCase().startsWith('googledocs')) return '/gmail.png'
+    
+    // Default fallback
+    return '/gmail.png'
+  }
+
+  // Helper function to format tool name for display
+  const formatToolName = (toolName: string) => {
+    return toolName
+      .replace(/^(gmail_|googlecalendar_|googlesheets_|googledocs_)/i, '')
+      .replace(/_/g, ' ')
+      .toLowerCase()
+      .replace(/\b\w/g, l => l.toUpperCase())
+  }
+
+  // Helper function to render text with tool highlighting
+  const renderTextWithTools = (text: string) => {
+    if (!text) return <span className="text-gray-500">Enter your agent definition here...</span>
+
+    // Split text by both patterns: tool:toolname and toolname:actual_tool_name
+    const parts = text.split(/(tool:\w+|toolname:[a-zA-Z_]+)/g)
+    
+    return parts.map((part, index) => {
+      if (part.match(/^tool:\w+$/)) {
+        // This is a "tool:toolname" mention - show in gray box
+        const toolName = part.replace('tool:', '')
+        const logo = getToolLogo(toolName)
+        const displayName = formatToolName(toolName)
+        
+        return (
+          <span
+            key={index}
+            className="inline-flex items-center gap-1.5 bg-gray-100 border border-gray-200 rounded-md px-2 py-1 text-sm font-medium text-gray-700 mx-1"
+          >
+            {logo ? (
+              <img src={logo} alt={displayName} className="w-4 h-4 rounded" />
+            ) : (
+              <div className="w-4 h-4 bg-gray-300 rounded flex items-center justify-center">
+                <span className="text-xs font-bold text-gray-600">
+                  {toolName.charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
+            {displayName}
+          </span>
+        )
+      } else if (part.match(/^toolname:[a-zA-Z_]+$/)) {
+        // This is a "toolname:actual_tool_name" mention - show bold with smaller icon, no gray box
+        const toolName = part.replace('toolname:', '')
+        const logo = getToolLogo(toolName)
+        const displayName = formatToolName(toolName)
+        
+        return (
+          <span key={index} className="inline-flex items-center gap-1 font-bold text-gray-900">
+            {logo ? (
+              <img src={logo} alt={displayName} className="w-3.5 h-3.5 rounded" />
+            ) : (
+              <div className="w-3.5 h-3.5 bg-gray-300 rounded flex items-center justify-center">
+                <span className="text-xs font-bold text-gray-600">
+                  {toolName.charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
+            {displayName}
+          </span>
+        )
+      } else {
+        // Regular text
+        return <span key={index}>{part}</span>
+      }
+    })
+  }
+
+  // Reset create agent form when modal closes
+  useEffect(() => {
+    if (!isCreateAgentModalOpen) {
+      setIsEditingAgentName(false)
+      setCreateAgentForm({
+        name: 'New Agent',
+        steps: ['']
+      })
+      setShowSmartCreateInput(false)
+    }
+  }, [isCreateAgentModalOpen])
+
+  // Handle modal open/close effects
+  useEffect(() => {
+    if (isCreateAgentModalOpen && user?.uid) {
+      // Reset tools search when modal opens
+      setToolsSearchQuery('')
+      setFilteredTools([])
+      
+      // Load merchant's primary email for notification settings
+      const loadMerchantEmail = async () => {
+        try {
+          const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
+          if (merchantDoc.exists() && merchantDoc.data().primaryemail) {
+            setNotificationSettings(prev => ({
+              ...prev,
+              emailAddress: merchantDoc.data().primaryemail
+            }))
+          }
+        } catch (error) {
+          console.error('Error fetching merchant data:', error)
+        }
+      }
+      
+      loadMerchantEmail()
+    }
+  }, [isCreateAgentModalOpen, user])
+
+  // Handle clicking on a custom agent
+  const handleCustomAgentClick = (agent: any) => {
+    setSelectedCustomAgent(agent)
+    
+    // Set form data based on the selected agent
+    setCreateAgentForm({
+      name: agent.agentName || 'Custom Agent',
+      steps: agent.steps || ['']
+    })
+    
+    // Set schedule if available
+    if (agent.settings?.schedule) {
+      setCreateAgentSchedule({
+        frequency: agent.settings.schedule.frequency || '',
+        time: agent.settings.schedule.time || '12:00',
+        days: agent.settings.schedule.days || [],
+        selectedDay: agent.settings.schedule.selectedDay || ''
+      })
+    } else {
+      setCreateAgentSchedule({
+        frequency: '',
+        time: '12:00',
+        days: [],
+        selectedDay: ''
+      })
+    }
+    
+    // Set selected tools if available
+    if (agent.settings?.selectedTools) {
+      setSelectedTools(new Set(agent.settings.selectedTools))
+    } else {
+      setSelectedTools(new Set())
+    }
+    
+    // Set agent canvas content if available
+    if (agent.prompt) {
+      setAgentCanvasContent(agent.prompt)
+    } else {
+      setAgentCanvasContent('')
+    }
+    
+    // Set notification settings if available
+    if (agent.settings?.notifications) {
+      setNotificationSettings({
+        sendToInbox: agent.settings.notifications.sendToInbox ?? true,
+        sendViaEmail: agent.settings.notifications.sendViaEmail ?? false,
+        emailAddress: agent.settings.notifications.emailAddress || notificationSettings.emailAddress,
+        emailFormat: agent.settings.notifications.emailFormat || "professional"
+      })
+    }
+    
+    // Open the create agent modal
+    setIsCreateAgentModalOpen(true)
+  }
+
+  // Handle deleting a custom agent
+  const handleDeleteAgent = async (agentId: string, agentName: string) => {
+    try {
+      if (!user?.uid) {
+        toast({
+          title: "Error",
+          description: "You must be logged in to delete an agent.",
+          variant: "destructive"
+        })
+        return
+      }
+
+      // Get the agent data first to find the scheduleId
+      const agentDocRef = doc(db, 'merchants', user.uid, 'agentsenrolled', agentId)
+      const agentDoc = await getDoc(agentDocRef)
+      const agentData = agentDoc.data()
+
+      // Delete the agent from Firestore
+      await deleteDoc(agentDocRef)
+      
+      // Also delete from the top-level agentschedule collection if scheduleId exists
+      if (agentData?.scheduleId) {
+        const scheduleRef = doc(db, 'agentschedule', agentData.scheduleId)
+        await deleteDoc(scheduleRef).catch(err => {
+          // Ignore errors if the schedule document doesn't exist
+          console.log('Schedule may not exist or was already deleted:', err.message)
+        })
+      }
+      
+      // Refresh the custom agents list
+      await loadCustomAgents()
+      
+      toast({
+        title: "Agent Deleted",
+        description: `${agentName} has been deleted successfully.`
+      })
+    } catch (error) {
+      console.error('Error deleting agent:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete the agent. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
+
   return (
     <div className="px-6 py-6">
       {/* Header */}
@@ -1303,7 +1582,10 @@ export default function AgentsPage() {
               <Button
                 variant="default"
                 size="sm"
-                onClick={() => setIsCreateAgentModalOpen(true)}
+                onClick={() => {
+                  setIsCreateAgentModalOpen(true)
+                  setIsEditingAgentName(true)
+                }}
                 className="rounded-md gap-2"
               >
                 <Plus className="h-4 w-4" />
@@ -1533,35 +1815,40 @@ export default function AgentsPage() {
                 <div className="flex items-center justify-center py-8">
                   <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
                   <span className="ml-2 text-sm text-gray-600">Loading custom agents...</span>
-                      </div>
+                </div>
               ) : customAgents.length === 0 ? (
                 <div className="text-sm text-gray-500">
                   No custom agents exist.
-                        </div>
+                </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {customAgents.map((agent) => (
-                    <div key={agent.id} className="bg-gray-50 border border-gray-200 rounded-md p-5 flex flex-col hover:border-gray-300 transition-colors">
+                    <div 
+                      key={agent.id} 
+                      className="bg-gray-50 border border-gray-200 rounded-md p-5 flex flex-col hover:border-gray-300 transition-colors cursor-pointer"
+                      onClick={() => handleCustomAgentClick(agent)}
+                    >
                       {/* Header with title and status */}
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-2 flex-1">
                           <h3 className="text-base font-medium text-gray-900">{agent.agentName}</h3>
                         </div>
                         <div className="flex items-center gap-2 ml-3">
+                          
                           {/* Status indicator */}
                           {agent.status === 'active' ? (
                             <div className="flex items-center gap-1">
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                               <span className="text-xs text-green-600 font-medium">Active</span>
-                        </div>
+                            </div>
                           ) : (
                             <div className="flex items-center gap-1">
                               <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
                               <span className="text-xs text-gray-600 font-medium">Inactive</span>
-                      </div>
+                            </div>
                           )}
-                  </div>
-                </div>
+                        </div>
+                      </div>
 
                       {/* Description/Prompt preview */}
                       <p className="text-sm text-gray-600 mb-4 flex-1 leading-relaxed line-clamp-3">
@@ -1570,9 +1857,12 @@ export default function AgentsPage() {
 
                       {/* Schedule Info */}
                       {agent.settings?.schedule && (
-                        <div className="text-xs text-gray-500 mb-3">
-                          <span className="font-medium">Schedule:</span> {agent.settings.schedule.frequency} at {agent.settings.schedule.time}
-                      </div>
+                        <div className="flex items-center mb-3">
+                          <Badge variant="outline" className="flex items-center gap-1 px-2 py-1 bg-gray-50 text-gray-700 border-gray-200 rounded-md">
+                            <Clock className="h-3 w-3 text-gray-500" />
+                            <span className="text-xs">{agent.settings.schedule.frequency.charAt(0).toUpperCase() + agent.settings.schedule.frequency.slice(1)} at {agent.settings.schedule.time.includes('AM') || agent.settings.schedule.time.includes('PM') ? agent.settings.schedule.time : agent.settings.schedule.time + (parseInt(agent.settings.schedule.time.split(':')[0]) >= 12 ? ' PM' : ' AM')}</span>
+                          </Badge>
+                        </div>
                       )}
 
                       {/* Tools Used */}
@@ -1581,7 +1871,7 @@ export default function AgentsPage() {
                           <span className="text-xs text-gray-500 font-medium">Tools:</span>
                       <div className="flex gap-1">
                             {agent.settings.selectedTools.slice(0, 3).map((toolSlug: string, index: number) => (
-                              <div key={index} className="w-4 h-4 bg-gray-100 rounded flex items-center justify-center">
+                              <div key={index} className="w-4 h-4 bg-gray-100 rounded-md flex items-center justify-center">
                                 <span className="text-xs font-medium text-gray-600">
                                   {toolSlug.charAt(0).toUpperCase()}
                                 </span>
@@ -1593,7 +1883,7 @@ export default function AgentsPage() {
                     </div>
                   </div>
                       )}
-                </div>
+                    </div>
                   ))}
                       </div>
               )}
@@ -1734,11 +2024,11 @@ export default function AgentsPage() {
               <X className="h-4 w-4" />
               <span className="sr-only">Close</span>
             </DialogPrimitive.Close>
-          <div className="flex h-full">
+          <div className="flex h-full focus:outline-none">
             {/* Main Content - Left Section */}
-            <div className="flex-1 flex flex-col h-full p-6 pr-4 overflow-y-auto">
-              <DialogHeader className="mb-6">
-                <div className="flex items-center justify-between">
+            <div className="flex-1 flex flex-col h-full p-6 pr-4 overflow-y-auto focus:outline-none">
+              <DialogHeader className="mb-6 focus:outline-none">
+                <div className="flex items-center justify-between focus:outline-none">
                   <div className="flex items-center gap-3">
                     <DialogTitle className="text-xl font-semibold">Customer Service Agent</DialogTitle>
                     {enrolledAgents['customer-service']?.status === 'active' && (
@@ -2653,11 +2943,11 @@ export default function AgentsPage() {
               <X className="h-4 w-4" />
               <span className="sr-only">Close</span>
             </DialogPrimitive.Close>
-          <div className="flex h-full">
+          <div className="flex h-full focus:outline-none">
             {/* Main Content - Left Section */}
-            <div className="flex-1 flex flex-col h-full p-6 pr-4 overflow-y-auto">
-              <DialogHeader className="mb-6">
-                <div className="flex items-center justify-between">
+            <div className="flex-1 flex flex-col h-full p-6 pr-4 overflow-y-auto focus:outline-none">
+              <DialogHeader className="mb-6 focus:outline-none">
+                <div className="flex items-center justify-between focus:outline-none">
                   <div className="flex items-center gap-3">
                     <DialogTitle className="text-xl font-semibold">Email Summary Agent</DialogTitle>
                     {enrolledAgents['email-summary']?.status === 'active' && (
@@ -3115,11 +3405,11 @@ export default function AgentsPage() {
               <X className="h-4 w-4" />
               <span className="sr-only">Close</span>
             </DialogPrimitive.Close>
-          <div className="flex h-full">
+          <div className="flex h-full focus:outline-none">
             {/* Main Content - Left Section */}
-            <div className="flex-1 flex flex-col h-full p-6 pr-4 overflow-y-auto">
-              <DialogHeader className="mb-6">
-                <div className="flex items-center justify-between">
+            <div className="flex-1 flex flex-col h-full p-6 pr-4 overflow-y-auto focus:outline-none">
+              <DialogHeader className="mb-6 focus:outline-none">
+                <div className="flex items-center justify-between focus:outline-none">
                   <div className="flex items-center gap-3">
                     <DialogTitle className="text-xl font-semibold">Email Executive Assistant</DialogTitle>
                     {enrolledAgents['email-executive']?.status === 'active' && (
@@ -3838,7 +4128,36 @@ export default function AgentsPage() {
       </Dialog>
 
       {/* Create Agent Modal */}
-      <Dialog open={isCreateAgentModalOpen} onOpenChange={setIsCreateAgentModalOpen}>
+      <Dialog 
+        open={isCreateAgentModalOpen} 
+        onOpenChange={(open) => {
+          if (!open) {
+            // Reset selected custom agent when closing
+            setSelectedCustomAgent(null)
+            // Reset form when closing
+            setCreateAgentForm({ name: 'New Agent', steps: [''] })
+            setCreateAgentSchedule({ frequency: '', time: '12:00', days: [], selectedDay: '' })
+            setSelectedTools(new Set())
+            setToolsSearchQuery('')
+            setSmartCreatePrompt('')
+            setShowSmartCreateInput(false)
+            setAgentCanvasContent('')
+            setShowToolsDropdown(false)
+            setToolsDropdownQuery('')
+            setSelectedToolIndex(0)
+            setFilteredTools([])
+            setAtMentionPosition(0)
+            setCreateAgentDebugResponse(null)
+            setNotificationSettings({
+              sendToInbox: true,
+              sendViaEmail: false,
+              emailAddress: notificationSettings.emailAddress, // Keep the merchant's email
+              emailFormat: "professional"
+            })
+          }
+          setIsCreateAgentModalOpen(open)
+        }}
+      >
         <DialogPortal>
           <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
           <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-5xl h-[90vh] translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg overflow-hidden p-0">
@@ -3846,28 +4165,29 @@ export default function AgentsPage() {
               <X className="h-4 w-4" />
               <span className="sr-only">Close</span>
             </DialogPrimitive.Close>
-          <div className="flex h-full">
+          <div className="flex h-full focus:outline-none">
             {/* Main Content - Left Section */}
-            <div className="flex-1 flex flex-col h-full p-6 pr-4 overflow-y-auto">
-              <DialogHeader className="mb-6">
-                <div className="flex items-center justify-between">
+            <div className="flex-1 flex flex-col h-full p-6 pr-4 overflow-y-auto focus:outline-none">
+              <DialogHeader className="mb-6 focus:outline-none">
+                <div className="flex items-center justify-between focus:outline-none">
                   <div className="flex items-center gap-3">
                     {isEditingAgentName ? (
                       <Input
                         value={createAgentForm.name}
                         onChange={(e) => setCreateAgentForm(prev => ({ ...prev, name: e.target.value }))}
-                        onBlur={() => setIsEditingAgentName(false)}
-                        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                        onKeyDown={(e) => {
                           if (e.key === 'Enter') {
+                            e.preventDefault()
                             setIsEditingAgentName(false)
                           }
                         }}
-                        className="text-xl font-semibold border-0 p-0 h-auto focus:ring-0 bg-transparent"
+                        onBlur={() => setIsEditingAgentName(false)}
+                        className="text-xl font-semibold border-0 p-0 h-auto focus:ring-0 bg-transparent outline-none focus:outline-none shadow-none"
                         autoFocus
                       />
                     ) : (
                       <DialogTitle 
-                        className="text-xl font-semibold cursor-text hover:bg-gray-100 px-2 py-1 rounded-md"
+                        className="text-xl font-semibold cursor-text px-0 py-0"
                         onDoubleClick={() => setIsEditingAgentName(true)}
                       >
                         {createAgentForm.name}
@@ -3883,7 +4203,7 @@ export default function AgentsPage() {
                           <span className="font-medium text-gray-700 capitalize">{createAgentSchedule.frequency}</span>
                           <span className="text-gray-500">at {createAgentSchedule.time}</span>
                           {createAgentSchedule.frequency === 'weekly' && createAgentSchedule.selectedDay && (
-                            <span className="text-gray-500">on {createAgentSchedule.selectedDay}</span>
+                            <span className="text-gray-500">on {capitaliseFirstLetter(createAgentSchedule.selectedDay)}</span>
                           )}
                           {createAgentSchedule.frequency === 'monthly' && createAgentSchedule.days[0] && (
                             <span className="text-gray-500">on day {createAgentSchedule.days[0]}</span>
@@ -4103,6 +4423,29 @@ export default function AgentsPage() {
                             <p>Schedule - Set when agent runs</p>
                           </TooltipContent>
                         </Tooltip>
+                        
+                        {/* Vertical Separator */}
+                        <div className="h-6 w-px bg-gray-200 mx-2"></div>
+                        
+                        {/* Tools Button */}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowToolsInLeftPanel(!showToolsInLeftPanel)}
+                              className={cn(
+                                "rounded-md h-8 w-8 p-0",
+                                showToolsInLeftPanel && "bg-gray-100"
+                              )}
+                            >
+                              <Puzzle className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Tools - View available integrations</p>
+                          </TooltipContent>
+                        </Tooltip>
                       </div>
                     </TooltipProvider>
                   </div>
@@ -4112,114 +4455,153 @@ export default function AgentsPage() {
               {/* Main Content */}
               <div className="space-y-6">
                 {/* Agent Canvas */}
-                <div>
+                <div className="flex-1 flex flex-col">
                   <div className="flex items-center justify-between mb-4">
                     <Label className="text-sm font-medium">Agent Definition</Label>
+                    {agentCanvasContent && agentCanvasContent.trim() && isEditingCanvas && !showSmartCreateInput && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsEditingCanvas(false)}
+                        className="rounded-md opacity-70 hover:opacity-100"
+                      >
+                        Done
+                      </Button>
+                    )}
                   </div>
 
                   {/* Smart Create Input */}
                   {showSmartCreateInput && (
                     <div className="mb-4">
+                      <div className={cn(
+                        "overflow-hidden transition-all duration-700 ease-in-out",
+                        isGeneratingSteps ? "max-h-0 opacity-0" : "max-h-[200px] opacity-100"
+                      )}>
                         <Textarea
-                        placeholder="What are you trying to achieve..."
+                          placeholder="What are you trying to achieve..."
                           value={smartCreatePrompt}
                           onChange={(e) => setSmartCreatePrompt(e.target.value)}
-                        onKeyDown={async (e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault()
-                            
-                          if (!user?.uid) {
-                            toast({
-                              title: "Authentication Required",
-                              description: "Please sign in to create agents.",
-                              variant: "destructive"
-                            })
-                            return
-                          }
-
-                          if (!smartCreatePrompt.trim()) {
-                            toast({
-                              title: "Prompt Required",
-                              description: "Please describe what you want the agent to do.",
-                              variant: "destructive"
-                            })
-                            return
-                          }
-
-                          try {
-                            setIsGeneratingSteps(true)
-                            
-                            console.log('🔧 [CreateAgent] Starting createAgentExecutionPlan call')
-                            console.log('🔧 [CreateAgent] User ID:', user.uid)
-                            console.log('🔧 [CreateAgent] Smart prompt:', smartCreatePrompt)
-                            
-                            toast({
-                                title: "Generating Agent Definition",
-                                description: "AI is creating your agent definition...",
-                            })
-
-                            const functions = getFunctions()
-                            const createAgentExecutionPlan = httpsCallable(functions, 'createAgentExecutionPlan')
-                            
-                            console.log('🔧 [CreateAgent] Calling function with params:', {
-                              prompt: smartCreatePrompt,
-                              merchantId: user.uid
-                            })
-                            
-                            const result = await createAgentExecutionPlan({
-                              prompt: smartCreatePrompt,
-                              merchantId: user.uid
-                            })
-
-                            console.log('🔧 [CreateAgent] Function call completed')
-                            console.log('🔧 [CreateAgent] Raw result:', result)
-                            
-                            const data = result.data as any
-                            console.log('🔧 [CreateAgent] Extracted data:', data)
-                            console.log('🔧 [CreateAgent] Data type:', typeof data)
-                            console.log('🔧 [CreateAgent] Data keys:', data ? Object.keys(data) : 'No data')
+                          className="min-h-[120px] rounded-md"
+                          onKeyDown={async (e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault()
                               
-                            // Store the full response for debugging
-                            setCreateAgentDebugResponse(JSON.stringify(data, null, 2))
-                            console.log('🔧 [CreateAgent] Debug response stored in UI')
+                            if (!user?.uid) {
+                              toast({
+                                title: "Authentication Required",
+                                description: "Please sign in to create agents.",
+                                variant: "destructive"
+                              })
+                              return
+                            }
+
+                            if (!smartCreatePrompt.trim()) {
+                              toast({
+                                title: "Prompt Required",
+                                description: "Please describe what you want the agent to do.",
+                                variant: "destructive"
+                              })
+                              return
+                            }
+
+                            try {
+                              setIsGeneratingSteps(true)
                               
-                            if (data && data.structuredPrompt) {
-                                console.log('✅ [CreateAgent] Found structuredPrompt:', data.structuredPrompt)
-                                setAgentCanvasContent(data.structuredPrompt)
-                                setShowSmartCreateInput(false)
-                                setSmartCreatePrompt('')
+                              console.log('🔧 [CreateAgent] Starting createAgentExecutionPlan call')
+                              console.log('🔧 [CreateAgent] User ID:', user.uid)
+                              console.log('🔧 [CreateAgent] Smart prompt:', smartCreatePrompt)
                               
                               toast({
-                                  title: "Agent Definition Generated!",
-                                  description: "Review and edit the generated definition below.",
+                                  title: "Generating Agent Definition",
+                                  description: "AI is creating your agent definition...",
                               })
-                            } else {
-                              console.error('❌ [CreateAgent] No structuredPrompt found in response')
-                              console.error('❌ [CreateAgent] Available fields:', data ? Object.keys(data) : 'No data object')
-                              throw new Error('No structured prompt found in response')
+
+                              const functions = getFunctions()
+                              const createAgentExecutionPlan = httpsCallable(functions, 'createAgentExecutionPlan')
+                              
+                              console.log('🔧 [CreateAgent] Calling function with params:', {
+                                prompt: smartCreatePrompt,
+                                merchantId: user.uid
+                              })
+                              
+                              const result = await createAgentExecutionPlan({
+                                prompt: smartCreatePrompt,
+                                merchantId: user.uid
+                              })
+
+                              console.log('🔧 [CreateAgent] Function call completed')
+                              console.log('🔧 [CreateAgent] Raw result:', result)
+                              
+                              const data = result.data as any
+                              console.log('🔧 [CreateAgent] Extracted data:', data)
+                              console.log('🔧 [CreateAgent] Data type:', typeof data)
+                              console.log('🔧 [CreateAgent] Data keys:', data ? Object.keys(data) : 'No data')
+                                
+                              // Store the full response for debugging
+                              setCreateAgentDebugResponse(JSON.stringify(data, null, 2))
+                              console.log('🔧 [CreateAgent] Debug response stored in UI')
+                              if (data && data.promptv2) {
+                                  console.log('✅ [CreateAgent] Found promptv2:', data.promptv2)
+                                  setAgentCanvasContent(data.promptv2)
+                                  setIsEditingCanvas(false) // Exit edit mode to show formatted content
+                                  setShowSmartCreateInput(false)
+                                  setSmartCreatePrompt('')
+                                
+                                  // Check if schedule information is provided in the response
+                                  if (data.executionPlan && data.executionPlan.schedule) {
+                                    console.log('✅ [CreateAgent] Found schedule information:', data.executionPlan.schedule)
+                                    setCreateAgentSchedule({
+                                      frequency: data.executionPlan.schedule.frequency || 'weekly',
+                                      time: data.executionPlan.schedule.time || '07:00',
+                                      days: data.executionPlan.schedule.days || ['monday'],
+                                      selectedDay: data.executionPlan.schedule.days && data.executionPlan.schedule.days[0] ? data.executionPlan.schedule.days[0] : 'monday'
+                                    })
+                                  } else if (data.schedule) {
+                                    console.log('✅ [CreateAgent] Found direct schedule information:', data.schedule)
+                                    setCreateAgentSchedule({
+                                      frequency: data.schedule.frequency || 'weekly',
+                                      time: data.schedule.time || '07:00',
+                                      days: data.schedule.days || ['monday'],
+                                      selectedDay: data.schedule.days && data.schedule.days[0] ? data.schedule.days[0] : 'monday'
+                                    })
+                                  }
+                                
+                                  toast({
+                                    title: "Agent Definition Generated!",
+                                    description: "Review and edit the generated definition below.",
+                                  })
+                              } else {
+                                console.error('❌ [CreateAgent] No promptv2 found in response')
+                                console.error('❌ [CreateAgent] Available fields:', data ? Object.keys(data) : 'No data object')
+                                throw new Error('No promptv2 found in response')
+                              }
+                            } catch (error) {
+                                console.error('❌ [CreateAgent] Error in createAgentExecutionPlan:', error)
+                                console.error('❌ [CreateAgent] Error type:', error instanceof Error ? error.constructor.name : typeof error)
+                                console.error('❌ [CreateAgent] Error message:', error instanceof Error ? error.message : String(error))
+                                console.error('❌ [CreateAgent] Error stack:', error instanceof Error ? error.stack : 'No stack trace')
+                              toast({
+                                title: "Generation Failed",
+                                  description: error instanceof Error ? error.message : "Failed to generate agent definition. Please try again.",
+                                variant: "destructive"
+                              })
+                            } finally {
+                              console.log('🔧 [CreateAgent] Cleaning up, setting isGeneratingSteps to false')
+                              setIsGeneratingSteps(false)
+                              }
                             }
-                          } catch (error) {
-                              console.error('❌ [CreateAgent] Error in createAgentExecutionPlan:', error)
-                              console.error('❌ [CreateAgent] Error type:', error instanceof Error ? error.constructor.name : typeof error)
-                              console.error('❌ [CreateAgent] Error message:', error instanceof Error ? error.message : String(error))
-                              console.error('❌ [CreateAgent] Error stack:', error instanceof Error ? error.stack : 'No stack trace')
-                            toast({
-                              title: "Generation Failed",
-                                description: error instanceof Error ? error.message : "Failed to generate agent definition. Please try again.",
-                              variant: "destructive"
-                            })
-                          } finally {
-                            console.log('🔧 [CreateAgent] Cleaning up, setting isGeneratingSteps to false')
-                            setIsGeneratingSteps(false)
-                            }
-                          }
-                        }}
-                        className="rounded-md min-h-[80px]"
-                        disabled={isGeneratingSteps}
-                      />
-                      {isGeneratingSteps && (
-                        <div className="mt-2 flex items-center gap-2 text-sm">
-                            <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
+                          }}
+                          className="rounded-md h-[60px] text-sm leading-relaxed resize-none border border-input shadow-sm"
+                          style={{ whiteSpace: 'pre-wrap', height: '60px' }}
+                        />
+                      </div>
+
+                      <div className={cn(
+                        "transition-all duration-700 ease-in-out",
+                        isGeneratingSteps ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2 absolute"
+                      )}>
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
                           <span 
                             className="font-medium relative"
                             style={{
@@ -4234,14 +4616,42 @@ export default function AgentsPage() {
                             Generating...
                           </span>
                         </div>
-                      )}
+                      </div>
+                      
+                      {!isGeneratingSteps && (
+                        <div className="mt-4 text-sm text-gray-900">
+                          <h4 className="font-medium mb-2">How to prompt effectively:</h4>
+                          <ul className="space-y-2 pl-4 list-disc">
+                            <li>Be specific about what you want the agent to achieve</li>
+                            <li>Include any specific tools you want to use (e.g., Gmail, Calendar)</li>
+                            <li>Mention the frequency of execution if relevant (daily, weekly)</li>
+                            <li>Include any specific data formats or outputs you need</li>
+                            <li>Describe the problem you're solving rather than implementation details</li>
+                          </ul>
                         </div>
                       )}
+                    </div>
+                  )}
 
-                  {/* Agent Canvas */}
-                  <div className="relative">
-                    <Textarea
-                      placeholder={`## Objective
+                  {/* Agent Canvas or Tools Panel */}
+                  {!showSmartCreateInput && (
+                    <>
+                      {!showToolsInLeftPanel ? (
+                        <div className="relative flex-1" style={{ height: "auto", minHeight: "500px" }}>
+                          {agentCanvasContent && agentCanvasContent.trim() && !isEditingCanvas ? (
+                            /* Display mode with tool highlighting */
+                            <div 
+                              onDoubleClick={() => setIsEditingCanvas(true)} 
+                              style={{ cursor: "pointer" }} 
+                              className="border border-gray-200 rounded-md h-[500px] overflow-y-auto p-3 pb-8 bg-white text-sm leading-relaxed whitespace-pre-wrap relative [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-300"
+                            >
+                              {renderTextWithTools(agentCanvasContent)}
+                            </div>
+                          ) : (
+                            /* Edit mode - textarea */
+                            <div className="relative h-full">
+                              <Textarea
+                                placeholder={`## Objective
 Describe the main purpose and goal of your agent...
 
 ## Steps
@@ -4254,153 +4664,145 @@ Describe the main purpose and goal of your agent...
 @calendar - For scheduling
 @sheets - For data management
 (Type @ to see available tools)`}
-                      value={agentCanvasContent}
-                      onChange={(e) => {
-                        const value = e.target.value
-                        setAgentCanvasContent(value)
-                        
-                        // Check for @ mentions
-                        const cursorPosition = e.target.selectionStart
-                        const textBeforeCursor = value.substring(0, cursorPosition)
-                        const lastAtIndex = textBeforeCursor.lastIndexOf('@')
-                        
-                        if (lastAtIndex !== -1) {
-                          const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1)
-                          // Show tools dropdown if @ is followed by word characters or is at the end
-                          if (/^\w*$/.test(textAfterAt)) {
-                            setShowToolsDropdown(true)
-                            setToolsDropdownQuery(textAfterAt.toLowerCase())
-                            setAtMentionPosition(lastAtIndex)
-                          } else {
-                            setShowToolsDropdown(false)
-                          }
-                        } else {
-                          setShowToolsDropdown(false)
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        // Handle tool selection with Enter or Tab
-                        if ((e.key === 'Enter' || e.key === 'Tab') && showToolsDropdown && filteredTools.length > 0) {
-                          e.preventDefault()
-                          const selectedTool = filteredTools[selectedToolIndex]
-                          insertToolMention(selectedTool)
-                        }
-                        // Handle arrow keys for tool selection
-                        else if (e.key === 'ArrowDown' && showToolsDropdown) {
-                          e.preventDefault()
-                          setSelectedToolIndex(prev => Math.min(prev + 1, filteredTools.length - 1))
-                        }
-                        else if (e.key === 'ArrowUp' && showToolsDropdown) {
-                          e.preventDefault()
-                          setSelectedToolIndex(prev => Math.max(prev - 1, 0))
-                        }
-                        // Hide dropdown on Escape
-                        else if (e.key === 'Escape') {
-                          setShowToolsDropdown(false)
-                        }
-                      }}
-                      className="rounded-md min-h-[400px] font-mono text-sm leading-relaxed"
-                      style={{ whiteSpace: 'pre-wrap' }}
-                    />
-                    
-                    {/* Tools Dropdown */}
-                    {showToolsDropdown && (
-                      <div className="absolute z-10 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto"
-                           style={{
-                             top: '200px', // Approximate position, you might want to calculate this dynamically
-                             left: '20px',
-                             minWidth: '200px'
-                           }}>
-                        {filteredTools.length > 0 ? (
-                          filteredTools.map((tool, index) => (
-                            <button
-                              key={tool.slug}
-                              onClick={() => insertToolMention(tool)}
-                              className={`w-full text-left px-3 py-2 hover:bg-gray-100 flex items-center gap-2 ${
-                                index === selectedToolIndex ? 'bg-blue-50' : ''
-                              }`}
-                            >
-                              {tool.deprecated?.toolkit?.logo ? (
-                                <img
-                                  src={tool.deprecated.toolkit.logo}
-                                  alt={tool.toolkit?.name || tool.name}
-                                  className="w-4 h-4 rounded flex-shrink-0"
-                                />
+                                value={agentCanvasContent}
+                                onChange={(e) => {
+                                  const value = e.target.value
+                                  setAgentCanvasContent(value)
+                                  
+                                  // Check for @ mentions
+                                  const cursorPosition = e.target.selectionStart
+                                  const textBeforeCursor = value.substring(0, cursorPosition)
+                                  const lastAtIndex = textBeforeCursor.lastIndexOf('@')
+                                  
+                                  if (lastAtIndex !== -1) {
+                                    const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1)
+                                    // Show tools dropdown if @ is followed by word characters or is at the end
+                                    if (/^\w*$/.test(textAfterAt)) {
+                                      setShowToolsDropdown(true)
+                                      setToolsDropdownQuery(textAfterAt.toLowerCase())
+                                      setAtMentionPosition(lastAtIndex)
+                                    } else {
+                                      setShowToolsDropdown(false)
+                                    }
+                                  } else {
+                                    setShowToolsDropdown(false)
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  // Handle tool selection with Enter or Tab
+                                  if ((e.key === 'Enter' || e.key === 'Tab') && showToolsDropdown && filteredTools.length > 0) {
+                                    e.preventDefault()
+                                    const selectedTool = filteredTools[selectedToolIndex]
+                                    insertToolMention(selectedTool)
+                                  }
+                                  // Handle arrow keys for tool selection
+                                  else if (e.key === 'ArrowDown' && showToolsDropdown) {
+                                    e.preventDefault()
+                                    setSelectedToolIndex(prev => Math.min(prev + 1, filteredTools.length - 1))
+                                  }
+                                  else if (e.key === 'ArrowUp' && showToolsDropdown) {
+                                    e.preventDefault()
+                                    setSelectedToolIndex(prev => Math.max(prev - 1, 0))
+                                  }
+                                  // Hide dropdown on Escape
+                                  else if (e.key === 'Escape') {
+                                    setShowToolsDropdown(false)
+                                  }
+                                }}
+                                className="rounded-md h-[500px] text-sm leading-relaxed resize-none"
+                                style={{ whiteSpace: 'pre-wrap' }}
+                              />
+                            </div>
+                          )}
+                          
+                          {/* Tools Dropdown */}
+                          {showToolsDropdown && (
+                            <div className="absolute z-10 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto"
+                                 style={{
+                                   top: '200px', // Approximate position, you might want to calculate this dynamically
+                                   left: '20px',
+                                   minWidth: '200px'
+                                 }}>
+                              {filteredTools.length > 0 ? (
+                                filteredTools.map((tool, index) => (
+                                  <button
+                                    key={tool.slug}
+                                    onClick={() => insertToolMention(tool)}
+                                    className={`w-full text-left px-3 py-2 hover:bg-gray-100 flex items-center gap-2 ${
+                                      index === selectedToolIndex ? 'bg-blue-50' : ''
+                                    }`}
+                                  >
+                                    {tool.deprecated?.toolkit?.logo ? (
+                                      <img
+                                        src={tool.deprecated.toolkit.logo}
+                                        alt={tool.toolkit?.name || tool.name}
+                                        className="w-4 h-4 rounded flex-shrink-0"
+                                      />
+                                    ) : (
+                                      <div className="w-4 h-4 bg-gray-100 rounded flex items-center justify-center flex-shrink-0">
+                                        <span className="text-xs font-medium text-gray-600">
+                                          {tool.name.charAt(0)}
+                                        </span>
+                                      </div>
+                                    )}
+                                    <div>
+                                      <div className="text-sm font-medium">
+                                        {tool.name.replace(/^(GMAIL_|GOOGLECALENDAR_|GOOGLEDOCS_|GOOGLESHEETS_)/i, '').toLowerCase().replace(/_/g, ' ')}
+                                      </div>
+                                      <div className="text-xs text-gray-500">{tool.toolkit?.name}</div>
+                                    </div>
+                                  </button>
+                                ))
                               ) : (
-                                <div className="w-4 h-4 bg-gray-100 rounded flex items-center justify-center flex-shrink-0">
-                                  <span className="text-xs font-medium text-gray-600">
-                                    {tool.name.charAt(0)}
-                                  </span>
-                        </div>
-                      )}
-                              <div>
-                                <div className="text-sm font-medium">
-                                  {tool.name.replace(/^(GMAIL_|GOOGLECALENDAR_)/i, '').toLowerCase().replace(/_/g, ' ')}
-                    </div>
-                                <div className="text-xs text-gray-500">{tool.toolkit?.name}</div>
-                          </div>
-                            </button>
-                          ))
-                        ) : (
-                          <div className="px-3 py-2 text-sm text-gray-500">No tools found</div>
-                        )}
-                    </div>
-                  )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Vertical Separator */}
-            <div className="w-px bg-gray-200"></div>
-
-            {/* Right Sidebar */}
-            <div className="w-80 p-6 pl-4 bg-gray-50 flex flex-col h-full">
-              {/* Available Tools - Right Panel */}
-              <div className="flex-1 flex flex-col overflow-hidden">
-                <div className="flex-1 overflow-y-auto">
-                  {/* Available Tools - Right Panel */}
-                  <div className="mb-6">
-                    <div className="flex items-center mb-3">
-                      <h3 className="text-sm font-medium text-gray-600">Available Tools</h3>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => router.push('/dashboard/integrations')}
-                        className="rounded-md h-6 w-6 ml-1"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                    {/* Tools Search */}
-                    <div className="mb-3">
-                      <Input
-                        placeholder="Search tools..."
-                        value={toolsSearchQuery}
-                        onChange={(e) => setToolsSearchQuery(e.target.value)}
-                        className="rounded-md h-8 text-sm"
-                      />
-                    </div>
-                    {/* Tools Grid */}
-                    <div className="bg-white border border-gray-200 rounded-md shadow-sm overflow-y-auto scrollbar-hide" style={{ maxHeight: 'calc(100vh - 500px)' }}>
-                      {toolsLoading ? (
-                        <div className="flex items-center justify-center py-6">
-                          <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
-                          <span className="ml-2 text-xs text-gray-600">Loading...</span>
-                        </div>
-                      ) : composioTools.length === 0 ? (
-                        <div className="text-center py-6">
-                          <p className="text-xs text-gray-500 mb-2">No connected tools</p>
-                          <p className="text-xs text-gray-400">Connect integrations first</p>
+                                <div className="px-3 py-2 text-sm text-gray-500">No tools found</div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ) : (
-                        <div className="p-2">
-                          <div className="space-y-1">
-                            {composioTools.map((tool) => (
-                              <TooltipProvider key={tool.slug}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <button
+                        /* Tools Panel */
+                        <div className="relative flex-1" style={{ height: "auto", minHeight: "500px" }}>
+                          <div className="border border-gray-200 rounded-md h-[500px] overflow-y-auto p-4 bg-white [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-300">
+                            <div className="mb-4">
+                              <h3 className="text-sm font-medium text-gray-700">Available Tools</h3>
+                            </div>
+                            <p className="text-xs text-gray-500 mb-4">Select tools to use in your agent or mention them with @ in your agent definition.</p>
+                            
+                            {/* Tools Search */}
+                            <div className="mb-4">
+                              <Input
+                                placeholder="Search tools..."
+                                value={toolsSearchQuery}
+                                onChange={(e) => setToolsSearchQuery(e.target.value)}
+                                className="rounded-md h-8 text-sm"
+                              />
+                            </div>
+                            
+                            {/* Tools List with Descriptions */}
+                            <div className="space-y-3">
+                              {toolsLoading ? (
+                                <div className="flex items-center justify-center py-6">
+                                  <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
+                                  <span className="ml-2 text-xs text-gray-600">Loading tools...</span>
+                                </div>
+                              ) : composioTools.length === 0 ? (
+                                <div className="text-center py-6">
+                                  <p className="text-xs text-gray-500 mb-2">No connected tools</p>
+                                  <p className="text-xs text-gray-400">Connect integrations first</p>
+                                </div>
+                              ) : (
+                                composioTools.map((tool) => (
+                                  <div 
+                                    key={tool.slug}
+                                    className={cn(
+                                      "border rounded-md p-3 transition-all duration-200",
+                                      selectedTools.has(tool.slug)
+                                        ? "border-blue-500 bg-blue-50"
+                                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                                    )}
+                                  >
+                                    <div 
+                                      className="flex items-start gap-3 cursor-pointer"
                                       onClick={() => {
                                         const newSelected = new Set(selectedTools)
                                         if (newSelected.has(tool.slug)) {
@@ -4410,62 +4812,173 @@ Describe the main purpose and goal of your agent...
                                         }
                                         setSelectedTools(newSelected)
                                       }}
-                                      className={`w-full p-2 rounded-md border transition-all duration-200 hover:shadow-sm ${
-                                        selectedTools.has(tool.slug)
-                                          ? 'border-blue-500 bg-blue-50 shadow-sm'
-                                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                                      }`}
                                     >
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex-shrink-0 mt-0.5">
                                         {tool.deprecated?.toolkit?.logo ? (
                                           <img
                                             src={tool.deprecated.toolkit.logo}
                                             alt={tool.toolkit?.name || tool.name}
-                                            className="w-5 h-5 rounded flex-shrink-0"
+                                            className="w-5 h-5 rounded"
                                             onError={(e) => {
                                               e.currentTarget.style.display = 'none'
                                             }}
                                           />
                                         ) : (
-                                          <div className="w-5 h-5 bg-gray-100 rounded flex items-center justify-center flex-shrink-0">
+                                          <div className="w-5 h-5 bg-gray-100 rounded flex items-center justify-center">
                                             <span className="text-xs font-medium text-gray-600">
                                               {tool.name.charAt(0)}
                                             </span>
                                           </div>
                                         )}
-                                        <span className="text-xs font-medium text-left truncate flex-1">
-                                          {tool.name.replace(/^(GMAIL_|GOOGLECALENDAR_)/i, '').toLowerCase().replace(/_/g, ' ').split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-                                        </span>
                                       </div>
-                                    </button>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="bg-gray-900 text-white border-gray-700 max-w-xs">
-                                    <div className="space-y-1">
-                                      <div className="font-medium">{tool.name}</div>
-                                      <div className="text-gray-300 text-xs">{tool.description}</div>
-                                      {tool.toolkit && (
-                                        <div className="flex items-center gap-1 text-blue-300 text-xs">
-                                          {tool.deprecated?.toolkit?.logo && (
-                                            <img
-                                              src={tool.deprecated.toolkit.logo}
-                                              alt={tool.toolkit.name}
-                                              className="w-3 h-3 rounded"
-                                            />
-                                          )}
-                                          <span>{tool.toolkit.name}</span>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between mb-1">
+                                          <h4 className="text-sm font-medium text-gray-800 truncate">
+                                            {tool.name.replace(/^(GMAIL_|GOOGLECALENDAR_|GOOGLEDOCS_|GOOGLESHEETS_)/i, '').toLowerCase().replace(/_/g, ' ').split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                                          </h4>
+                                          <div className="flex-shrink-0">
+                                            <CheckCircle className={cn(
+                                              "h-4 w-4 transition-opacity",
+                                              selectedTools.has(tool.slug) ? "text-blue-500 opacity-100" : "text-gray-300 opacity-0"
+                                            )} />
+                                          </div>
                                         </div>
-                                      )}
+                                        <p className="text-xs text-gray-600 mb-1">{tool.description || "No description available"}</p>
+                                        {tool.toolkit && (
+                                          <div className="flex items-center gap-1 text-xs text-gray-500">
+                                            {tool.deprecated?.toolkit?.logo && (
+                                              <img
+                                                src={tool.deprecated.toolkit.logo}
+                                                alt={tool.toolkit.name}
+                                                className="w-3 h-3 rounded"
+                                              />
+                                            )}
+                                            <span>{tool.toolkit.name}</span>
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            ))}
+                                  </div>
+                                ))
+                              )}
+                            </div>
                           </div>
                         </div>
                       )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Vertical Separator */}
+            <div className="w-px bg-gray-200"></div>
+            {/* Right Sidebar */}
+            <div className="w-80 p-6 pl-4 bg-gray-50 flex flex-col h-full">
+              {/* Right Panel */}
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 overflow-y-auto">
+                  {/* Notification Options */}
+                  <div className="mb-6">
+                    <h3 className="text-sm font-medium mb-3 text-gray-600">Notification Options</h3>
+                    
+                    <div className="bg-white border border-gray-200 rounded-md p-4 shadow-sm">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium">Agent Inbox</p>
+                            <p className="text-xs text-gray-500">Receive notifications in your agent inbox</p>
+                          </div>
+                          <Switch 
+                            id="inbox-notification" 
+                            checked={notificationSettings.sendToInbox}
+                            onCheckedChange={(checked) => {
+                              // If turning off inbox and email is also off, force email on
+                              if (!checked && !notificationSettings.sendViaEmail) {
+                                setNotificationSettings(prev => ({ 
+                                  ...prev, 
+                                  sendToInbox: false,
+                                  sendViaEmail: true 
+                                }))
+                              } else {
+                                setNotificationSettings(prev => ({ ...prev, sendToInbox: checked }))
+                              }
+                            }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium">Email Notifications</p>
+                            <p className="text-xs text-gray-500">Receive email updates when the agent runs</p>
+                          </div>
+                          <Switch 
+                            id="email-notification" 
+                            checked={notificationSettings.sendViaEmail}
+                            onCheckedChange={(checked) => {
+                              // If turning off email and inbox is also off, force inbox on
+                              if (!checked && !notificationSettings.sendToInbox) {
+                                setNotificationSettings(prev => ({ 
+                                  ...prev, 
+                                  sendViaEmail: false,
+                                  sendToInbox: true 
+                                }))
+                              } else {
+                                setNotificationSettings(prev => ({ ...prev, sendViaEmail: checked }))
+                              }
+                            }}
+                          />
+                        </div>
+                        
+                        {/* Email Settings - conditionally shown */}
+                        {notificationSettings.sendViaEmail && (
+                          <div className="space-y-3 border-t border-gray-100 pt-3 mt-2">
+                            <Label htmlFor="email-address" className="text-sm font-medium">Email Address</Label>
+                            <Input 
+                              id="email-address" 
+                              placeholder="you@example.com" 
+                              value={notificationSettings.emailAddress}
+                              onChange={(e) => setNotificationSettings(prev => ({ ...prev, emailAddress: e.target.value }))}
+                              className="text-xs h-8 rounded-md bg-gray-50"
+                            />
+                            <p className="text-xs text-gray-500">We'll send notifications to this email address</p>
+                            
+                            <div className="pt-2">
+                              <Label htmlFor="email-format" className="text-sm font-medium">Email Format</Label>
+                              {/* Sub-Tab Container */}
+                              <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit mt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setNotificationSettings(prev => ({ ...prev, emailFormat: "professional" }))}
+                                  className={cn(
+                                    "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                                    notificationSettings.emailFormat === "professional"
+                                      ? "text-gray-800 bg-white shadow-sm"
+                                      : "text-gray-600 hover:bg-gray-200/70"
+                                  )}
+                                >
+                                  <FileText className="h-3 w-3" />
+                                  Professional
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setNotificationSettings(prev => ({ ...prev, emailFormat: "simple" }))}
+                                  className={cn(
+                                    "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                                    notificationSettings.emailFormat === "simple"
+                                      ? "text-gray-800 bg-white shadow-sm"
+                                      : "text-gray-600 hover:bg-gray-200/70"
+                                  )}
+                                >
+                                  <AlignLeft className="h-3 w-3" />
+                                  Simple
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-
                   {/* Selected Tools Details */}
                   {selectedTools.size > 0 && (
                     <div className="mb-6">
@@ -4487,7 +5000,7 @@ Describe the main purpose and goal of your agent...
                                   }}
                                 />
                               ) : (
-                                <div className="w-4 h-4 bg-gray-100 rounded flex items-center justify-center flex-shrink-0">
+                                <div className="w-4 h-4 bg-gray-100 rounded flex-shrink-0 flex items-center justify-center">
                                   <span className="text-xs font-medium text-gray-600">
                                     {tool.name.charAt(0)}
                                   </span>
@@ -4504,138 +5017,144 @@ Describe the main purpose and goal of your agent...
                     </div>
                   )}
 
-                  {/* Debug Response Section */}
-                  {createAgentDebugResponse && (
-                    <div className="mb-6">
-                      <h3 className="text-sm font-medium mb-3 text-gray-600">Debug Response</h3>
-                      <div className="bg-white border border-gray-200 rounded-md shadow-sm">
-                        <div className="p-3 border-b border-gray-100">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium text-gray-700">createAgentExecutionPlan Response</span>
-                            <button
-                              onClick={() => setCreateAgentDebugResponse(null)}
-                              className="text-gray-400 hover:text-gray-600"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="p-3">
-                          <pre className="text-xs overflow-auto bg-gray-50 p-2 rounded-md max-h-64 text-gray-700 whitespace-pre-wrap">
-                            {createAgentDebugResponse}
-                          </pre>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Create Button Section - Fixed at bottom */}
                 <div className="border-t border-gray-200 pt-4 mt-auto sticky bottom-0 bg-gray-50">
                   <div className="space-y-3">
                     <Button
+                      type="button"
                       onClick={async () => {
-                        if (!createAgentForm.name.trim()) {
-                          toast({
-                            title: "Agent Name Required",
-                            description: "Please provide a name for your agent.",
-                            variant: "destructive"
-                          })
-                          return
-                        }
-                        
-                        if (!agentCanvasContent.trim()) {
-                          toast({
-                            title: "Agent Definition Required",
-                            description: "Please define your agent in the canvas above.",
-                            variant: "destructive"
-                          })
-                          return
-                        }
-                        
-                        if (!createAgentSchedule.frequency) {
-                          toast({
-                            title: "Schedule Required",
-                            description: "Please set a schedule for when the agent should run.",
-                            variant: "destructive"
-                          })
-                          return
-                        }
-
-                        if (!user?.uid) {
-                          toast({
-                            title: "Authentication Required",
-                            description: "Please sign in to create agents.",
-                            variant: "destructive"
-                          })
-                          return
-                        }
-                        
                         try {
-                          // Create agent name for document ID (lowercase, no spaces)
-                          const agentDocId = createAgentForm.name.toLowerCase().replace(/\s+/g, '-')
+                          setIsCreatingAgent(true)
                           
-                          // Generate a unique schedule ID
-                          const scheduleId = `${user.uid}_${agentDocId}_${Date.now()}`
-                          
-                          // Prepare schedule days based on frequency
-                          let scheduleDays: string[] = []
-                          if (createAgentSchedule.frequency === 'daily') {
-                            scheduleDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
-                          } else if (createAgentSchedule.frequency === 'weekly' && createAgentSchedule.selectedDay) {
-                            scheduleDays = [createAgentSchedule.selectedDay]
-                          } else if (createAgentSchedule.frequency === 'monthly' && createAgentSchedule.days[0]) {
-                            scheduleDays = [createAgentSchedule.days[0]]
-                          } else {
-                            scheduleDays = createAgentSchedule.days
+                          // Validate that schedule is set
+                          if (!createAgentSchedule.frequency) {
+                            toast({
+                              title: "Schedule Required",
+                              description: "Please select a schedule frequency before creating the agent.",
+                              variant: "destructive"
+                            })
+                            setIsCreatingAgent(false)
+                            return
                           }
                           
-                          // Prepare agent data for Firestore
-                        const agentData = {
+                          // Check for duplicate agent names
+                          const nameCheckRef = collection(db, 'merchants', user?.uid || '', 'agentsenrolled')
+                          const nameQuery = query(nameCheckRef, where("agentName", "==", createAgentForm.name.trim()))
+                          const nameSnapshot = await getDocs(nameQuery)
+                          
+                          // If we're creating a new agent or updating with a different name
+                          if (!nameSnapshot.empty && 
+                              (!selectedCustomAgent || 
+                               (selectedCustomAgent && selectedCustomAgent.agentName !== createAgentForm.name.trim()))) {
+                            toast({
+                              title: "Duplicate Name",
+                              description: "An agent with this name already exists. Please choose a different name.",
+                              variant: "destructive"
+                            })
+                            setIsCreatingAgent(false)
+                            return
+                          }
+                          
+                          // Generate a unique schedule ID for this custom agent
+                          const scheduleId = `${user?.uid}_custom_${Date.now()}`
+                          
+                          const agentData = {
                             agentName: createAgentForm.name,
-                            prompt: agentCanvasContent,
-                            enrolledAt: serverTimestamp(),
-                            status: 'active',
                             type: 'custom',
-                            scheduleId: scheduleId,
+                            status: 'active',
+                            prompt: agentCanvasContent,
+                            scheduleId: scheduleId, // Store reference to schedule document
                             settings: {
                               schedule: {
                                 frequency: createAgentSchedule.frequency,
                                 time: createAgentSchedule.time,
-                                days: scheduleDays
+                                days: createAgentSchedule.days,
+                                selectedDay: createAgentSchedule.selectedDay
                               },
-                              selectedTools: Array.from(selectedTools)
-                            }
-                          }
-                          
-                          // Save to Firestore
-                          const agentRef = doc(db, 'merchants', user.uid, 'agentsenrolled', agentDocId)
-                          await setDoc(agentRef, agentData)
-                          
-                          // Also save schedule data to top-level agentschedule collection
-                          const scheduleRef = doc(db, 'agentschedule', scheduleId)
-                          const scheduleData = {
-                            merchantId: user.uid,
-                            agentname: createAgentForm.name,
-                            enabled: true,
-                            schedule: {
-                              frequency: createAgentSchedule.frequency,
-                              time: createAgentSchedule.time,
-                              days: scheduleDays
+                              selectedTools: Array.from(selectedTools),
+                              notifications: {
+                                sendToInbox: notificationSettings.sendToInbox,
+                                sendViaEmail: notificationSettings.sendViaEmail,
+                                emailAddress: notificationSettings.emailAddress,
+                                emailFormat: notificationSettings.emailFormat
+                              }
                             },
-                            createdAt: serverTimestamp(),
-                            lastUpdated: serverTimestamp()
+                            enrolledAt: new Date(),
+                            lastUpdated: new Date()
                           }
-                          await setDoc(scheduleRef, scheduleData)
                           
-                        toast({
-                          title: "Agent Created!",
-                            description: `${createAgentForm.name} has been created successfully.`
-                          })
+                          let agentDocRef;
+                          
+                          // If we're editing an existing agent, update it
+                          if (selectedCustomAgent) {
+                            const agentId = selectedCustomAgent.id
+                            agentDocRef = doc(db, 'merchants', user?.uid || '', 'agentsenrolled', agentId)
+                            
+                            // Ensure agentId is set in the agent data
+                            const updatedAgentData = {
+                              ...agentData,
+                              agentId: agentId // Explicitly set the agentId to the document ID
+                            }
+                            
+                            await updateDoc(agentDocRef, updatedAgentData)
+                            
+                            // Also update the agentschedule collection
+                            const scheduleRef = doc(db, 'agentschedule', selectedCustomAgent.scheduleId || scheduleId)
+                            const scheduleData = {
+                              merchantId: user?.uid,
+                              agentname: createAgentForm.name,
+                              agentId: agentId, // Use the document ID as agentId
+                              agentName: createAgentForm.name,
+                              schedule: updatedAgentData.settings.schedule,
+                              enabled: true,
+                              lastUpdated: new Date()
+                            }
+                            await updateDoc(scheduleRef, scheduleData).catch(async err => {
+                              console.log('Schedule document may not exist, creating new one:', err.message)
+                              // If update fails (document doesn't exist), create a new one
+                              await setDoc(scheduleRef, {
+                                ...scheduleData,
+                                createdAt: new Date()
+                              })
+                            })
+                            
+                            toast({
+                              title: "Agent Updated!",
+                              description: `${createAgentForm.name} has been updated successfully.`
+                            })
+                          } else {
+                            // Otherwise create a new agent
+                            agentDocRef = await addDoc(collection(db, 'merchants', user?.uid || '', 'agentsenrolled'), agentData)
+                            
+                            // Update the agent document with its own ID as agentId
+                            const agentId = agentDocRef.id
+                            await updateDoc(agentDocRef, { agentId })
+                            
+                            // Also save schedule data to top-level agentschedule collection
+                            const scheduleRef = doc(db, 'agentschedule', scheduleId)
+                            const scheduleData = {
+                              merchantId: user?.uid,
+                              agentname: createAgentForm.name,
+                              agentId: agentId, // Use the document ID as agentId
+                              agentName: createAgentForm.name,
+                              schedule: agentData.settings.schedule,
+                              enabled: true,
+                              createdAt: new Date(),
+                              lastUpdated: new Date()
+                            }
+                            await setDoc(scheduleRef, scheduleData)
+                            
+                            toast({
+                              title: "Agent Created!",
+                              description: `${createAgentForm.name} has been created successfully.`
+                            })
+                          }
                           
                           // Refresh custom agents list
-                          const agentsRef = collection(db, 'merchants', user.uid, 'agentsenrolled')
-                          const customAgentsQuery = query(agentsRef, orderBy('enrolledAt', 'desc'))
+                          const customAgentsRef = collection(db, 'merchants', user?.uid || '', 'agentsenrolled')
+                          const customAgentsQuery = query(customAgentsRef, orderBy('enrolledAt', 'desc'))
                           const refreshSnapshot = await getDocs(customAgentsQuery)
                           const refreshedCustomAgents = refreshSnapshot.docs
                             .map(doc => ({
@@ -4645,11 +5164,12 @@ Describe the main purpose and goal of your agent...
                             .filter((agent: any) => agent.type === 'custom')
                           setCustomAgents(refreshedCustomAgents)
                         
-                        // Reset form and close modal
+                          // Reset form and close modal
+                          setSelectedCustomAgent(null)
                           setCreateAgentForm({ name: 'New Agent', steps: [''] })
-                        setCreateAgentSchedule({ frequency: '', time: '12:00', days: [], selectedDay: '' })
-                        setSelectedTools(new Set())
-                        setToolsSearchQuery('')
+                          setCreateAgentSchedule({ frequency: '', time: '12:00', days: [], selectedDay: '' })
+                          setSelectedTools(new Set())
+                          setToolsSearchQuery('')
                           setSmartCreatePrompt('')
                           setShowSmartCreateInput(false)
                           setAgentCanvasContent('')
@@ -4659,26 +5179,95 @@ Describe the main purpose and goal of your agent...
                           setFilteredTools([])
                           setAtMentionPosition(0)
                           setCreateAgentDebugResponse(null)
-                        setIsCreateAgentModalOpen(false)
-                          
+                          setIsCreateAgentModalOpen(false)
                         } catch (error) {
-                          console.error('Error creating agent:', error)
+                          console.error('Error saving agent:', error)
                           toast({
-                            title: "Creation Failed",
-                            description: error instanceof Error ? error.message : "Failed to create agent. Please try again.",
+                            title: "Error",
+                            description: "Failed to save agent. Please try again.",
                             variant: "destructive"
                           })
+                        } finally {
+                          setIsCreatingAgent(false)
                         }
                       }}
+                      disabled={isCreatingAgent || !agentCanvasContent.trim() || !createAgentForm.name.trim() || !createAgentSchedule.frequency}
                       className="w-full rounded-md"
-                      disabled={!createAgentForm.name.trim() || !agentCanvasContent.trim() || !createAgentSchedule.frequency}
                     >
-                      Create Agent
+                      {isCreatingAgent ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {selectedCustomAgent ? 'Updating...' : 'Creating...'}
+                        </>
+                      ) : (
+                        selectedCustomAgent ? 'Update Agent' : 'Create Agent'
+                      )}
                     </Button>
+                    
+                    {selectedCustomAgent && (
+                      <Button
+                        variant="destructive"
+                        onClick={async () => {
+                          try {
+                            if (confirm("Are you sure you want to delete this agent? This action cannot be undone.")) {
+                              const agentId = selectedCustomAgent.id
+                              
+                              // Delete the agent from agentsenrolled collection
+                              await deleteDoc(doc(db, 'merchants', user?.uid || '', 'agentsenrolled', agentId))
+                              
+                              // Also delete from the top-level agentschedule collection if it exists
+                              if (selectedCustomAgent.scheduleId) {
+                                const scheduleRef = doc(db, 'agentschedule', selectedCustomAgent.scheduleId)
+                                await deleteDoc(scheduleRef).catch(err => {
+                                  // Ignore errors if the schedule document doesn't exist
+                                  console.log('Schedule may not exist or was already deleted:', err.message)
+                                })
+                              }
+                              
+                              toast({
+                                title: "Agent Deleted",
+                                description: `${selectedCustomAgent.agentName} has been deleted successfully.`
+                              })
+                              
+                              // Refresh custom agents list
+                              await loadCustomAgents()
+                              
+                              // Reset form and close modal
+                              setSelectedCustomAgent(null)
+                              setCreateAgentForm({ name: 'New Agent', steps: [''] })
+                              setCreateAgentSchedule({ frequency: '', time: '12:00', days: [], selectedDay: '' })
+                              setSelectedTools(new Set())
+                              setToolsSearchQuery('')
+                              setSmartCreatePrompt('')
+                              setShowSmartCreateInput(false)
+                              setAgentCanvasContent('')
+                              setShowToolsDropdown(false)
+                              setToolsDropdownQuery('')
+                              setSelectedToolIndex(0)
+                              setFilteredTools([])
+                              setAtMentionPosition(0)
+                              setCreateAgentDebugResponse(null)
+                              setIsCreateAgentModalOpen(false)
+                            }
+                          } catch (error) {
+                            console.error('Error deleting agent:', error)
+                            toast({
+                              title: "Error",
+                              description: "Failed to delete agent. Please try again.",
+                              variant: "destructive"
+                            })
+                          }
+                        }}
+                        className="w-full rounded-md"
+                      >
+                        Delete Agent
+                      </Button>
+                    )}
                     
                     <Button
                       variant="outline"
                       onClick={() => {
+                        setSelectedCustomAgent(null)
                         setCreateAgentForm({ name: 'New Agent', steps: [''] })
                         setCreateAgentSchedule({ frequency: '', time: '12:00', days: [], selectedDay: '' })
                         setSelectedTools(new Set())
@@ -4692,6 +5281,12 @@ Describe the main purpose and goal of your agent...
                         setFilteredTools([])
                         setAtMentionPosition(0)
                         setCreateAgentDebugResponse(null)
+                        setNotificationSettings({
+                          sendToInbox: true,
+                          sendViaEmail: false,
+                          emailAddress: notificationSettings.emailAddress, // Keep the merchant's email
+                          emailFormat: "professional"
+                        })
                         setIsCreateAgentModalOpen(false)
                       }}
                       className="w-full rounded-md"
@@ -4706,6 +5301,44 @@ Describe the main purpose and goal of your agent...
           </DialogPrimitive.Content>
         </DialogPortal>
       </Dialog>
+
+      {/* Debug Dialog */}
+      {createAgentDebugResponse && (
+        <Dialog open={showDebugDialog} onOpenChange={setShowDebugDialog}>
+          <DialogPortal>
+            <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+            <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-3xl translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg overflow-hidden p-6">
+              <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground z-10">
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </DialogPrimitive.Close>
+              <div>
+                <h2 className="text-lg font-semibold mb-4">Debug Information</h2>
+                <div className="bg-gray-50 border border-gray-200 rounded-md p-3 mb-4">
+                  <h3 className="text-sm font-medium mb-2 text-gray-700">createAgentExecutionPlan Response</h3>
+                  <pre className="text-xs overflow-auto bg-white p-3 rounded-md max-h-[60vh] text-gray-700 whitespace-pre-wrap border border-gray-100 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-300">
+                    {createAgentDebugResponse}
+                  </pre>
+                </div>
+                <div className="flex justify-end">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => {
+                      setShowDebugDialog(false);
+                      setCreateAgentDebugResponse(null);
+                    }}
+                    className="rounded-md"
+                  >
+                    Clear & Close
+                  </Button>
+                </div>
+              </div>
+            </DialogPrimitive.Content>
+          </DialogPortal>
+        </Dialog>
+      )}
     </div>
   )
 } 
+

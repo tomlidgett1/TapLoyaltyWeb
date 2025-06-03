@@ -1,0 +1,1678 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useToast } from '@/components/ui/use-toast'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogOverlay, DialogPortal, DialogDescription } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import { Separator } from '@/components/ui/separator'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
+import { ArrowLeft, Bell, Headphones, Inbox, Brain, BarChart3, Receipt, Users, ShoppingCart, DollarSign, Calculator, Settings, Plus, FileText, Mail, MessageSquare, Clock, CheckCircle, X, ArrowUpRight, ChevronRightIcon, ChevronDown, Calendar, Wand2, Terminal, Puzzle, AlignLeft } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import Image from 'next/image'
+import { useAuth } from '@/contexts/auth-context'
+import { doc, setDoc, serverTimestamp, getDoc, updateDoc, collection, getDocs, query, orderBy, limit, addDoc, deleteDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import * as DialogPrimitive from "@radix-ui/react-dialog"
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from '@/components/ui/avatar'
+import {
+  TableBody,
+  TableCell,
+  TableColumnHeader,
+  TableHead,
+  TableHeader,
+  TableHeaderGroup,
+  TableProvider,
+  TableRow,
+} from '@/components/ui/kibo-ui/table'
+import type { ColumnDef } from '@/components/ui/kibo-ui/table'
+import { getFunctions, httpsCallable } from 'firebase/functions'
+import { Loader2 } from 'lucide-react'
+
+export default function AgentsPage() {
+  const router = useRouter()
+  const { toast } = useToast()
+  const { user } = useAuth()
+  const [isIntegrationsOpen, setIsIntegrationsOpen] = useState(false)
+  const [isRequestAgentOpen, setIsRequestAgentOpen] = useState(false)
+  const [isCustomerServiceModalOpen, setIsCustomerServiceModalOpen] = useState(false)
+  const [isEmailSummaryModalOpen, setIsEmailSummaryModalOpen] = useState(false)
+  const [isEmailExecutiveModalOpen, setIsEmailExecutiveModalOpen] = useState(false)
+  const [isCreateAgentModalOpen, setIsCreateAgentModalOpen] = useState(false)
+  const [connectingAgents, setConnectingAgents] = useState<Set<string>>(new Set())
+  const [enrolledAgents, setEnrolledAgents] = useState<Record<string, any>>({})
+  const [agentSettings, setAgentSettings] = useState({
+    autoReply: true,
+    vaultAccess: true,
+    webSearching: false,
+    lightspeedIntegration: {
+      enabled: false,
+      priceLookup: false,
+      inventoryLookup: false
+    },
+    squareIntegration: {
+      enabled: false,
+      priceLookup: false,
+      inventoryLookup: false
+    },
+    businessHours: {
+      enabled: true,
+      timezone: 'Australia/Sydney',
+      monday: { start: '09:00', end: '17:00', enabled: true },
+      tuesday: { start: '09:00', end: '17:00', enabled: true },
+      wednesday: { start: '09:00', end: '17:00', enabled: true },
+      thursday: { start: '09:00', end: '17:00', enabled: true },
+      friday: { start: '09:00', end: '17:00', enabled: true },
+      saturday: { start: '10:00', end: '16:00', enabled: false },
+      sunday: { start: '10:00', end: '16:00', enabled: false }
+    },
+    businessContext: '',
+    forbiddenResponses: [],
+    greeting: '',
+    signOff: '',
+    communicationStyle: 'professional'
+  })
+  const [testEmail, setTestEmail] = useState({
+    from: '',
+    subject: '',
+    body: '',
+    response: '',
+    isGenerating: false
+  })
+  const [showConfiguration, setShowConfiguration] = useState(false)
+  const [showEmailSummaryConfiguration, setShowEmailSummaryConfiguration] = useState(false)
+  const [showEmailExecutiveConfiguration, setShowEmailExecutiveConfiguration] = useState(false)
+  const [integrationStatuses, setIntegrationStatuses] = useState({
+    gmail: true,
+    mailchimp: false,
+    vault: true
+  })
+  const [requestForm, setRequestForm] = useState({
+    agentName: '',
+    description: '',
+    useCase: '',
+    integrations: '',
+    email: ''
+  })
+  const [businessContextItems, setBusinessContextItems] = useState<string[]>([])
+  const [newContextItem, setNewContextItem] = useState('')
+  const [activeConfigTab, setActiveConfigTab] = useState('general')
+  const [newRule, setNewRule] = useState('')
+  const [businessRules, setBusinessRules] = useState<string[]>([])
+  const [newForbiddenItem, setNewForbiddenItem] = useState('')
+  const [forbiddenItems, setForbiddenItems] = useState<string[]>([])
+  const [emailSummarySettings, setEmailSummarySettings] = useState({
+    enabled: true,
+    lookbackPeriod: '30',
+    schedule: {
+      frequency: 'daily',
+      time: '12:00',
+      days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+    },
+    emailFormat: 'summary',
+    priorityOnly: true,
+    includeAttachments: true
+  })
+  const [emailExecutiveSettings, setEmailExecutiveSettings] = useState({
+    enabled: true,
+    integration: 'gmail', // 'gmail' or 'outlook'
+    categories: [
+      { 
+        id: 'to-respond',
+        name: 'To respond', 
+        description: 'Emails you need to respond to',
+        color: '#EF4444',
+        enabled: true
+      },
+      { 
+        id: 'fyi',
+        name: 'FYI', 
+        description: 'Emails that don\'t require your response, but are important',
+        color: '#3B82F6',
+        enabled: true
+      },
+      { 
+        id: 'actioned',
+        name: 'Actioned', 
+        description: 'Emails you\'ve sent that you\'re not expecting a reply to',
+        color: '#6B7280',
+        enabled: true
+      },
+      { 
+        id: 'invoices',
+        name: 'Invoices', 
+        description: 'Billing and payment related emails',
+        color: '#10B981',
+        enabled: true
+      },
+      { 
+        id: 'customer-inquiries',
+        name: 'Customer inquiries', 
+        description: 'Questions and support requests from customers',
+        color: '#F59E0B',
+        enabled: true
+      },
+      { 
+        id: 'notifications',
+        name: 'Notifications', 
+        description: 'Automated updates from tools and services',
+        color: '#8B5CF6',
+        enabled: true
+      }
+    ],
+    draftSettings: {
+      enabled: true,
+      mode: 'all', // 'all', 'selected', 'none'
+      selectedCategories: [] as string[],
+      autoSend: false,
+      approvalRequired: true,
+      template: 'professional'
+    },
+    schedule: {
+      frequency: 'realtime', // 'realtime', 'hourly', 'daily'
+      time: '09:00'
+    },
+    rules: [] as Array<{
+      id: string;
+      emailAddresses: string;
+      domains: string;
+      subjects: string;
+      categoryId: string;
+    }>
+  })
+  const [showLogsView, setShowLogsView] = useState(false)
+  const [agentLogs, setAgentLogs] = useState<any[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
+  
+  // Notification settings state
+  const [notificationSettings, setNotificationSettings] = useState({
+    sendToInbox: true,
+    sendViaEmail: false,
+    emailAddress: "",
+    emailFormat: "professional" // "professional" or "simple"
+  })
+
+  // Create Agent Modal State
+  const [createAgentForm, setCreateAgentForm] = useState({
+    name: 'New Agent',
+    steps: ['']
+  })
+  const [showScheduleDropdown, setShowScheduleDropdown] = useState(false)
+  const [showToolsInLeftPanel, setShowToolsInLeftPanel] = useState(false) // Control tools visibility in left panel
+  const [createAgentSchedule, setCreateAgentSchedule] = useState({
+    frequency: '',
+    time: '12:00',
+    days: [] as string[],
+    selectedDay: '' // for weekly
+  })
+  const [isCreatingAgent, setIsCreatingAgent] = useState(false) // Add state for creating agent loading
+  const [isDeletingAgent, setIsDeletingAgent] = useState(false) // Add state for deleting agent
+  const [composioTools, setComposioTools] = useState<any[]>([])
+  const [toolsLoading, setToolsLoading] = useState(false)
+  const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set())
+  const [toolsSearchQuery, setToolsSearchQuery] = useState('') // Search query for tools in left panel
+  const [createAgentStepsTab, setCreateAgentStepsTab] = useState('smart') // Add tab state for agent steps
+  const [smartCreatePrompt, setSmartCreatePrompt] = useState('') // Add state for smart create prompt
+  const [isEditingAgentName, setIsEditingAgentName] = useState(false) // Add state for editing agent name
+  const [isGeneratingSteps, setIsGeneratingSteps] = useState(false) // Add state for generating steps
+  const [generatedStepsText, setGeneratedStepsText] = useState('') // Add state for generated steps text
+  const [structuredPrompt, setStructuredPrompt] = useState('') // Add state for structured prompt
+  const [agentIdeas, setAgentIdeas] = useState<any>(null) // Add state for agent ideas response
+  const [isLoadingAgentIdeas, setIsLoadingAgentIdeas] = useState(false) // Add state for loading agent ideas
+  const [expandedAgentIdeas, setExpandedAgentIdeas] = useState<Set<string>>(new Set()) // Add state for expanded agent ideas
+  const [showSmartCreateInput, setShowSmartCreateInput] = useState(false) // Add state for smart create input
+  const [agentCanvasContent, setAgentCanvasContent] = useState('') // Add state for agent canvas content
+  const [showToolsDropdown, setShowToolsDropdown] = useState(false) // Add state for tools dropdown
+  const [toolsDropdownQuery, setToolsDropdownQuery] = useState('') // Add state for tools dropdown query
+  const [selectedToolIndex, setSelectedToolIndex] = useState(0) // Add state for selected tool index
+  const [filteredTools, setFilteredTools] = useState<any[]>([]) // Add state for filtered tools
+  const [atMentionPosition, setAtMentionPosition] = useState(0) // Add state for @ mention position
+  const [createAgentDebugResponse, setCreateAgentDebugResponse] = useState<string | null>(null) // Add state for debugging
+  const [isEditingCanvas, setIsEditingCanvas] = useState(false) // Add state for canvas edit mode
+  const [showDebugDialog, setShowDebugDialog] = useState(false) // Control debug dialog visibility
+
+  // Email Rule State for adding new rules
+  const [emailRule, setEmailRule] = useState({
+    emailAddresses: '',
+    domains: '',
+    subjects: '',
+    categoryId: ''
+  })
+
+  // Custom Agents State
+  const [customAgents, setCustomAgents] = useState<any[]>([])
+  const [customAgentsLoading, setCustomAgentsLoading] = useState(false)
+  const [selectedCustomAgent, setSelectedCustomAgent] = useState<any>(null) // Add state for selected custom agent
+
+  // Define agent type
+  type Agent = {
+    id: string
+    name: string
+    description: string
+    status: 'active' | 'coming-soon'
+    features: string[]
+    integrations: string[]
+    requiredIntegrations?: string[]
+    optionalIntegrations?: string[]
+    customisable?: boolean
+    frequencies?: string[]
+  }
+
+  // Define agents organized by sections
+  const agentSections: Record<string, Agent[]> = {
+    'Customer Service': [
+      {
+        id: 'customer-service',
+        name: 'Customer Service Agent',
+        description: 'Handle customer inquiries and support requests automatically with AI-powered responses',
+        status: 'active' as const,
+        features: ['24/7 Support', 'Auto-responses', 'Ticket routing', 'Sentiment analysis'],
+        integrations: ['gmail.png', 'vault.png'],
+        requiredIntegrations: ['gmail.png', 'vault.png'],
+        optionalIntegrations: ['square.png', 'lslogo.png']
+      },
+      {
+        id: 'email-summary',
+        name: 'Email Summary Agent',
+        description: 'Summarise and analyse your email communications for better customer insights',
+        status: 'active' as const,
+        features: ['Daily summaries', 'Priority detection', 'Action items', 'Thread analysis'],
+        integrations: ['gmail.png']
+      },
+      {
+        id: 'email-executive',
+        name: 'Email Executive Assistant',
+        description: 'Automatically categorise incoming emails and draft professional responses based on your custom categories',
+        status: 'active' as const,
+        features: ['Email categorisation', 'Auto-draft responses', 'Custom categories', 'Multi-platform support'],
+        integrations: ['gmail.png'],
+        requiredIntegrations: ['gmail.png'],
+        optionalIntegrations: ['outlook.png']
+      }
+    ]
+  }
+
+  // Define integration name mapping
+  const integrationNames: Record<string, string> = {
+    'gmail.png': 'Gmail',
+    'mailchimp.png': 'Mailchimp',
+    'xero.png': 'Xero',
+    'square.png': 'Square',
+    'lslogo.png': 'Lightspeed',
+    'vault.png': 'Vault',
+    'outlook.png': 'Outlook'
+  }
+
+  // Define available integrations
+  const availableIntegrations = [
+    { id: 'xero', name: 'Xero', description: 'Accounting and bookkeeping', logo: 'xero.png', status: 'active' },
+    { id: 'square', name: 'Square', description: 'Point of sale system', logo: 'square.png', status: 'active' },
+    { id: 'lightspeed', name: 'Lightspeed', description: 'Retail POS system', logo: 'lslogo.png', status: 'active' },
+    { id: 'gmail', name: 'Gmail', description: 'Email communication', logo: 'gmail.png', status: 'active' },
+    { id: 'mailchimp', name: 'Mailchimp', description: 'Email marketing', logo: 'mailchimp.png', status: 'active' },
+    { id: 'shopify', name: 'Shopify', description: 'E-commerce platform', logo: 'square.png', status: 'coming-soon' },
+    { id: 'stripe', name: 'Stripe', description: 'Payment processing', logo: 'square.png', status: 'coming-soon' },
+    { id: 'quickbooks', name: 'QuickBooks', description: 'Accounting software', logo: 'xero.png', status: 'coming-soon' },
+    { id: 'hubspot', name: 'HubSpot', description: 'CRM and marketing', logo: 'mailchimp.png', status: 'coming-soon' },
+    { id: 'salesforce', name: 'Salesforce', description: 'Customer relationship management', logo: 'square.png', status: 'coming-soon' },
+  ]
+
+  // Load enrolled agents when component mounts
+  useEffect(() => {
+    const loadEnrolledAgents = async () => {
+      if (!user?.uid) return
+      
+      try {
+        // Load customer-service agent
+        const customerServiceRef = doc(db, 'merchants', user.uid, 'agentsenrolled', 'customer-service')
+        const customerServiceDoc = await getDoc(customerServiceRef)
+        
+        if (customerServiceDoc.exists()) {
+          const agentData = customerServiceDoc.data()
+          setEnrolledAgents(prev => ({
+            ...prev,
+            'customer-service': agentData
+          }))
+        }
+
+        // Load email-summary agent
+        const emailSummaryRef = doc(db, 'merchants', user.uid, 'agentsenrolled', 'email-summary')
+        const emailSummaryDoc = await getDoc(emailSummaryRef)
+        
+        if (emailSummaryDoc.exists()) {
+          const agentData = emailSummaryDoc.data()
+          setEnrolledAgents(prev => ({
+            ...prev,
+            'email-summary': agentData
+          }))
+          
+          // Update local settings if they exist
+          if (agentData.settings) {
+            setEmailSummarySettings(agentData.settings)
+          }
+        }
+
+        // Load email-executive agent
+        const emailExecutiveRef = doc(db, 'merchants', user.uid, 'agentsenrolled', 'email-executive')
+        const emailExecutiveDoc = await getDoc(emailExecutiveRef)
+        
+        if (emailExecutiveDoc.exists()) {
+          const agentData = emailExecutiveDoc.data()
+          setEnrolledAgents(prev => ({
+            ...prev,
+            'email-executive': agentData
+          }))
+          
+          // Update local settings if they exist
+          if (agentData.settings) {
+            // Preserve the new predefined categories but load other settings
+            setEmailExecutiveSettings(prev => ({
+              ...prev,
+              enabled: agentData.settings.enabled ?? prev.enabled,
+              integration: agentData.settings.integration ?? prev.integration,
+              draftSettings: agentData.settings.draftSettings ?? prev.draftSettings,
+              schedule: agentData.settings.schedule ?? prev.schedule,
+              rules: agentData.settings.rules ?? prev.rules
+            }))
+          }
+        }
+      } catch (error) {
+        console.error('Error loading enrolled agents:', error)
+      }
+    }
+
+    loadEnrolledAgents()
+  }, [user?.uid])
+
+  // Load agent logs when showLogsView is true
+  useEffect(() => {
+    const loadAgentLogs = async () => {
+      if (!showLogsView || !user?.uid) return
+      
+      setLogsLoading(true)
+      try {
+        const executionsRef = collection(db, 'agentlogs', user.uid, 'executions')
+        const logsQuery = query(executionsRef, orderBy('executedAt', 'desc'), limit(50))
+        const querySnapshot = await getDocs(logsQuery)
+        
+        const logs = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        
+        setAgentLogs(logs)
+      } catch (error) {
+        console.error('Error loading agent logs:', error)
+        toast({
+          title: "Failed to Load Logs",
+          description: "Could not load agent execution logs. Please try again.",
+          variant: "destructive"
+        })
+      } finally {
+        setLogsLoading(false)
+      }
+    }
+
+    loadAgentLogs()
+  }, [showLogsView, user?.uid, toast])
+
+  // Load custom agents when component mounts
+  useEffect(() => {
+    const loadCustomAgents = async () => {
+      if (!user?.uid) return
+      
+      setCustomAgentsLoading(true)
+      try {
+        const agentsRef = collection(db, 'merchants', user.uid, 'agentsenrolled')
+        const customAgentsQuery = query(agentsRef, orderBy('enrolledAt', 'desc'))
+        const querySnapshot = await getDocs(customAgentsQuery)
+        
+        const customAgentsList = querySnapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }))
+          .filter((agent: any) => agent.type === 'custom')
+        
+        setCustomAgents(customAgentsList)
+      } catch (error) {
+        console.error('Error loading custom agents:', error)
+        toast({
+          title: "Failed to Load Custom Agents",
+          description: "Could not load your custom agents. Please try again.",
+          variant: "destructive"
+        })
+      } finally {
+        setCustomAgentsLoading(false)
+      }
+    }
+
+    loadCustomAgents()
+  }, [user?.uid, toast])
+
+  // Load Composio tools when create agent modal opens
+  useEffect(() => {
+    const loadComposioTools = async () => {
+      if (!isCreateAgentModalOpen || !user?.uid) {
+        console.log('🔧 [Frontend] Skipping tools load - modal closed or no user:', { 
+          modalOpen: isCreateAgentModalOpen, 
+          hasUser: !!user?.uid 
+        })
+        return
+      }
+      
+      console.log('🔧 [Frontend] Starting to load Composio tools...')
+      console.log('🔧 [Frontend] User ID:', user.uid)
+      console.log('🔧 [Frontend] Search query:', toolsSearchQuery)
+      
+      setToolsLoading(true)
+      try {
+        // Fetch merchant's primary email for notification settings
+        try {
+          const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
+          if (merchantDoc.exists() && merchantDoc.data().primaryemail) {
+            setNotificationSettings(prev => ({
+              ...prev,
+              emailAddress: merchantDoc.data().primaryemail
+            }))
+          }
+        } catch (error) {
+          console.error('Error fetching merchant data:', error)
+        }
+        
+        const params = new URLSearchParams({
+          merchantId: user.uid
+        })
+        
+        if (toolsSearchQuery) {
+          params.append('search', toolsSearchQuery)
+          console.log('🔧 [Frontend] Added search parameter:', toolsSearchQuery)
+        }
+        
+        const apiUrl = `/api/composio/tools?${params}`
+        console.log('🔧 [Frontend] Making request to:', apiUrl)
+        
+        const response = await fetch(apiUrl)
+        
+        console.log('🔧 [Frontend] Response received')
+        console.log('🔧 [Frontend] Response status:', response.status)
+        console.log('🔧 [Frontend] Response statusText:', response.statusText)
+        console.log('🔧 [Frontend] Response headers:', Object.fromEntries(response.headers.entries()))
+        
+        if (!response.ok) {
+          console.log('❌ [Frontend] Response not ok, trying to get error details...')
+          
+          let errorText = ''
+          try {
+            errorText = await response.text()
+            console.log('❌ [Frontend] Error response body:', errorText)
+          } catch (e) {
+            console.log('❌ [Frontend] Could not read error response:', e)
+          }
+          
+          throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`)
+        }
+        
+        console.log('🔧 [Frontend] Parsing response JSON...')
+        const data = await response.json()
+        
+        console.log('🔧 [Frontend] Received data:', {
+          hasItems: !!data.items,
+          itemsCount: data.items?.length || 0,
+          totalPages: data.total_pages,
+          nextCursor: data.next_cursor,
+          error: data.error,
+          details: data.details
+        })
+        
+        if (data.error) {
+          console.log('❌ [Frontend] API returned error:', data)
+          
+          // Handle specific error types
+          if (data.error.includes('Invalid Composio API key') || data.details?.includes('Authentication failed')) {
+            console.log('❌ [Frontend] Composio API key authentication error')
+            console.log('❌ [Frontend] Troubleshooting info:', data.troubleshooting)
+            
+            toast({
+              title: "Composio API Key Invalid",
+              description: "Your Composio API key is invalid or expired. Please check your configuration.",
+              variant: "destructive"
+            })
+            
+            // Show detailed error in console for debugging
+            console.group('🔧 [Frontend] Composio API Key Troubleshooting')
+            console.log('API Key Found:', data.apiKeyFound)
+            console.log('API Key Length:', data.apiKeyLength)
+            if (data.troubleshooting) {
+              console.log('Troubleshooting Steps:')
+              data.troubleshooting.forEach((step: string, index: number) => {
+                console.log(`${index + 1}. ${step}`)
+              })
+            }
+            console.groupEnd()
+            
+            return
+          }
+          
+          throw new Error(`API Error: ${data.error} - ${data.details}`)
+        }
+        
+        setComposioTools(data.items || [])
+        console.log('✅ [Frontend] Tools loaded successfully, count:', data.items?.length || 0)
+        
+      } catch (error) {
+        console.error('❌ [Frontend] Error loading Composio tools:', error)
+        console.error('❌ [Frontend] Error name:', error instanceof Error ? error.name : typeof error)
+        console.error('❌ [Frontend] Error message:', error instanceof Error ? error.message : String(error))
+        console.error('❌ [Frontend] Error stack:', error instanceof Error ? error.stack : 'No stack trace')
+        
+        toast({
+          title: "Failed to Load Tools",
+          description: `Could not load available tools: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          variant: "destructive"
+        })
+      } finally {
+        setToolsLoading(false)
+        console.log('🔧 [Frontend] Tools loading completed')
+      }
+    }
+
+    loadComposioTools()
+  }, [isCreateAgentModalOpen, toolsSearchQuery, toast, user?.uid])
+
+  // Debounced search for tools
+  useEffect(() => {
+    if (!isCreateAgentModalOpen || !user?.uid) return
+    
+    const timer = setTimeout(() => {
+      // Trigger tools reload when search query changes
+      if (toolsSearchQuery !== '') {
+        setToolsLoading(true)
+        const loadTools = async () => {
+          try {
+            const params = new URLSearchParams({
+              merchantId: user.uid,
+              search: toolsSearchQuery
+            })
+            
+            const response = await fetch(`/api/composio/tools?${params}`)
+            if (!response.ok) throw new Error('Failed to fetch tools')
+            
+            const data = await response.json()
+            setComposioTools(data.items || [])
+          } catch (error) {
+            console.error('Error searching tools:', error)
+          } finally {
+            setToolsLoading(false)
+          }
+        }
+        loadTools()
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [toolsSearchQuery, isCreateAgentModalOpen, user?.uid])
+
+  // Filter tools based on @ mention query
+  useEffect(() => {
+    if (toolsDropdownQuery !== undefined) {
+      const filtered = composioTools.filter(tool => 
+        tool.name.toLowerCase().includes(toolsDropdownQuery) ||
+        tool.toolkit?.name?.toLowerCase().includes(toolsDropdownQuery)
+      )
+      setFilteredTools(filtered)
+      setSelectedToolIndex(0) // Reset selection
+    }
+  }, [toolsDropdownQuery, composioTools])
+
+  const handleAgentAction = async (agent: Agent) => {
+    if (agent.id === 'email-summary') {
+      setIsEmailSummaryModalOpen(true)
+    } else if (agent.id === 'email-executive') {
+      setIsEmailExecutiveModalOpen(true)
+    } else if (agent.id === 'insights') {
+      router.push('/insights')
+    } else if (agent.id === 'customer-service') {
+      // Open the customer service modal
+      setIsCustomerServiceModalOpen(true)
+    } else if (agent.id === 'sales-analysis') {
+      toast({
+        title: "Sales Analysis Agent",
+        description: "Sales analysis agent functionality coming soon!"
+      })
+    } else {
+      toast({
+        title: agent.name,
+        description: `${agent.name} functionality coming soon!`
+      })
+    }
+  }
+
+  const handleIntegrationConnect = (integration: typeof availableIntegrations[0]) => {
+    if (integration.status === 'active') {
+      toast({
+        title: `${integration.name} Connected`,
+        description: `Successfully connected to ${integration.name}!`
+      })
+    } else {
+      toast({
+        title: `${integration.name}`,
+        description: `${integration.name} integration coming soon!`
+      })
+    }
+    setIsIntegrationsOpen(false)
+  }
+
+  const handleRequestFormChange = (field: string, value: string) => {
+    setRequestForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleRequestSubmit = () => {
+    if (!requestForm.agentName || !requestForm.description || !requestForm.email) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Here you would typically send the request to your backend
+    toast({
+      title: "Request Submitted!",
+      description: "We'll review your agent request and get back to you soon."
+    })
+    
+    // Reset form and close dialog
+    setRequestForm({
+      agentName: '',
+      description: '',
+      useCase: '',
+      integrations: '',
+      email: ''
+    })
+    setIsRequestAgentOpen(false)
+  }
+
+  const handleCustomerServiceConnect = async () => {
+    const agent = agentSections['Customer Service'].find(a => a.id === 'customer-service')
+    if (!agent) return
+
+    // Set loading state
+    setConnectingAgents(prev => new Set([...prev, agent.id]))
+    
+    try {
+      // Get merchantId from authenticated user
+      if (!user?.uid) {
+        throw new Error('User not authenticated')
+      }
+      
+      const merchantId = user.uid
+      const isEnrolled = enrolledAgents['customer-service']?.status === 'active'
+      
+      if (isEnrolled) {
+        // Handle disconnect
+        const agentEnrollmentRef = doc(db, 'merchants', merchantId, 'agentsenrolled', 'customer-service')
+        await updateDoc(agentEnrollmentRef, {
+          status: 'inactive',
+          deactivatedAt: serverTimestamp(),
+          lastUpdated: serverTimestamp()
+        })
+        
+        // Update local state
+        setEnrolledAgents(prev => ({
+          ...prev,
+          'customer-service': {
+            ...prev['customer-service'],
+            status: 'inactive'
+          }
+        }))
+        
+        toast({
+          title: "Customer Service Agent Disconnected",
+          description: "Agent has been deactivated successfully."
+        })
+      } else {
+        // Handle connect
+        const response = await fetch('/api/enrollGmailTrigger', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ merchantId })
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+          
+          // Check if agent document already exists to preserve settings
+          const agentEnrollmentRef = doc(db, 'merchants', merchantId, 'agentsenrolled', 'customer-service')
+          const existingDoc = await getDoc(agentEnrollmentRef)
+          
+          // Prepare the base agent data
+          const baseAgentData = {
+            agentId: 'customer-service',
+            agentName: 'Customer Service Agent',
+            agentType: 'gmail-trigger',
+            status: 'active',
+            enrolledAt: serverTimestamp(),
+            triggerDetails: {
+              triggerName: 'GMAIL_NEW_GMAIL_MESSAGE',
+              app: 'gmail',
+              triggerId: result.data?.triggerId,
+              entityId: result.data?.entityId,
+              triggerStatus: result.data?.status
+            },
+            description: 'Handle customer inquiries and support requests automatically with AI-powered responses',
+            features: ['24/7 Support', 'Auto-responses', 'Ticket routing', 'Sentiment analysis'],
+            integrations: ['gmail'],
+            lastUpdated: serverTimestamp()
+          }
+          
+          // If document exists, preserve existing settings, otherwise use defaults
+          const agentData = existingDoc.exists() 
+            ? {
+                ...baseAgentData,
+                settings: existingDoc.data().settings || {
+                  autoReply: agentSettings.autoReply
+                }
+              }
+            : {
+                ...baseAgentData,
+                settings: {
+                  autoReply: agentSettings.autoReply
+                }
+              }
+          
+          try {
+            await setDoc(agentEnrollmentRef, agentData)
+            
+            // Update local state
+            setEnrolledAgents(prev => ({
+              ...prev,
+              'customer-service': agentData
+            }))
+            
+            console.log('✅ Agent enrollment saved to Firestore')
+          } catch (firestoreError) {
+            console.error('❌ Failed to save enrollment to Firestore:', firestoreError)
+            // Don't fail the whole operation if Firestore save fails
+          }
+          
+          toast({
+            title: "Customer Service Agent Connected!",
+            description: "Gmail trigger has been enrolled successfully."
+          })
+          
+          // Close the modal
+          setIsCustomerServiceModalOpen(false)
+        } else {
+          const error = await response.json()
+          throw new Error(error.error || error.message || 'Failed to enroll Gmail trigger')
+        }
+      }
+    } catch (error) {
+      console.error('Error handling agent action:', error)
+      toast({
+        title: "Action Failed",
+        description: error instanceof Error ? error.message : "Failed to perform agent action. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      // Remove loading state
+      setConnectingAgents(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(agent.id)
+        return newSet
+      })
+    }
+  }
+
+  const handleEmailSummaryConnect = async () => {
+    const agent = agentSections['Customer Service'].find(a => a.id === 'email-summary')
+    if (!agent) return
+
+    // Set loading state
+    setConnectingAgents(prev => new Set([...prev, agent.id]))
+    
+    try {
+      // Get merchantId from authenticated user
+      if (!user?.uid) {
+        throw new Error('User not authenticated')
+      }
+      
+      const merchantId = user.uid
+      const isEnrolled = enrolledAgents['email-summary']?.status === 'active'
+      
+      if (isEnrolled) {
+        // Handle disconnect
+        const agentEnrollmentRef = doc(db, 'merchants', merchantId, 'agentsenrolled', 'email-summary')
+        await updateDoc(agentEnrollmentRef, {
+          status: 'inactive',
+          deactivatedAt: serverTimestamp(),
+          lastUpdated: serverTimestamp()
+        })
+        
+        // Update local state
+        setEnrolledAgents(prev => ({
+          ...prev,
+          'email-summary': {
+            ...prev['email-summary'],
+            status: 'inactive'
+          }
+        }))
+        
+        toast({
+          title: "Email Summary Agent Disconnected",
+          description: "Agent has been deactivated successfully."
+        })
+      } else {
+        // Handle connect - Email Summary Agent doesn't need special API calls like Gmail trigger
+        const agentEnrollmentRef = doc(db, 'merchants', merchantId, 'agentsenrolled', 'email-summary')
+        const existingDoc = await getDoc(agentEnrollmentRef)
+        
+        // Generate a unique schedule ID
+        const scheduleId = `${merchantId}_email-summary_${Date.now()}`
+        
+        // Prepare the base agent data
+        const baseAgentData = {
+          agentId: 'email-summary',
+          agentName: 'Email Summary Agent',
+          agentType: 'email-summary',
+          status: 'active',
+          enrolledAt: serverTimestamp(),
+          description: 'Summarise and analyse your email communications for better customer insights',
+          features: ['Daily summaries', 'Priority detection', 'Action items', 'Thread analysis'],
+          integrations: ['gmail'],
+          lastUpdated: serverTimestamp(),
+          scheduleId: scheduleId // Store reference to schedule document
+        }
+        
+        // If document exists, preserve existing settings, otherwise use defaults
+        const agentData = existingDoc.exists() 
+          ? {
+              ...baseAgentData,
+              settings: existingDoc.data().settings || emailSummarySettings
+            }
+          : {
+              ...baseAgentData,
+              settings: emailSummarySettings
+            }
+        
+        await setDoc(agentEnrollmentRef, agentData)
+        
+        // Also save schedule data to top-level agentschedule collection
+        const scheduleRef = doc(db, 'agentschedule', scheduleId)
+        const scheduleData = {
+          merchantId: merchantId,
+          agentname: 'email-summary',
+          agentId: 'email-summary',
+          agentName: 'Email Summary Agent',
+          schedule: agentData.settings.schedule,
+          enabled: agentData.settings.enabled,
+          createdAt: serverTimestamp(),
+          lastUpdated: serverTimestamp()
+        }
+        
+        await setDoc(scheduleRef, scheduleData)
+        
+        // Update local state
+        setEnrolledAgents(prev => ({
+          ...prev,
+          'email-summary': agentData
+        }))
+        
+        toast({
+          title: "Email Summary Agent Connected!",
+          description: "Agent has been activated successfully."
+        })
+        
+        // Close the modal
+        setIsEmailSummaryModalOpen(false)
+      }
+    } catch (error) {
+      console.error('Error handling Email Summary agent action:', error)
+      toast({
+        title: "Action Failed",
+        description: error instanceof Error ? error.message : "Failed to perform agent action. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      // Remove loading state
+      setConnectingAgents(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(agent.id)
+        return newSet
+      })
+    }
+  }
+
+  const handleEmailExecutiveConnect = async () => {
+    const agent = agentSections['Customer Service'].find(a => a.id === 'email-executive')
+    if (!agent) return
+
+    // Set loading state
+    setConnectingAgents(prev => new Set([...prev, agent.id]))
+    
+    try {
+      // Get merchantId from authenticated user
+      if (!user?.uid) {
+        throw new Error('User not authenticated')
+      }
+      
+      const merchantId = user.uid
+      const isEnrolled = enrolledAgents['email-executive']?.status === 'active'
+      
+      if (isEnrolled) {
+        // Handle disconnect
+        const agentEnrollmentRef = doc(db, 'merchants', merchantId, 'agentsenrolled', 'email-executive')
+        await updateDoc(agentEnrollmentRef, {
+          status: 'inactive',
+          deactivatedAt: serverTimestamp(),
+          lastUpdated: serverTimestamp()
+        })
+        
+        // Update local state
+        setEnrolledAgents(prev => ({
+          ...prev,
+          'email-executive': {
+            ...prev['email-executive'],
+            status: 'inactive'
+          }
+        }))
+        
+        toast({
+          title: "Email Executive Assistant Disconnected",
+          description: "Agent has been deactivated successfully."
+        })
+      } else {
+        // Handle connect
+        const agentEnrollmentRef = doc(db, 'merchants', merchantId, 'agentsenrolled', 'email-executive')
+        const existingDoc = await getDoc(agentEnrollmentRef)
+        
+        // Generate a unique schedule ID
+        const scheduleId = `${merchantId}_email-executive_${Date.now()}`
+        
+        // Prepare the base agent data
+        const baseAgentData = {
+          agentId: 'email-executive',
+          agentName: 'Email Executive Assistant',
+          agentType: 'email-executive',
+          status: 'active',
+          enrolledAt: serverTimestamp(),
+          description: 'Automatically categorise incoming emails and draft professional responses based on your custom categories',
+          features: ['Email categorisation', 'Auto-draft responses', 'Custom categories', 'Multi-platform support'],
+          integrations: [emailExecutiveSettings.integration],
+          lastUpdated: serverTimestamp(),
+          scheduleId: scheduleId // Store reference to schedule document
+        }
+        
+        // Prepare settings with capitalised category IDs for Firestore
+        const settingsForFirestore = prepareSettingsForFirestore(emailExecutiveSettings)
+        
+        // If document exists, preserve existing settings, otherwise use defaults
+        const agentData = existingDoc.exists() 
+          ? {
+              ...baseAgentData,
+              settings: existingDoc.data().settings || settingsForFirestore
+            }
+          : {
+              ...baseAgentData,
+              settings: settingsForFirestore
+            }
+        
+        await setDoc(agentEnrollmentRef, agentData)
+        
+        // Also save schedule data to top-level agentschedule collection if not realtime
+        if (emailExecutiveSettings.schedule.frequency !== 'realtime') {
+          const scheduleRef = doc(db, 'agentschedule', scheduleId)
+          const scheduleData = {
+            merchantId: merchantId,
+            agentname: 'email-executive',
+            agentId: 'email-executive',
+            agentName: 'Email Executive Assistant',
+            schedule: agentData.settings.schedule,
+            enabled: agentData.settings.enabled,
+            createdAt: serverTimestamp(),
+            lastUpdated: serverTimestamp()
+          }
+          
+          await setDoc(scheduleRef, scheduleData)
+        }
+        
+        // Update local state
+        setEnrolledAgents(prev => ({
+          ...prev,
+          'email-executive': agentData
+        }))
+        
+        // Call categorizeEmails Firebase function
+        try {
+          const functions = getFunctions()
+          const categorizeEmails = httpsCallable(functions, 'categorizeEmails')
+          
+          await categorizeEmails({
+            merchantId: merchantId
+          })
+          
+          console.log('✅ categorizeEmails function called successfully')
+        } catch (functionError) {
+          console.error('❌ Error calling categorizeEmails function:', functionError)
+          // Don't fail the whole connection process if the function call fails
+        }
+        
+        toast({
+          title: "Email Executive Assistant Connected!",
+          description: "Agent has been activated successfully."
+        })
+        
+        // Close the modal
+        setIsEmailExecutiveModalOpen(false)
+      }
+    } catch (error) {
+      console.error('Error handling Email Executive assistant action:', error)
+      toast({
+        title: "Action Failed",
+        description: error instanceof Error ? error.message : "Failed to perform agent action. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      // Remove loading state
+      setConnectingAgents(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(agent.id)
+        return newSet
+      })
+    }
+  }
+
+  // Sample agent logs data - Remove this section
+  const statuses = [
+    { id: '1', name: 'Success', color: '#10B981' },
+    { id: '2', name: 'Failed', color: '#EF4444' },
+    { id: '3', name: 'Running', color: '#F59E0B' },
+    { id: '4', name: 'Scheduled', color: '#6B7280' },
+  ]
+
+  const agentsForLogs = [
+    { id: '1', name: 'Customer Service Agent', avatar: '/gmail.png' },
+    { id: '2', name: 'Email Summary Agent', avatar: '/gmail.png' },
+    { id: '3', name: 'Sales Analysis Agent', avatar: '/square.png' },
+  ]
+
+  const sampleLogs = Array.from({ length: 25 }).map((_, index) => ({
+    id: `log-${index + 1}`,
+    agent: agentsForLogs[index % agentsForLogs.length],
+    executedAt: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000), // Random date within last week
+    duration: Math.floor(Math.random() * 300) + 5, // 5-305 seconds
+    status: statuses[Math.floor(Math.random() * statuses.length)],
+    tasksCompleted: Math.floor(Math.random() * 20) + 1,
+    message: index % 4 === 1 ? 'Rate limit exceeded' : index % 7 === 2 ? 'Authentication failed' : 'Completed successfully',
+    type: ['Scheduled', 'Manual', 'Triggered'][Math.floor(Math.random() * 3)],
+  }))
+
+  // Helper function to get status color
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'success':
+      case 'completed':
+        return '#10B981'
+      case 'failed':
+      case 'error':
+        return '#EF4444'
+      case 'running':
+      case 'in_progress':
+        return '#F59E0B'
+      default:
+        return '#6B7280'
+    }
+  }
+
+  // Helper function to get agent avatar
+  const getAgentAvatar = (agentname: string) => {
+    if (agentname?.toLowerCase().includes('customer') || agentname?.toLowerCase().includes('email')) {
+      return '/gmail.png'
+    } else if (agentname?.toLowerCase().includes('sales') || agentname?.toLowerCase().includes('square')) {
+      return '/square.png'
+    }
+    return '/gmail.png' // default
+  }
+
+  // Define table columns for agent logs
+  const logColumns: ColumnDef<any>[] = [
+    {
+      accessorKey: 'agentname',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Agent" />
+      ),
+      cell: ({ row }) => (
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={getAgentAvatar(row.original.agentname)} />
+              <AvatarFallback className="text-xs">
+                {row.original.agentname?.slice(0, 2) || 'AG'}
+              </AvatarFallback>
+            </Avatar>
+            <div
+              className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background"
+              style={{
+                backgroundColor: getStatusColor(row.original.status),
+              }}
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-medium text-sm truncate">{row.original.agentname || 'Unknown Agent'}</div>
+            <div className="flex items-center gap-1 text-muted-foreground text-xs">
+              <span>{row.original.toolsExecuted || 0} tools executed</span>
+              <ChevronRightIcon size={12} />
+              <span>{row.original.successfulTools || 0} successful</span>
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'executedAt',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Executed At" />
+      ),
+      cell: ({ row }) => {
+        const executedAt = row.original.executedAt
+        if (!executedAt) return 'Unknown'
+        
+        // Handle Firestore timestamp
+        const date = executedAt.toDate ? executedAt.toDate() : new Date(executedAt)
+        return new Intl.DateTimeFormat('en-US', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }).format(date)
+      },
+    },
+    {
+      accessorKey: 'toolsCalled',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Tools Called" />
+      ),
+      cell: ({ row }) => {
+        const toolsCalled = row.original.toolsCalled || []
+        return (
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-medium">{toolsCalled.length} tools</span>
+            {toolsCalled.length > 0 && (
+              <div className="text-xs text-muted-foreground">
+                {toolsCalled.slice(0, 2).map((tool: any, index: number) => {
+                  // Handle different possible structures
+                  let toolName = ''
+                  if (typeof tool === 'string') {
+                    toolName = tool
+                  } else if (tool && typeof tool === 'object') {
+                    toolName = tool.name || tool.id || 'Unknown Tool'
+                  } else {
+                    toolName = 'Unknown Tool'
+                  }
+                  
+                  return (
+                    <span key={index} className="block truncate max-w-32" title={toolName}>
+                      {toolName}
+                    </span>
+                  )
+                })}
+                {toolsCalled.length > 2 && (
+                  <span>+{toolsCalled.length - 2} more</span>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: 'status',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Status" />
+      ),
+      cell: ({ row }) => {
+        const status = row.original.status || 'unknown'
+        return (
+          <div className="flex items-center gap-2">
+            <div
+              className="h-2 w-2 rounded-full"
+              style={{ backgroundColor: getStatusColor(status) }}
+            />
+            <span className="text-sm font-medium capitalize">{status}</span>
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: 'details',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Connected Apps" />
+      ),
+      cell: ({ row }) => {
+        const connectedApps = row.original.details?.connectedApps || []
+        if (connectedApps.length === 0) return <span className="text-xs text-muted-foreground">None</span>
+        
+        return (
+          <div className="flex items-center gap-1">
+            {connectedApps.slice(0, 3).map((app: string, index: number) => (
+              <div key={index} className="text-xs bg-gray-100 px-2 py-1 rounded">
+                {app}
+              </div>
+            ))}
+            {connectedApps.length > 3 && (
+              <span className="text-xs text-muted-foreground">+{connectedApps.length - 3}</span>
+            )}
+          </div>
+        )
+      },
+    },
+  ]
+
+  // Helper function to insert tool mention
+  const insertToolMention = (tool: any) => {
+    const toolName = tool.name.replace(/^(GMAIL_|GOOGLECALENDAR_)/i, '').toLowerCase().replace(/_/g, ' ')
+    const beforeAt = agentCanvasContent.substring(0, atMentionPosition)
+    const afterMention = agentCanvasContent.substring(agentCanvasContent.indexOf(' ', atMentionPosition) === -1 
+      ? agentCanvasContent.length 
+      : agentCanvasContent.indexOf(' ', atMentionPosition))
+    
+    const newContent = beforeAt + `@${toolName}` + afterMention
+    setAgentCanvasContent(newContent)
+    setShowToolsDropdown(false)
+    setSelectedToolIndex(0)
+  }
+
+  // Helper function to capitalise the first letter of a string
+  const capitaliseFirstLetter = (str: string) => {
+    return str.charAt(0).toUpperCase() + str.slice(1)
+  }
+
+  // Helper function to prepare settings for Firestore with capitalised category IDs
+  const prepareSettingsForFirestore = (settings: typeof emailExecutiveSettings) => {
+    return {
+      ...settings,
+      categories: settings.categories.map(category => ({
+        ...category,
+        id: capitaliseFirstLetter(category.id)
+      })),
+      rules: settings.rules.map(rule => ({
+        ...rule,
+        categoryId: capitaliseFirstLetter(rule.categoryId)
+      })),
+      draftSettings: {
+        ...settings.draftSettings,
+        selectedCategories: settings.draftSettings.selectedCategories.map(categoryId => 
+          capitaliseFirstLetter(categoryId)
+        )
+      }
+    }
+  }
+
+  // Helper function to get tool logo for a given tool name
+  const getToolLogo = (toolName: string) => {
+    // Map tool names to their corresponding integration logos
+    const toolLogoMap: Record<string, string> = {
+      'gmail_send_email': '/gmail.png',
+      'gmail_create_email_draft': '/gmail.png',
+      'gmail_fetch_emails': '/gmail.png',
+      'gmail_reply_to_thread': '/gmail.png',
+      'googlecalendar_create_event': '/gmail.png', // Using gmail as fallback for calendar
+      'googlecalendar_find_event': '/gmail.png',
+      'googlecalendar_sync_events': '/gmail.png',
+      'googlesheets_create_google_sheet1': '/gmail.png', // Using gmail as fallback for sheets
+      'googlesheets_batch_update': '/gmail.png',
+      'googledocs_create_document': '/gmail.png', // Using gmail as fallback for docs
+      'googledocs_update_existing_document': '/gmail.png',
+      // Add more mappings as needed
+    }
+
+    // Try to find a logo for the specific tool
+    if (toolLogoMap[toolName.toLowerCase()]) {
+      return toolLogoMap[toolName.toLowerCase()]
+    }
+
+    // Fallback to general service logos based on tool prefix
+    if (toolName.toLowerCase().startsWith('gmail')) return '/gmail.png'
+    if (toolName.toLowerCase().startsWith('googlecalendar')) return '/gmail.png'
+    if (toolName.toLowerCase().startsWith('googlesheets')) return '/gmail.png'
+    if (toolName.toLowerCase().startsWith('googledocs')) return '/gmail.png'
+    
+    // Default fallback
+    return '/gmail.png'
+  }
+
+  // Helper function to format tool name for display
+  const formatToolName = (toolName: string) => {
+    return toolName
+      .replace(/^(gmail_|googlecalendar_|googlesheets_|googledocs_)/i, '')
+      .replace(/_/g, ' ')
+      .toLowerCase()
+      .replace(/\b\w/g, l => l.toUpperCase())
+  }
+
+  // Helper function to render text with tool highlighting
+  const renderTextWithTools = (text: string) => {
+    if (!text) return <span className="text-gray-500">Enter your agent definition here...</span>
+
+    // Split text by both patterns: tool:toolname and toolname:actual_tool_name
+    const parts = text.split(/(tool:\w+|toolname:[a-zA-Z_]+)/g)
+    
+    return parts.map((part, index) => {
+      if (part.match(/^tool:\w+$/)) {
+        // This is a "tool:toolname" mention - show in gray box
+        const toolName = part.replace('tool:', '')
+        const logo = getToolLogo(toolName)
+        const displayName = formatToolName(toolName)
+        
+        return (
+          <span
+            key={index}
+            className="inline-flex items-center gap-1.5 bg-gray-100 border border-gray-200 rounded-md px-2 py-1 text-sm font-medium text-gray-700 mx-1"
+          >
+            {logo ? (
+              <img src={logo} alt={displayName} className="w-4 h-4 rounded" />
+            ) : (
+              <div className="w-4 h-4 bg-gray-300 rounded flex items-center justify-center">
+                <span className="text-xs font-bold text-gray-600">
+                  {toolName.charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
+            {displayName}
+          </span>
+        )
+      } else if (part.match(/^toolname:[a-zA-Z_]+$/)) {
+        // This is a "toolname:actual_tool_name" mention - show bold with smaller icon, no gray box
+        const toolName = part.replace('toolname:', '')
+        const logo = getToolLogo(toolName)
+        const displayName = formatToolName(toolName)
+        
+        return (
+          <span key={index} className="inline-flex items-center gap-1 font-bold text-gray-900">
+            {logo ? (
+              <img src={logo} alt={displayName} className="w-3.5 h-3.5 rounded" />
+            ) : (
+              <div className="w-3.5 h-3.5 bg-gray-300 rounded flex items-center justify-center">
+                <span className="text-xs font-bold text-gray-600">
+                  {toolName.charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
+            {displayName}
+          </span>
+        )
+      } else {
+        // Regular text
+        return <span key={index}>{part}</span>
+      }
+    })
+  }
+
+  // Reset create agent form when modal closes
+  useEffect(() => {
+    if (!isCreateAgentModalOpen) {
+      setIsEditingAgentName(false)
+      setCreateAgentForm({
+        name: 'New Agent',
+        steps: ['']
+      })
+      setShowSmartCreateInput(false)
+    }
+  }, [isCreateAgentModalOpen])
+
+  // Handle modal open/close effects
+  useEffect(() => {
+    if (isCreateAgentModalOpen && user?.uid) {
+      // Reset tools search when modal opens
+      setToolsSearchQuery('')
+      setFilteredTools([])
+      
+      // Load merchant's primary email for notification settings
+      const loadMerchantEmail = async () => {
+        try {
+          const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
+          if (merchantDoc.exists() && merchantDoc.data().primaryemail) {
+            setNotificationSettings(prev => ({
+              ...prev,
+              emailAddress: merchantDoc.data().primaryemail
+            }))
+          }
+        } catch (error) {
+          console.error('Error fetching merchant data:', error)
+        }
+      }
+      
+      loadMerchantEmail()
+    }
+  }, [isCreateAgentModalOpen, user])
+
+  // Handle clicking on a custom agent
+  const handleCustomAgentClick = (agent: any) => {
+    setSelectedCustomAgent(agent)
+    
+    // Set form data based on the selected agent
+    setCreateAgentForm({
+      name: agent.agentName || 'Custom Agent',
+      steps: agent.steps || ['']
+    })
+    
+    // Set schedule if available
+    if (agent.settings?.schedule) {
+      setCreateAgentSchedule({
+        frequency: agent.settings.schedule.frequency || '',
+        time: agent.settings.schedule.time || '12:00',
+        days: agent.settings.schedule.days || [],
+        selectedDay: agent.settings.schedule.selectedDay || ''
+      })
+    } else {
+      setCreateAgentSchedule({
+        frequency: '',
+        time: '12:00',
+        days: [],
+        selectedDay: ''
+      })
+    }
+    
+    // Set selected tools if available
+    if (agent.settings?.selectedTools) {
+      setSelectedTools(new Set(agent.settings.selectedTools))
+    } else {
+      setSelectedTools(new Set())
+    }
+    
+    // Set agent canvas content if available
+    if (agent.prompt) {
+      setAgentCanvasContent(agent.prompt)
+    } else {
+      setAgentCanvasContent('')
+    }
+    
+    // Set notification settings if available
+    if (agent.settings?.notifications) {
+      setNotificationSettings({
+        sendToInbox: agent.settings.notifications.sendToInbox ?? true,
+        sendViaEmail: agent.settings.notifications.sendViaEmail ?? false,
+        emailAddress: agent.settings.notifications.emailAddress || notificationSettings.emailAddress,
+        emailFormat: agent.settings.notifications.emailFormat || "professional"
+      })
+    }
+    
+    // Open the create agent modal
+    setIsCreateAgentModalOpen(true)
+  }
+
+  // Handle deleting a custom agent
+  const handleDeleteAgent = async () => {
+    if (!selectedCustomAgent || !user?.uid) return;
+    
+    try {
+      setIsDeletingAgent(true);
+      
+      // Delete the agent from Firestore
+      await deleteDoc(doc(db, 'merchants', user.uid || '', 'agentsenrolled', selectedCustomAgent.id));
+      
+      // Update the UI
+      setCustomAgents(prev => prev.filter(agent => agent.id !== selectedCustomAgent.id));
+      
+      // Show success message
+      toast({
+        title: "Agent Deleted",
+        description: `${selectedCustomAgent.agentName} has been deleted successfully.`
+      });
+      
+      // Reset form and close modal
+      setSelectedCustomAgent(null);
+      setCreateAgentForm({ name: 'New Agent', steps: [''] });
+      setCreateAgentSchedule({ frequency: '', time: '12:00', days: [], selectedDay: '' });
+      setSelectedTools(new Set());
+      setToolsSearchQuery('');
+      setSmartCreatePrompt('');
+      setShowSmartCreateInput(false);
+      setAgentCanvasContent('');
+      setShowToolsDropdown(false);
+      setToolsDropdownQuery('');
+      setSelectedToolIndex(0);
+      setFilteredTools([]);
+      setAtMentionPosition(0);
+      setCreateAgentDebugResponse(null);
+      setIsCreateAgentModalOpen(false);
+    } catch (error) {
+      console.error('Error deleting agent:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete agent. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeletingAgent(false);
+    }
+  };
+
+  return (
+    <div className="px-6 py-6">
+      {/* Header */}
+                          setIsCreatingAgent(false)
+                        }
+                      }}
+                      disabled={isCreatingAgent || !agentCanvasContent.trim() || !createAgentForm.name.trim()}
+                      className="w-full rounded-md"
+                    >
+                      {isCreatingAgent ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {selectedCustomAgent ? 'Updating...' : 'Creating...'}
+                        </>
+                      ) : (
+                        selectedCustomAgent ? 'Update Agent' : 'Create Agent'
+                      )}
+                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedCustomAgent(null)
+                          setCreateAgentForm({ name: 'New Agent', steps: [''] })
+                          setCreateAgentSchedule({ frequency: '', time: '12:00', days: [], selectedDay: '' })
+                          setSelectedTools(new Set())
+                          setToolsSearchQuery('')
+                          setSmartCreatePrompt('')
+                          setShowSmartCreateInput(false)
+                          setAgentCanvasContent('')
+                          setShowToolsDropdown(false)
+                          setToolsDropdownQuery('')
+                          setSelectedToolIndex(0)
+                          setFilteredTools([])
+                          setAtMentionPosition(0)
+                          setCreateAgentDebugResponse(null)
+                          setNotificationSettings({
+                            sendToInbox: true,
+                            sendViaEmail: false,
+                            emailAddress: notificationSettings.emailAddress, // Keep the merchant's email
+                            emailFormat: "professional"
+                          })
+                          setIsCreateAgentModalOpen(false)
+                        }}
+                        className="w-full rounded-md"
+                      >
+                        Cancel
+                      </Button>
+                      {selectedCustomAgent && (
+                        <Button
+                          variant="destructive"
+                          onClick={handleDeleteAgent}
+                          disabled={isDeletingAgent}
+                          className="w-full rounded-md"
+                        >
+                          {isDeletingAgent ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Deleting...
+                            </>
+                          ) : (
+                            'Delete Agent'
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          </DialogPrimitive.Content>
+        </DialogPortal>
+      </Dialog>
+
+      {/* Debug Dialog */}
+      {createAgentDebugResponse && (
+        <Dialog open={showDebugDialog} onOpenChange={setShowDebugDialog}>
+          <DialogPortal>
+            <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+            <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-3xl translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg overflow-hidden p-6">
+              <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground z-10">
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </DialogPrimitive.Close>
+              <div>
+                <h2 className="text-lg font-semibold mb-4">Debug Information</h2>
+                <div className="bg-gray-50 border border-gray-200 rounded-md p-3 mb-4">
+                  <h3 className="text-sm font-medium mb-2 text-gray-700">createAgentExecutionPlan Response</h3>
+                  <pre className="text-xs overflow-auto bg-white p-3 rounded-md max-h-[60vh] text-gray-700 whitespace-pre-wrap border border-gray-100 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-300">
+                    {createAgentDebugResponse}
+                  </pre>
+                </div>
+                <div className="flex justify-end">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => {
+                      setShowDebugDialog(false);
+                      setCreateAgentDebugResponse(null);
+                    }}
+                    className="rounded-md"
+                  >
+                    Clear & Close
+                  </Button>
+                </div>
+              </div>
+            </DialogPrimitive.Content>
+          </DialogPortal>
+        </Dialog>
+      )}
+    </div>
+  )
+} 

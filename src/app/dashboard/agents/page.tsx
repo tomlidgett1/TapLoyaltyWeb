@@ -1224,36 +1224,85 @@ export default function AgentsPage() {
       header: ({ column }) => (
         <TableColumnHeader column={column} title="Tools Called" />
       ),
-      size: 180,
+      size: 280,
       cell: ({ row }) => {
-        const toolsCalled = row.original.toolsCalled || []
+        // Try to get tools from details array first, then fallback to toolsCalled
+        const rawTools = row.original.details?.toolsCalled || row.original.toolsCalled || []
+        
+        // Debug logging to understand the structure (will only show in browser console)
+        if (process.env.NODE_ENV !== 'production') {
+          console.debug('[Agent Logs] Tools Called Structure:', {
+            rawTools,
+            fromDetails: Boolean(row.original.details?.toolsCalled),
+            fromToolsCalled: Boolean(row.original.toolsCalled),
+            type: typeof rawTools,
+            isArray: Array.isArray(rawTools),
+            rowId: row.original.id
+          })
+        }
+        
+        // Ensure toolsCalled is always an array
+        const toolsArray = Array.isArray(rawTools) ? rawTools : 
+          (typeof rawTools === 'string' ? [rawTools] : [])
+        
+        if (toolsArray.length === 0) {
+          return <span className="text-sm text-gray-500">No tools used</span>
+        }
+        
         return (
           <div className="flex flex-col gap-1 min-w-0">
-            <span className="text-sm font-medium">{toolsCalled.length} tools</span>
-            {toolsCalled.length > 0 && (
-              <div className="text-xs text-muted-foreground">
-                {toolsCalled.slice(0, 2).map((tool: any, index: number) => {
-                  // Handle different possible structures
-                  let toolName = ''
-                  if (typeof tool === 'string') {
-                    toolName = tool
-                  } else if (tool && typeof tool === 'object') {
-                    toolName = tool.name || tool.id || 'Unknown Tool'
-                  } else {
-                    toolName = 'Unknown Tool'
+            <div className="flex flex-wrap gap-1.5">
+              {toolsArray.map((tool: any, index: number) => {
+                // Extract tool name based on the Firestore structure
+                let toolName = '';
+                
+                if (typeof tool === 'object' && tool !== null) {
+                  // Check for the specific structure from Firestore
+                  if (tool.name) {
+                    toolName = tool.name;
+                  } else if (tool.id) {
+                    toolName = tool.id;
                   }
-                  
-                  return (
-                    <span key={index} className="block truncate max-w-32" title={toolName}>
-                      {toolName}
-                    </span>
-                  )
-                })}
-                {toolsCalled.length > 2 && (
-                  <span>+{toolsCalled.length - 2} more</span>
-                )}
-              </div>
-            )}
+                } else if (typeof tool === 'string') {
+                  toolName = tool;
+                }
+                
+                // If no valid name found, use a placeholder
+                if (!toolName) {
+                  toolName = 'Unknown Tool';
+                }
+                
+                // Log tool name to help with debugging
+                if (process.env.NODE_ENV !== 'production') {
+                  console.debug('[Agent Logs] Tool Name:', toolName);
+                }
+                
+                // Format the tool name for display (remove prefixes, format nicely)
+                const displayName = formatToolName(toolName);
+                
+                // Use the original unformatted name for logo lookup to match exactly what's in the API
+                const logo = getToolLogo(toolName);
+                
+                return (
+                  <div 
+                    key={index} 
+                    className="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-md px-1.5 py-0.5 text-xs font-medium text-gray-700"
+                    title={`${displayName}${tool.arguments ? ` (${typeof tool.arguments === 'string' ? tool.arguments : JSON.stringify(tool.arguments)})` : ''}`}
+                  >
+                    {logo ? (
+                      <img src={logo} alt={displayName} className="w-3.5 h-3.5 rounded" />
+                    ) : (
+                      <div className="w-3.5 h-3.5 bg-gray-200 rounded flex items-center justify-center">
+                        <span className="text-[9px] font-bold text-gray-600">
+                          {displayName.charAt(0)}
+                        </span>
+                      </div>
+                    )}
+                    <span className="truncate max-w-[100px]">{displayName}</span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )
       },
@@ -1263,7 +1312,7 @@ export default function AgentsPage() {
       header: ({ column }) => (
         <TableColumnHeader column={column} title="Status" />
       ),
-      size: 120,
+      size: 140,
       cell: ({ row }) => {
         const status = row.original.status || 'unknown'
         return (
@@ -1276,31 +1325,7 @@ export default function AgentsPage() {
           </div>
         )
       },
-    },
-    {
-      accessorKey: 'details',
-      header: ({ column }) => (
-        <TableColumnHeader column={column} title="Connected Apps" />
-      ),
-      size: 200,
-      cell: ({ row }) => {
-        const connectedApps = row.original.details?.connectedApps || []
-        if (connectedApps.length === 0) return <span className="text-xs text-muted-foreground">None</span>
-        
-        return (
-          <div className="flex items-center gap-1 flex-wrap min-w-0">
-            {connectedApps.slice(0, 3).map((app: string, index: number) => (
-              <div key={index} className="text-xs bg-gray-100 px-2 py-1 rounded-md truncate">
-                {app}
-              </div>
-            ))}
-            {connectedApps.length > 3 && (
-              <span className="text-xs text-muted-foreground">+{connectedApps.length - 3}</span>
-            )}
-          </div>
-        )
-      },
-    },
+    }
   ]
 
   // Helper function to insert tool mention
@@ -1345,6 +1370,18 @@ export default function AgentsPage() {
 
   // Helper function to get tool logo for a given tool name
   const getToolLogo = (toolName: string) => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[getToolLogo] Looking for logo for:', toolName);
+    }
+    
+    // Extract the toolkit prefix (GMAIL_, GOOGLECALENDAR_, etc.)
+    const toolkitMatch = toolName.match(/^([A-Z]+)_/);
+    const toolkitPrefix = toolkitMatch ? toolkitMatch[1].toLowerCase() : '';
+    
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[getToolLogo] Toolkit prefix:', toolkitPrefix);
+    }
+    
     // First, try to find the tool in composioTools by matching the name
     const tool = composioTools.find(t => {
       // Try exact match first
@@ -1366,7 +1403,43 @@ export default function AgentsPage() {
       return tool.deprecated.toolkit.logo
     }
 
-    // Fallback: try to find by toolkit name/prefix
+    // Direct toolkit matching based on prefix
+    if (toolkitPrefix) {
+      // For specific tools from the screenshot example
+      if (toolkitPrefix === 'googlecalendar') {
+        const calendarTool = composioTools.find(t => t.deprecated?.toolkit?.name?.toLowerCase().includes('calendar'));
+        if (calendarTool?.deprecated?.toolkit?.logo) {
+          return calendarTool.deprecated.toolkit.logo;
+        }
+        return '/google_calendar.png'; // Fallback specific to calendar
+      }
+      
+      if (toolkitPrefix === 'gmail') {
+        const gmailTool = composioTools.find(t => t.deprecated?.toolkit?.name?.toLowerCase().includes('gmail'));
+        if (gmailTool?.deprecated?.toolkit?.logo) {
+          return gmailTool.deprecated.toolkit.logo;
+        }
+        return '/gmail.png'; // Fallback specific to Gmail
+      }
+      
+      if (toolkitPrefix === 'googlesheets') {
+        const sheetsTool = composioTools.find(t => t.deprecated?.toolkit?.name?.toLowerCase().includes('sheets'));
+        if (sheetsTool?.deprecated?.toolkit?.logo) {
+          return sheetsTool.deprecated.toolkit.logo;
+        }
+        return '/google_sheets.png'; // Fallback specific to Sheets
+      }
+      
+      if (toolkitPrefix === 'googledocs') {
+        const docsTool = composioTools.find(t => t.deprecated?.toolkit?.name?.toLowerCase().includes('docs'));
+        if (docsTool?.deprecated?.toolkit?.logo) {
+          return docsTool.deprecated.toolkit.logo;
+        }
+        return '/google_docs.png'; // Fallback specific to Docs
+      }
+    }
+
+    // Fallback: try to find by toolkit name/prefix (existing logic)
     const toolkitTool = composioTools.find(t => {
       const toolkitName = t.deprecated?.toolkit?.name?.toLowerCase()
       if (!toolkitName) return false
@@ -1383,8 +1456,14 @@ export default function AgentsPage() {
       return toolkitTool.deprecated.toolkit.logo
     }
     
+    // Default mappings for known tools
+    if (toolName.toLowerCase().includes('googlecalendar')) return '/google_calendar.png';
+    if (toolName.toLowerCase().includes('gmail')) return '/gmail.png';
+    if (toolName.toLowerCase().includes('googlesheets')) return '/google_sheets.png';
+    if (toolName.toLowerCase().includes('googledocs')) return '/google_docs.png';
+    
     // Default fallback
-    return '/gmail.png'
+    return '/api_tool.png'
   }
   // Helper function to format tool name for display
   const formatToolName = (toolName: string) => {
@@ -1651,128 +1730,174 @@ export default function AgentsPage() {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {agents.map((agent) => (
-                <div key={agent.id} className={cn(
-                  "bg-gray-50 border border-gray-200 rounded-md p-5 flex flex-col hover:border-gray-300 transition-colors",
-                  agent.status === 'coming-soon' && "opacity-60 grayscale"
-                )}>
-                  {/* Header with title and button */}
-                  <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-2 flex-1">
-                            <h3 className="text-base font-medium text-gray-900">{agent.name}</h3>
-                          </div>
-                    <div className="flex items-center gap-2 ml-3">
-                      {(() => {
-                        const isEnrolled = enrolledAgents[agent.id]?.status === 'active'
-                        const isConnecting = connectingAgents.has(agent.id)
-                        const isComingSoon = agent.status === 'coming-soon'
-                        
-                        return (
-                          <>
-                            {/* Configure button - only show when enrolled */}
-                            {isEnrolled && (
+              {agents.map((agent) => {
+                const isCustomerServiceSection = sectionName === 'Customer Service';
+                return (
+                  <div 
+                    key={agent.id} 
+                    className={cn(
+                      "bg-gray-50 border border-gray-200 rounded-md p-5 flex flex-col hover:border-gray-300 transition-colors",
+                      agent.status === 'coming-soon' && "opacity-60 grayscale",
+                      isCustomerServiceSection && "cursor-pointer"
+                    )}
+                    onClick={() => {
+                      // Make all boxes in Customer Service section clickable
+                      if (isCustomerServiceSection && agent.status === 'active') {
+                        handleAgentAction(agent);
+                      }
+                    }}
+                  >
+                    {/* Header with title and button */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2 flex-1">
+                        <h3 className="text-base font-medium text-gray-900">{agent.name}</h3>
+                      </div>
+                      <div className="flex items-center gap-2 ml-3">
+                        {(() => {
+                          const isEnrolled = enrolledAgents[agent.id]?.status === 'active'
+                          const isConnecting = connectingAgents.has(agent.id)
+                          const isComingSoon = agent.status === 'coming-soon'
+                          
+                          // For all agents in Customer Service section, just show status indicator
+                          if (isCustomerServiceSection) {
+                            return (
+                              <>
+                                {/* Only show status indicator for Customer Service section agents */}
+                                {isEnrolled ? (
+                                  <div className="flex items-center gap-1 py-1 px-2 text-xs font-medium text-green-700 bg-green-50 rounded-md">
+                                    <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+                                    <span>Connected</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1 py-1 px-2 text-xs font-medium text-gray-700 bg-gray-100 rounded-md">
+                                    <div className="h-2 w-2 bg-gray-400 rounded-full"></div>
+                                    <span>Not Connected</span>
+                                  </div>
+                                )}
+                              </>
+                            )
+                          }
+                          
+                          // For all other sections, show the buttons as before
+                          return (
+                            <>
+                              {/* Configure button - only show when enrolled */}
+                              {isEnrolled && (
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  className="rounded-md h-7 w-7 p-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // Prevent triggering parent onClick
+                                    handleAgentAction(agent);
+                                  }}
+                                >
+                                  <Settings className="h-3 w-3" />
+                                </Button>
+                              )}
+                              
+                              {/* Main connect/connected button */}
                               <Button 
                                 size="sm" 
-                                variant="outline"
-                                className="rounded-md h-7 w-7 p-0"
-                                onClick={() => handleAgentAction(agent)}
+                                variant={isEnrolled ? 'outline' : (agent.status === 'active' ? 'default' : 'outline')}
+                                disabled={isComingSoon || isConnecting || !user}
+                                className={cn(
+                                  "rounded-md text-xs px-3 py-1 h-7",
+                                  isEnrolled && "bg-green-50 hover:bg-green-100 border-green-200 text-green-700"
+                                )}
+                                onClick={(e) => {
+                                  e.stopPropagation(); // Prevent triggering parent onClick
+                                  if (!isEnrolled) handleAgentAction(agent);
+                                }}
                               >
-                                <Settings className="h-3 w-3" />
+                                {isConnecting 
+                                        ? 'Connecting...' 
+                                  : isEnrolled 
+                                          ? 'Connected'
+                                    : (agent.status === 'active' ? 'Connect' : 'Coming Soon')
+                                }
                               </Button>
-                            )}
+                            </>
+                          )
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    <p className="text-sm text-gray-600 mb-4 flex-1 leading-relaxed">{agent.description}</p>
+
+                    {/* Integration Logos - Show for all agents */}
+                    <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                      <TooltipProvider>
+                        {/* Required Integrations */}
+                        <div className="flex gap-1.5">
+                          {(agent.requiredIntegrations || agent.integrations).map((integration, index) => (
+                            <Tooltip key={`required-${index}`}>
+                              <TooltipTrigger asChild>
+                                <div 
+                                  className="w-6 h-6 bg-gray-50 rounded border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors cursor-help"
+                                  onClick={(e) => e.stopPropagation()} // Prevent triggering parent onClick
+                                >
+                                  {integration === 'vault.png' ? (
+                                    <FileText className="h-4 w-4 text-blue-600" />
+                                  ) : (
+                                    <Image
+                                      src={`/${integration}`}
+                                      alt={integration.split('.')[0]}
+                                      width={16}
+                                      height={16}
+                                      className="object-contain"
+                                    />
+                                  )}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent className="bg-gray-900 text-white border-gray-700">
+                                <p>{integrationNames[integration] || integration.split('.')[0]} (Required)</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          ))}
+                        </div>
+
+                        {/* Separator */}
+                        {agent.optionalIntegrations && agent.optionalIntegrations.length > 0 && (
+                          <>
+                            <div className="w-px h-4 bg-gray-300"></div>
                             
-                            {/* Main connect/connected button */}
-                            <Button 
-                              size="sm" 
-                              variant={isEnrolled ? 'outline' : (agent.status === 'active' ? 'default' : 'outline')}
-                              disabled={isComingSoon || isConnecting || !user}
-                              className={cn(
-                                "rounded-md text-xs px-3 py-1 h-7",
-                                isEnrolled && "bg-green-50 hover:bg-green-100 border-green-200 text-green-700"
-                              )}
-                              onClick={() => !isEnrolled ? handleAgentAction(agent) : undefined}
-                            >
-                              {isConnecting 
-                                      ? 'Connecting...' 
-                                : isEnrolled 
-                                        ? 'Connected'
-                                  : (agent.status === 'active' ? 'Connect' : 'Coming Soon')
-                              }
-                            </Button>
+                            {/* Optional Integrations */}
+                            <div className="flex gap-1.5">
+                              {agent.optionalIntegrations.map((integration, index) => (
+                                <Tooltip key={`optional-${index}`}>
+                                  <TooltipTrigger asChild>
+                                    <div 
+                                      className="w-6 h-6 bg-gray-50 rounded border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors cursor-help opacity-60"
+                                      onClick={(e) => e.stopPropagation()} // Prevent triggering parent onClick
+                                    >
+                                      {integration === 'vault.png' ? (
+                                        <FileText className="h-4 w-4 text-blue-600" />
+                                      ) : (
+                                        <Image
+                                          src={`/${integration}`}
+                                          alt={integration.split('.')[0]}
+                                          width={16}
+                                          height={16}
+                                          className="object-contain"
+                                        />
+                                      )}
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="bg-gray-900 text-white border-gray-700">
+                                    <p>{integrationNames[integration] || integration.split('.')[0]} (Optional)</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              ))}
+                            </div>
                           </>
-                        )
-                      })()}
+                        )}
+                      </TooltipProvider>
                     </div>
                   </div>
-
-                  {/* Description */}
-                  <p className="text-sm text-gray-600 mb-4 flex-1 leading-relaxed">{agent.description}</p>
-
-                  {/* Integration Logos - Bottom */}
-                  <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-                    <TooltipProvider>
-                      {/* Required Integrations */}
-                      <div className="flex gap-1.5">
-                        {(agent.requiredIntegrations || agent.integrations).map((integration, index) => (
-                          <Tooltip key={`required-${index}`}>
-                            <TooltipTrigger asChild>
-                              <div className="w-6 h-6 bg-gray-50 rounded border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors cursor-help">
-                                {integration === 'vault.png' ? (
-                                  <FileText className="h-4 w-4 text-blue-600" />
-                                ) : (
-                                  <Image
-                                    src={`/${integration}`}
-                                    alt={integration.split('.')[0]}
-                                    width={16}
-                                    height={16}
-                                    className="object-contain"
-                                  />
-                                )}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent className="bg-gray-900 text-white border-gray-700">
-                              <p>{integrationNames[integration] || integration.split('.')[0]} (Required)</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        ))}
-                      </div>
-
-                      {/* Separator */}
-                      {agent.optionalIntegrations && agent.optionalIntegrations.length > 0 && (
-                        <>
-                          <div className="w-px h-4 bg-gray-300"></div>
-                          
-                          {/* Optional Integrations */}
-                          <div className="flex gap-1.5">
-                            {agent.optionalIntegrations.map((integration, index) => (
-                              <Tooltip key={`optional-${index}`}>
-                                <TooltipTrigger asChild>
-                                  <div className="w-6 h-6 bg-gray-50 rounded border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors cursor-help opacity-60">
-                                    {integration === 'vault.png' ? (
-                                      <FileText className="h-4 w-4 text-blue-600" />
-                                    ) : (
-                                      <Image
-                                        src={`/${integration}`}
-                                        alt={integration.split('.')[0]}
-                                        width={16}
-                                        height={16}
-                                        className="object-contain"
-                                      />
-                                    )}
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent className="bg-gray-900 text-white border-gray-700">
-                                  <p>{integrationNames[integration] || integration.split('.')[0]} (Optional)</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                    </TooltipProvider>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}
@@ -1793,9 +1918,27 @@ export default function AgentsPage() {
                 </div>
               ) : (
                 /* Logs Table */
-                <div className="border border-gray-200 rounded-md bg-white overflow-hidden">
-                  <TableProvider columns={logColumns} data={agentLogs}>
-                    <div className="overflow-x-auto">
+                <div 
+                  className="border border-gray-200 rounded-md bg-white overflow-hidden agent-logs-table"
+                  onClick={(event) => {
+                    // Only proceed if handleLogClick function exists and user is logged in
+                    if (!(window as any).handleLogClick || !user?.uid) return;
+                    
+                    // Find the closest table row element to get the row index
+                    const rowElement = (event.target as HTMLElement).closest('tr');
+                    if (!rowElement) return;
+                    
+                    // Get the row index and find the corresponding log data
+                    const allRows = Array.from(rowElement.closest('tbody')?.querySelectorAll('tr') || []);
+                    const rowIndex = allRows.indexOf(rowElement);
+                    if (rowIndex === -1 || rowIndex >= agentLogs.length) return;
+                    
+                    // Call the handleLogClick function with the log ID
+                    (window as any).handleLogClick(agentLogs[rowIndex].id, user.uid);
+                  }}
+                >
+                  <div className="overflow-x-auto">
+                    <TableProvider columns={logColumns} data={agentLogs}>
                       <TableHeader>
                         {({ headerGroup }) => (
                           <TableHeaderGroup key={headerGroup.id} headerGroup={headerGroup}>
@@ -1805,23 +1948,17 @@ export default function AgentsPage() {
                       </TableHeader>
                       <TableBody>
                         {({ row }) => (
-                          <div
-                            onClick={() => {
-                              // Call the globally exposed handleLogClick function
-                              if ((window as any).handleLogClick && user?.uid) {
-                                (window as any).handleLogClick((row.original as any).id, user.uid)
-                              }
-                            }}
+                          <TableRow 
+                            key={row.id} 
+                            row={row}
                             className="cursor-pointer hover:bg-gray-50 transition-colors"
                           >
-                            <TableRow key={row.id} row={row}>
-                              {({ cell }) => <TableCell key={cell.id} cell={cell} />}
-                            </TableRow>
-                          </div>
+                            {({ cell }) => <TableCell key={cell.id} cell={cell} />}
+                          </TableRow>
                         )}
                       </TableBody>
-                    </div>
-                  </TableProvider>
+                    </TableProvider>
+                  </div>
                 </div>
               )}
             </div>

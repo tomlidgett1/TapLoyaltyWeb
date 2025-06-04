@@ -87,7 +87,7 @@ export function TableProvider<TData, TValue>({
         table: table as never,
       }}
     >
-      <TableRaw className={className}>{children}</TableRaw>
+      <TableRaw className={cn("w-full table-auto", className)}>{children}</TableRaw>
     </TableContext.Provider>
   );
 }
@@ -98,7 +98,7 @@ export type TableHeadProps = {
 };
 
 export const TableHead = ({ header, className }: TableHeadProps) => (
-  <TableHeadRaw key={header.id} className={className}>
+  <TableHeadRaw key={header.id} className={cn("px-4 py-3", className)}>
     {header.isPlaceholder
       ? null
       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -189,7 +189,7 @@ export type TableCellProps = {
 };
 
 export const TableCell = ({ cell, className }: TableCellProps) => (
-  <TableCellRaw className={className}>
+  <TableCellRaw className={cn("px-4 py-3", className)}>
     {flexRender(cell.column.columnDef.cell, cell.getContext())}
   </TableCellRaw>
 );

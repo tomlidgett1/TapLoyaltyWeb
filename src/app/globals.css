@@ -198,3 +198,79 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   display: none; 
 }
 */
+
+/* Agent logs table styles */
+.agent-logs-table table {
+  width: 100%;
+  table-layout: auto;
+}
+
+.agent-logs-table th,
+.agent-logs-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+}
+
+.agent-logs-table th:nth-child(1),
+.agent-logs-table td:nth-child(1) {
+  width: 32%;
+}
+
+.agent-logs-table th:nth-child(2),
+.agent-logs-table td:nth-child(2) {
+  width: 20%;
+}
+
+.agent-logs-table th:nth-child(3),
+.agent-logs-table td:nth-child(3) {
+  width: 33%;
+}
+
+.agent-logs-table th:nth-child(4),
+.agent-logs-table td:nth-child(4) {
+  width: 15%;
+}
+
+/* For smaller screens */
+@media (max-width: 768px) {
+  .agent-logs-table th:nth-child(3),
+  .agent-logs-table td:nth-child(3) {
+    display: none;
+  }
+  
+  .agent-logs-table th:nth-child(1),
+  .agent-logs-table td:nth-child(1) {
+    width: 55%;
+  }
+  
+  .agent-logs-table th:nth-child(2),
+  .agent-logs-table td:nth-child(2) {
+    width: 25%;
+  }
+  
+  .agent-logs-table th:nth-child(4),
+  .agent-logs-table td:nth-child(4) {
+    width: 20%;
+  }
+}
+
+/* For constrained container width (like in pop-ups) */
+.constrained-width .agent-logs-table th:nth-child(3),
+.constrained-width .agent-logs-table td:nth-child(3) {
+  display: none;
+}
+
+.constrained-width .agent-logs-table th:nth-child(1),
+.constrained-width .agent-logs-table td:nth-child(1) {
+  width: 55%;
+}
+
+.constrained-width .agent-logs-table th:nth-child(2),
+.constrained-width .agent-logs-table td:nth-child(2) {
+  width: 25%;
+}
+
+.constrained-width .agent-logs-table th:nth-child(4),
+.constrained-width .agent-logs-table td:nth-child(4) {
+  width: 20%;
+}

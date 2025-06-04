@@ -169,7 +169,7 @@ const navItems: NavItem[] = [
     icon: Bot,
   },
   {
-    title: "Agent Inbox",
+    title: "Inbox",
     href: "/dashboard/agent-inbox",
     icon: Inbox,
   },

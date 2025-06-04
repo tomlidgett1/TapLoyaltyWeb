@@ -4620,7 +4620,7 @@ export default function AgentsPage() {
                 {/* Agent Canvas */}
                 <div className="flex-1 flex flex-col">
                   <div className="flex items-center justify-between mb-4">
-                    <Label className="text-sm font-medium">Agent Definition</Label>
+                    <h3 className="text-base font-bold">Instructions</h3>
                     {agentCanvasContent && typeof agentCanvasContent === 'string' && agentCanvasContent.trim() && isEditingCanvas && !showSmartCreateInput && (
                       <Button
                         variant="outline"
@@ -4807,11 +4807,11 @@ export default function AgentsPage() {
                       {!showToolsInLeftPanel ? (
                         <div className="relative flex-1" style={{ height: "auto", minHeight: "500px" }}>
                           {agentCanvasContent && typeof agentCanvasContent === 'string' && agentCanvasContent.trim() && !isEditingCanvas ? (
-                            /* Display mode with tool highlighting */
+                            /* Display mode with tool highlighting - Moved outside container */
                             <div 
                               onDoubleClick={() => setIsEditingCanvas(true)} 
                               style={{ cursor: "pointer" }} 
-                              className="border border-gray-200 rounded-md h-[500px] overflow-y-auto p-3 pb-8 bg-white text-sm leading-relaxed whitespace-pre-wrap relative [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-300"
+                              className="h-[500px] overflow-y-auto py-1 text-sm leading-relaxed whitespace-pre-wrap [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-300"
                             >
                               {renderTextWithTools(agentCanvasContent)}
                             </div>

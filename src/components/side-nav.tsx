@@ -55,8 +55,8 @@ import { Badge } from "@/components/ui/badge"
 const auth = getAuth();
 
 // Custom scrollbar styles
-const scrollbarStyles = `
-  .custom-scrollbar::-webkit-scrollbar {
+const scrollbarStyles = 
+  `.custom-scrollbar::-webkit-scrollbar {
     width: 4px;
   }
   .custom-scrollbar::-webkit-scrollbar-track {
@@ -68,6 +68,21 @@ const scrollbarStyles = `
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background-color: rgba(0, 0, 0, 0.2);
+  }
+  
+  /* Hidden scrollbar styles for collapsed state */
+  .scrollbar-hidden::-webkit-scrollbar,
+  .scrollbar-hidden *::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
+  }
+  
+  .scrollbar-hidden,
+  .scrollbar-hidden * {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
   }
   
   /* Avatar image styles */
@@ -453,8 +468,27 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       isCollapsed ? "w-full md:w-16" : "w-full md:w-48",
       className
     )}>
-      {/* Apply custom scrollbar styles */}
-      <style jsx global>{scrollbarStyles}</style>
+      {/* Apply all styles in a single style tag */}
+      <style jsx global>{`
+        ${scrollbarStyles}
+        
+        ${isCollapsed ? `
+          /* Global styles to completely eliminate scrollbars when sidebar is collapsed */
+          nav[data-scrollbar-hidden="true"]::-webkit-scrollbar,
+          nav[data-scrollbar-hidden="true"] *::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+            background: transparent !important;
+          }
+          
+          nav[data-scrollbar-hidden="true"],
+          nav[data-scrollbar-hidden="true"] * {
+            -ms-overflow-style: none !important;
+            scrollbar-width: none !important;
+          }
+        ` : ''}
+      `}</style>
       
       <div className="h-16 flex items-end px-3 pb-2 mb-2 relative">
         <div className="flex items-center gap-2.5 pl-2 h-8">
@@ -593,7 +627,19 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
         <div className="border-t border-gray-200"></div>
       </div>
       
-      <nav className="px-3 py-2 flex-1 overflow-y-auto custom-scrollbar">
+      <nav 
+        className={cn(
+          "px-3 py-2 flex-1",
+          isCollapsed ? "" : "overflow-y-auto custom-scrollbar"
+        )}
+        style={isCollapsed ? {
+          msOverflowStyle: "none",  /* IE and Edge */
+          scrollbarWidth: "none",   /* Firefox */
+          overflowY: "hidden",      /* Standard property */
+          WebkitOverflowScrolling: "auto" /* Disable momentum scrolling */
+        } : {}}
+        {...(isCollapsed ? { 'data-scrollbar-hidden': 'true' } : {})}
+      >
         <ul className="space-y-1">
           {navItems.map((item) => {
             const isActive = item.title === "Dashboard" 

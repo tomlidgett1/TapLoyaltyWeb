@@ -293,6 +293,8 @@ export default function DashboardPage() {
   // Add state variable for the AI assistant response
   const [assistantResponse, setAssistantResponse] = useState<string | null>(null)
   const [assistantLoading, setAssistantLoading] = useState(false)
+  const [activeAgents, setActiveAgents] = useState<any[]>([])
+  const [agentsLoading, setAgentsLoading] = useState(false)
 
   // Agents carousel state
 
@@ -1543,6 +1545,64 @@ export default function DashboardPage() {
     }
   }, [user?.uid]);
 
+  // Fetch active agents
+  useEffect(() => {
+    const fetchActiveAgents = async () => {
+      if (!user?.uid) return;
+      
+      try {
+        setAgentsLoading(true);
+        
+        // Fetch enrolled agents from the merchants collection
+        const agentsRef = collection(db, 'merchants', user.uid, 'agentsenrolled');
+        const agentsSnapshot = await getDocs(agentsRef);
+        
+        const agents = [];
+        
+        // Process each enrolled agent
+        for (const doc of agentsSnapshot.docs) {
+          const data = doc.data();
+          
+          // Check if agent is enabled/active
+          const isActive = data.enabled === true || data.isActive === true || data.status === 'active';
+          
+          if (isActive) {
+            agents.push({
+              id: doc.id,
+              name: data.agentName || data.name || data.agentname || doc.id,
+              type: data.type || 'enrolled',
+              status: 'active',
+              lastRun: data.lastRun?.toDate() || data.lastExecuted?.toDate() || data.enrolledAt?.toDate() || null,
+              description: data.description || `${doc.id} agent`,
+              frequency: data.frequency || data.schedule || 'manual',
+              tools: data.tools || [],
+              selectedTools: data.selectedTools || []
+            });
+          }
+        }
+        
+        // Sort by last run date (most recent first)
+        agents.sort((a, b) => {
+          if (!a.lastRun && !b.lastRun) return 0;
+          if (!a.lastRun) return 1;
+          if (!b.lastRun) return -1;
+          return b.lastRun.getTime() - a.lastRun.getTime();
+        });
+        
+        setActiveAgents(agents);
+        
+      } catch (error) {
+        console.error('Error fetching active agents:', error);
+      } finally {
+        setAgentsLoading(false);
+      }
+    };
+    
+    if (user?.uid) {
+      fetchActiveAgents();
+    }
+  }, [user?.uid]);
+
   // Available integrations for the command box
   const availableIntegrations = [
     { id: "mailchimp", name: "MailChimp", icon: <Mail className="h-4 w-4 text-red-500" /> },
@@ -2479,66 +2539,52 @@ export default function DashboardPage() {
           {/* Quick Actions Section */}
           <div className="mb-8">
             <h2 className="text-lg font-medium mb-4">Quick Actions</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-              <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
-                <div className="mb-2">
-                  <PlusCircle className="h-8 w-8 text-gray-600" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors">
+                <div className="flex items-center gap-3 mb-3">
+                  <PlusCircle className="h-4 w-4 text-gray-500" />
+                  <h3 className="text-sm font-semibold text-gray-900">Setup Wizard</h3>
                 </div>
-                <h3 className="text-sm font-semibold mb-2">Setup Wizard</h3>
-                <p className="text-xs text-gray-600 mb-auto pb-4">Configure your business settings and integrations.</p>
+                <p className="text-xs text-gray-600 mb-4 leading-relaxed">Configure your business settings and integrations.</p>
                 <Button 
                   size="sm" 
                   onClick={() => setIsSetupWizardOpen(true)} 
                   variant="outline" 
-                  className="w-full rounded-md"
+                  className="w-full rounded-md mt-auto text-xs"
                 >
                   Open Wizard
                 </Button>
               </div>
               
-              <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
-                <div className="mb-2">
-                  <BarChartIcon className="h-8 w-8 text-gray-600" />
-                </div>
-                <h3 className="text-sm font-semibold mb-2">Business Insights</h3>
-                <p className="text-xs text-gray-600 mb-auto pb-4">Get AI-powered insights about your business performance.</p>
-                <Button 
-                  size="sm" 
-                  onClick={() => setInsightDialogOpen(true)} 
-                  variant="outline" 
-                  className="w-full rounded-md"
-                >
-                  View Insights
-                </Button>
-              </div>
+
               
-              <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
-                <div className="mb-2">
-                  <Gift className="h-8 w-8 text-gray-600" />
+              <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors">
+                <div className="flex items-center gap-3 mb-3">
+                  <Gift className="h-4 w-4 text-gray-500" />
+                  <h3 className="text-sm font-semibold text-gray-900">Create Reward</h3>
                 </div>
-                <h3 className="text-sm font-semibold mb-2">Create Reward</h3>
-                <p className="text-xs text-gray-600 mb-auto pb-4">Create a new loyalty reward for your customers.</p>
+                <p className="text-xs text-gray-600 mb-4 leading-relaxed">Create a new loyalty reward for your customers.</p>
                 <Button 
                   size="sm" 
                   onClick={() => setShowRewardDialog(true)} 
                   variant="outline" 
-                  className="w-full rounded-md"
+                  className="w-full rounded-md mt-auto text-xs"
                 >
                   Create Reward
                 </Button>
               </div>
 
-              <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
-                <div className="mb-2">
-                  <Bot className="h-8 w-8 text-gray-600" />
+              <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors">
+                <div className="flex items-center gap-3 mb-3">
+                  <Bot className="h-4 w-4 text-gray-500" />
+                  <h3 className="text-sm font-semibold text-gray-900">AI Agents</h3>
                 </div>
-                <h3 className="text-sm font-semibold mb-2">AI Agents</h3>
-                <p className="text-xs text-gray-600 mb-auto pb-4">View and connect to all available AI agents.</p>
+                <p className="text-xs text-gray-600 mb-4 leading-relaxed">View and connect to all available AI agents.</p>
                 <Button 
                   size="sm" 
                   onClick={() => router.push('/dashboard/agents')} 
                   variant="outline" 
-                  className="w-full rounded-md"
+                  className="w-full rounded-md mt-auto text-xs"
                 >
                   View Agents
                 </Button>
@@ -2554,10 +2600,11 @@ export default function DashboardPage() {
             
             {metricsType === "platform" && (
               <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-                <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="h-8 w-8 rounded-md bg-blue-100 flex items-center justify-center">
-                      <Gift className="h-4 w-4 text-blue-600" />
+                <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Gift className="h-4 w-4 text-gray-500" />
+                      <h3 className="text-sm font-medium text-gray-900">Active Rewards</h3>
                     </div>
                     {metricsLoading ? (
                       <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
@@ -2565,14 +2612,14 @@ export default function DashboardPage() {
                       <div className="text-2xl font-semibold text-gray-900">{metrics.activeRewards}</div>
                     )}
                   </div>
-                  <h3 className="text-sm font-medium text-gray-900 mb-1">Active Rewards</h3>
                   <p className="text-xs text-gray-600">Currently available rewards</p>
                 </div>
                 
-                <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="h-8 w-8 rounded-md bg-green-100 flex items-center justify-center">
-                      <Eye className="h-4 w-4 text-green-600" />
+                <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Eye className="h-4 w-4 text-gray-500" />
+                      <h3 className="text-sm font-medium text-gray-900">Reward Views</h3>
                     </div>
                     {metricsLoading ? (
                       <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
@@ -2580,14 +2627,14 @@ export default function DashboardPage() {
                       <div className="text-2xl font-semibold text-gray-900">{metrics.totalRewardViews}</div>
                     )}
                   </div>
-                  <h3 className="text-sm font-medium text-gray-900 mb-1">Reward Views</h3>
                   <p className="text-xs text-gray-600">Total reward page views</p>
                 </div>
                 
-                <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="h-8 w-8 rounded-md bg-purple-100 flex items-center justify-center">
-                      <Zap className="h-4 w-4 text-purple-600" />
+                <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-gray-500" />
+                      <h3 className="text-sm font-medium text-gray-900">Points Issued</h3>
                     </div>
                     {metricsLoading ? (
                       <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
@@ -2595,14 +2642,14 @@ export default function DashboardPage() {
                       <div className="text-2xl font-semibold text-gray-900">{metrics.totalPointsIssued}</div>
                     )}
                   </div>
-                  <h3 className="text-sm font-medium text-gray-900 mb-1">Points Issued</h3>
                   <p className="text-xs text-gray-600">Total loyalty points awarded</p>
                 </div>
                 
-                <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="h-8 w-8 rounded-md bg-orange-100 flex items-center justify-center">
-                      <Eye className="h-4 w-4 text-orange-600" />
+                <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Eye className="h-4 w-4 text-gray-500" />
+                      <h3 className="text-sm font-medium text-gray-900">Store Views</h3>
                     </div>
                     {metricsLoading ? (
                       <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
@@ -2610,7 +2657,6 @@ export default function DashboardPage() {
                       <div className="text-2xl font-semibold text-gray-900">{metrics.totalStoreViews}</div>
                     )}
                   </div>
-                  <h3 className="text-sm font-medium text-gray-900 mb-1">Store Views</h3>
                   <p className="text-xs text-gray-600">Total store page visits</p>
                 </div>
               </div>
@@ -2618,10 +2664,11 @@ export default function DashboardPage() {
 
             {metricsType === "consumer" && (
               <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-                <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="h-8 w-8 rounded-md bg-blue-100 flex items-center justify-center">
-                      <Users className="h-4 w-4 text-blue-600" />
+                <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-gray-500" />
+                      <h3 className="text-sm font-medium text-gray-900">Active Customers</h3>
                     </div>
                     {metricsLoading ? (
                       <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
@@ -2629,14 +2676,14 @@ export default function DashboardPage() {
                       <div className="text-2xl font-semibold text-gray-900">{metrics.activeCustomers}</div>
                     )}
                   </div>
-                  <h3 className="text-sm font-medium text-gray-900 mb-1">Active Customers</h3>
                   <p className="text-xs text-gray-600">Customers with recent activity</p>
                 </div>
                 
-                <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="h-8 w-8 rounded-md bg-green-100 flex items-center justify-center">
-                      <ShoppingCart className="h-4 w-4 text-green-600" />
+                <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <ShoppingCart className="h-4 w-4 text-gray-500" />
+                      <h3 className="text-sm font-medium text-gray-900">Transactions</h3>
                     </div>
                     {metricsLoading ? (
                       <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
@@ -2644,14 +2691,14 @@ export default function DashboardPage() {
                       <div className="text-2xl font-semibold text-gray-900">{metrics.totalTransactions}</div>
                     )}
                   </div>
-                  <h3 className="text-sm font-medium text-gray-900 mb-1">Transactions</h3>
                   <p className="text-xs text-gray-600">Total completed purchases</p>
                 </div>
                 
-                <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="h-8 w-8 rounded-md bg-purple-100 flex items-center justify-center">
-                      <Gift className="h-4 w-4 text-purple-600" />
+                <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Gift className="h-4 w-4 text-gray-500" />
+                      <h3 className="text-sm font-medium text-gray-900">Redemptions</h3>
                     </div>
                     {metricsLoading ? (
                       <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
@@ -2659,14 +2706,14 @@ export default function DashboardPage() {
                       <div className="text-2xl font-semibold text-gray-900">{metrics.totalRedemptions}</div>
                     )}
                   </div>
-                  <h3 className="text-sm font-medium text-gray-900 mb-1">Redemptions</h3>
                   <p className="text-xs text-gray-600">Total rewards redeemed</p>
                 </div>
                 
-                <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="h-8 w-8 rounded-md bg-orange-100 flex items-center justify-center">
-                      <DollarSign className="h-4 w-4 text-orange-600" />
+                <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-gray-500" />
+                      <h3 className="text-sm font-medium text-gray-900">Avg Order Value</h3>
                     </div>
                     {metricsLoading ? (
                       <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
@@ -2674,7 +2721,6 @@ export default function DashboardPage() {
                       <div className="text-2xl font-semibold text-gray-900">${metrics.avgOrderValue}</div>
                     )}
                   </div>
-                  <h3 className="text-sm font-medium text-gray-900 mb-1">Avg Order Value</h3>
                   <p className="text-xs text-gray-600">Average transaction amount</p>
                 </div>
               </div>
@@ -2682,7 +2728,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Activity and Analytics Section */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Recent Activity */}
             <div className="border border-gray-200 rounded-md bg-gray-50">
               <div className="p-6 border-b border-gray-200">
@@ -2801,6 +2847,144 @@ export default function DashboardPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Active Agents */}
+            <div className="border border-gray-200 rounded-md bg-gray-50">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-md font-semibold mb-1">Active Agents</h3>
+                    <p className="text-sm text-gray-600">Currently running AI agents</p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="rounded-md"
+                    asChild
+                  >
+                    <Link href="/dashboard/agents" className="flex items-center gap-1">
+                      View all
+                      <ChevronRight className="h-3 w-3" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+              <div className="p-6">
+                {agentsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
+                  </div>
+                ) : activeAgents.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
+                      <Bot className="h-6 w-6 text-gray-400" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-700">No active agents</p>
+                    <p className="text-xs text-gray-500 mt-1">Connect agents to see them here</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {activeAgents.slice(0, 5).map((agent, index) => {
+                      // Function to get tool logo based on tool name
+                      const getToolLogo = (toolName: string) => {
+                        const lowerToolName = toolName.toLowerCase();
+                        
+                        // Gmail/Google tools
+                        if (lowerToolName.includes('gmail') || lowerToolName.includes('google mail')) {
+                          return <Image src="/gmailnew.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain" />;
+                        }
+                        
+                        // Xero tools
+                        if (lowerToolName.includes('xero')) {
+                          return <Image src="/xero.png" width={16} height={16} alt="Xero" className="h-4 w-4 object-contain" />;
+                        }
+                        
+                        // Square tools
+                        if (lowerToolName.includes('square')) {
+                          return <Image src="/square.png" width={16} height={16} alt="Square" className="h-4 w-4 object-contain" />;
+                        }
+                        
+                        // Lightspeed tools
+                        if (lowerToolName.includes('lightspeed')) {
+                          return <Image src="/lslogo.png" width={16} height={16} alt="Lightspeed" className="h-4 w-4 object-contain" />;
+                        }
+                        
+                        // MailChimp tools
+                        if (lowerToolName.includes('mailchimp') || lowerToolName.includes('mail chimp')) {
+                          return <Image src="/mailchimp.png" width={16} height={16} alt="MailChimp" className="h-4 w-4 object-contain" />;
+                        }
+                        
+                        // HubSpot tools
+                        if (lowerToolName.includes('hubspot') || lowerToolName.includes('hub spot')) {
+                          return <Image src="/hubspot.png" width={16} height={16} alt="HubSpot" className="h-4 w-4 object-contain" />;
+                        }
+                        
+                        // Outlook tools
+                        if (lowerToolName.includes('outlook') || lowerToolName.includes('microsoft')) {
+                          return <Image src="/outlook.png" width={16} height={16} alt="Outlook" className="h-4 w-4 object-contain" />;
+                        }
+                        
+                        // Google Sheets tools
+                        if (lowerToolName.includes('sheets') || lowerToolName.includes('google sheets')) {
+                          return <Image src="/sheetspro.png" width={16} height={16} alt="Google Sheets" className="h-4 w-4 object-contain" />;
+                        }
+                        
+                        // Default fallback
+                        return <Bot className="h-4 w-4 text-gray-500" />;
+                      };
+
+                      // Function to get the appropriate icon for each agent
+                      const getAgentIcon = (agent: any) => {
+                        // Built-in agents
+                        switch (agent.id) {
+                          case 'customer-service':
+                          case 'email-summary':
+                          case 'email-executive':
+                            return <Image src="/gmailnew.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain" />;
+                        }
+                        
+                        // Custom agents - check their tools
+                        if (agent.type === 'custom' && (agent.tools || agent.selectedTools)) {
+                          const tools = agent.tools || agent.selectedTools || [];
+                          
+                          // If agent has tools, use the first tool's icon
+                          if (tools.length > 0) {
+                            const firstTool = tools[0];
+                            const toolName = typeof firstTool === 'string' ? firstTool : (firstTool.name || firstTool.tool || firstTool.app);
+                            if (toolName) {
+                              return getToolLogo(toolName);
+                            }
+                          }
+                        }
+                        
+                        // Default fallback
+                        return <Bot className="h-4 w-4 text-gray-500" />;
+                      };
+
+                                              return (
+                          <div key={agent.id} className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-md bg-gray-200 flex items-center justify-center">
+                              {getAgentIcon(agent)}
+                            </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900">{agent.name}</p>
+                            <p className="text-xs text-gray-500">
+                              {agent.lastRun ? `Last run ${formatTimeAgo(agent.lastRun)}` : 'Never run'}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <div className="flex items-center gap-1">
+                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                              <p className="text-xs text-gray-500">Active</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

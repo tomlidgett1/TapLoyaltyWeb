@@ -1,5 +1,5 @@
 import { initializeApp, getApp, getApps } from "firebase/app"
-import { getAuth } from "firebase/auth"
+import { getAuth, Auth } from "firebase/auth"
 import { getFirestore, Firestore } from "firebase/firestore"
 import { getFunctions, connectFunctionsEmulator, Functions } from 'firebase/functions'
 import { getStorage } from "firebase/storage"
@@ -40,7 +40,7 @@ try {
 }
 
 // Initialize Firebase services with logging
-let auth, db: Firestore, functions: Functions, storage;
+let auth: Auth, db: Firestore, functions: Functions, storage;
 
 try {
   console.log('Initializing Firebase Auth');

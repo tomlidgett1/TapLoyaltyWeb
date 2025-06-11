@@ -27,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Loader2, Mail } from "lucide-react"
 
 export function LoginForm({
   className,
@@ -130,108 +131,141 @@ export function LoginForm({
   }
 
   return (
-    <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Login</CardTitle>
-          <CardDescription>
-            Enter your email below to login to your account
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit}>
-            <div className="flex flex-col gap-6">
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
+    <div className={cn("w-full", className)} {...props}>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+              Email address
+            </Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="m@example.com"
+              placeholder="Enter your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+              className="h-12 px-4 text-base rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-[#007AFF]"
                 />
               </div>
-              <div className="grid gap-2">
-                <div className="flex items-center">
-                  <Label htmlFor="password">Password</Label>
+          
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+                Password
+              </Label>
                   <button
                     type="button"
                     onClick={() => {
                       setResetEmail(email)
                       setResetDialogOpen(true)
                     }}
-                    className="ml-auto inline-block text-sm underline-offset-4 hover:underline text-[#007AFF]"
+                className="text-sm text-[#007AFF] hover:text-[#0066CC] hover:underline underline-offset-4 transition-colors"
                   >
-                    Forgot your password?
+                Forgot password?
                   </button>
                 </div>
                 <Input 
                   id="password" 
                   type="password" 
+              placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required 
+              className="h-12 px-4 text-base rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-[#007AFF]"
                 />
               </div>
+        </div>
+        
               <Button 
                 type="submit" 
-                className="w-full bg-[#007AFF] hover:bg-[#0066CC]"
+          className="w-full h-12 bg-[#007AFF] hover:bg-[#0066CC] text-white font-medium text-base rounded-md transition-colors"
                 disabled={loading}
               >
-                {loading ? "Logging in..." : "Login"}
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Signing in...
+            </>
+          ) : (
+            "Sign in"
+          )}
               </Button>
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-white text-gray-500">New to Tap Loyalty?</span>
+          </div>
             </div>
-            <div className="mt-4 text-center text-sm">
-              Don&apos;t have an account?{" "}
+
+        <div className="text-center">
               <Link 
                 href="/signup" 
-                className="text-[#007AFF] hover:underline underline-offset-4"
+            className="text-[#007AFF] hover:text-[#0066CC] font-medium hover:underline underline-offset-4 transition-colors"
               >
-                Sign up
+            Create an account
               </Link>
             </div>
           </form>
-        </CardContent>
-      </Card>
 
       <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px] rounded-md">
           <DialogHeader>
-            <DialogTitle>Reset Password</DialogTitle>
-            <DialogDescription>
-              Enter your email address and we'll send you a link to reset your password.
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-blue-100 rounded-md flex items-center justify-center">
+                <Mail className="w-5 h-5 text-[#007AFF]" />
+              </div>
+              <div>
+                <DialogTitle className="text-left">Reset your password</DialogTitle>
+                <DialogDescription className="text-left">
+                  We'll send you a link to reset your password
             </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
           <form onSubmit={handleResetPassword}>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="resetEmail">Email</Label>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="resetEmail" className="text-sm font-medium text-gray-700">
+                  Email address
+                </Label>
                 <Input
                   id="resetEmail"
                   type="email"
-                  placeholder="m@example.com"
+                  placeholder="Enter your email"
                   value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)}
                   required
+                  className="h-12 px-4 text-base rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-[#007AFF]"
                 />
               </div>
             </div>
-            <DialogFooter>
+            <DialogFooter className="gap-3 sm:gap-3">
               <Button 
                 type="button" 
                 variant="outline" 
                 onClick={() => setResetDialogOpen(false)}
                 disabled={resetLoading}
+                className="rounded-md"
               >
                 Cancel
               </Button>
               <Button 
                 type="submit"
-                className="bg-[#007AFF] hover:bg-[#0066CC]"
+                className="bg-[#007AFF] hover:bg-[#0066CC] rounded-md"
                 disabled={resetLoading}
               >
-                {resetLoading ? "Sending..." : "Send Reset Link"}
+                {resetLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  "Send reset link"
+                )}
               </Button>
             </DialogFooter>
           </form>

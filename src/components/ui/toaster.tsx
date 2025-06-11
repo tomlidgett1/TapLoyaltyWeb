@@ -22,7 +22,7 @@ export function Toaster() {
         
         return (
           <Toast key={id} {...props}>
-            <div className="grid gap-1">
+            <div className="grid gap-0.5 flex-1">
               {title && (
                 <ToastTitle>
                   {isAgentNotification ? (

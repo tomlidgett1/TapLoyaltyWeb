@@ -2,7 +2,7 @@
 
 import { SideNav } from "@/components/side-nav"
 import { usePathname } from "next/navigation"
-import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic, Menu, Pencil, Loader2, ExternalLink, Plug, PanelRight, Send } from "lucide-react"
+import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic, Menu, Pencil, Loader2, ExternalLink, Plug, PanelRight, Send, Activity, Clock, Wrench, Code } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useState, useEffect, useRef } from "react"
@@ -3031,25 +3031,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 ) : selectedLogData ? (
                   <div className="space-y-6">
                     {/* Execution Summary */}
-                    <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-medium text-gray-900">Execution Summary</h3>
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="h-2 w-2 rounded-full"
-                            style={{ backgroundColor: selectedLogData.status === 'success' ? '#10B981' : selectedLogData.status === 'failed' ? '#EF4444' : '#6B7280' }}
-                          />
-                          <span className="text-sm font-medium capitalize">{selectedLogData.status || 'Unknown'}</span>
+                    <div className="bg-white border border-gray-200 rounded-md p-4 shadow-sm">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="flex items-center justify-center w-9 h-9 bg-gray-100 rounded-md">
+                          <Activity className="h-4 w-4 text-gray-600" />
                         </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-gray-600">Agent:</span>
-                          <div className="font-medium">{selectedLogData.agentname || 'Unknown Agent'}</div>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Executed At:</span>
-                          <div className="font-medium">
+                        <div className="flex-1">
+                          <h3 className="font-medium text-gray-900">Execution Summary</h3>
+                          <div className="text-xs text-gray-500 mt-0.5">
                             {selectedLogData.executedAt ? 
                               new Intl.DateTimeFormat('en-AU', {
                                 dateStyle: 'medium',
@@ -3059,215 +3048,76 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                             }
                           </div>
                         </div>
-                        <div>
-                          <span className="text-gray-600">Tools Executed:</span>
-                          <div className="font-medium">{selectedLogData.toolsExecuted || 0}</div>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Successful Tools:</span>
-                          <div className="font-medium text-green-600">{selectedLogData.successfulTools || 0}</div>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Failed Tools:</span>
-                          <div className="font-medium text-red-600">{selectedLogData.failedTools || 0}</div>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Duration:</span>
-                          <div className="font-medium">{selectedLogData.details?.duration || selectedLogData.duration || 'N/A'} seconds</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Agent Response */}
-                    {selectedLogData.agentResponse && (
-                      <div className="bg-white border border-gray-200 rounded-md">
-                        <div className="p-3 border-b border-gray-200">
-                          <h4 className="font-medium text-gray-900">Agent Summary</h4>
-                        </div>
-                        <div className="p-4">
-                          <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                            {selectedLogData.agentResponse}
+                        <div className={`px-2.5 py-1 rounded-md text-xs font-medium ${
+                          selectedLogData.status === 'success' 
+                            ? 'bg-gray-100 text-green-700' 
+                            : selectedLogData.status === 'failed' 
+                              ? 'bg-gray-100 text-red-700' 
+                              : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          <div className="flex items-center gap-1.5">
+                            <div
+                              className="h-2 w-2 rounded-full"
+                              style={{ backgroundColor: selectedLogData.status === 'success' ? '#10B981' : selectedLogData.status === 'failed' ? '#EF4444' : '#6B7280' }}
+                            />
+                            <span className="capitalize">{selectedLogData.status || 'Unknown'}</span>
                           </div>
                         </div>
                       </div>
-                    )}
+
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-gray-100 rounded-md p-2.5 text-center">
+                          <div className="text-base font-medium text-gray-900">{selectedLogData.toolsExecuted || 0}</div>
+                          <div className="text-xs text-gray-500 mt-0.5">Tools Executed</div>
+                        </div>
+                        <div className="bg-gray-100 rounded-md p-2.5 text-center">
+                          <div className="text-base font-medium text-gray-900">{selectedLogData.successfulTools || 0}</div>
+                          <div className="text-xs text-gray-500 mt-0.5">Successful</div>
+                        </div>
+                        <div className="bg-gray-100 rounded-md p-2.5 text-center">
+                          <div className="text-base font-medium text-gray-900">{selectedLogData.failedTools || 0}</div>
+                          <div className="text-xs text-gray-500 mt-0.5">Failed</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-3.5 w-3.5 text-gray-400" />
+                          <span className="text-xs text-gray-600">{selectedLogData.details?.duration || selectedLogData.duration || 'N/A'} seconds</span>
+                        </div>
+                        <div className="text-xs font-medium text-gray-700">{selectedLogData.agentname || 'Unknown Agent'}</div>
+                      </div>
+                    </div>
 
                     {/* Tools Called */}
                     {selectedLogData.details?.toolsCalled && selectedLogData.details.toolsCalled.length > 0 && (
-                      <div className="bg-white border border-gray-200 rounded-md">
-                        <div className="p-3 border-b border-gray-200">
-                          <h4 className="font-medium text-gray-900">Tools Called</h4>
+                      <div className="bg-white border border-gray-200 rounded-md shadow-sm">
+                        <div className="p-3 border-b border-gray-200 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Wrench className="h-3.5 w-3.5 text-gray-500" />
+                            <h4 className="text-sm font-medium text-gray-900">Tools Called</h4>
+                          </div>
+                          <div className="bg-gray-100 rounded-md px-2 py-0.5 text-xs font-medium text-gray-700">
+                            {selectedLogData.details.toolsCalled.length} tools
+                          </div>
                         </div>
-                        <div className="p-4 space-y-3">
+                        <div className="divide-y divide-gray-100">
                           {selectedLogData.details.toolsCalled.map((tool: any, index: number) => (
-                            <div key={index} className="border border-gray-100 rounded-md p-3 bg-gray-50">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="font-medium text-sm">{tool.name}</span>
-                                <span className="text-xs text-gray-500">
-                                  {tool.timestamp ? new Date(tool.timestamp).toLocaleTimeString('en-AU') : ''}
-                                </span>
-                              </div>
-                              {tool.arguments && (
-                                <div className="text-xs">
-                                  <span className="text-gray-600">Arguments:</span>
-                                  <pre className="mt-1 bg-white p-2 rounded border text-gray-700 overflow-auto">
-                                    {JSON.stringify(JSON.parse(tool.arguments), null, 2)}
-                                  </pre>
+                            <div key={index} className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center gap-2">
+                                <div className="w-5 h-5 rounded-md bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                  <Code className="h-3 w-3 text-gray-600" />
                                 </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Executed Actions */}
-                    {selectedLogData.details?.executedActions && selectedLogData.details.executedActions.length > 0 && (
-                      <div className="bg-white border border-gray-200 rounded-md">
-                        <div className="p-3 border-b border-gray-200">
-                          <h4 className="font-medium text-gray-900">Executed Actions</h4>
-                        </div>
-                        <div className="p-4 space-y-4">
-                          {selectedLogData.details.executedActions.map((action: any, index: number) => (
-                            <div key={index} className="border border-gray-100 rounded-md p-3">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                  <div
-                                    className="h-2 w-2 rounded-full"
-                                    style={{ backgroundColor: action.successful ? '#10B981' : '#EF4444' }}
-                                  />
-                                  <span className="font-medium text-sm">{action.tool}</span>
-                                </div>
-                                <span className="text-xs text-gray-500">
-                                  {action.successful ? 'Success' : 'Failed'}
-                                </span>
+                                <span className="text-xs font-medium text-gray-800">{tool.name}</span>
                               </div>
-                              
-                              {action.arguments && (
-                                <div className="mb-2">
-                                  <div className="text-xs font-medium text-gray-600 mb-1">Arguments:</div>
-                                  <pre className="text-xs bg-gray-50 p-2 rounded border overflow-auto">
-                                    {JSON.stringify(action.arguments, null, 2)}
-                                  </pre>
-                                </div>
-                              )}
-                              
-                              {action.result && (
-                                <div>
-                                  <div className="text-xs font-medium text-gray-600 mb-1">Result:</div>
-                                  <pre className="text-xs bg-blue-50 p-2 rounded border overflow-auto max-h-32">
-                                    {typeof action.result === 'string' ? action.result : JSON.stringify(action.result, null, 2)}
-                                  </pre>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Conversation History */}
-                    {selectedLogData.details?.conversations && selectedLogData.details.conversations.length > 0 && (
-                      <div className="bg-white border border-gray-200 rounded-md">
-                        <div className="p-3 border-b border-gray-200">
-                          <h4 className="font-medium text-gray-900">Conversation History</h4>
-                        </div>
-                        <div className="p-4 space-y-3">
-                          {selectedLogData.details.conversations.map((message: any, index: number) => (
-                            <div key={index} className={`p-3 rounded-md ${
-                              message.role === 'user' ? 'bg-blue-50 border border-blue-200' :
-                              message.role === 'assistant' ? 'bg-green-50 border border-green-200' :
-                              message.role === 'system' ? 'bg-yellow-50 border border-yellow-200' :
-                              'bg-gray-50 border border-gray-200'
-                            }`}>
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-medium uppercase tracking-wide text-gray-600">
-                                  {message.role}
-                                </span>
-                              </div>
-                              <div className="text-sm leading-relaxed">
-                                {message.content && (
-                                  <div className="whitespace-pre-wrap">{message.content}</div>
-                                )}
-                                {message.tool_calls && message.tool_calls.length > 0 && (
-                                  <div className="mt-2 space-y-2">
-                                    <div className="text-xs font-medium text-gray-600">Tool Calls:</div>
-                                    {message.tool_calls.map((toolCall: any, toolIndex: number) => (
-                                      <div key={toolIndex} className="bg-white p-2 rounded border text-xs">
-                                        <div className="font-medium">{toolCall.function?.name}</div>
-                                        {toolCall.function?.arguments && (
-                                          <pre className="mt-1 text-gray-600 overflow-auto">
-                                            {JSON.stringify(JSON.parse(toolCall.function.arguments), null, 2)}
-                                          </pre>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Connected Apps */}
-                    {selectedLogData.details?.connectedApps && selectedLogData.details.connectedApps.length > 0 && (
-                      <div className="bg-white border border-gray-200 rounded-md">
-                        <div className="p-3 border-b border-gray-200">
-                          <h4 className="font-medium text-gray-900">Connected Apps</h4>
-                        </div>
-                        <div className="p-4">
-                          <div className="flex flex-wrap gap-2">
-                            {selectedLogData.details.connectedApps.map((app: string, index: number) => (
-                              <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 capitalize">
-                                {app}
+                              <span className="text-xs text-gray-500">
+                                {tool.timestamp ? new Date(tool.timestamp).toLocaleTimeString('en-AU') : ''}
                               </span>
-                            ))}
-                          </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
-
-                    {/* Original Prompt */}
-                    {selectedLogData.details?.prompt && (
-                      <div className="bg-white border border-gray-200 rounded-md">
-                        <div className="p-3 border-b border-gray-200">
-                          <h4 className="font-medium text-gray-900">Original Prompt</h4>
-                        </div>
-                        <div className="p-4">
-                          <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap bg-gray-50 p-3 rounded-md border">
-                            {selectedLogData.details.prompt}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Final Message */}
-                    {selectedLogData.details?.fullMessage && (
-                      <div className="bg-white border border-gray-200 rounded-md">
-                        <div className="p-3 border-b border-gray-200">
-                          <h4 className="font-medium text-gray-900">Final Response</h4>
-                        </div>
-                        <div className="p-4">
-                          <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                            {selectedLogData.details.fullMessage}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Debug: Raw Data */}
-                    <div className="bg-white border border-gray-200 rounded-md">
-                      <div className="p-3 border-b border-gray-200">
-                        <h4 className="font-medium text-gray-900">Debug: Raw Log Data</h4>
-                      </div>
-                      <div className="p-4">
-                        <pre className="text-xs overflow-auto bg-gray-50 p-3 rounded-md max-h-96 text-gray-700 whitespace-pre-wrap border border-gray-100">
-                          {JSON.stringify(selectedLogData, null, 2)}
-                        </pre>
-                      </div>
-                    </div>
                   </div>
                 ) : (
                   <div className="text-center py-12">

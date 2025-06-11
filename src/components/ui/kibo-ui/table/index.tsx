@@ -98,7 +98,7 @@ export type TableHeadProps = {
 };
 
 export const TableHead = ({ header, className }: TableHeadProps) => (
-  <TableHeadRaw key={header.id} className={cn("px-4 py-3", className)}>
+  <TableHeadRaw key={header.id} className={cn("px-4 py-2", className)}>
     {header.isPlaceholder
       ? null
       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -146,7 +146,7 @@ export function TableColumnHeader<TData, TValue>({
   className,
 }: TableColumnHeaderProps<TData, TValue>) {
   if (!column.getCanSort()) {
-    return <div className={cn(className)}>{title}</div>;
+    return <div className={cn('text-xs font-medium', className)}>{title}</div>;
   }
 
   return (
@@ -156,15 +156,15 @@ export function TableColumnHeader<TData, TValue>({
           <Button
             variant="ghost"
             size="sm"
-            className="-ml-3 h-8 data-[state=open]:bg-accent"
+            className="-ml-3 h-7 text-xs font-medium data-[state=open]:bg-accent"
           >
             <span>{title}</span>
             {column.getIsSorted() === 'desc' ? (
-              <ArrowDownIcon className="ml-2 h-4 w-4" />
+              <ArrowDownIcon className="ml-1.5 h-3.5 w-3.5" />
             ) : column.getIsSorted() === 'asc' ? (
-              <ArrowUpIcon className="ml-2 h-4 w-4" />
+              <ArrowUpIcon className="ml-1.5 h-3.5 w-3.5" />
             ) : (
-              <ChevronsUpDownIcon className="ml-2 h-4 w-4" />
+              <ChevronsUpDownIcon className="ml-1.5 h-3.5 w-3.5" />
             )}
           </Button>
         </DropdownMenuTrigger>

@@ -1169,7 +1169,7 @@ export default function AgentsPage() {
       header: ({ column }) => (
         <TableColumnHeader column={column} title="Agent" />
       ),
-      size: 280,
+      size: 240,
       cell: ({ row }) => (
         <div className="flex items-center gap-3 min-w-0 w-full">
           <div className="relative flex-shrink-0">
@@ -1220,89 +1220,18 @@ export default function AgentsPage() {
       },
     },
     {
-      accessorKey: 'toolsCalled',
+      accessorKey: 'scheduleId',
       header: ({ column }) => (
-        <TableColumnHeader column={column} title="Tools Called" />
+        <TableColumnHeader column={column} title="Schedule ID" />
       ),
-      size: 280,
+      size: 150,
       cell: ({ row }) => {
-        // Try to get tools from details array first, then fallback to toolsCalled
-        const rawTools = row.original.details?.toolsCalled || row.original.toolsCalled || []
-        
-        // Debug logging to understand the structure (will only show in browser console)
-        if (process.env.NODE_ENV !== 'production') {
-          console.debug('[Agent Logs] Tools Called Structure:', {
-            rawTools,
-            fromDetails: Boolean(row.original.details?.toolsCalled),
-            fromToolsCalled: Boolean(row.original.toolsCalled),
-            type: typeof rawTools,
-            isArray: Array.isArray(rawTools),
-            rowId: row.original.id
-          })
-        }
-        
-        // Ensure toolsCalled is always an array
-        const toolsArray = Array.isArray(rawTools) ? rawTools : 
-          (typeof rawTools === 'string' ? [rawTools] : [])
-        
-        if (toolsArray.length === 0) {
-          return <span className="text-sm text-gray-500">No tools used</span>
-        }
+        const scheduleId = row.original.scheduleId || row.original.details?.scheduleId
+        if (!scheduleId) return <span className="text-sm text-gray-500">—</span>
         
         return (
-          <div className="flex flex-col gap-1 min-w-0">
-            <div className="flex flex-wrap gap-1.5">
-              {toolsArray.map((tool: any, index: number) => {
-                // Extract tool name based on the Firestore structure
-                let toolName = '';
-                
-                if (typeof tool === 'object' && tool !== null) {
-                  // Check for the specific structure from Firestore
-                  if (tool.name) {
-                    toolName = tool.name;
-                  } else if (tool.id) {
-                    toolName = tool.id;
-                  }
-                } else if (typeof tool === 'string') {
-                  toolName = tool;
-                }
-                
-                // If no valid name found, use a placeholder
-                if (!toolName) {
-                  toolName = 'Unknown Tool';
-                }
-                
-                // Log tool name to help with debugging
-                if (process.env.NODE_ENV !== 'production') {
-                  console.debug('[Agent Logs] Tool Name:', toolName);
-                }
-                
-                // Format the tool name for display (remove prefixes, format nicely)
-                const displayName = formatToolName(toolName);
-                
-                // Use the original unformatted name for logo lookup to match exactly what's in the API
-                const logo = getToolLogo(toolName);
-                
-                return (
-                  <div 
-                    key={index} 
-                    className="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-md px-1.5 py-0.5 text-xs font-medium text-gray-700"
-                    title={`${displayName}${tool.arguments ? ` (${typeof tool.arguments === 'string' ? tool.arguments : JSON.stringify(tool.arguments)})` : ''}`}
-                  >
-                    {logo ? (
-                      <img src={logo} alt={displayName} className="w-3.5 h-3.5 rounded" />
-                    ) : (
-                      <div className="w-3.5 h-3.5 bg-gray-200 rounded flex items-center justify-center">
-                        <span className="text-[9px] font-bold text-gray-600">
-                          {displayName.charAt(0)}
-                        </span>
-                      </div>
-                    )}
-                    <span className="truncate max-w-[100px]">{displayName}</span>
-                  </div>
-                )
-              })}
-            </div>
+          <div className="text-sm">
+            <span className="font-mono text-xs text-gray-600">{scheduleId}</span>
           </div>
         )
       },
@@ -1736,7 +1665,7 @@ export default function AgentsPage() {
                   <div 
                     key={agent.id} 
                     className={cn(
-                      "bg-gray-50 border border-gray-200 rounded-md p-5 flex flex-col hover:border-gray-300 transition-colors",
+                  "bg-gray-50 border border-gray-200 rounded-md p-5 flex flex-col hover:border-gray-300 transition-colors",
                       agent.status === 'coming-soon' && "opacity-60 grayscale",
                       isCustomerServiceSection && "cursor-pointer"
                     )}
@@ -1747,17 +1676,17 @@ export default function AgentsPage() {
                       }
                     }}
                   >
-                    {/* Header with title and button */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2 flex-1">
-                        <h3 className="text-base font-medium text-gray-900">{agent.name}</h3>
-                      </div>
-                      <div className="flex items-center gap-2 ml-3">
-                        {(() => {
-                          const isEnrolled = enrolledAgents[agent.id]?.status === 'active'
-                          const isConnecting = connectingAgents.has(agent.id)
-                          const isComingSoon = agent.status === 'coming-soon'
-                          
+                  {/* Header with title and button */}
+                  <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2 flex-1">
+                            <h3 className="text-base font-medium text-gray-900">{agent.name}</h3>
+                          </div>
+                    <div className="flex items-center gap-2 ml-3">
+                      {(() => {
+                        const isEnrolled = enrolledAgents[agent.id]?.status === 'active'
+                        const isConnecting = connectingAgents.has(agent.id)
+                        const isComingSoon = agent.status === 'coming-soon'
+                        
                           // For all agents in Customer Service section, just show status indicator
                           if (isCustomerServiceSection) {
                             return (
@@ -1779,123 +1708,123 @@ export default function AgentsPage() {
                           }
                           
                           // For all other sections, show the buttons as before
-                          return (
-                            <>
-                              {/* Configure button - only show when enrolled */}
-                              {isEnrolled && (
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  className="rounded-md h-7 w-7 p-0"
+                        return (
+                          <>
+                            {/* Configure button - only show when enrolled */}
+                            {isEnrolled && (
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                className="rounded-md h-7 w-7 p-0"
                                   onClick={(e) => {
                                     e.stopPropagation(); // Prevent triggering parent onClick
                                     handleAgentAction(agent);
                                   }}
-                                >
-                                  <Settings className="h-3 w-3" />
-                                </Button>
+                              >
+                                <Settings className="h-3 w-3" />
+                              </Button>
+                            )}
+                            
+                            {/* Main connect/connected button */}
+                            <Button 
+                              size="sm" 
+                              variant={isEnrolled ? 'outline' : (agent.status === 'active' ? 'default' : 'outline')}
+                              disabled={isComingSoon || isConnecting || !user}
+                              className={cn(
+                                "rounded-md text-xs px-3 py-1 h-7",
+                                isEnrolled && "bg-green-50 hover:bg-green-100 border-green-200 text-green-700"
                               )}
-                              
-                              {/* Main connect/connected button */}
-                              <Button 
-                                size="sm" 
-                                variant={isEnrolled ? 'outline' : (agent.status === 'active' ? 'default' : 'outline')}
-                                disabled={isComingSoon || isConnecting || !user}
-                                className={cn(
-                                  "rounded-md text-xs px-3 py-1 h-7",
-                                  isEnrolled && "bg-green-50 hover:bg-green-100 border-green-200 text-green-700"
-                                )}
                                 onClick={(e) => {
                                   e.stopPropagation(); // Prevent triggering parent onClick
                                   if (!isEnrolled) handleAgentAction(agent);
                                 }}
-                              >
-                                {isConnecting 
-                                        ? 'Connecting...' 
-                                  : isEnrolled 
-                                          ? 'Connected'
-                                    : (agent.status === 'active' ? 'Connect' : 'Coming Soon')
-                                }
-                              </Button>
-                            </>
-                          )
-                        })()}
-                      </div>
-                    </div>
-
-                    {/* Description */}
-                    <p className="text-sm text-gray-600 mb-4 flex-1 leading-relaxed">{agent.description}</p>
-
-                    {/* Integration Logos - Show for all agents */}
-                    <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-                      <TooltipProvider>
-                        {/* Required Integrations */}
-                        <div className="flex gap-1.5">
-                          {(agent.requiredIntegrations || agent.integrations).map((integration, index) => (
-                            <Tooltip key={`required-${index}`}>
-                              <TooltipTrigger asChild>
-                                <div 
-                                  className="w-6 h-6 bg-gray-50 rounded border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors cursor-help"
-                                  onClick={(e) => e.stopPropagation()} // Prevent triggering parent onClick
-                                >
-                                  {integration === 'vault.png' ? (
-                                    <FileText className="h-4 w-4 text-blue-600" />
-                                  ) : (
-                                    <Image
-                                      src={`/${integration}`}
-                                      alt={integration.split('.')[0]}
-                                      width={16}
-                                      height={16}
-                                      className="object-contain"
-                                    />
-                                  )}
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent className="bg-gray-900 text-white border-gray-700">
-                                <p>{integrationNames[integration] || integration.split('.')[0]} (Required)</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          ))}
-                        </div>
-
-                        {/* Separator */}
-                        {agent.optionalIntegrations && agent.optionalIntegrations.length > 0 && (
-                          <>
-                            <div className="w-px h-4 bg-gray-300"></div>
-                            
-                            {/* Optional Integrations */}
-                            <div className="flex gap-1.5">
-                              {agent.optionalIntegrations.map((integration, index) => (
-                                <Tooltip key={`optional-${index}`}>
-                                  <TooltipTrigger asChild>
-                                    <div 
-                                      className="w-6 h-6 bg-gray-50 rounded border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors cursor-help opacity-60"
-                                      onClick={(e) => e.stopPropagation()} // Prevent triggering parent onClick
-                                    >
-                                      {integration === 'vault.png' ? (
-                                        <FileText className="h-4 w-4 text-blue-600" />
-                                      ) : (
-                                        <Image
-                                          src={`/${integration}`}
-                                          alt={integration.split('.')[0]}
-                                          width={16}
-                                          height={16}
-                                          className="object-contain"
-                                        />
-                                      )}
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="bg-gray-900 text-white border-gray-700">
-                                    <p>{integrationNames[integration] || integration.split('.')[0]} (Optional)</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              ))}
-                            </div>
+                            >
+                              {isConnecting 
+                                      ? 'Connecting...' 
+                                : isEnrolled 
+                                        ? 'Connected'
+                                  : (agent.status === 'active' ? 'Connect' : 'Coming Soon')
+                              }
+                            </Button>
                           </>
-                        )}
-                      </TooltipProvider>
+                        )
+                      })()}
                     </div>
                   </div>
+
+                  {/* Description */}
+                  <p className="text-sm text-gray-600 mb-4 flex-1 leading-relaxed">{agent.description}</p>
+
+                    {/* Integration Logos - Show for all agents */}
+                  <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                    <TooltipProvider>
+                      {/* Required Integrations */}
+                      <div className="flex gap-1.5">
+                        {(agent.requiredIntegrations || agent.integrations).map((integration, index) => (
+                          <Tooltip key={`required-${index}`}>
+                            <TooltipTrigger asChild>
+                                <div 
+                                  className="w-8 h-8 bg-gray-50 rounded-md border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors cursor-help"
+                                  onClick={(e) => e.stopPropagation()} // Prevent triggering parent onClick
+                                >
+                                {integration === 'vault.png' ? (
+                                  <FileText className="h-5 w-5 text-blue-600" />
+                                ) : (
+                                  <Image
+                                    src={`/${integration}`}
+                                    alt={integration.split('.')[0]}
+                                    width={16}
+                                    height={16}
+                                    className="object-contain"
+                                  />
+                                )}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent className="bg-gray-900 text-white border-gray-700">
+                              <p>{integrationNames[integration] || integration.split('.')[0]} (Required)</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ))}
+                      </div>
+
+                      {/* Separator */}
+                      {agent.optionalIntegrations && agent.optionalIntegrations.length > 0 && (
+                        <>
+                          <div className="w-px h-5 bg-gray-300"></div>
+                          
+                          {/* Optional Integrations */}
+                          <div className="flex gap-1.5">
+                            {agent.optionalIntegrations.map((integration, index) => (
+                              <Tooltip key={`optional-${index}`}>
+                                <TooltipTrigger asChild>
+                                    <div 
+                                      className="w-8 h-8 bg-gray-50 rounded-md border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors cursor-help opacity-60"
+                                      onClick={(e) => e.stopPropagation()} // Prevent triggering parent onClick
+                                    >
+                                    {integration === 'vault.png' ? (
+                                      <FileText className="h-5 w-5 text-blue-600" />
+                                    ) : (
+                                      <Image
+                                        src={`/${integration}`}
+                                        alt={integration.split('.')[0]}
+                                        width={20}
+                                        height={20}
+                                        className="object-contain"
+                                      />
+                                    )}
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-gray-900 text-white border-gray-700">
+                                  <p>{integrationNames[integration] || integration.split('.')[0]} (Optional)</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </TooltipProvider>
+                  </div>
+                </div>
                 );
               })}
             </div>
@@ -1937,7 +1866,7 @@ export default function AgentsPage() {
                     (window as any).handleLogClick(agentLogs[rowIndex].id, user.uid);
                   }}
                 >
-                  <div className="overflow-x-auto">
+                    <div className="overflow-x-auto">
                     <TableProvider columns={logColumns} data={agentLogs}>
                       <TableHeader>
                         {({ headerGroup }) => (
@@ -1953,11 +1882,11 @@ export default function AgentsPage() {
                             row={row}
                             className="cursor-pointer hover:bg-gray-50 transition-colors"
                           >
-                            {({ cell }) => <TableCell key={cell.id} cell={cell} />}
-                          </TableRow>
+                              {({ cell }) => <TableCell key={cell.id} cell={cell} />}
+                            </TableRow>
                         )}
                       </TableBody>
-                    </TableProvider>
+                  </TableProvider>
                   </div>
                 </div>
               )}
@@ -2033,7 +1962,7 @@ export default function AgentsPage() {
                           <span className="text-xs text-gray-500 font-medium">Tools:</span>
                       <div className="flex gap-1">
                             {agent.settings.selectedTools.slice(0, 3).map((toolSlug: string, index: number) => (
-                              <div key={index} className="w-4 h-4 bg-gray-100 rounded-md flex items-center justify-center">
+                              <div key={index} className="w-5 h-5 bg-gray-100 rounded-md flex items-center justify-center">
                                 <span className="text-xs font-medium text-gray-600">
                                   {toolSlug.charAt(0).toUpperCase()}
                                 </span>
@@ -4907,7 +4836,7 @@ Describe the main purpose and goal of your agent...
                                         className="w-4 h-4 rounded flex-shrink-0"
                                       />
                                     ) : (
-                                      <div className="w-4 h-4 bg-gray-100 rounded flex items-center justify-center flex-shrink-0">
+                                      <div className="w-5 h-5 bg-gray-100 rounded-md flex items-center justify-center flex-shrink-0">
                                         <span className="text-xs font-medium text-gray-600">
                                           {tool.name.charAt(0)}
                                         </span>
@@ -4986,14 +4915,14 @@ Describe the main purpose and goal of your agent...
                                           <img
                                             src={tool.deprecated.toolkit.logo}
                                             alt={tool.toolkit?.name || tool.name}
-                                            className="w-5 h-5 rounded"
+                                            className="w-7 h-7 rounded-md"
                                             onError={(e) => {
                                               e.currentTarget.style.display = 'none'
                                             }}
                                           />
                                         ) : (
-                                          <div className="w-5 h-5 bg-gray-100 rounded flex items-center justify-center">
-                                            <span className="text-xs font-medium text-gray-600">
+                                          <div className="w-7 h-7 bg-gray-100 rounded-md flex items-center justify-center">
+                                            <span className="text-sm font-medium text-gray-600">
                                               {tool.name.charAt(0)}
                                             </span>
                                           </div>
@@ -5162,13 +5091,13 @@ Describe the main purpose and goal of your agent...
                                 <img
                                   src={tool.deprecated.toolkit.logo}
                                   alt={tool.toolkit?.name || tool.name}
-                                  className="w-4 h-4 rounded flex-shrink-0"
+                                  className="w-5 h-5 rounded-md flex-shrink-0"
                                   onError={(e) => {
                                     e.currentTarget.style.display = 'none'
                                   }}
                                 />
                               ) : (
-                                <div className="w-4 h-4 bg-gray-100 rounded flex-shrink-0 flex items-center justify-center">
+                                <div className="w-5 h-5 bg-gray-100 rounded-md flex-shrink-0 flex items-center justify-center">
                                   <span className="text-xs font-medium text-gray-600">
                                     {tool.name.charAt(0)}
                                   </span>
@@ -5217,7 +5146,7 @@ Describe the main purpose and goal of your agent...
 
                 {/* Create Button Section - Fixed at bottom */}
                 <div className="border-t border-gray-200 pt-4 mt-auto sticky bottom-0 bg-gray-50">
-                  <div className="space-y-3">
+                  <div className="flex items-center justify-end gap-3">
                     <Button
                       type="button"
                       onClick={async () => {
@@ -5256,6 +5185,7 @@ Describe the main purpose and goal of your agent...
                             prompt: agentCanvasContent,
                             agentDescription: agentDescription || 'AI agent that executes multi-step tasks',
                             scheduleId: scheduleId, // Store reference to schedule document
+                            appsUsed: Array.from(selectedTools), // Add appsUsed field to track connected apps
                             settings: {
                               schedule: {
                                 frequency: createAgentSchedule.frequency,
@@ -5383,11 +5313,12 @@ Describe the main purpose and goal of your agent...
                         }
                       }}
                       disabled={isCreatingAgent || !agentCanvasContent || typeof agentCanvasContent !== 'string' || !agentCanvasContent.trim() || !createAgentForm.name.trim() || !createAgentSchedule.frequency}
-                      className="w-full rounded-md"
+                      className="rounded-md px-4 py-1.5 h-auto text-sm"
+                      size="sm"
                     >
                       {isCreatingAgent ? (
                         <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                           {selectedCustomAgent ? 'Updating...' : 'Creating...'}
                         </>
                       ) : (
@@ -5398,6 +5329,7 @@ Describe the main purpose and goal of your agent...
                     {selectedCustomAgent && (
                       <Button
                         variant="destructive"
+                        size="sm"
                         onClick={async () => {
                           try {
                             if (confirm("Are you sure you want to delete this agent? This action cannot be undone.")) {
@@ -5450,42 +5382,60 @@ Describe the main purpose and goal of your agent...
                             })
                           }
                         }}
-                        className="w-full rounded-md"
+                        className="rounded-md px-4 py-1.5 h-auto text-sm"
                       >
                         Delete Agent
                       </Button>
                     )}
                     
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedCustomAgent(null)
-                        setCreateAgentForm({ name: 'New Agent', steps: [''] })
-                        setCreateAgentSchedule({ frequency: '', time: '12:00', days: [], selectedDay: '' })
-                        setSelectedTools(new Set())
-                        setToolsSearchQuery('')
-                        setSmartCreatePrompt('')
-                        setShowSmartCreateInput(false)
-                        setAgentCanvasContent('')
-                        setAgentDescription('')
-                        setShowToolsDropdown(false)
-                        setToolsDropdownQuery('')
-                        setSelectedToolIndex(0)
-                        setFilteredTools([])
-                        setAtMentionPosition(0)
-                        setCreateAgentDebugResponse(null)
-                        setNotificationSettings({
-                          sendToInbox: true,
-                          sendViaEmail: false,
-                          emailAddress: notificationSettings.emailAddress, // Keep the merchant's email
-                          emailFormat: "professional"
-                        })
-                        setIsCreateAgentModalOpen(false)
-                      }}
-                      className="w-full rounded-md"
-                    >
-                      Cancel
-                    </Button>
+                    {!selectedCustomAgent && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            // Using httpsCallable for Firebase Functions automatically handles CORS
+                            const functions = getFunctions()
+                            const triggerAgentExecution = httpsCallable(functions, 'triggerAgentExecution')
+                            
+                            // Create a random agent ID with a prefix
+                            const randomAgentId = "test-agent-" + Math.random().toString(36).substring(2, 8)
+                            
+                            // Prepare payload exactly as the function expects
+                            const payload = {
+                              merchantId: user?.uid || "abc123",
+                              agentId: randomAgentId,
+                              prompt: agentCanvasContent
+                            }
+                            
+                            toast({
+                              title: "Testing Agent",
+                              description: "Triggering agent execution...",
+                            })
+                            
+                            // Call the function with the payload
+                            const result = await triggerAgentExecution(payload)
+                            
+                            toast({
+                              title: "Test Initiated",
+                              description: "Agent execution has been triggered successfully.",
+                            })
+                            
+                            console.log("Agent execution result:", result.data)
+                          } catch (error) {
+                            console.error("Error triggering agent:", error)
+                            toast({
+                              title: "Error",
+                              description: error.message || "Failed to trigger agent execution. Please try again.",
+                              variant: "destructive"
+                            })
+                          }
+                        }}
+                        className="rounded-md px-4 py-1.5 h-auto text-sm"
+                      >
+                        Test
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>

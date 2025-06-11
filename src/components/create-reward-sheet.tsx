@@ -1,6 +1,7 @@
 "use client"
 
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose, SheetPortal, SheetOverlay } from "@/components/ui/sheet"
+import * as SheetPrimitive from "@radix-ui/react-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -967,11 +968,23 @@ export function CreateRewardSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        className="sm:max-w-[600px] p-0 overflow-auto h-screen rounded-md"
-        onInteractOutside={(e) => e.preventDefault()}
-        data-instant-close={instantClose ? "true" : "false"}
-      >
+      <SheetPortal>
+        <SheetOverlay className="bg-black/30" />
+        <SheetPrimitive.Content
+          className={cn(
+            "fixed z-50 gap-4 bg-background shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
+            "inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
+            "sm:max-w-[600px] p-0 overflow-auto h-screen rounded-md"
+          )}
+          data-instant-close={instantClose ? "true" : "false"}
+        >
+          <SheetPrimitive.Close 
+            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-0 disabled:pointer-events-none data-[state=open]:bg-secondary z-10"
+            tabIndex={-1}
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </SheetPrimitive.Close>
         <div className="flex-none px-6 py-3 border-b">
           <SheetHeader className="mb-1">
             <SheetTitle className="text-lg">
@@ -2795,7 +2808,8 @@ export function CreateRewardSheet({
             </Button>
           </div>
         </div>
-      </SheetContent>
+        </SheetPrimitive.Content>
+      </SheetPortal>
     </Sheet>
   )
 }

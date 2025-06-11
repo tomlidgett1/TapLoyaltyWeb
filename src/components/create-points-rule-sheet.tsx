@@ -1,6 +1,6 @@
 "use client"
 
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose, SheetDescription } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose, SheetDescription, SheetOverlay } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -224,6 +224,7 @@ export function CreatePointsRuleSheet({ open, onOpenChange }: CreatePointsRuleSh
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetOverlay className="bg-black/30" />
       <SheetContent
         className="sm:max-w-[600px] p-0 overflow-auto h-screen rounded-md"
         onInteractOutside={(e) => e.preventDefault()}

@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose, SheetDescription } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose, SheetDescription, SheetOverlay } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -537,6 +537,7 @@ export function SendBroadcastSheet({ open, onOpenChange }: SendBroadcastSheetPro
   
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetOverlay className="bg-black/30" />
       <SheetContent
         className="sm:max-w-[600px] p-0 overflow-hidden h-screen flex flex-col rounded-md"
         onInteractOutside={(e) => e.preventDefault()}

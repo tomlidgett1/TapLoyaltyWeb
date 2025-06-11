@@ -1,6 +1,6 @@
 "use client"
 
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetOverlay } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Coffee, Percent, ChevronRight, ArrowLeft, Loader2, CheckCircle, ShoppingBag } from "lucide-react"
 import { Card } from "@/components/ui/card"
@@ -763,6 +763,7 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetOverlay className="bg-black/30" />
         <SheetContent side="right" className="w-full sm:max-w-md md:max-w-xl lg:max-w-2xl overflow-hidden p-0 flex flex-col" instantClose={instantClose}>
           <style jsx global>{scrollbarStyles}</style>
           

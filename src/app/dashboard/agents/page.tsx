@@ -252,6 +252,7 @@ export default function AgentsPage() {
   const [createAgentDebugResponse, setCreateAgentDebugResponse] = useState<string | null>(null) // Add state for debugging
   const [isEditingCanvas, setIsEditingCanvas] = useState(false) // Add state for canvas edit mode
   const [showDebugDialog, setShowDebugDialog] = useState(false) // Control debug dialog visibility
+  const [isInquiriesLoggerMode, setIsInquiriesLoggerMode] = useState(false) // Control simplified UI for preset agents
   const [agentDescription, setAgentDescription] = useState<string>('')
 
   // Email Rule State for adding new rules
@@ -311,6 +312,16 @@ export default function AgentsPage() {
         integrations: ['gmail.png'],
         requiredIntegrations: ['gmail.png'],
         optionalIntegrations: ['outlook.png']
+      },
+      {
+        id: 'inquiries-logger',
+        name: 'Inquiries Logger',
+        description: 'Automatically log and categorise customer inquiries from emails for better tracking and analytics',
+        status: 'active' as const,
+        features: ['Auto-logging', 'Inquiry categorisation', 'Analytics tracking', 'Customer insights'],
+        integrations: ['gmail.png'],
+        requiredIntegrations: ['gmail.png'],
+        optionalIntegrations: ['xero.png', 'square.png']
       }
     ]
   }
@@ -648,7 +659,6 @@ export default function AgentsPage() {
       setSelectedToolIndex(0) // Reset selection
     }
   }, [toolsDropdownQuery, composioTools])
-
   const handleAgentAction = async (agent: Agent) => {
     if (agent.id === 'email-summary') {
       setIsEmailSummaryModalOpen(true)
@@ -659,6 +669,16 @@ export default function AgentsPage() {
     } else if (agent.id === 'customer-service') {
       // Open the customer service modal
       setIsCustomerServiceModalOpen(true)
+    } else if (agent.id === 'inquiries-logger') {
+      // Pre-populate the create agent modal with inquiries logger instructions
+      setCreateAgentForm({
+        name: 'Inquiries Logger',
+        steps: ['']
+      })
+      setAgentCanvasContent("**Goal**\nAutomatically process customer emails by analyzing and logging their content in a Google Sheet, then sending a weekly summary of all customer inquiries to the user's inbox.\n\n**Tools Required**\n1. tool:GMAIL_FETCH_EMAILS\n2. tool:GOOGLESHEETS_BATCH_UPDATE\n3. tool:GOOGLESHEETS_BATCH_GET\n4. tool:GMAIL_SEND_EMAIL\n\n**Steps**\nStep 1: Monitor the user's inbox for incoming emails from customers. Identify and filter emails that are from customers by checking sender addresses or specific labels if applicable. Exclude non-customer emails such as spam, internal communications, or newsletters. and use toolname:GMAIL_FETCH_EMAILS\n\nStep 2: Analyze the content of each customer email. Extract key information such as customer name, inquiry details, date/time of the email, and any other relevant metadata. This analysis should provide a structured summary of the email content.\n\nStep 3: Log the structured data from each analyzed email into a designated Google Sheet. Each row in the sheet should represent one customer inquiry with columns for customer name, inquiry details, date/time, and any other relevant fields. and use toolname:GOOGLESHEETS_BATCH_UPDATE\n\nStep 4: At the end of each week, compile a summary of all customer inquiries logged in the Google Sheet during that week. The summary should highlight key points such as volume of inquiries, common topics, and any notable requests or issues. and use toolname:GOOGLESHEETS_BATCH_GET\n\nStep 5: Send the weekly summary report via email to the user's inbox. The email should have a clear subject line indicating it is a weekly customer inquiry summary and include the compiled summary content in the body. and use toolname:GMAIL_SEND_EMAIL\n\n**Notes**\n- **Clarify Requirements and Data Definitions**  \n  - Confirm precise definitions for \"customer email\" (e.g., specific domains, address patterns, or inbox labels).  \n  - Identify what counts as \"key information\" and \"relevant metadata\" — consider including email ID, thread info, urgency flags, etc.  \n  - Align on the Google Sheet schema, naming conventions, and access permissions.\n\n- **Design Robust Email Filtering**  \n  - Implement layered filtering: check sender domain/address, apply labels, and use subject/body keyword analysis if necessary.  \n  - Maintain a configurable allow-list/block-list for senders to adapt over time.  \n  - Regularly review false positives/negatives and refine rules.\n\n- **Automate Structured Data Extraction with High Accuracy**  \n  - Use advanced NLP techniques to parse free-text inquiry details and summarize them concisely.  \n  - Validate extracted fields (e.g., cross-check customer names against CRM if possible).  \n  - Capture the full date/time in a standardized format (ISO 8601), handle time zones properly.\n\n- **Implement Google Sheets Logging with Data Integrity**  \n  - Ensure atomic updates to prevent race conditions or data loss.  \n  - Use unique identifiers for each row to enable tracing back to the original email.  \n  - Handle Google Sheets API rate limits and error cases gracefully (with retries and logging).\n\n- **Generate Insightful Weekly Summaries**  \n  - Go beyond raw counts — analyze for trends")
+      setAgentDescription("Automatically log and categorise customer inquiries from emails for better tracking and analytics")
+      setIsInquiriesLoggerMode(true) // Enable simplified UI
+      setIsCreateAgentModalOpen(true)
     } else if (agent.id === 'sales-analysis') {
       toast({
         title: "Sales Analysis Agent",
@@ -1665,7 +1685,7 @@ export default function AgentsPage() {
                   <div 
                     key={agent.id} 
                     className={cn(
-                  "bg-gray-50 border border-gray-200 rounded-md p-5 flex flex-col hover:border-gray-300 transition-colors",
+                  "bg-gray-50 border border-gray-200 rounded-md p-5 flex flex-col hover:border-gray-300 transition-colors relative",
                       agent.status === 'coming-soon' && "opacity-60 grayscale",
                       isCustomerServiceSection && "cursor-pointer"
                     )}
@@ -1676,6 +1696,14 @@ export default function AgentsPage() {
                       }
                     }}
                   >
+                  {/* Trigger Badge - only for Inquiries Logger */}
+                  {agent.id === 'inquiries-logger' && (
+                    <div className="absolute bottom-6 right-5 z-10 flex items-center">
+                      <div className="bg-gray-100 border border-gray-200 text-gray-700 text-xs font-medium px-2 py-1 rounded-md">
+                        Trigger
+                      </div>
+                    </div>
+                  )}
                   {/* Header with title and button */}
                   <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2 flex-1">
@@ -4239,6 +4267,7 @@ export default function AgentsPage() {
             setFilteredTools([])
             setAtMentionPosition(0)
             setCreateAgentDebugResponse(null)
+            setIsInquiriesLoggerMode(false) // Reset simplified UI mode
             setNotificationSettings({
               sendToInbox: true,
               sendViaEmail: false,
@@ -4306,94 +4335,98 @@ export default function AgentsPage() {
                     
                     <TooltipProvider>
                       <div className="flex items-center gap-2">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setShowSmartCreateInput(!showSmartCreateInput)
-                              }}
-                              className="rounded-md h-8 w-8 p-0"
-                            >
-                              <Wand2 className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Smart Create - Generate agent with AI</p>
-                          </TooltipContent>
-                        </Tooltip>
+                        {!isInquiriesLoggerMode && (
+                          <>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setShowSmartCreateInput(!showSmartCreateInput)
+                                  }}
+                                  className="rounded-md h-8 w-8 p-0"
+                                >
+                                  <Wand2 className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Smart Create - Generate agent with AI</p>
+                              </TooltipContent>
+                            </Tooltip>
 
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={async () => {
-                          if (!user?.uid) {
-                          toast({
-                              title: "Authentication Required",
-                              description: "Please sign in to generate agent ideas.",
-                              variant: "destructive"
-                            })
-                            return
-                          }
-
-                          try {
-                                  setIsLoadingAgentIdeas(true)
-                            
-                            toast({
-                              title: "Generating Agent Ideas",
-                              description: "AI is analysing your business and available tools...",
-                            })
-
-                            const functions = getFunctions()
-                            const generateAgentIdeas = httpsCallable(functions, 'generateAgentIdeas')
-                            
-                            const result = await generateAgentIdeas({
-                              merchantId: user.uid
-                            })
-
-                            const data = result.data as any
-
-                            setAgentIdeas(data)
-
-                            if (data && data.agentIdeas) {
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              if (!user?.uid) {
                               toast({
-                                title: "Agent Ideas Generated!",
-                                description: `Found ${data.agentIdeas.length} agent ideas for your business.`,
-                              })
-                            } else {
-                              toast({
-                                title: "Ideas Generated",
-                                description: "Agent ideas have been generated successfully.",
-                              })
-                            }
-                          } catch (error) {
-                                  console.error('Error generating agent ideas:', error)
-                            toast({
-                              title: "Generation Failed",
-                              description: error instanceof Error ? error.message : "Failed to generate agent ideas. Please try again.",
-                              variant: "destructive"
-                            })
-                          } finally {
-                                  setIsLoadingAgentIdeas(false)
-                          }
-                        }}
-                        disabled={isLoadingAgentIdeas}
-                              className="rounded-md h-8 w-8 p-0"
-                      >
-                        {isLoadingAgentIdeas ? (
-                          <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
-                        ) : (
-                          <Brain className="h-4 w-4" />
+                                  title: "Authentication Required",
+                                  description: "Please sign in to generate agent ideas.",
+                                  variant: "destructive"
+                                })
+                                return
+                              }
+
+                              try {
+                                      setIsLoadingAgentIdeas(true)
+                                
+                                toast({
+                                  title: "Generating Agent Ideas",
+                                  description: "AI is analysing your business and available tools...",
+                                })
+
+                                const functions = getFunctions()
+                                const generateAgentIdeas = httpsCallable(functions, 'generateAgentIdeas')
+                                
+                                const result = await generateAgentIdeas({
+                                  merchantId: user.uid
+                                })
+
+                                const data = result.data as any
+
+                                setAgentIdeas(data)
+
+                                if (data && data.agentIdeas) {
+                                  toast({
+                                    title: "Agent Ideas Generated!",
+                                    description: `Found ${data.agentIdeas.length} agent ideas for your business.`,
+                                  })
+                                } else {
+                                  toast({
+                                    title: "Ideas Generated",
+                                    description: "Agent ideas have been generated successfully.",
+                                  })
+                                }
+                              } catch (error) {
+                                      console.error('Error generating agent ideas:', error)
+                                toast({
+                                  title: "Generation Failed",
+                                  description: error instanceof Error ? error.message : "Failed to generate agent ideas. Please try again.",
+                                  variant: "destructive"
+                                })
+                              } finally {
+                                      setIsLoadingAgentIdeas(false)
+                              }
+                            }}
+                            disabled={isLoadingAgentIdeas}
+                                  className="rounded-md h-8 w-8 p-0"
+                          >
+                            {isLoadingAgentIdeas ? (
+                              <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
+                            ) : (
+                              <Brain className="h-4 w-4" />
+                            )}
+                          </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Generate Ideas - Get AI agent suggestions</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </>
                         )}
-                      </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Generate Ideas - Get AI agent suggestions</p>
-                          </TooltipContent>
-                        </Tooltip>
 
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -4516,28 +4549,32 @@ export default function AgentsPage() {
                           </TooltipContent>
                         </Tooltip>
                         
-                        {/* Vertical Separator */}
-                        <div className="h-6 w-px bg-gray-200 mx-2"></div>
-                        
-                        {/* Tools Button */}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowToolsInLeftPanel(!showToolsInLeftPanel)}
-                              className={cn(
-                                "rounded-md h-8 w-8 p-0",
-                                showToolsInLeftPanel && "bg-gray-100"
-                              )}
-                            >
-                              <Puzzle className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Tools - View available integrations</p>
-                          </TooltipContent>
-                        </Tooltip>
+                        {!isInquiriesLoggerMode && (
+                          <>
+                            {/* Vertical Separator */}
+                            <div className="h-6 w-px bg-gray-200 mx-2"></div>
+                            
+                            {/* Tools Button */}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setShowToolsInLeftPanel(!showToolsInLeftPanel)}
+                                  className={cn(
+                                    "rounded-md h-8 w-8 p-0",
+                                    showToolsInLeftPanel && "bg-gray-100"
+                                  )}
+                                >
+                                  <Puzzle className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Tools - View available integrations</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </>
+                        )}
                       </div>
                     </TooltipProvider>
                   </div>
@@ -5482,6 +5519,8 @@ Describe the main purpose and goal of your agent...
           </DialogPortal>
         </Dialog>
       )}
+
+
     </div>
   )
 } 

@@ -38,7 +38,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, DocumentData } from "firebase/firestore"
@@ -49,6 +49,11 @@ import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/use-toast"
 import { collection, getDocs, query, where, limit, onSnapshot } from "firebase/firestore"
 import { CreateSheet } from "@/components/create-sheet"
+import { CreateRewardSheet } from "@/components/create-reward-sheet"
+import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
+import { SendBroadcastSheet } from "@/components/send-broadcast-sheet"
+import { CreatePointsRuleSheet } from "@/components/create-points-rule-sheet"
+import { IntroductoryRewardSheet } from "@/components/introductory-reward-sheet"
 import { Badge } from "@/components/ui/badge"
 
 // Get auth instance
@@ -234,6 +239,24 @@ interface SectionState {
 }
 
 export function SideNav({ className = "", onCollapseChange, collapsed }: { className?: string, onCollapseChange?: (collapsed: boolean) => void, collapsed?: boolean }) {
+  // Add portal container for dropdown menus to the document body
+  useEffect(() => {
+    const portalContainer = document.getElementById('dropdown-portal');
+    if (!portalContainer) {
+      const div = document.createElement('div');
+      div.id = 'dropdown-portal';
+      div.style.position = 'relative';
+      div.style.zIndex = '9999';
+      document.body.appendChild(div);
+    }
+    
+    return () => {
+      const portalContainer = document.getElementById('dropdown-portal');
+      if (portalContainer) {
+        document.body.removeChild(portalContainer);
+      }
+    };
+  }, []);
   const pathname = usePathname() || ""
   const router = useRouter()
   const { user } = useAuth()
@@ -255,9 +278,57 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
     "Tap Loyalty": false
   })
   const [createSheetOpen, setCreateSheetOpen] = useState(false)
+  const [createRewardSheetOpen, setCreateRewardSheetOpen] = useState(false)
+  const [createRecurringOpen, setCreateRecurringOpen] = useState(false)
+  const [createBannerOpen, setCreateBannerOpen] = useState(false)
+  const [broadcastDialogOpen, setBroadcastDialogOpen] = useState(false)
+  const [createRuleOpen, setCreateRuleOpen] = useState(false)
+  const [introRewardOpen, setIntroRewardOpen] = useState(false)
   const [pendingInboxCount, setPendingInboxCount] = useState(0)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isInternalChange, setIsInternalChange] = useState(true)
+  const [createMenuOpen, setCreateMenuOpen] = useState(false)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 })
+  const createButtonRef = useRef<HTMLButtonElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Handle clicks outside of the dropdown to close it
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (createMenuOpen &&
+          dropdownRef.current && 
+          !dropdownRef.current.contains(event.target as Node) &&
+          createButtonRef.current && 
+          !createButtonRef.current.contains(event.target as Node)) {
+        setCreateMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [createMenuOpen]);
+
+  // Position dropdown when button is clicked
+  useEffect(() => {
+    if (createMenuOpen && createButtonRef.current) {
+      const rect = createButtonRef.current.getBoundingClientRect()
+      if (isCollapsed) {
+        // Position dropdown to the right of collapsed sidebar
+        setDropdownPosition({
+          top: rect.top,
+          left: rect.right + 5
+        })
+      } else {
+        // Position dropdown below the button for expanded sidebar
+        setDropdownPosition({
+          top: rect.bottom + 5,
+          left: rect.left
+        })
+      }
+    }
+  }, [createMenuOpen, isCollapsed])
 
   // Sync with parent's collapsed prop (external change)
   useEffect(() => {
@@ -266,6 +337,12 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       setIsCollapsed(collapsed)
     }
   }, [collapsed, isCollapsed])
+
+  // Close dropdown menus when sheets are opened/closed
+  useEffect(() => {
+    // Reset the dropdown states when sheets are opened or closed
+    setCreateMenuOpen(false)
+  }, [createSheetOpen, createRewardSheetOpen, createRecurringOpen, createBannerOpen, broadcastDialogOpen, createRuleOpen, introRewardOpen])
 
   // Notify parent component when collapse state changes (only for internal changes)
   useEffect(() => {
@@ -526,99 +603,175 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       
       {/* Create Button */}
       <div className="px-3 mb-2">
-        {isCollapsed ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-normal transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 w-full h-9"
-                title="Create"
-              >
+                  {isCollapsed ? (
+          <div className="relative">
+            <button
+              className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-normal transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 w-full h-9"
+              title="Create"
+              onClick={() => setCreateMenuOpen(!createMenuOpen)}
+              ref={createButtonRef}
+            >
+              <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+                <PlusCircle className="h-4 w-4 text-gray-500 group-hover:text-[#007AFF]" />
+              </div>
+            </button>
+            {createMenuOpen && (
+              <div ref={dropdownRef} className="fixed z-[1000] bg-white rounded-md shadow-lg border border-gray-200 py-1 w-56" style={dropdownPosition}>
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
+                  onClick={() => {
+                    setCreateRewardSheetOpen(true);
+                    setCreateMenuOpen(false);
+                  }}
+                >
+                  <Gift className="h-4 w-4 mr-2" />
+                  New Reward
+                </button>
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
+                  onClick={() => {
+                    setCreateRecurringOpen(true);
+                    setCreateMenuOpen(false);
+                  }}
+                >
+                  <Coffee className="h-4 w-4 mr-2" />
+                  Create Program
+                </button>
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
+                  onClick={() => {
+                    setCreateBannerOpen(true);
+                    setCreateMenuOpen(false);
+                  }}
+                >
+                  <Image className="h-4 w-4 mr-2" />
+                  New Banner
+                </button>
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
+                  onClick={() => {
+                    setBroadcastDialogOpen(true);
+                    setCreateMenuOpen(false);
+                  }}
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  New Message
+                </button>
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
+                  onClick={() => {
+                    setCreateRuleOpen(true);
+                    setCreateMenuOpen(false);
+                  }}
+                >
+                  <Zap className="h-4 w-4 mr-2" />
+                  New Points Rule
+                </button>
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
+                  onClick={() => {
+                    setIntroRewardOpen(true);
+                    setCreateMenuOpen(false);
+                  }}
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  <span>Intro Reward</span>
+                </button>
+              </div>
+            )}
+          </div>
+                  ) : (
+          <div className="relative">
+            <button
+              className="group flex items-center justify-between w-full gap-3 rounded-md px-3 py-2 text-sm font-normal transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 h-9"
+              onClick={() => setCreateMenuOpen(!createMenuOpen)}
+              ref={createButtonRef}
+            >
+              <div className="flex items-center gap-3 h-full">
                 <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
                   <PlusCircle className="h-4 w-4 text-gray-500 group-hover:text-[#007AFF]" />
                 </div>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onClick={() => setCreateSheetOpen(true)}>
-                <Gift className="h-4 w-4 mr-2" />
-                New Reward
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreateSheetOpen(true)}>
-                <Coffee className="h-4 w-4 mr-2" />
-                Create Program
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreateSheetOpen(true)}>
-                <Image className="h-4 w-4 mr-2" />
-                New Banner
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreateSheetOpen(true)}>
-                <MessageSquare className="h-4 w-4 mr-2" />
-                New Message
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreateSheetOpen(true)}>
-                <Zap className="h-4 w-4 mr-2" />
-                New Points Rule
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreateSheetOpen(true)}>
-                <Sparkles className="w-4 h-4 mr-2" />
-                <span>Introductory Reward</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="group flex items-center justify-between w-full gap-3 rounded-md px-3 py-2 text-sm font-normal transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 h-9"
-              >
-                <div className="flex items-center gap-3 h-full">
-                  <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                    <PlusCircle className="h-4 w-4 text-gray-500 group-hover:text-[#007AFF]" />
-                  </div>
-                  <div className="h-full flex items-center overflow-hidden">
-                    <span className={cn(
-                      "transition-all duration-300 ease-in-out whitespace-nowrap group-hover:text-[#007AFF]",
-                      isCollapsed ? "w-0 opacity-0 delay-0" : "w-auto opacity-100 delay-75"
-                    )}>
-                      Create
-                    </span>
-                  </div>
-                </div>
-                <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                  <ChevronDown className={cn(
-                    "h-4 w-4 transition-all duration-300 ease-in-out text-gray-500 group-hover:text-[#007AFF]",
+                <div className="h-full flex items-center overflow-hidden">
+                  <span className={cn(
+                    "transition-all duration-300 ease-in-out whitespace-nowrap group-hover:text-[#007AFF]",
                     isCollapsed ? "w-0 opacity-0 delay-0" : "w-auto opacity-100 delay-75"
-                  )} />
+                  )}>
+                    Create
+                  </span>
                 </div>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
-              <DropdownMenuItem onClick={() => setCreateSheetOpen(true)}>
-                <Gift className="h-4 w-4 mr-2" />
-                New Reward
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreateSheetOpen(true)}>
-                <Coffee className="h-4 w-4 mr-2" />
-                Create Program
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreateSheetOpen(true)}>
-                <Image className="h-4 w-4 mr-2" />
-                New Banner
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreateSheetOpen(true)}>
-                <MessageSquare className="h-4 w-4 mr-2" />
-                New Message
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreateSheetOpen(true)}>
-                <Zap className="h-4 w-4 mr-2" />
-                New Points Rule
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreateSheetOpen(true)}>
-                <Sparkles className="w-4 h-4 mr-2" />
-                <span>Introductory Reward</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </div>
+              <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+                <ChevronDown className={cn(
+                  "h-4 w-4 transition-all duration-300 ease-in-out text-gray-500 group-hover:text-[#007AFF]",
+                  isCollapsed ? "w-0 opacity-0 delay-0" : "w-auto opacity-100 delay-75"
+                )} />
+              </div>
+            </button>
+            {createMenuOpen && (
+              <div ref={dropdownRef} className="fixed z-[1000] bg-white rounded-md shadow-lg border border-gray-200 py-1 w-56" style={dropdownPosition}>
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
+                  onClick={() => {
+                    setCreateRewardSheetOpen(true);
+                    setCreateMenuOpen(false);
+                  }}
+                >
+                  <Gift className="h-4 w-4 mr-2" />
+                  New Reward
+                </button>
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
+                  onClick={() => {
+                    setCreateRecurringOpen(true);
+                    setCreateMenuOpen(false);
+                  }}
+                >
+                  <Coffee className="h-4 w-4 mr-2" />
+                  Create Program
+                </button>
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
+                  onClick={() => {
+                    setCreateBannerOpen(true);
+                    setCreateMenuOpen(false);
+                  }}
+                >
+                  <Image className="h-4 w-4 mr-2" />
+                  New Banner
+                </button>
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
+                  onClick={() => {
+                    setBroadcastDialogOpen(true);
+                    setCreateMenuOpen(false);
+                  }}
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  New Message
+                </button>
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
+                  onClick={() => {
+                    setCreateRuleOpen(true);
+                    setCreateMenuOpen(false);
+                  }}
+                >
+                  <Zap className="h-4 w-4 mr-2" />
+                  New Points Rule
+                </button>
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
+                  onClick={() => {
+                    setIntroRewardOpen(true);
+                    setCreateMenuOpen(false);
+                  }}
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  <span>Intro Reward</span>
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
       
@@ -932,6 +1085,21 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
 
       {/* CreateSheet component */}
       <CreateSheet open={createSheetOpen} onOpenChange={setCreateSheetOpen} />
+      
+      {/* CreateRewardSheet component */}
+      <CreateRewardSheet open={createRewardSheetOpen} onOpenChange={setCreateRewardSheetOpen} />
+
+      {/* CreateRecurringRewardDialog component */}
+      <CreateRecurringRewardDialog open={createRecurringOpen} onOpenChange={setCreateRecurringOpen} />
+
+      {/* SendBroadcastSheet component */}
+      <SendBroadcastSheet open={broadcastDialogOpen} onOpenChange={setBroadcastDialogOpen} />
+
+      {/* CreatePointsRuleSheet component */}
+      <CreatePointsRuleSheet open={createRuleOpen} onOpenChange={setCreateRuleOpen} />
+
+      {/* IntroductoryRewardSheet component */}
+      <IntroductoryRewardSheet open={introRewardOpen} onOpenChange={setIntroRewardOpen} />
     </div>
   )
 }

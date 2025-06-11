@@ -1,92 +1,161 @@
+"use client"
+
 import { LoginForm } from "@/components/login-form"
 import { PageTransition } from "@/components/page-transition"
-import { ShieldCheck, Zap, Users, Mail, Gift, Network, Banknote } from "lucide-react"
+import { ShieldCheck, Zap, Users, Mail, Gift, Network, Banknote, ChevronLeft, ChevronRight } from "lucide-react"
 import Image from "next/image"
+import { useState, useEffect } from "react"
 
 export default function LoginPage() {
+  const [currentSlide, setCurrentSlide] = useState(0)
+  
+  // Auto-rotate carousel every 5 seconds
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % 3)
+    }, 5000)
+    
+    return () => clearInterval(timer)
+  }, [])
+
+  const slides = [
+    {
+      tagline: "Australia's first networked loyalty program",
+      content: [
+        {
+          text: "Tap Loyalty delivers personalised rewards through networked programs powered by open banking integration.",
+          highlight: "Tap Loyalty"
+        },
+        {
+          text: "Tap Agents provide intelligent customer, email, and retail automation for personalised business experiences.",
+          highlight: "Tap Agents"
+        }
+      ],
+      features: [
+        { text: "Powered by open banking", icon: true },
+        { text: "Government accredited", icon: true }
+      ]
+    },
+    {
+      tagline: "Intelligent automation that works for you",
+      content: [
+        {
+          text: "Smart email management that categorises, responds, and escalates customer inquiries automatically.",
+          highlight: "Smart email management"
+        },
+        {
+          text: "Retail insights that track customer behaviour and optimise your sales strategy in real-time.",
+          highlight: "Retail insights"
+        }
+      ],
+      features: [
+        { text: "24/7 automated responses", icon: true },
+        { text: "Real-time analytics", icon: true }
+      ]
+    },
+    {
+      tagline: "Join Australia's growing loyalty network",
+      content: [
+        {
+          text: "Connect with thousands of businesses to offer your customers rewards across multiple venues.",
+          highlight: "thousands of businesses"
+        },
+        {
+          text: "Drive customer retention with intelligent rewards that adapt to spending patterns and preferences.",
+          highlight: "intelligent rewards"
+        }
+      ],
+      features: [
+        { text: "Cross-business rewards", icon: true },
+        { text: "Adaptive algorithms", icon: true }
+      ]
+    }
+  ]
+
   return (
     <PageTransition>
       <div className="min-h-screen w-full bg-white">
-        <div className="grid min-h-screen lg:grid-cols-2">
-          {/* Left side - Hero section */}
-          <div className="relative hidden lg:flex bg-gray-50 flex-col justify-between px-16 py-16">
-            <div className="flex-1 flex flex-col justify-center max-w-md">
-              {/* Logo */}
-              <div className="mb-12">
-                <h1 className="text-5xl font-bold">
-                  <span className="font-extrabold text-[#007AFF]">Tap</span>{" "}
-                  <span className="font-semibold text-gray-900">Loyalty</span>
-                </h1>
-                <p className="text-lg text-gray-600 mt-3">
-                  Australia's first networked loyalty program
-                </p>
-              </div>
-              
-              {/* Product Descriptions */}
-              <div className="mb-12 space-y-6">
-                <p className="text-base text-gray-700 leading-relaxed">
-                  <span className="font-bold text-[#007AFF]">Tap Loyalty</span> delivers personalised rewards through networked programs powered by open banking integration.
-                </p>
-                
-                <p className="text-base text-gray-700 leading-relaxed">
-                  <span className="font-bold text-[#007AFF]">Tap Agents</span> provide intelligent customer, email, and retail automation for personalised business experiences.
-                </p>
-              </div>
+        <div className="grid min-h-screen lg:grid-cols-5">
+          {/* Left side - Hero section with carousel */}
+          <div className="relative hidden lg:flex lg:col-span-2 bg-gray-50 flex-col justify-between px-16 py-16 overflow-hidden">
+            {/* Tap Loyalty title */}
+            <div className="absolute top-6 left-16">
+              <h1 className="text-2xl font-bold">
+                <span className="font-extrabold text-[#007AFF]">Tap</span>{" "}
+                <span className="font-semibold text-gray-900">Loyalty</span>
+              </h1>
+            </div>
+            {/* Carousel container */}
+            <div className="flex-1 flex flex-col justify-center max-w-md relative mt-16">
+              <div className="relative overflow-hidden">
+                {/* Slides */}
+                <div 
+                  className="flex transition-transform duration-500 ease-in-out"
+                  style={{ transform: `translateX(-${currentSlide * 100}%)` }}
+                >
+                  {slides.map((slide, index) => (
+                    <div key={index} className="min-w-full">
+                      {/* Tagline */}
+                      <div className="mb-12">
+                        <p className="text-xl text-gray-700 font-medium">
+                          {slide.tagline}
+                        </p>
+                      </div>
+                      
+                      {/* Product Descriptions */}
+                      <div className="mb-12 space-y-6">
+                        {slide.content.map((item, contentIndex) => (
+                          <p key={contentIndex} className="text-base text-gray-700 leading-relaxed">
+                            <span className="font-bold text-[#007AFF]">{item.highlight}</span> {item.text.replace(item.highlight, '')}
+                          </p>
+                        ))}
+                      </div>
 
-              {/* Government accreditation */}
-              <div className="mb-12">
-                <div className="flex items-center gap-2 text-sm text-gray-600 mb-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="font-medium">Powered by open banking</span>
+                      {/* Features */}
+                      <div className="mb-12">
+                        {slide.features.map((feature, featureIndex) => (
+                          <div key={featureIndex} className="flex items-center gap-2 text-sm text-gray-600 mb-3">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span className="font-medium">{feature.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="font-medium">Government accredited</span>
+
+                {/* Carousel navigation dots */}
+                <div className="flex items-center gap-2 mt-8">
+                  {slides.map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentSlide(index)}
+                      className={`w-2 h-2 rounded-full transition-colors ${
+                        index === currentSlide ? 'bg-[#007AFF]' : 'bg-gray-300'
+                      }`}
+                    />
+                  ))}
                 </div>
               </div>
             </div>
 
             {/* Integration icons */}
             <div className="border-t border-gray-200 pt-6">
-              <p className="text-xs text-gray-500 mb-4 font-medium tracking-wide">INTEGRATES WITH</p>
+              <p className="text-xs text-gray-500 mb-4 font-medium tracking-wide">
+                INTEGRATES WITH
+              </p>
               <div className="flex items-center gap-3 flex-wrap">
-                <div className="w-9 h-9 bg-white rounded-md shadow-sm border border-gray-200 flex items-center justify-center p-1.5">
-                  <Image src="/xero.png" alt="Xero" width={24} height={24} className="w-full h-full object-contain" />
-                </div>
-                
-                <div className="w-9 h-9 bg-white rounded-md shadow-sm border border-gray-200 flex items-center justify-center p-1.5">
-                  <Image src="/square.png" alt="Square" width={24} height={24} className="w-full h-full object-contain" />
-                </div>
-                
-                <div className="w-9 h-9 bg-white rounded-md shadow-sm border border-gray-200 flex items-center justify-center p-1.5">
-                  <Image src="/sheetspro.png" alt="Sheets Pro" width={24} height={24} className="w-full h-full object-contain" />
-                </div>
-                
-                <div className="w-9 h-9 bg-white rounded-md shadow-sm border border-gray-200 flex items-center justify-center p-1.5">
-                  <Image src="/outlook.png" alt="Outlook" width={24} height={24} className="w-full h-full object-contain" />
-                </div>
-                
-                <div className="w-9 h-9 bg-white rounded-md shadow-sm border border-gray-200 flex items-center justify-center p-1.5">
-                  <Image src="/mailchimp.png" alt="Mailchimp" width={24} height={24} className="w-full h-full object-contain" />
-                </div>
-                
-                <div className="w-9 h-9 bg-white rounded-md shadow-sm border border-gray-200 flex items-center justify-center p-1.5">
-                  <Image src="/hubspot.png" alt="HubSpot" width={24} height={24} className="w-full h-full object-contain" />
-                </div>
-                
-                <div className="w-9 h-9 bg-white rounded-md shadow-sm border border-gray-200 flex items-center justify-center p-1.5">
-                  <Image src="/gmailnew.png" alt="Gmail" width={24} height={24} className="w-full h-full object-contain" />
-                </div>
-                
-                <div className="w-9 h-9 bg-white rounded-md shadow-sm border border-gray-200 flex items-center justify-center p-1.5">
-                  <Image src="/lslogo.png" alt="Lightspeed" width={24} height={24} className="w-full h-full object-contain" />
-                </div>
+                {["xero.png", "square.png", "sheetspro.png", "outlook.png", "mailchimp.png", "hubspot.png", "gmailnew.png", "lslogo.png"].map((integration, index) => (
+                  <div key={index} className="w-9 h-9 bg-white rounded-md shadow-sm border border-gray-200 flex items-center justify-center p-1.5">
+                    <Image src={`/${integration}`} alt={integration.split('.')[0]} width={24} height={24} className="w-full h-full object-contain" />
+                  </div>
+                ))}
               </div>
             </div>
           </div>
 
           {/* Right side - Login form */}
-          <div className="relative flex flex-col">
+          <div className="relative flex flex-col lg:col-span-3">
             {/* Mobile header */}
             <div className="lg:hidden p-6 border-b bg-white">
               <div className="flex items-center gap-3">

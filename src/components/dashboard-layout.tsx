@@ -14,6 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
@@ -1421,32 +1422,41 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   
   // Define available integrations
   const availableIntegrations = [
-    { id: 'xero', name: 'Xero', description: 'Accounting and bookkeeping', logo: 'xero.png', status: 'active' },
-    { id: 'square', name: 'Square', description: 'Point of sale system', logo: 'square.png', status: 'active' },
-    { id: 'lightspeed', name: 'Lightspeed', description: 'Retail POS system', logo: 'lslogo.png', status: 'active' },
-    { id: 'gmail', name: 'Gmail', description: 'Email communication', logo: 'gmail.png', status: 'active' },
-    { id: 'mailchimp', name: 'Mailchimp', description: 'Email marketing', logo: 'mailchimp.png', status: 'active' },
-    { id: 'shopify', name: 'Shopify', description: 'E-commerce platform', logo: 'square.png', status: 'coming-soon' },
-    { id: 'stripe', name: 'Stripe', description: 'Payment processing', logo: 'square.png', status: 'coming-soon' },
-    { id: 'quickbooks', name: 'QuickBooks', description: 'Accounting software', logo: 'xero.png', status: 'coming-soon' },
-    { id: 'hubspot', name: 'HubSpot', description: 'CRM and marketing', logo: 'mailchimp.png', status: 'coming-soon' },
-    { id: 'salesforce', name: 'Salesforce', description: 'Customer relationship management', logo: 'square.png', status: 'coming-soon' },
+    { id: 'square', name: 'Square', description: 'Point of sale system', logo: 'squarepro.png', status: 'active' },
+    { id: 'lightspeed_new', name: 'Lightspeed Retail', description: 'Retail POS system', logo: 'lslogo.png', status: 'active' },
+    { id: 'gmail', name: 'Gmail', description: 'Email communication', logo: 'gmailpro.png', status: 'active' },
+    { id: 'google_calendar', name: 'Google Calendar', description: 'Calendar Integration', logo: 'cal.svg', status: 'active' },
+    { id: 'google_docs', name: 'Google Docs', description: 'Document Management', logo: 'docspro.png', status: 'active' },
+    { id: 'google_sheets', name: 'Google Sheets', description: 'Spreadsheet Integration', logo: 'sheetspro.png', status: 'active' },
+    { id: 'hubspot', name: 'HubSpot', description: 'CRM Integration', logo: 'hubspot.png', status: 'active' },
+    { id: 'outlook', name: 'Microsoft Outlook', description: 'Email Integration', logo: 'outlook.png', status: 'active' },
+    { id: 'xero', name: 'Xero', description: 'Accounting and bookkeeping', logo: 'xero.png', status: 'coming-soon' },
+    { id: 'mailchimp', name: 'Mailchimp', description: 'Email marketing', logo: 'mailchimp.png', status: 'coming-soon' },
+    { id: 'shopify', name: 'Shopify', description: 'E-commerce platform', logo: 'shopify.png', status: 'coming-soon' },
+    { id: 'twilio', name: 'Twilio', description: 'SMS & Voice', logo: 'twilio.png', status: 'coming-soon' },
   ]
   
   // Function to handle integration connection
   const handleIntegrationConnect = (integration: typeof availableIntegrations[0]) => {
-    if (integration.status === 'active') {
+    if (!user?.uid) {
       toast({
-        title: `${integration.name} Connected`,
-        description: `Successfully connected to ${integration.name}!`
-      })
-    } else {
+        title: "Error",
+        description: "You must be logged in to connect integrations",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (integration.status === 'coming-soon') {
       toast({
         title: `${integration.name}`,
         description: `${integration.name} integration coming soon!`
-      })
+      });
+      return;
     }
-    setShowIntegrationsPopup(false)
+
+    // Redirect to the integrations page
+    window.location.href = `/dashboard/integrations`;
   }
   
   // Add state for sidebar collapse
@@ -1465,15 +1475,47 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     }
   }, [showChatbotPanel, showLogsPanel, showIntegrationsPanel])
   
-  // Define integration items
-  const integrations = [
-    { name: 'Gmail', connected: true, icon: 'https://www.gstatic.com/images/branding/product/1x/gmail_2020q4_32dp.png' },
-    { name: 'Lightspeed', connected: false, icon: 'https://cdn.iconscout.com/icon/free/png-256/free-lightspeed-4054744-3352961.png' },
-    { name: 'Square', connected: true, icon: 'https://cdn.iconscout.com/icon/free/png-256/free-square-5-226580.png' },
-    { name: 'HubSpot', connected: false, icon: 'https://cdn.iconscout.com/icon/free/png-256/free-hubspot-3521479-2944922.png' },
-    { name: 'Google Drive', connected: true, icon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Google_Drive_icon_%282020%29.svg/32px-Google_Drive_icon_%282020%29.svg.png' },
-    { name: 'Google Sheets', connected: true, icon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/Google_Sheets_2020_Logo.svg/32px-Google_Sheets_2020_Logo.svg.png' }
-  ]
+  // Fetch integrations status from Firestore (to be dynamically updated later)
+  const [integrationsStatus, setIntegrationsStatus] = useState<{[key: string]: boolean}>({
+    square: false,
+    lightspeed_new: false,
+    gmail: false,
+    google_calendar: false,
+    google_docs: false,
+    google_sheets: false,
+    hubspot: false,
+    outlook: false
+  });
+
+  // Fetch integration status when user changes
+  useEffect(() => {
+    const fetchIntegrationStatus = async () => {
+      if (!user?.uid) return;
+      
+      try {
+        // Check each integration
+        const status: {[key: string]: boolean} = {};
+        
+        for (const integration of availableIntegrations) {
+          if (integration.status === 'active') {
+            const docRef = doc(db, `merchants/${user.uid}/integrations/${integration.id}`);
+            const docSnap = await getDoc(docRef);
+            status[integration.id] = docSnap.exists() && docSnap.data()?.connected === true;
+          }
+        }
+        
+        setIntegrationsStatus(status);
+      } catch (error) {
+        console.error("Error fetching integration status:", error);
+      }
+    };
+    
+    if (user?.uid) {
+      fetchIntegrationStatus();
+    }
+  }, [user?.uid]);
+  
+  // Remove hardcoded integrations array since we're using integrationsStatus
   
   // Scroll to show new messages after animation completes
   useEffect(() => {
@@ -2576,30 +2618,42 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48 rounded-md">
-                      <div className="px-2 py-1.5 text-xs font-medium text-gray-500 border-b">
+                      <DropdownMenuLabel className="text-xs font-medium text-gray-500 px-2 pt-1.5 pb-1.5 border-b">
                         Integrations
-                      </div>
-                      {integrations.map((integration, index) => (
+                      </DropdownMenuLabel>
+                      {availableIntegrations.map((integration, index) => (
                         <DropdownMenuItem key={index} className="py-1.5 px-2">
                           <div className="flex items-center justify-between w-full text-xs">
-                            <div className="flex items-center gap-2">
-                              <img 
-                                src={integration.icon} 
-                                alt={integration.name} 
-                                className="h-4 w-4"
-                                onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-                                  const target = e.currentTarget;
-                                  target.src = "data:image/svg+xml;charset=UTF-8,%3Csvg width='16' height='16' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23ccc'/%3E%3C/svg%3E";
-                                }}
-                              />
-                              <span>{integration.name}</span>
+                            <div className="flex items-center space-x-2" title={integration.description}>
+                              <div className="h-4 w-4 flex-shrink-0">
+                                <NextImage
+                                  src={`/${integration.logo}`}
+                                  alt={integration.name}
+                                  width={16}
+                                  height={16}
+                                  className="object-contain"
+                                />
+                              </div>
+                              <span className="text-sm truncate">{integration.name}</span>
                             </div>
-                            <div className={`h-2 w-2 rounded-full ${integration.connected ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                            <div className="flex items-center">
+                              {integration.status === 'active' && integrationsStatus[integration.id] ? (
+                                <span className="text-xs text-green-600">Connected</span>
+                              ) : integration.status === 'coming-soon' ? (
+                                <span className="text-xs text-gray-400">Soon</span>
+                              ) : (
+                                <span className="text-xs text-gray-500">Available</span>
+                              )}
+                            </div>
                           </div>
                         </DropdownMenuItem>
                       ))}
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="py-1.5 px-2 text-xs text-blue-500">
+                      
+                      <DropdownMenuItem 
+                        className="py-1.5 px-2 text-xs text-blue-500" 
+                        onSelect={() => window.location.href = '/dashboard/integrations'}
+                      >
                         Manage integrations
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -2949,7 +3003,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   
                   {availableIntegrations.map((integration) => (
                     <div key={integration.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3" title={integration.description}>
                         <div className="w-8 h-8 bg-white rounded-md border border-gray-200 shadow-sm flex items-center justify-center">
                           <NextImage
                             src={`/${integration.logo}`}
@@ -2961,24 +3015,28 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                         </div>
                         <div>
                           <h3 className="font-medium text-gray-900 text-sm">{integration.name}</h3>
-                          <p className="text-xs text-gray-600">{integration.description}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {integration.status === 'active' && (
-                          <div className="h-2 w-2 rounded-full bg-green-500" title="Connected"></div>
-                        )}
                         <Button
                           size="sm"
-                          variant={integration.status === 'active' ? 'default' : 'outline'}
+                          variant={integration.status === 'active' 
+                            ? (integrationsStatus[integration.id] ? 'outline' : 'default')
+                            : 'outline'}
                           disabled={integration.status === 'coming-soon'}
                           onClick={() => {
                             handleIntegrationConnect(integration)
                             setShowIntegrationsPanel(false)
                           }}
-                          className="rounded-md text-xs px-3 py-1"
+                          className={`rounded-md text-xs px-3 py-1 ${
+                            integration.status === 'active' && integrationsStatus[integration.id]
+                              ? 'text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200'
+                              : ''
+                          }`}
                         >
-                          {integration.status === 'active' ? 'Connect' : 'Coming Soon'}
+                          {integration.status === 'active' 
+                            ? (integrationsStatus[integration.id] ? 'Connected' : 'Connect') 
+                            : 'Coming Soon'}
                         </Button>
                       </div>
                     </div>

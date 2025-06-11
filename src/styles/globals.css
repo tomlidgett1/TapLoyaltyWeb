@@ -49,4 +49,16 @@
 [data-instant-close="true"] + [role="presentation"] {
   opacity: 1 !important;
   transition: none !important;
+}
+
+/* Prevent invisible (closed) Radix overlays from blocking interaction */
+[data-state="closed"],
+[data-instant-close="true"] {
+  pointer-events: none !important;
+}
+
+/* Also disable pointer events on the adjacent overlay that Radix mounts */
+[data-instant-close="true"] + [role="presentation"],
+[data-instant-close="true"] + [role="presentation"] * {
+  pointer-events: none !important;
 } 

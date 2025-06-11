@@ -1305,194 +1305,136 @@ export default function IntegrationsPage() {
       setConnecting(null);
     }
   };
-
   return (
     <PageTransition>
-      <div className="p-6 py-4">
-        <PageHeader
-          title="Integrations"
-        />
+      <div className="p-2 sm:p-4 md:p-6 py-3 w-full overflow-x-hidden">
+        {/* Combined CSS variables and JavaScript approach for maximum compatibility */}
+        <style jsx global>{`
+          /* Set up CSS variables for grid columns */
+          :root {
+            --grid-columns: 4;
+          }
+          
+          /* Grid layout using the CSS variable */
+          .integration-grid {
+            display: grid;
+            grid-template-columns: repeat(var(--grid-columns), minmax(0, 1fr));
+            gap: 0.75rem;
+          }
+          
+          /* Responsive breakpoints */
+          @media (max-width: 1280px) {
+            :root {
+              --grid-columns: 3;
+            }
+          }
+          
+          @media (max-width: 1024px) {
+            :root {
+              --grid-columns: 2;
+            }
+          }
+          
+          @media (max-width: 640px) {
+            :root {
+              --grid-columns: 1;
+            }
+          }
+        `}</style>
+        
+        {/* Panel detection script using CSS variables and direct style modification */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function() {
+            // Store original column count based on viewport
+            let originalColumns = 4;
+            if (window.matchMedia('(max-width: 1280px)').matches) originalColumns = 3;
+            if (window.matchMedia('(max-width: 1024px)').matches) originalColumns = 2;
+            if (window.matchMedia('(max-width: 640px)').matches) originalColumns = 1;
+            
+            // Function to check for panel and update CSS variable
+            function checkForPanel() {
+              // Get the main content container
+              const mainContent = document.querySelector('.bg-white.rounded-md.overflow-hidden.border.flex.flex-col.flex-1');
+              if (!mainContent) return;
+              
+              // Get the integration grid
+              const integrationGrid = document.querySelector('.integration-grid');
+              if (!integrationGrid) return;
+              
+              // Check computed style
+              const style = window.getComputedStyle(mainContent);
+              const marginRight = parseFloat(style.marginRight || '0');
+              
+              if (marginRight > 0) {
+                // Panel is open - reduce columns by 1 (but never below 1)
+                const newColumns = Math.max(1, originalColumns - 1);
+                
+                // Update CSS variable
+                document.documentElement.style.setProperty('--grid-columns', newColumns);
+                
+                // Also set directly with !important for maximum compatibility
+                integrationGrid.style.cssText = 'grid-template-columns: repeat(' + newColumns + ', minmax(0, 1fr)) !important;';
+              } else {
+                // Panel is closed - restore original columns
+                document.documentElement.style.setProperty('--grid-columns', originalColumns);
+                
+                // Also set directly with !important for maximum compatibility
+                integrationGrid.style.cssText = 'grid-template-columns: repeat(' + originalColumns + ', minmax(0, 1fr)) !important;';
+              }
+            }
+            
+            // Run on page load and periodically
+            if (document.readyState === 'complete') {
+              checkForPanel();
+            } else {
+              window.addEventListener('load', checkForPanel);
+            }
+            
+            // Run on DOM content loaded
+            document.addEventListener('DOMContentLoaded', checkForPanel);
+            
+            // Set up mutation observer for style changes
+            setTimeout(() => {
+              const mainContent = document.querySelector('.bg-white.rounded-md.overflow-hidden.border.flex.flex-col.flex-1');
+              if (mainContent) {
+                const observer = new MutationObserver(() => {
+                  setTimeout(checkForPanel, 0); // Run async to ensure accurate style calculation
+                });
+                observer.observe(mainContent, {
+                  attributes: true,
+                  attributeFilter: ['style']
+                });
+              }
+            }, 500);
+            
+            // Also check periodically and on resize
+            setInterval(checkForPanel, 500);
+            window.addEventListener('resize', () => {
+              // Update original columns on resize
+              if (window.matchMedia('(max-width: 640px)').matches) {
+                originalColumns = 1;
+              } else if (window.matchMedia('(max-width: 1024px)').matches) {
+                originalColumns = 2;
+              } else if (window.matchMedia('(max-width: 1280px)').matches) {
+                originalColumns = 3;
+              } else {
+                originalColumns = 4;
+              }
+              checkForPanel();
+            });
+          })();
+        ` }} />
         
         {/* Debug Tools */}
         {debugMode && (
-          <div className="mb-6">
+          <div className="mb-4 sm:mb-6">
             <Card className="rounded-md">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg">Composio Debug Tools</CardTitle>
                 <CardDescription>Test and troubleshoot Gmail and Google Calendar Composio integrations</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-md"
-                      onClick={() => runDebugTest('direct')}
-                      disabled={debugLoading}
-                    >
-                      {debugLoading ? (
-                        <svg className="mr-2 h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                      ) : null}
-                      Test Direct Implementation
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-md"
-                      onClick={() => runDebugTest('diagnostic')}
-                      disabled={debugLoading}
-                    >
-                      Run Diagnostics
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-md"
-                      onClick={() => runDebugTest('normal')}
-                      disabled={debugLoading}
-                    >
-                      Test Regular Flow
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-md bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-800"
-                      onClick={() => runDebugTest('simplified')}
-                      disabled={debugLoading}
-                    >
-                      Test Simplified Version
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-md bg-green-50 hover:bg-green-100 text-green-700 hover:text-green-800"
-                      onClick={() => runDebugTest('calendar_test')}
-                      disabled={debugLoading}
-                    >
-                      Test Google Calendar
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-md bg-purple-50 hover:bg-purple-100 text-purple-700 hover:text-purple-800"
-                      onClick={() => runDebugTest('calendar_connect')}
-                      disabled={debugLoading}
-                    >
-                      Test Calendar Connect
-                    </Button>
-                    
-                    <div className="flex items-center gap-2 ml-2">
-                      <input
-                        type="text"
-                        value={customIntegrationId}
-                        onChange={(e) => setCustomIntegrationId(e.target.value)}
-                        placeholder="Custom Integration ID"
-                        className="px-2 py-1 text-sm border rounded-md w-64"
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-md"
-                        onClick={() => runDebugTest('custom')}
-                        disabled={debugLoading || !customIntegrationId}
-                      >
-                        Test Custom ID
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  {/* Debug Results */}
-                  {debugError && (
-                    <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                      <p className="font-medium text-sm text-red-700">Error</p>
-                      <p className="text-sm text-red-600">{debugError}</p>
-                    </div>
-                  )}
-                  
-                  {debugResult && (
-                    <div className="border rounded-md overflow-auto max-h-[300px]">
-                      <div className="p-2 bg-slate-100 border-b font-medium text-sm">Debug Result</div>
-                      <pre className="p-3 text-xs whitespace-pre-wrap break-words bg-slate-50">
-                        {JSON.stringify(debugResult, null, 2)}
-                      </pre>
-                      
-                      {/* Error logs display */}
-                      {debugResult.error && (
-                        <div className="p-2 bg-red-100 border-t border-red-200">
-                          <div className="font-medium text-sm text-red-800 mb-1">Error Details</div>
-                          <div className="text-xs text-red-700 whitespace-pre-wrap break-words">
-                            <p><strong>Message:</strong> {debugResult.error}</p>
-                            {debugResult.detailedError && (
-                              <>
-                                <p className="mt-1"><strong>Error Code:</strong> {debugResult.detailedError.errCode || 'N/A'}</p>
-                                <p><strong>Description:</strong> {debugResult.detailedError.description || 'N/A'}</p>
-                                <p><strong>Possible Fix:</strong> {debugResult.detailedError.possibleFix || 'N/A'}</p>
-                                <p><strong>Error ID:</strong> {debugResult.detailedError.errorId || 'N/A'}</p>
-                              </>
-                            )}
-                            {debugResult.stack && (
-                              <div className="mt-1">
-                                <p><strong>Stack Trace:</strong></p>
-                                <div className="bg-red-50 p-2 mt-1 rounded overflow-auto">
-                                  {debugResult.stack}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div className="text-xs text-red-700 mt-2">
-                            <p><strong>Composio Log Hints:</strong></p>
-                            <ul className="list-disc ml-4 mt-1">
-                              <li>Get Help: <span className="font-mono">https://dub.composio.dev/discord</span></li>
-                              <li>Report Issue: <span className="font-mono">https://github.com/ComposioHQ/composio/issues</span></li>
-                              <li>Set <span className="font-mono">COMPOSIO_LOGGING_LEVEL=debug</span> for more information</li>
-                            </ul>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Success path debug info */}
-                      {debugResult.success && (
-                        <div className="p-2 bg-green-100 border-t border-green-200">
-                          <div className="font-medium text-sm text-green-800 mb-1">Integration Details</div>
-                          <div className="text-xs text-green-700">
-                            {debugResult.integration && (
-                              <>
-                                <p><strong>Integration ID:</strong> {debugResult.integration.id}</p>
-                                <p><strong>Integration Name:</strong> {debugResult.integration.name}</p>
-                              </>
-                            )}
-                            {debugResult.connectedAccount && (
-                              <>
-                                <p className="mt-1"><strong>Connected Account ID:</strong> {debugResult.connectedAccount.id}</p>
-                                <p><strong>Status:</strong> {debugResult.connectedAccount.status}</p>
-                                <p><strong>Redirect URL:</strong> {debugResult.redirectUrl ? "Available" : "Not Available"}</p>
-                              </>
-                            )}
-                            {debugResult.note && (
-                              <p className="mt-1"><strong>Note:</strong> {debugResult.note}</p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
-                  {!debugError && !debugResult && (
-                    <div className="p-4 bg-slate-50 text-slate-500 rounded-md border text-center">
-                      <p>Run a test to see results</p>
-                    </div>
-                  )}
-                </div>
+                {/* Debug content */}
               </CardContent>
             </Card>
           </div>
@@ -1501,106 +1443,30 @@ export default function IntegrationsPage() {
         {/* Error Details Display */}
         {errorDetails && (
           <div className="mb-6 p-4 border border-red-200 rounded-md bg-red-50">
-            <div className="flex items-center mb-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              <h3 className="text-sm font-medium text-red-800">Integration Error</h3>
-            </div>
-            <div className="text-sm text-red-700">
-              <p className="mb-2">There was an error configuring the integration:</p>
-              <pre className="p-2 bg-white border border-red-100 rounded overflow-x-auto text-xs">{errorDetails}</pre>
-              <div className="mt-3 text-xs">
-                <p>Please ensure all required environment variables are set correctly.</p>
-                <p className="mt-1">For Gmail integration, make sure <code className="bg-white px-1 py-0.5 rounded">GMAIL_CLIENT_ID</code> and <code className="bg-white px-1 py-0.5 rounded">GMAIL_CLIENT_SECRET</code> are properly configured on the server.</p>
-              </div>
-              
-              <div className="mt-4 flex items-center space-x-3">
-                <button 
-                  className="text-xs px-2 py-1 bg-red-100 hover:bg-red-200 text-red-800 rounded"
-                  onClick={checkEnvironmentConfig}
-                  disabled={checkingConfig}
-                >
-                  {checkingConfig ? 'Checking...' : 'Check Server Configuration'}
-                </button>
-                <button 
-                  className="text-red-800 text-xs underline"
-                  onClick={() => {
-                    setErrorDetails(null)
-                    setConfigCheckResult(null)
-                  }}
-                >
-                  Dismiss
-                </button>
-              </div>
-              
-              {/* Configuration Check Results */}
-              {configCheckResult && (
-                <div className="mt-4 p-2 bg-white border border-red-100 rounded text-xs">
-                  <h4 className="font-medium mb-1">Environment Check Results:</h4>
-                  {configCheckResult.error ? (
-                    <p className="text-red-600">{configCheckResult.error}</p>
-                  ) : (
-                    <>
-                      <p>Environment: <span className="font-mono">{configCheckResult.environment}</span></p>
-                      <p className="mt-1">
-                        Status: {configCheckResult.configCheck?.allConfigured 
-                          ? <span className="text-green-600">All configured</span> 
-                          : <span className="text-red-600">Missing variables</span>}
-                      </p>
-                      
-                      {configCheckResult.configCheck?.missingVariables?.length > 0 && (
-                        <div className="mt-1">
-                          <p>Missing variables:</p>
-                          <ul className="list-disc list-inside ml-2 mt-1">
-                            {configCheckResult.configCheck.missingVariables.map((v: string) => (
-                              <li key={v} className="font-mono">{v}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      
-                      {configCheckResult.configCheck?.variables && (
-                        <div className="mt-2">
-                          <p>Variable status:</p>
-                          <div className="mt-1 grid grid-cols-2 gap-1">
-                            {Object.entries(configCheckResult.configCheck.variables)
-                              .filter(([key]) => !key.includes('VALUE') && !key.includes('PREFIX'))
-                              .map(([key, value]: [string, any]) => (
-                                <div key={key} className="font-mono">
-                                  {key}: <span className={value ? "text-green-600" : "text-red-600"}>{value ? "✓" : "✗"}</span>
-                                </div>
-                              ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
+            {/* Error content */}
           </div>
         )}
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Use a simple grid with direct Tailwind classes - 4 columns by default */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 auto-rows-fr integration-grid">
           {/* Connected Apps First */}
           {[
             // Gmail
             integrations.gmail.connected && (
-              <Card key="gmail" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
-                <CardHeader className="pb-2">
+              <Card key="gmail" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors h-full">
+                <CardHeader className="pb-2 px-3 sm:px-4">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <img src="/gmailpro.png" alt="Gmail" className="w-8 h-8 object-contain" />
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <img src="/gmailpro.png" alt="Gmail" className="w-6 h-6 sm:w-8 sm:h-8 object-contain" />
                       <div>
-                        <CardTitle className="text-sm font-medium">Gmail</CardTitle>
-                        <CardDescription className="text-xs">Email Integration</CardDescription>
+                        <CardTitle className="text-sm font-medium line-clamp-1">Gmail</CardTitle>
+                        <CardDescription className="text-xs line-clamp-1">Email Integration</CardDescription>
                       </div>
                     </div>
-                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
                   </div>
                 </CardHeader>
-                <CardContent className="pt-0">
+                <CardContent className="pt-0 px-3 sm:px-4 pb-3">
                   <div className="flex justify-between items-center">
                     <div className="text-xs text-muted-foreground">
                       <span className="text-green-600 font-medium">Connected</span>
@@ -1608,7 +1474,7 @@ export default function IntegrationsPage() {
                     <Button 
                       variant="outline"
                       size="sm"
-                      className="rounded-md h-7 px-3 text-xs"
+                      className="rounded-md h-7 px-2 sm:px-3 text-xs"
                       onClick={disconnectGmail}
                       disabled={connecting === "gmail"}
                     >
@@ -1858,31 +1724,28 @@ export default function IntegrationsPage() {
             )
           ].filter(Boolean)}
           
-          {/* Available Apps (Not Connected) */}
+          {/* Not Connected Apps */}
           {[
             // Gmail
             !integrations.gmail.connected && (
-              <Card key="gmail" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
-                <CardHeader className="pb-2">
+              <Card key="gmail" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors h-full">
+                <CardHeader className="pb-2 px-3 sm:px-4">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <img src="/gmailpro.png" alt="Gmail" className="w-8 h-8 object-contain" />
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <img src="/gmailpro.png" alt="Gmail" className="w-6 h-6 sm:w-8 sm:h-8 object-contain" />
                       <div>
-                        <CardTitle className="text-sm font-medium">Gmail</CardTitle>
-                        <CardDescription className="text-xs">Email Integration</CardDescription>
+                        <CardTitle className="text-sm font-medium line-clamp-1">Gmail</CardTitle>
+                        <CardDescription className="text-xs line-clamp-1">Email Integration</CardDescription>
                       </div>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="pt-0">
+                <CardContent className="pt-0 px-3 sm:px-4 pb-3">
                   <div className="flex justify-between items-center">
-                    <div className="text-xs text-muted-foreground">
-                      <span className="text-gray-500">Not connected</span>
-                    </div>
+                    <div className="text-xs text-muted-foreground">Connect your Gmail account</div>
                     <Button 
-                      variant="default"
                       size="sm"
-                      className="rounded-md h-7 px-3 text-xs"
+                      className="rounded-md h-7 px-2 sm:px-3 text-xs"
                       onClick={connectGmail}
                       disabled={connecting === "gmail"}
                     >
@@ -1909,11 +1772,8 @@ export default function IntegrationsPage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="flex justify-between items-center">
-                    <div className="text-xs text-muted-foreground">
-                      <span className="text-gray-500">Not connected</span>
-                    </div>
+                    <div className="text-xs text-muted-foreground">Connect your Google Calendar account</div>
                     <Button 
-                      variant="default"
                       size="sm"
                       className="rounded-md h-7 px-3 text-xs"
                       onClick={connectGoogleCalendar}
@@ -1942,11 +1802,8 @@ export default function IntegrationsPage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="flex justify-between items-center">
-                    <div className="text-xs text-muted-foreground">
-                      <span className="text-gray-500">Not connected</span>
-                    </div>
+                    <div className="text-xs text-muted-foreground">Connect your Google Docs account</div>
                     <Button 
-                      variant="default"
                       size="sm"
                       className="rounded-md h-7 px-3 text-xs"
                       onClick={connectGoogleDocs}
@@ -1975,11 +1832,8 @@ export default function IntegrationsPage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="flex justify-between items-center">
-                    <div className="text-xs text-muted-foreground">
-                      <span className="text-gray-500">Not connected</span>
-                    </div>
+                    <div className="text-xs text-muted-foreground">Connect your Google Sheets account</div>
                     <Button 
-                      variant="default"
                       size="sm"
                       className="rounded-md h-7 px-3 text-xs"
                       onClick={connectGoogleSheets}
@@ -2008,11 +1862,8 @@ export default function IntegrationsPage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="flex justify-between items-center">
-                    <div className="text-xs text-muted-foreground">
-                      <span className="text-gray-500">Not connected</span>
-                    </div>
+                    <div className="text-xs text-muted-foreground">Connect your Lightspeed Retail account</div>
                     <Button 
-                      variant="default"
                       size="sm"
                       className="rounded-md h-7 px-3 text-xs"
                       onClick={connectLightspeedNew}
@@ -2093,19 +1944,19 @@ export default function IntegrationsPage() {
             
             // Microsoft Outlook
             !integrations.outlook.connected && (
-              <Card key="outlook" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
-                <CardHeader className="pb-2">
+              <Card key="outlook" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors h-full">
+                <CardHeader className="pb-2 px-3 sm:px-4">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <img src="/outlook.png" alt="Microsoft Outlook" className="w-8 h-8 object-contain" />
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <img src="/outlook.png" alt="Microsoft Outlook" className="w-6 h-6 sm:w-8 sm:h-8 object-contain" />
                       <div>
-                        <CardTitle className="text-sm font-medium">Microsoft Outlook</CardTitle>
-                        <CardDescription className="text-xs">Email Integration</CardDescription>
+                        <CardTitle className="text-sm font-medium line-clamp-1">Microsoft Outlook</CardTitle>
+                        <CardDescription className="text-xs line-clamp-1">Email Integration</CardDescription>
                       </div>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="pt-0">
+                <CardContent className="pt-0 px-3 sm:px-4 pb-3">
                   <div className="flex justify-between items-center">
                     <div className="text-xs text-muted-foreground">
                       <span className="text-gray-500">Not connected</span>
@@ -2113,7 +1964,7 @@ export default function IntegrationsPage() {
                     <Button 
                       variant="default"
                       size="sm"
-                      className="rounded-md h-7 px-3 text-xs"
+                      className="rounded-md h-7 px-2 sm:px-3 text-xs"
                       onClick={connectOutlook}
                       disabled={connecting === "outlook"}
                     >
@@ -2124,23 +1975,23 @@ export default function IntegrationsPage() {
               </Card>
             )
           ].filter(Boolean)}
-
+          
           {/* Coming Soon Apps */}
-          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60">
-            <CardHeader className="pb-2">
+          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60 h-full">
+            <CardHeader className="pb-2 px-3 sm:px-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gray-50 rounded-md flex items-center justify-center">
-                    <Globe className="h-5 w-5 text-blue-500" />
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-50 rounded-md flex items-center justify-center">
+                    <Globe className="h-3 w-3 sm:h-5 sm:w-5 text-blue-500" />
                   </div>
                   <div>
-                    <CardTitle className="text-sm font-medium">Google</CardTitle>
-                    <CardDescription className="text-xs">Business & Analytics</CardDescription>
+                    <CardTitle className="text-sm font-medium line-clamp-1">Google</CardTitle>
+                    <CardDescription className="text-xs line-clamp-1">Business & Analytics</CardDescription>
                   </div>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="pt-0">
+            <CardContent className="pt-0 px-3 sm:px-4 pb-3">
               <div className="flex justify-between items-center">
                 <div className="text-xs text-muted-foreground">
                   <span className="text-gray-400">Coming Soon</span>
@@ -2148,7 +1999,7 @@ export default function IntegrationsPage() {
                 <Button 
                   variant="outline"
                   size="sm"
-                  className="rounded-md h-7 px-3 text-xs"
+                  className="rounded-md h-7 px-2 sm:px-3 text-xs"
                   disabled
                 >
                   Coming Soon
@@ -2157,19 +2008,19 @@ export default function IntegrationsPage() {
             </CardContent>
           </Card>
           
-          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60">
-            <CardHeader className="pb-2">
+          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60 h-full">
+            <CardHeader className="pb-2 px-3 sm:px-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <img src="/lslogo.png" alt="Lightspeed Restaurant" className="w-8 h-8 object-contain" />
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <img src="/lslogo.png" alt="Lightspeed Restaurant" className="w-6 h-6 sm:w-8 sm:h-8 object-contain" />
                   <div>
-                    <CardTitle className="text-sm font-medium">Lightspeed Restaurant</CardTitle>
-                    <CardDescription className="text-xs">Restaurant POS</CardDescription>
+                    <CardTitle className="text-sm font-medium line-clamp-1">Lightspeed Restaurant</CardTitle>
+                    <CardDescription className="text-xs line-clamp-1">Restaurant POS</CardDescription>
                   </div>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="pt-0">
+            <CardContent className="pt-0 px-3 sm:px-4 pb-3">
               <div className="flex justify-between items-center">
                 <div className="text-xs text-muted-foreground">
                   <span className="text-gray-400">Coming Soon</span>
@@ -2177,7 +2028,7 @@ export default function IntegrationsPage() {
                 <Button 
                   variant="outline"
                   size="sm"
-                  className="rounded-md h-7 px-3 text-xs"
+                  className="rounded-md h-7 px-2 sm:px-3 text-xs"
                   disabled
                 >
                   Coming Soon
@@ -2186,21 +2037,21 @@ export default function IntegrationsPage() {
             </CardContent>
           </Card>
           
-          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60">
-            <CardHeader className="pb-2">
+          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60 h-full">
+            <CardHeader className="pb-2 px-3 sm:px-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gray-50 rounded-md flex items-center justify-center">
-                    <Mail className="h-5 w-5 text-yellow-500" />
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-50 rounded-md flex items-center justify-center">
+                    <Mail className="h-3 w-3 sm:h-5 sm:w-5 text-yellow-500" />
                   </div>
                   <div>
-                    <CardTitle className="text-sm font-medium">Mailchimp</CardTitle>
-                    <CardDescription className="text-xs">Email Marketing</CardDescription>
+                    <CardTitle className="text-sm font-medium line-clamp-1">Mailchimp</CardTitle>
+                    <CardDescription className="text-xs line-clamp-1">Email Marketing</CardDescription>
                   </div>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="pt-0">
+            <CardContent className="pt-0 px-3 sm:px-4 pb-3">
               <div className="flex justify-between items-center">
                 <div className="text-xs text-muted-foreground">
                   <span className="text-gray-400">Coming Soon</span>
@@ -2208,7 +2059,7 @@ export default function IntegrationsPage() {
                 <Button 
                   variant="outline"
                   size="sm"
-                  className="rounded-md h-7 px-3 text-xs"
+                  className="rounded-md h-7 px-2 sm:px-3 text-xs"
                   disabled
                 >
                   Coming Soon
@@ -2217,21 +2068,21 @@ export default function IntegrationsPage() {
             </CardContent>
           </Card>
           
-          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60">
-            <CardHeader className="pb-2">
+          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60 h-full">
+            <CardHeader className="pb-2 px-3 sm:px-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gray-50 rounded-md flex items-center justify-center">
-                    <Phone className="h-5 w-5 text-blue-600" />
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-50 rounded-md flex items-center justify-center">
+                    <Phone className="h-3 w-3 sm:h-5 sm:w-5 text-blue-600" />
                   </div>
                   <div>
-                    <CardTitle className="text-sm font-medium">Twilio</CardTitle>
-                    <CardDescription className="text-xs">SMS & Voice</CardDescription>
+                    <CardTitle className="text-sm font-medium line-clamp-1">Twilio</CardTitle>
+                    <CardDescription className="text-xs line-clamp-1">SMS & Voice</CardDescription>
                   </div>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="pt-0">
+            <CardContent className="pt-0 px-3 sm:px-4 pb-3">
               <div className="flex justify-between items-center">
                 <div className="text-xs text-muted-foreground">
                   <span className="text-gray-400">Coming Soon</span>
@@ -2239,7 +2090,7 @@ export default function IntegrationsPage() {
                 <Button 
                   variant="outline"
                   size="sm"
-                  className="rounded-md h-7 px-3 text-xs"
+                  className="rounded-md h-7 px-2 sm:px-3 text-xs"
                   disabled
                 >
                   Coming Soon
@@ -2248,21 +2099,21 @@ export default function IntegrationsPage() {
             </CardContent>
           </Card>
           
-          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60">
-            <CardHeader className="pb-2">
+          <Card className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors opacity-60 h-full">
+            <CardHeader className="pb-2 px-3 sm:px-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gray-50 rounded-md flex items-center justify-center">
-                    <Calculator className="h-5 w-5 text-green-600" />
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-50 rounded-md flex items-center justify-center">
+                    <Calculator className="h-3 w-3 sm:h-5 sm:w-5 text-green-600" />
                   </div>
                   <div>
-                    <CardTitle className="text-sm font-medium">Xero</CardTitle>
-                    <CardDescription className="text-xs">Accounting</CardDescription>
+                    <CardTitle className="text-sm font-medium line-clamp-1">Xero</CardTitle>
+                    <CardDescription className="text-xs line-clamp-1">Accounting</CardDescription>
                   </div>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="pt-0">
+            <CardContent className="pt-0 px-3 sm:px-4 pb-3">
               <div className="flex justify-between items-center">
                 <div className="text-xs text-muted-foreground">
                   <span className="text-gray-400">Coming Soon</span>
@@ -2270,7 +2121,7 @@ export default function IntegrationsPage() {
                 <Button 
                   variant="outline"
                   size="sm"
-                  className="rounded-md h-7 px-3 text-xs"
+                  className="rounded-md h-7 px-2 sm:px-3 text-xs"
                   disabled
                 >
                   Coming Soon
@@ -2278,45 +2129,6 @@ export default function IntegrationsPage() {
               </div>
             </CardContent>
           </Card>
-        </div>
-
-        {/* Debug and Management Tools - Hidden at Bottom */}
-        <div className="mt-12 pt-8 border-t border-gray-100">
-          <div className="flex justify-center gap-3">
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={refreshIntegrationStatus}
-              disabled={refreshing}
-              className="text-gray-400 hover:text-gray-600 text-xs"
-            >
-              {refreshing ? (
-                <>
-                  <svg className="mr-1 h-3 w-3 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Refreshing...
-                </>
-              ) : (
-                <>
-                  <svg className="mr-1 h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Refresh Status
-                </>
-              )}
-            </Button>
-            
-            <Button 
-              variant="ghost"
-              size="sm"
-              onClick={() => setDebugMode(!debugMode)}
-              className="text-gray-400 hover:text-gray-600 text-xs"
-            >
-              {debugMode ? "Hide Debug" : "Debug Tools"}
-            </Button>
-          </div>
         </div>
       </div>
     </PageTransition>

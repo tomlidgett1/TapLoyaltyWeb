@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetOverlay } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -485,6 +485,7 @@ export function IntroductoryRewardSheet({ open, onOpenChange }: IntroductoryRewa
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetOverlay className="bg-black/30" />
       <SheetContent
         side="right"
         className="w-full sm:max-w-md md:max-w-xl lg:max-w-2xl p-0 overflow-hidden flex flex-col rounded-md"

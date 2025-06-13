@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "@/components/ui/use-toast"
-import { Eye, EyeOff, ArrowRight, Loader2, ChevronLeft, ChevronRight, Upload } from "lucide-react"
+import { Eye, EyeOff, ArrowRight, Loader2, ChevronLeft, ChevronRight, Upload, ShieldCheck, Users, Zap } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -20,6 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { collection, query, where, getDocs } from "firebase/firestore"
 import Script from "next/script"
+import { PageTransition } from "@/components/page-transition"
 
 // Business types matching iOS app
 const businessTypes = [
@@ -66,6 +67,15 @@ const australianStates = [
 // Days of the week
 const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
+// Operating hours type
+interface OperatingHours {
+  [key: string]: {
+    isOpen: boolean
+    openTime: string
+    closeTime: string
+  }
+}
+
 export default function SignupPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -94,8 +104,8 @@ export default function SignupPage() {
   const [postcode, setPostcode] = useState("")
   
   // Step 4: Operating Hours
-  const [operatingHours, setOperatingHours] = useState(() => {
-    const defaultHours = {}
+  const [operatingHours, setOperatingHours] = useState<OperatingHours>(() => {
+    const defaultHours: OperatingHours = {}
     daysOfWeek.forEach(day => {
       defaultHours[day.toLowerCase()] = {
         isOpen: true,
@@ -116,7 +126,7 @@ export default function SignupPage() {
   const [pointOfSale, setPointOfSale] = useState("lightspeed")
   const [paymentProvider, setPaymentProvider] = useState("square")
   
-  const updateOperatingHours = (day, field, value) => {
+  const updateOperatingHours = (day: string, field: string, value: any) => {
     setOperatingHours(prev => ({
       ...prev,
       [day.toLowerCase()]: {
@@ -126,7 +136,7 @@ export default function SignupPage() {
     }))
   }
   
-  const handleFileChange = (e) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setLogoFile(e.target.files[0])
     }
@@ -199,53 +209,35 @@ export default function SignupPage() {
         
         // First check with Firebase Auth
         const signInMethods = await fetchSignInMethodsForEmail(auth, email);
-        console.log("Sign-in methods found:", signInMethods);
-        
-        // If there are sign-in methods available, the email is already in use
         if (signInMethods.length > 0) {
-          console.log("Email already exists in Auth, showing error");
-          setValidationErrors(["This email is already registered. Please use a different email or login."]);
+          setValidationErrors(["An account with this email already exists. Please use a different email or sign in."]);
           setLoading(false);
           return;
         }
         
-        // Also check in Firestore merchants collection for primaryemail field
-        console.log("Checking Firestore for email...");
-        const merchantsRef = collection(db, "merchants");
-        const q = query(merchantsRef, where("primaryemail", "==", email));
+        // Also check Firestore for existing merchants
+        const merchantsRef = collection(db, 'merchants');
+        const q = query(merchantsRef, where('businessEmail', '==', email));
         const querySnapshot = await getDocs(q);
         
         if (!querySnapshot.empty) {
-          console.log("Email found in Firestore merchants collection");
-          setValidationErrors(["This email is already registered. Please use a different email or login."]);
-          setLoading(false);
-          return;
-        }
-        
-        // Also check for businessEmail field
-        const businessEmailQuery = query(merchantsRef, where("businessEmail", "==", email));
-        const businessEmailSnapshot = await getDocs(businessEmailQuery);
-        
-        if (!businessEmailSnapshot.empty) {
-          console.log("Email found as business email in Firestore");
-          setValidationErrors(["This email is already registered. Please use a different email or login."]);
+          setValidationErrors(["A business with this email already exists. Please use a different email."]);
           setLoading(false);
           return;
         }
         
         console.log("Email is available, proceeding to next step");
-        // Email is available, proceed to next step
-        setCurrentStep(prev => Math.min(prev + 1, totalSteps));
       } catch (error) {
         console.error("Error checking email:", error);
-        setValidationErrors(["An error occurred while checking email availability. Please try again."]);
+        setValidationErrors(["Error validating email. Please try again."]);
+        setLoading(false);
+        return;
       } finally {
         setLoading(false);
       }
-    } else {
-      // For other steps, just proceed normally
-      setCurrentStep(prev => Math.min(prev + 1, totalSteps));
     }
+    
+    setCurrentStep(prev => Math.min(prev + 1, totalSteps));
   }
   
   const prevStep = () => {
@@ -253,163 +245,161 @@ export default function SignupPage() {
   }
   
   const uploadLogo = async (userId) => {
-    console.log("Starting logo upload for user:", userId);
-    
-    if (!logoFile) {
-      console.warn("No logo file selected");
-      return null;
-    }
-    
-    console.log("Logo file details:", {
-      name: logoFile.name,
-      type: logoFile.type,
-      size: `${(logoFile.size / 1024).toFixed(2)} KB`
-    });
-    
-    const filename = `${userId}/logo/${logoFile.name}`;
-    console.log("Target storage path:", filename);
+    if (!logoFile) return null
     
     try {
-      console.log("Creating storage reference...");
-      const storageRef = ref(storage, filename);
-      console.log("Storage reference created:", storageRef);
-      
-      console.log("Starting file upload...");
-      const snapshot = await uploadBytes(storageRef, logoFile);
-      console.log("Upload completed:", snapshot);
-      
-      console.log("Getting download URL...");
-      const downloadURL = await getDownloadURL(snapshot.ref);
-      console.log("Download URL obtained:", downloadURL);
-      
-      return downloadURL;
+      const logoRef = ref(storage, `merchants/${userId}/logo.${logoFile.name.split('.').pop()}`)
+      await uploadBytes(logoRef, logoFile)
+      const logoUrl = await getDownloadURL(logoRef)
+      return logoUrl
     } catch (error) {
-      console.error("Error uploading logo:", error);
-      console.error("Error details:", JSON.stringify(error, null, 2));
-      // Return the path instead of null, so we at least have the reference
-      return `${userId}/logo/${logoFile.name}`;
+      console.error("Error uploading logo:", error)
+      throw error
     }
   }
   
   const handleSubmit = async (e) => {
     e.preventDefault()
     
+    if (currentStep < totalSteps) {
+      nextStep()
+      return
+    }
+    
     if (!validateCurrentStep()) return
     
     setLoading(true)
     
     try {
-      console.log("Starting account creation process...");
-      console.log("Form data:", { 
-        email, 
-        password: "********", // Don't log actual password
-        legalBusinessName,
-        tradingName,
-        businessType
-      });
+      console.log("Creating user account...")
       
       // Create user account
-      console.log("Attempting to create user with Firebase Auth...");
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      )
-      
-      console.log("User created successfully:", userCredential.user.uid);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password)
       const user = userCredential.user
-      const userId = user.uid
       
-      // Update profile with business name
-      console.log("Updating user profile...");
+      console.log("User created:", user.uid)
+      
+      // Upload logo if provided
+      let logoUrl = null
+      if (logoFile) {
+        console.log("Uploading logo...")
+        logoUrl = await uploadLogo(user.uid)
+      }
+      
+      // Update user profile
       await updateProfile(user, {
         displayName: tradingName
       })
       
-      console.log("User created successfully, starting file uploads...");
-
-      // Upload logo if provided
-      console.log("Uploading logo...");
-      const logoURL = await uploadLogo(userId);
-      console.log("Logo upload result:", logoURL);
-      
-      // Format the display address
-      const displayAddress = [street, suburb]
-        .filter(part => part)
-        .join(", ")
-      
-      // Format the full address
-      const formattedAddress = [street, suburb, postcode, state]
-        .filter(part => part)
-        .join(", ")
-      
-      // Create business details
-      const businessData = {
-        legalName: legalBusinessName,
-        tradingName: tradingName,
-        merchantName: tradingName,
-        abn: abn,
-        businessType: businessType,
-        businessPhone: businessPhone,
+      // Create merchant document
+      const merchantData = {
+        // Auth info
+        userId: user.uid,
+        email: email,
+        
+        // Business details
+        legalBusinessName,
+        tradingName,
+        businessEmail,
+        businessPhone,
+        businessType,
+        logoUrl,
+        
+        // Address
         address: {
-          street: street,
-          suburb: suburb,
-          state: state,
-          postcode: postcode
+          street,
+          suburb,
+          state,
+          postcode,
+          coordinates: new GeoPoint(0, 0) // Will be updated with actual coordinates later
         },
-        location: {
-          address: [formattedAddress],
-          displayAddress: displayAddress,
-          coordinates: {
-            latitude: 0,
-            longitude: 0
-          }
-        },
-        operatingHours: operatingHours,
+        
+        // Operating hours
+        operatingHours,
+        
+        // Representative
         representative: {
           name: repName,
           phone: repPhone,
           email: repEmail
         },
-        businessEmail: businessEmail,
-        primaryemail: email,
-        merchantId: userId,
-        pointOfSale: pointOfSale,
-        paymentProvider: paymentProvider,
-        defaultmultiplier: 3,
+        
+        // Business verification
+        abn,
+        pointOfSale,
+        paymentProvider,
+        
+        // System fields
         createdAt: new Date(),
-        status: "active",
-        plan: "free",
-        logoUrl: logoURL // Use the actual URL or path
+        updatedAt: new Date(),
+        isActive: true,
+        isVerified: false,
+        
+        // Loyalty program settings
+        loyaltyProgram: {
+          pointsPerDollar: 1,
+          welcomeBonus: 100,
+          isActive: true
+        }
       }
       
-      // Save to Firestore
-      await setDoc(doc(db, "merchants", userId), businessData)
+      console.log("Creating merchant document...")
+      await setDoc(doc(db, 'merchants', user.uid), merchantData)
+      
+      console.log("Account created successfully!")
       
       toast({
-        title: "Account created!",
-        description: "Welcome to Tap Loyalty. Redirecting to your dashboard...",
+        title: "Account created successfully!",
+        description: "Welcome to Tap Loyalty. You can now start setting up your loyalty program.",
       })
       
-      setTimeout(() => {
-        router.push("/dashboard")
-      }, 1500)
+      // Redirect to dashboard
+      router.push('/dashboard')
       
     } catch (error) {
-      console.error("Error creating account:", error);
-      // More detailed error logging
-      if (error.code) {
-        console.error("Error code:", error.code);
+      console.error("Error creating account:", error)
+      
+      let errorMessage = "Failed to create account. Please try again."
+      
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = "An account with this email already exists."
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = "Password is too weak. Please choose a stronger password."
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = "Invalid email address."
       }
       
-      // Show error to user
       toast({
-        title: "Account creation failed",
-        description: error.message || "There was an error creating your account. Please try again.",
-        variant: "destructive"
-      });
+        variant: "destructive",
+        title: "Error",
+        description: errorMessage,
+      })
     } finally {
       setLoading(false)
+    }
+  }
+  
+  const getStepTitle = () => {
+    switch (currentStep) {
+      case 1: return "Create your account"
+      case 2: return "Tell us about your business"
+      case 3: return "Where are you located?"
+      case 4: return "When are you open?"
+      case 5: return "Who should we contact?"
+      case 6: return "Let's verify your business"
+      default: return "Create Account"
+    }
+  }
+  
+  const getStepDescription = () => {
+    switch (currentStep) {
+      case 1: return "Start by creating your secure account"
+      case 2: return "Help us understand your business better"
+      case 3: return "We need your business address for customer matching"
+      case 4: return "Set your operating hours for customer visibility"
+      case 5: return "Primary contact for your loyalty program"
+      case 6: return "Final details to get you started"
+      default: return ""
     }
   }
   
@@ -419,46 +409,42 @@ export default function SignupPage() {
         return (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-sm font-medium text-gray-700">Email address</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="your@email.com"
+                placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                className="h-12 px-4 text-base rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-[#007AFF]"
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="text-sm font-medium text-gray-700">Password</Label>
               <div className="relative">
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Create a password (min 8 characters)"
+                  placeholder="Create a strong password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  className="h-12 px-4 pr-12 text-base rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-[#007AFF]"
                 />
-                <Button 
+                <button
                   type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                   onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4 text-gray-500" />
-                  ) : (
-                    <Eye className="h-4 w-4 text-gray-500" />
-                  )}
-                </Button>
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">Confirm password</Label>
               <Input
                 id="confirmPassword"
                 type="password"
@@ -466,6 +452,7 @@ export default function SignupPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
+                className="h-12 px-4 text-base rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-[#007AFF]"
               />
             </div>
           </div>
@@ -478,10 +465,11 @@ export default function SignupPage() {
               <Label htmlFor="legalBusinessName">Legal Business Name</Label>
               <Input
                 id="legalBusinessName"
-                placeholder="Legal registered name"
+                placeholder="As registered with ASIC"
                 value={legalBusinessName}
                 onChange={(e) => setLegalBusinessName(e.target.value)}
                 required
+                className="rounded-md"
               />
             </div>
             
@@ -489,47 +477,45 @@ export default function SignupPage() {
               <Label htmlFor="tradingName">Trading Name</Label>
               <Input
                 id="tradingName"
-                placeholder="Name customers know you by"
+                placeholder="What customers know you as"
                 value={tradingName}
                 onChange={(e) => setTradingName(e.target.value)}
                 required
+                className="rounded-md"
               />
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="businessPhone">Business Phone</Label>
-              <Input
-                id="businessPhone"
-                type="tel"
-                placeholder="Business phone number"
-                value={businessPhone}
-                onChange={(e) => {
-                  // Only allow numeric input
-                  const numericValue = e.target.value.replace(/\D/g, '');
-                  setBusinessPhone(numericValue);
-                }}
-                inputMode="numeric"
-                pattern="[0-9]*"
-                required
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="businessEmail">Business Email</Label>
-              <Input
-                id="businessEmail"
-                type="email"
-                placeholder="business@example.com"
-                value={businessEmail}
-                onChange={(e) => setBusinessEmail(e.target.value)}
-                required
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="businessEmail">Business Email</Label>
+                <Input
+                  id="businessEmail"
+                  type="email"
+                  placeholder="business@example.com"
+                  value={businessEmail}
+                  onChange={(e) => setBusinessEmail(e.target.value)}
+                  required
+                  className="rounded-md"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="businessPhone">Business Phone</Label>
+                <Input
+                  id="businessPhone"
+                  placeholder="(02) 1234 5678"
+                  value={businessPhone}
+                  onChange={(e) => setBusinessPhone(e.target.value)}
+                  required
+                  className="rounded-md"
+                />
+              </div>
             </div>
             
             <div className="space-y-2">
               <Label htmlFor="businessType">Business Type</Label>
               <Select value={businessType} onValueChange={setBusinessType}>
-                <SelectTrigger>
+                <SelectTrigger className="rounded-md">
                   <SelectValue placeholder="Select business type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -540,6 +526,25 @@ export default function SignupPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="logo">Business Logo (Optional)</Label>
+              <div className="flex items-center gap-4">
+                <Input
+                  id="logo"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="rounded-md"
+                />
+                {logoFile && (
+                  <div className="text-sm text-green-600 flex items-center gap-1">
+                    <Upload className="h-4 w-4" />
+                    {logoFile.name}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )
@@ -555,47 +560,50 @@ export default function SignupPage() {
                 value={street}
                 onChange={(e) => setStreet(e.target.value)}
                 required
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="suburb">Suburb</Label>
-              <Input
-                id="suburb"
-                placeholder="Suburb"
-                value={suburb}
-                onChange={(e) => setSuburb(e.target.value)}
-                required
+                className="rounded-md"
               />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="state">State</Label>
-                <Select value={state} onValueChange={setState}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select state" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {australianStates.map(state => (
-                      <SelectItem key={state.value} value={state.value}>
-                        {state.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="suburb">Suburb</Label>
+                <Input
+                  id="suburb"
+                  placeholder="Sydney"
+                  value={suburb}
+                  onChange={(e) => setSuburb(e.target.value)}
+                  required
+                  className="rounded-md"
+                />
               </div>
               
               <div className="space-y-2">
                 <Label htmlFor="postcode">Postcode</Label>
                 <Input
                   id="postcode"
-                  placeholder="0000"
+                  placeholder="2000"
                   value={postcode}
                   onChange={(e) => setPostcode(e.target.value.replace(/\D/g, '').slice(0, 4))}
                   required
+                  className="rounded-md"
                 />
               </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="state">State</Label>
+              <Select value={state} onValueChange={setState}>
+                <SelectTrigger className="rounded-md">
+                  <SelectValue placeholder="Select state" />
+                </SelectTrigger>
+                <SelectContent>
+                  {australianStates.map(state => (
+                    <SelectItem key={state.value} value={state.value}>
+                      {state.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         )
@@ -603,49 +611,47 @@ export default function SignupPage() {
       case 4:
         return (
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">Set your business operating hours</p>
+            <p className="text-sm text-gray-600 mb-4">
+              Set your operating hours so customers know when you're open
+            </p>
             
-            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
-              {daysOfWeek.map(day => {
-                const dayLower = day.toLowerCase()
-                return (
-                  <div key={day} className="space-y-2 pb-2 border-b">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id={`open-${dayLower}`}
-                        checked={operatingHours[dayLower]?.isOpen}
-                        onCheckedChange={(checked) => 
-                          updateOperatingHours(dayLower, 'isOpen', checked)
-                        }
-                      />
-                      <Label htmlFor={`open-${dayLower}`} className="font-medium">{day}</Label>
-                    </div>
-                    
-                    {operatingHours[dayLower]?.isOpen && (
-                      <div className="grid grid-cols-2 gap-4 ml-6 mt-2">
-                        <div className="space-y-1">
-                          <Label htmlFor={`open-time-${dayLower}`} className="text-xs">Open</Label>
-                          <Input
-                            id={`open-time-${dayLower}`}
-                            type="time"
-                            value={operatingHours[dayLower]?.openTime || "09:00"}
-                            onChange={(e) => updateOperatingHours(dayLower, 'openTime', e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor={`close-time-${dayLower}`} className="text-xs">Close</Label>
-                          <Input
-                            id={`close-time-${dayLower}`}
-                            type="time"
-                            value={operatingHours[dayLower]?.closeTime || "17:00"}
-                            onChange={(e) => updateOperatingHours(dayLower, 'closeTime', e.target.value)}
-                          />
-                        </div>
-                      </div>
-                    )}
+            <div className="space-y-3">
+              {daysOfWeek.map(day => (
+                <div key={day} className="flex items-center gap-4 p-3 border rounded-md">
+                  <div className="flex items-center space-x-2 min-w-[100px]">
+                    <Checkbox
+                      id={`${day}-open`}
+                      checked={operatingHours[day.toLowerCase()]?.isOpen || false}
+                      onCheckedChange={(checked) => updateOperatingHours(day, 'isOpen', checked)}
+                    />
+                    <Label htmlFor={`${day}-open`} className="text-sm font-medium">
+                      {day}
+                    </Label>
                   </div>
-                )
-              })}
+                  
+                  {operatingHours[day.toLowerCase()]?.isOpen && (
+                    <div className="flex items-center gap-2 flex-1">
+                      <Input
+                        type="time"
+                        value={operatingHours[day.toLowerCase()]?.openTime || "09:00"}
+                        onChange={(e) => updateOperatingHours(day, 'openTime', e.target.value)}
+                        className="w-32 rounded-md"
+                      />
+                      <span className="text-gray-500">to</span>
+                      <Input
+                        type="time"
+                        value={operatingHours[day.toLowerCase()]?.closeTime || "17:00"}
+                        onChange={(e) => updateOperatingHours(day, 'closeTime', e.target.value)}
+                        className="w-32 rounded-md"
+                      />
+                    </div>
+                  )}
+                  
+                  {!operatingHours[day.toLowerCase()]?.isOpen && (
+                    <span className="text-gray-500 text-sm flex-1">Closed</span>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )
@@ -653,45 +659,47 @@ export default function SignupPage() {
       case 5:
         return (
           <div className="space-y-4">
+            <p className="text-sm text-gray-600 mb-4">
+              Who should we contact about your loyalty program?
+            </p>
+            
             <div className="space-y-2">
-              <Label htmlFor="repName">Representative Name</Label>
+              <Label htmlFor="repName">Contact Name</Label>
               <Input
                 id="repName"
-                placeholder="Full name"
+                placeholder="John Smith"
                 value={repName}
                 onChange={(e) => setRepName(e.target.value)}
                 required
+                className="rounded-md"
               />
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="repPhone">Contact Phone</Label>
-              <Input
-                id="repPhone"
-                placeholder="Phone number"
-                value={repPhone}
-                onChange={(e) => {
-                  // Only allow numeric input
-                  const numericValue = e.target.value.replace(/\D/g, '');
-                  setRepPhone(numericValue);
-                }}
-                type="tel"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                required
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="repEmail">Contact Email</Label>
-              <Input
-                id="repEmail"
-                type="email"
-                placeholder="contact@example.com"
-                value={repEmail}
-                onChange={(e) => setRepEmail(e.target.value)}
-                required
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="repPhone">Contact Phone</Label>
+                <Input
+                  id="repPhone"
+                  placeholder="0412 345 678"
+                  value={repPhone}
+                  onChange={(e) => setRepPhone(e.target.value)}
+                  required
+                  className="rounded-md"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="repEmail">Contact Email</Label>
+                <Input
+                  id="repEmail"
+                  type="email"
+                  placeholder="john@business.com"
+                  value={repEmail}
+                  onChange={(e) => setRepEmail(e.target.value)}
+                  required
+                  className="rounded-md"
+                />
+              </div>
             </div>
           </div>
         )
@@ -707,18 +715,18 @@ export default function SignupPage() {
                 value={abn}
                 onChange={(e) => setAbn(e.target.value.replace(/\D/g, '').slice(0, 11))}
                 required
+                className="rounded-md"
               />
-              <p className="text-sm text-muted-foreground mt-1">
-                Your ABN is required for matching customer payments with your business, allowing us to accurately 
-                award loyalty points to your customers when they make purchases.
+              <p className="text-sm text-gray-500">
+                Required for payment matching and loyalty point allocation
               </p>
             </div>
             
-            <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="pointOfSale">Point of Sale System</Label>
                 <Select value={pointOfSale} onValueChange={setPointOfSale}>
-                  <SelectTrigger>
+                  <SelectTrigger className="rounded-md">
                     <SelectValue placeholder="Select POS system" />
                   </SelectTrigger>
                   <SelectContent>
@@ -734,7 +742,7 @@ export default function SignupPage() {
               <div className="space-y-2">
                 <Label htmlFor="paymentProvider">Payment Provider</Label>
                 <Select value={paymentProvider} onValueChange={setPaymentProvider}>
-                  <SelectTrigger>
+                  <SelectTrigger className="rounded-md">
                     <SelectValue placeholder="Select payment provider" />
                   </SelectTrigger>
                   <SelectContent>
@@ -754,137 +762,202 @@ export default function SignupPage() {
         return null
     }
   }
-  
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
-      <div className="w-full max-w-md space-y-6">
-        <div className="flex flex-col items-center space-y-2 text-center">
-          <div className="flex items-center gap-2">
-            <Image 
-              src="/logo.png" 
-              alt="Tap Loyalty" 
-              width={48} 
-              height={48} 
-              className="rounded-lg"
-            />
-            <h1 className="text-2xl">
-              <span className="text-[#007AFF] font-extrabold">Tap</span>{" "}
-              <span className="font-semibold">Loyalty</span>
-            </h1>
-          </div>
-          <p className="text-gray-500 max-w-xs">
-Let's get started...
-          </p>
-        </div>
-        
-        <Card className="border-none shadow-md">
-          <CardHeader className="space-y-1 pb-4">
-            <div className="flex justify-between items-center">
-              <CardTitle className="text-xl">Step {currentStep} of {totalSteps}</CardTitle>
-              <div className="flex items-center space-x-1">
-                {Array.from({ length: totalSteps }).map((_, i) => (
-                  <div 
-                    key={i} 
-                    className={`h-2 w-2 rounded-full ${i < currentStep ? 'bg-blue-600' : 'bg-gray-200'}`}
-                  />
+    <PageTransition>
+      <div className="min-h-screen w-full bg-white">
+        <div className="grid min-h-screen lg:grid-cols-6">
+          {/* Left side - Hero section */}
+          <div className="relative hidden lg:flex lg:col-span-2 bg-gray-100 flex-col justify-between px-16 py-16">
+            {/* Main content */}
+            <div className="flex flex-col justify-center flex-1">
+              <div className="max-w-md">
+                {/* Tap Loyalty title */}
+                <h1 className="text-2xl font-bold mb-6">
+                  <span className="font-extrabold text-[#007AFF]">Tap</span>{" "}
+                  <span className="font-semibold text-gray-900">Loyalty</span>
+                </h1>
+                
+                <h2 className="text-2xl font-semibold text-gray-900 mb-4">
+                  Join thousands of Australian businesses
+                </h2>
+                <p className="text-gray-600 leading-relaxed mb-8">
+                  Start rewarding your customers today with Australia's most advanced loyalty platform.
+                </p>
+                
+                {/* Benefits */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-[#007AFF] bg-opacity-10 rounded-md flex items-center justify-center">
+                      <Users className="h-4 w-4 text-[#007AFF]" />
+                    </div>
+                    <span className="text-gray-700">Increase customer retention by 40%</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-[#007AFF] bg-opacity-10 rounded-md flex items-center justify-center">
+                      <Zap className="h-4 w-4 text-[#007AFF]" />
+                    </div>
+                    <span className="text-gray-700">Automated reward management</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-[#007AFF] bg-opacity-10 rounded-md flex items-center justify-center">
+                      <ShieldCheck className="h-4 w-4 text-[#007AFF]" />
+                    </div>
+                    <span className="text-gray-700">Bank-grade security & compliance</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Integration icons */}
+            <div className="border-t border-gray-200 pt-6">
+              <p className="text-xs text-gray-500 mb-4 font-medium tracking-wide">
+                INTEGRATES WITH
+              </p>
+              <div className="flex items-center gap-3 flex-wrap">
+                {["xero.png", "square.png", "sheetspro.png", "outlook.png", "mailchimp.png", "hubspot.png", "gmailnew.png", "lslogo.png"].map((integration, index) => (
+                  <div key={index} className="w-9 h-9 bg-white rounded-md shadow-sm border border-gray-200 flex items-center justify-center p-1.5">
+                    <Image src={`/${integration}`} alt={integration.split('.')[0]} width={24} height={24} className="w-full h-full object-contain" />
+                  </div>
                 ))}
               </div>
             </div>
-            <CardDescription>
-              {currentStep === 1 && "Account information"}
-              {currentStep === 2 && "Business details"}
-              {currentStep === 3 && "Business address"}
-              {currentStep === 4 && "Operating hours"}
-              {currentStep === 5 && "Representative details"}
-              {currentStep === 6 && "Business verification"}
-            </CardDescription>
-          </CardHeader>
-          
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {renderStepContent()}
-              
-              {validationErrors.length > 0 && (
-                <div className="bg-red-50 p-3 rounded-md">
-                  <p className="text-sm font-medium text-red-800 mb-1">Please fix the following errors:</p>
-                  <ul className="text-xs text-red-700 list-disc pl-5">
-                    {validationErrors.map((error, index) => (
-                      <li key={index}>{error}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              
-              <div className="flex justify-between pt-2">
-                {currentStep > 1 ? (
-                  <Button 
-                    type="button" 
-                    variant="outline"
-                    onClick={prevStep}
-                    disabled={loading}
-                  >
-                    <ChevronLeft className="h-4 w-4 mr-2" />
-                    Back
-                  </Button>
-                ) : (
-                  <div></div>
-                )}
-                
-                {currentStep < totalSteps ? (
-                  <Button 
-                    type="button" 
-                    onClick={nextStep}
-                    disabled={loading}
-                    className="bg-[#007AFF] hover:bg-[#0066CC] text-white"
-                  >
-                    Next
-                    <ChevronRight className="h-4 w-4 ml-2" />
-                  </Button>
-                ) : (
-                  <Button 
-                    type="submit" 
-                    className="bg-[#007AFF] hover:bg-[#0066CC] text-white"
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating Account...
-                      </>
-                    ) : (
-                      <>
-                        Create Account
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </>
-                    )}
-                  </Button>
-                )}
+          </div>
+
+          {/* Right side - Signup form */}
+          <div className="relative flex flex-col lg:col-span-4">
+            {/* Mobile header */}
+            <div className="lg:hidden p-6 border-b bg-white">
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold">
+                  <span className="font-extrabold text-[#007AFF]">Tap</span>{" "}
+                  <span className="font-semibold text-gray-900">Loyalty</span>
+                </h1>
               </div>
-            </form>
-          </CardContent>
-          
-          <CardFooter className="flex flex-col space-y-4">
-            <Separator />
-            <div className="text-center text-sm">
-              Already have an account?{" "}
-              <Link href="/login" className="text-blue-600 hover:underline font-medium">
-                Log in
-              </Link>
             </div>
-          </CardFooter>
-        </Card>
-        
-        <div className="text-center text-xs text-gray-500">
-          By creating an account, you agree to our{" "}
-          <Link href="/terms" className="text-blue-600 hover:underline">
-            Terms of Service
-          </Link>{" "}
-          and{" "}
-          <Link href="/privacy" className="text-blue-600 hover:underline">
-            Privacy Policy
-          </Link>
+
+            {/* Form section */}
+            <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
+              <div className="w-full max-w-lg">
+                {/* Progress indicator */}
+                <div className="mb-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm font-medium text-gray-500">Step {currentStep} of {totalSteps}</span>
+                    <div className="flex items-center space-x-1">
+                      {Array.from({ length: totalSteps }).map((_, i) => (
+                        <div 
+                          key={i} 
+                          className={`h-2 w-8 rounded-full transition-colors ${
+                            i < currentStep ? 'bg-[#007AFF]' : i === currentStep - 1 ? 'bg-[#007AFF]' : 'bg-gray-200'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="text-center mb-6">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">{getStepTitle()}</h2>
+                    <p className="text-gray-600">{getStepDescription()}</p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {renderStepContent()}
+                  
+                  {validationErrors.length > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                      <p className="text-sm font-medium text-red-800 mb-2">Please fix the following errors:</p>
+                      <ul className="text-sm text-red-700 list-disc pl-5 space-y-1">
+                        {validationErrors.map((error, index) => (
+                          <li key={index}>{error}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  <div className="flex justify-between pt-4">
+                    {currentStep > 1 ? (
+                      <Button 
+                        type="button" 
+                        variant="outline"
+                        onClick={prevStep}
+                        disabled={loading}
+                        className="rounded-md"
+                      >
+                        <ChevronLeft className="h-4 w-4 mr-2" />
+                        Back
+                      </Button>
+                    ) : (
+                      <div></div>
+                    )}
+                    
+                    {currentStep < totalSteps ? (
+                      <Button 
+                        type="button" 
+                        onClick={nextStep}
+                        disabled={loading}
+                        className="bg-[#007AFF] hover:bg-[#0066CC] text-white rounded-md"
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Checking...
+                          </>
+                        ) : (
+                          <>
+                            Continue
+                            <ChevronRight className="h-4 w-4 ml-2" />
+                          </>
+                        )}
+                      </Button>
+                    ) : (
+                      <Button 
+                        type="submit" 
+                        className="bg-[#007AFF] hover:bg-[#0066CC] text-white rounded-md"
+                        disabled={loading}
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Creating Account...
+                          </>
+                        ) : (
+                          <>
+                            Create Account
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                </form>
+                
+                {/* Sign in link */}
+                <div className="mt-8 pt-6 border-t border-gray-100">
+                  <div className="text-center text-sm text-gray-600">
+                    Already have an account?{" "}
+                    <Link href="/login" className="text-[#007AFF] hover:text-[#0066CC] font-medium hover:underline underline-offset-4 transition-colors">
+                      Sign in
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Mobile hero content */}
+            <div className="lg:hidden bg-gray-50 p-6">
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Join thousands of Australian businesses
+                </h3>
+                <p className="text-gray-600 text-sm">
+                  Start rewarding your customers with <span className="font-semibold text-[#007AFF]">Tap Loyalty</span>
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+    </PageTransition>
   )
 } 

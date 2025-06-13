@@ -164,7 +164,7 @@ export default function DashboardPage() {
   const [popularRewards, setPopularRewards] = useState<any[]>([])
   const [activeBanners, setActiveBanners] = useState<any[]>([])
   const [scheduledBanners, setScheduledBanners] = useState<any[]>([])
-  const [metricsType, setMetricsType] = useState<"consumer" | "platform">("platform")
+  const [metricsType, setMetricsType] = useState<"loyalty" | "merchant">("loyalty")
   const [tapAgentMetrics, setTapAgentMetrics] = useState({
     lastRun: null as Date | null,
     rewardsCreated: 0,
@@ -295,6 +295,21 @@ export default function DashboardPage() {
   const [assistantLoading, setAssistantLoading] = useState(false)
   const [activeAgents, setActiveAgents] = useState<any[]>([])
   const [agentsLoading, setAgentsLoading] = useState(false)
+
+  // Add integrations state
+  const [integrations, setIntegrations] = useState({
+    square: { connected: false, data: null },
+    clover: { connected: false, data: null },
+    shopify: { connected: false, data: null },
+    lightspeed_new: { connected: false, data: null },
+    gmail: { connected: false, data: null },
+    google_calendar: { connected: false, data: null },
+    google_docs: { connected: false, data: null },
+    google_sheets: { connected: false, data: null },
+    hubspot: { connected: false, data: null },
+    outlook: { connected: false, data: null }
+  })
+  const [integrationsLoading, setIntegrationsLoading] = useState(false)
 
   // Agents carousel state
 
@@ -1545,119 +1560,91 @@ export default function DashboardPage() {
     }
   }, [user?.uid]);
 
-  // Fetch active agents
+  // Fetch active agents and integrations
   useEffect(() => {
     const fetchActiveAgents = async () => {
-      if (!user?.uid) return;
+      if (!user?.uid) return
       
+      setAgentsLoading(true)
       try {
-        setAgentsLoading(true);
-        console.log('Fetching active agents for user:', user.uid);
+        // Fetch custom agents from Firestore
+        const agentsRef = collection(db, 'merchants', user.uid, 'agents')
+        const agentsQuery = query(agentsRef, orderBy('createdAt', 'desc'))
+        const agentsSnapshot = await getDocs(agentsQuery)
         
-        // Fetch enrolled agents from the merchants collection
-        const agentsRef = collection(db, 'merchants', user.uid, 'agentsenrolled');
-        const agentsSnapshot = await getDocs(agentsRef);
+        const customAgents = agentsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          type: 'custom'
+        }))
         
-        console.log('Found agents docs:', agentsSnapshot.docs.length);
-        
-        const agents = [];
-        
-        // Process each enrolled agent
-        for (const doc of agentsSnapshot.docs) {
-          const data = doc.data();
-          console.log('Agent doc data:', doc.id, data);
-          
-          // Check if agent is enabled/active
-          const isActive = data.enabled === true || data.isActive === true || data.status === 'active';
-          console.log('Is agent active?', doc.id, isActive, {
-            enabled: data.enabled,
-            isActive: data.isActive,
-            status: data.status
-          });
-          
-          if (isActive) {
-            const agent = {
-              id: doc.id,
-              name: data.agentName || data.name || data.agentname || doc.id,
-              type: data.type || 'enrolled',
-              status: 'active',
-              lastRun: data.lastRun?.toDate() || data.lastExecuted?.toDate() || data.enrolledAt?.toDate() || null,
-              description: data.description || `${doc.id} agent`,
-              frequency: data.frequency || data.schedule || 'manual',
-              tools: data.tools || [],
-              selectedTools: data.selectedTools || []
-            };
-            console.log('Adding active agent:', agent);
-            agents.push(agent);
-          }
-        }
-        
-        // Sort by last run date (most recent first)
-        agents.sort((a, b) => {
-          if (!a.lastRun && !b.lastRun) return 0;
-          if (!a.lastRun) return 1;
-          if (!b.lastRun) return -1;
-          return b.lastRun.getTime() - a.lastRun.getTime();
-        });
-        
-        console.log('Final active agents:', agents);
-        setActiveAgents(agents);
-        
-        // For testing purposes, if no agents found, add some mock data
-        if (agents.length === 0) {
-          console.log('No agents found, adding test data');
-          const testAgents = [
-            {
-              id: 'customer-service',
-              name: 'Customer Service Agent',
-              type: 'built-in',
-              status: 'active',
-              lastRun: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-              description: 'Automated customer service responses',
-              frequency: 'real-time',
-              tools: ['gmail'],
-              selectedTools: ['gmail']
-            },
-            {
-              id: 'email-summary',
-              name: 'Email Summary Agent',
-              type: 'built-in',
-              status: 'active', 
-              lastRun: new Date(Date.now() - 1 * 60 * 60 * 1000), // 1 hour ago
-              description: 'Daily email summaries',
-              frequency: 'daily',
-              tools: ['gmail'],
-              selectedTools: ['gmail']
-            }
-          ];
-          setActiveAgents(testAgents);
-        }
-        
-      } catch (error) {
-        console.error('Error fetching active agents:', error);
-        
-        // Set test agents on error as well
-        const testAgents = [
-          {
-            id: 'customer-service',
-            name: 'Customer Service Agent',
+        // Add built-in agents that are "active" (you can customize this logic)
+        const builtInAgents = availableAgents
+          .filter(agent => agent.status === 'active')
+          .map(agent => ({
+            ...agent,
             type: 'built-in',
-            status: 'active',
-            lastRun: new Date(Date.now() - 2 * 60 * 60 * 1000),
-            description: 'Automated customer service responses',
-            frequency: 'real-time',
-            tools: ['gmail'],
-            selectedTools: ['gmail']
-          }
-        ];
-        setActiveAgents(testAgents);
+            lastRun: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000) // Random last run within 7 days
+          }))
+        
+        // Combine and limit to show most recent/relevant agents
+        const allAgents = [...customAgents, ...builtInAgents].slice(0, 6)
+        
+        setActiveAgents(allAgents)
+      } catch (error) {
+        console.error('Error fetching active agents:', error)
       } finally {
-        setAgentsLoading(false);
+        setAgentsLoading(false)
       }
-    };
-    
+    }
+
+    // Function to fetch integrations status
+    const fetchIntegrations = async () => {
+      if (!user?.uid) return
+      
+      setIntegrationsLoading(true)
+      try {
+        // Check all integrations
+        const integrationChecks = [
+          { key: 'square', path: 'square' },
+          { key: 'lightspeed_new', path: 'lightspeed_new' },
+          { key: 'gmail', path: 'gmail' },
+          { key: 'google_calendar', path: 'google_calendar' },
+          { key: 'google_docs', path: 'google_docs' },
+          { key: 'google_sheets', path: 'google_sheets' },
+          { key: 'hubspot', path: 'hubspot' },
+          { key: 'outlook', path: 'outlook' }
+        ]
+
+        const integrationResults: any = {}
+
+        for (const integration of integrationChecks) {
+          try {
+            const integrationDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', integration.path))
+            integrationResults[integration.key] = {
+              connected: integrationDoc.exists() && integrationDoc.data()?.connected === true,
+              data: integrationDoc.exists() ? integrationDoc.data() : null
+            }
+          } catch (error) {
+            console.error(`Error checking ${integration.key} integration:`, error)
+            integrationResults[integration.key] = { connected: false, data: null }
+          }
+        }
+
+        setIntegrations(prev => ({
+          ...prev,
+          ...integrationResults
+        }))
+      } catch (error) {
+        console.error('Error fetching integrations:', error)
+      } finally {
+        setIntegrationsLoading(false)
+      }
+    }
+
     if (user?.uid) {
-      fetchActiveAgents();
+      fetchActiveAgents()
+      fetchIntegrations()
     }
   }, [user?.uid]);
 
@@ -2515,78 +2502,28 @@ export default function DashboardPage() {
               {/* Metrics type tabs moved to the left */}
               <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
                 <button
-                  onClick={() => setMetricsType("platform")}
+                  onClick={() => setMetricsType("loyalty")}
                   className={cn(
                     "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                    metricsType === "platform"
+                    metricsType === "loyalty"
                       ? "text-gray-800 bg-white shadow-sm"
                       : "text-gray-600 hover:bg-gray-200/70"
                   )}
                 >
-                  <Server className="h-4 w-4" />
-                  <span>Platform</span>
+                  <Gift className="h-4 w-4" />
+                  <span>Loyalty</span>
                 </button>
                 <button
-                  onClick={() => setMetricsType("consumer")}
+                  onClick={() => setMetricsType("merchant")}
                   className={cn(
                     "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                    metricsType === "consumer"
+                    metricsType === "merchant"
                       ? "text-gray-800 bg-white shadow-sm"
                       : "text-gray-600 hover:bg-gray-200/70"
                   )}
                 >
-                  <Users className="h-4 w-4" />
-                  <span>Consumer</span>
-                </button>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-3">
-              {/* Date range tabs */}
-              <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
-                <button
-                  onClick={() => setTimeframe("today")}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                    timeframe === "today"
-                      ? "text-gray-800 bg-white shadow-sm"
-                      : "text-gray-600 hover:bg-gray-200/70"
-                  )}
-                >
-                  Today
-                </button>
-                <button
-                  onClick={() => setTimeframe("yesterday")}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                    timeframe === "yesterday"
-                      ? "text-gray-800 bg-white shadow-sm"
-                      : "text-gray-600 hover:bg-gray-200/70"
-                  )}
-                >
-                  Yesterday
-                </button>
-                <button
-                  onClick={() => setTimeframe("7days")}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                    timeframe === "7days"
-                      ? "text-gray-800 bg-white shadow-sm"
-                      : "text-gray-600 hover:bg-gray-200/70"
-                  )}
-                >
-                  7 Days
-                </button>
-                <button
-                  onClick={() => setTimeframe("30days")}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                    timeframe === "30days"
-                      ? "text-gray-800 bg-white shadow-sm"
-                      : "text-gray-600 hover:bg-gray-200/70"
-                  )}
-                >
-                  30 Days
+                  <Bot className="h-4 w-4" />
+                  <span>Merchant</span>
                 </button>
               </div>
             </div>
@@ -2594,460 +2531,687 @@ export default function DashboardPage() {
         </div>
         
         <div className="px-6 pt-6 pb-14 flex-1 overflow-y-auto bg-white">
-          {/* Quick Actions Section */}
-          <div className="mb-8">
-            <h2 className="text-lg font-medium mb-4">Quick Actions</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors">
-                <div className="flex items-center gap-3 mb-3">
-                  <PlusCircle className="h-4 w-4 text-gray-500" />
-                  <h3 className="text-sm font-semibold text-gray-900">Setup Wizard</h3>
+          {/* Content based on selected tab */}
+          {metricsType === "loyalty" && (
+            <>
+              {/* Setup Section for Loyalty */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-medium">Essential Setup</h2>
+                  <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-md">1/4</span>
                 </div>
-                <p className="text-xs text-gray-600 mb-4 leading-relaxed">Configure your business settings and integrations.</p>
-                <Button 
-                  size="sm" 
-                  onClick={() => setIsSetupWizardOpen(true)} 
-                  variant="outline" 
-                  className="w-full rounded-md mt-auto text-xs"
-                >
-                  Open Wizard
-                </Button>
-              </div>
-              
-
-              
-              <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors">
-                <div className="flex items-center gap-3 mb-3">
-                  <Gift className="h-4 w-4 text-gray-500" />
-                  <h3 className="text-sm font-semibold text-gray-900">Create Reward</h3>
-                </div>
-                <p className="text-xs text-gray-600 mb-4 leading-relaxed">Create a new loyalty reward for your customers.</p>
-                <Button 
-                  size="sm" 
-                  onClick={() => setShowRewardDialog(true)} 
-                  variant="outline" 
-                  className="w-full rounded-md mt-auto text-xs"
-                >
-                  Create Reward
-                </Button>
-              </div>
-
-              <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors">
-                <div className="flex items-center gap-3 mb-3">
-                  <Bot className="h-4 w-4 text-gray-500" />
-                  <h3 className="text-sm font-semibold text-gray-900">AI Agents</h3>
-                </div>
-                <p className="text-xs text-gray-600 mb-4 leading-relaxed">View and connect to all available AI agents.</p>
-                <Button 
-                  size="sm" 
-                  onClick={() => router.push('/dashboard/agents')} 
-                  variant="outline" 
-                  className="w-full rounded-md mt-auto text-xs"
-                >
-                  View Agents
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Metrics Section */}
-          <div className="mb-8">
-            <h2 className="text-lg font-medium mb-4">
-              {metricsType === "platform" ? "Platform Metrics" : "Consumer Metrics"}
-            </h2>
-            
-            {metricsType === "platform" && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-                <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Gift className="h-4 w-4 text-gray-500" />
-                      <h3 className="text-sm font-medium text-gray-900">Active Rewards</h3>
-                    </div>
-                    {metricsLoading ? (
-                      <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
-                    ) : (
-                      <div className="text-2xl font-semibold text-gray-900">{metrics.activeRewards}</div>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-600">Currently available rewards</p>
-                </div>
-                
-                <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Eye className="h-4 w-4 text-gray-500" />
-                      <h3 className="text-sm font-medium text-gray-900">Reward Views</h3>
-                    </div>
-                    {metricsLoading ? (
-                      <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
-                    ) : (
-                      <div className="text-2xl font-semibold text-gray-900">{metrics.totalRewardViews}</div>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-600">Total reward page views</p>
-                </div>
-                
-                <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Zap className="h-4 w-4 text-gray-500" />
-                      <h3 className="text-sm font-medium text-gray-900">Points Issued</h3>
-                    </div>
-                    {metricsLoading ? (
-                      <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
-                    ) : (
-                      <div className="text-2xl font-semibold text-gray-900">{metrics.totalPointsIssued}</div>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-600">Total loyalty points awarded</p>
-                </div>
-                
-                <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Eye className="h-4 w-4 text-gray-500" />
-                      <h3 className="text-sm font-medium text-gray-900">Store Views</h3>
-                    </div>
-                    {metricsLoading ? (
-                      <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
-                    ) : (
-                      <div className="text-2xl font-semibold text-gray-900">{metrics.totalStoreViews}</div>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-600">Total store page visits</p>
-                </div>
-              </div>
-            )}
-
-            {metricsType === "consumer" && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-                <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-gray-500" />
-                      <h3 className="text-sm font-medium text-gray-900">Active Customers</h3>
-                    </div>
-                    {metricsLoading ? (
-                      <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
-                    ) : (
-                      <div className="text-2xl font-semibold text-gray-900">{metrics.activeCustomers}</div>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-600">Customers with recent activity</p>
-                </div>
-                
-                <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <ShoppingCart className="h-4 w-4 text-gray-500" />
-                      <h3 className="text-sm font-medium text-gray-900">Transactions</h3>
-                    </div>
-                    {metricsLoading ? (
-                      <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
-                    ) : (
-                      <div className="text-2xl font-semibold text-gray-900">{metrics.totalTransactions}</div>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-600">Total completed purchases</p>
-                </div>
-                
-                <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Gift className="h-4 w-4 text-gray-500" />
-                      <h3 className="text-sm font-medium text-gray-900">Redemptions</h3>
-                    </div>
-                    {metricsLoading ? (
-                      <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
-                    ) : (
-                      <div className="text-2xl font-semibold text-gray-900">{metrics.totalRedemptions}</div>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-600">Total rewards redeemed</p>
-                </div>
-                
-                <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-gray-500" />
-                      <h3 className="text-sm font-medium text-gray-900">Avg Order Value</h3>
-                    </div>
-                    {metricsLoading ? (
-                      <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
-                    ) : (
-                      <div className="text-2xl font-semibold text-gray-900">${metrics.avgOrderValue}</div>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-600">Average transaction amount</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Activity and Analytics Section */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Recent Activity */}
-            <div className="border border-gray-200 rounded-md bg-gray-50">
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-md font-semibold mb-1">Recent Activity</h3>
-                    <p className="text-sm text-gray-600">Latest transactions and redemptions</p>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="rounded-md"
-                    asChild
-                  >
-                    <Link href="/store/activity" className="flex items-center gap-1">
-                      View all
-                      <ChevronRight className="h-3 w-3" />
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-              <div className="p-6">
-                {activityLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
-                  </div>
-                ) : recentActivity.length === 0 ? (
-                  <div className="py-8 text-center">
-                    <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
-                      <Clock className="h-6 w-6 text-gray-400" />
-                    </div>
-                    <p className="text-sm font-medium text-gray-700">No recent activity</p>
-                    <p className="text-xs text-gray-500 mt-1">Transactions will appear here</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {recentActivity.slice(0, 5).map((activity, index) => (
-                      <div key={activity.id} className="flex items-center gap-3">
-                        <div className={`h-8 w-8 rounded-md ${
-                          activity.type === "transaction" ? 'bg-blue-100' : 'bg-purple-100'
-                        } flex items-center justify-center`}>
-                          {activity.type === "transaction" ? (
-                            <ShoppingCart className="h-4 w-4 text-blue-600" />
-                          ) : (
-                            <Gift className="h-4 w-4 text-purple-600" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">{activity.customer.name}</p>
-                          <p className="text-xs text-gray-500">
-                            {activity.type === "transaction" ? "Purchase" : "Redemption"} • {formatTimeAgo(activity.timestamp)}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium text-gray-900">
-                            {activity.type === "transaction" 
-                              ? `$${activity.amount.toFixed(2)}` 
-                              : `${activity.points} pts`}
-                          </p>
-                        </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                  {/* Recurring Program */}
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors w-72">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <Gift className="h-4 w-4 text-blue-500" />
+                        <h3 className="text-sm font-semibold text-gray-900">Recurring Program</h3>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Popular Rewards */}
-            <div className="border border-gray-200 rounded-md bg-gray-50">
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-md font-semibold mb-1">Popular Rewards</h3>
-                    <p className="text-sm text-gray-600">Most viewed and redeemed rewards</p>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="rounded-md"
-                    asChild
-                  >
-                    <Link href="/store/rewards" className="flex items-center gap-1">
-                      View all
-                      <ChevronRight className="h-3 w-3" />
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-              <div className="p-6">
-                {rewardsLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
-                  </div>
-                ) : popularRewards.length === 0 ? (
-                  <div className="py-8 text-center">
-                    <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
-                      <Gift className="h-6 w-6 text-gray-400" />
-                    </div>
-                    <p className="text-sm font-medium text-gray-700">No rewards yet</p>
-                    <p className="text-xs text-gray-500 mt-1">Create rewards to see analytics</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {popularRewards.slice(0, 5).map((reward, index) => (
-                      <div key={reward.id} className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-md bg-green-100 flex items-center justify-center">
-                          <Gift className="h-4 w-4 text-green-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">{reward.name}</p>
-                          <p className="text-xs text-gray-500">{reward.pointsCost} points</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium text-gray-900">{reward.views || 0}</p>
-                          <p className="text-xs text-gray-500">views</p>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                          5 min
+                        </span>
                       </div>
-                    ))}
+                    </div>
+                    <p className="text-xs text-gray-600 mb-4 leading-relaxed">Set up automatic loyalty rewards for your customers.</p>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="w-full rounded-md mt-auto text-xs"
+                      asChild
+                    >
+                      <Link href="/dashboard/rewards">Setup Now</Link>
+                    </Button>
                   </div>
-                )}
-              </div>
-            </div>
 
-            {/* Active Agents */}
-            <div className="border border-gray-200 rounded-md bg-gray-50">
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-md font-semibold mb-1">Active Agents</h3>
-                    <p className="text-sm text-gray-600">Currently running AI agents</p>
+                  {/* Individual Reward */}
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors w-72">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <Star className="h-4 w-4 text-blue-500" />
+                        <h3 className="text-sm font-semibold text-gray-900">Individual Reward</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                          2 min
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-600 mb-4 leading-relaxed">Create custom rewards for specific customers.</p>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="w-full rounded-md mt-auto text-xs"
+                      onClick={() => setShowRewardDialog(true)}
+                    >
+                      Setup Now
+                    </Button>
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="rounded-md"
-                    asChild
-                  >
-                    <Link href="/dashboard/agents" className="flex items-center gap-1">
-                      View all
-                      <ChevronRight className="h-3 w-3" />
-                    </Link>
-                  </Button>
+
+                  {/* Banner */}
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors w-72">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <Eye className="h-4 w-4 text-blue-500" />
+                        <h3 className="text-sm font-semibold text-gray-900">Banner</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                          3 min
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-600 mb-4 leading-relaxed">Display promotional banners to customers.</p>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="w-full rounded-md mt-auto text-xs text-green-600 border-green-200 hover:bg-green-50"
+                      asChild
+                    >
+                      <Link href="/dashboard/banners" className="flex items-center gap-2">
+                        <CheckIcon className="h-3 w-3" />
+                        Configured
+                      </Link>
+                    </Button>
+                  </div>
+
+                  {/* Intro Reward */}
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors w-72">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <Sparkles className="h-4 w-4 text-blue-500" />
+                        <h3 className="text-sm font-semibold text-gray-900">Intro Reward</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                          4 min
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-600 mb-4 leading-relaxed">Welcome new customers with special rewards.</p>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="w-full rounded-md mt-auto text-xs"
+                      onClick={() => setIsIntroductoryRewardSheetOpen(true)}
+                    >
+                      Setup Now
+                    </Button>
+                  </div>
                 </div>
               </div>
-              <div className="p-6">
-                {agentsLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
-                  </div>
-                ) : activeAgents.length === 0 ? (
-                  <div className="py-8 text-center">
-                    <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
-                      <Bot className="h-6 w-6 text-gray-400" />
-                    </div>
-                    <p className="text-sm font-medium text-gray-700">No active agents</p>
-                    <p className="text-xs text-gray-500 mt-1">Connect agents to see them here</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {activeAgents.slice(0, 5).map((agent, index) => {
-                      // Function to get tool logo based on tool name
-                      const getToolLogo = (toolName: string) => {
-                        const lowerToolName = toolName.toLowerCase();
-                        
-                        // Gmail/Google tools
-                        if (lowerToolName.includes('gmail') || lowerToolName.includes('google mail')) {
-                          return <Image src="/gmailnew.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain" />;
-                        }
-                        
-                        // Xero tools
-                        if (lowerToolName.includes('xero')) {
-                          return <Image src="/xero.png" width={16} height={16} alt="Xero" className="h-4 w-4 object-contain" />;
-                        }
-                        
-                        // Square tools
-                        if (lowerToolName.includes('square')) {
-                          return <Image src="/square.png" width={16} height={16} alt="Square" className="h-4 w-4 object-contain" />;
-                        }
-                        
-                        // Lightspeed tools
-                        if (lowerToolName.includes('lightspeed')) {
-                          return <Image src="/lslogo.png" width={16} height={16} alt="Lightspeed" className="h-4 w-4 object-contain" />;
-                        }
-                        
-                        // MailChimp tools
-                        if (lowerToolName.includes('mailchimp') || lowerToolName.includes('mail chimp')) {
-                          return <Image src="/mailchimp.png" width={16} height={16} alt="MailChimp" className="h-4 w-4 object-contain" />;
-                        }
-                        
-                        // HubSpot tools
-                        if (lowerToolName.includes('hubspot') || lowerToolName.includes('hub spot')) {
-                          return <Image src="/hubspot.png" width={16} height={16} alt="HubSpot" className="h-4 w-4 object-contain" />;
-                        }
-                        
-                        // Outlook tools
-                        if (lowerToolName.includes('outlook') || lowerToolName.includes('microsoft')) {
-                          return <Image src="/outlook.png" width={16} height={16} alt="Outlook" className="h-4 w-4 object-contain" />;
-                        }
-                        
-                        // Google Sheets tools
-                        if (lowerToolName.includes('sheets') || lowerToolName.includes('google sheets')) {
-                          return <Image src="/sheetspro.png" width={16} height={16} alt="Google Sheets" className="h-4 w-4 object-contain" />;
-                        }
-                        
-                        // Default fallback
-                        return <Bot className="h-4 w-4 text-gray-500" />;
-                      };
 
-                      // Function to get the appropriate icon for each agent
-                      const getAgentIcon = (agent: any) => {
-                        // Built-in agents
-                        switch (agent.id) {
-                          case 'customer-service':
-                          case 'email-summary':
-                          case 'email-executive':
-                            return <Image src="/gmailnew.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain" />;
-                        }
-                        
-                        // Custom agents - check their tools
-                        if (agent.type === 'custom' && (agent.tools || agent.selectedTools)) {
-                          const tools = agent.tools || agent.selectedTools || [];
-                          
-                          // If agent has tools, use the first tool's icon
-                          if (tools.length > 0) {
-                            const firstTool = tools[0];
-                            const toolName = typeof firstTool === 'string' ? firstTool : (firstTool.name || firstTool.tool || firstTool.app);
-                            if (toolName) {
-                              return getToolLogo(toolName);
+              {/* Loyalty Metrics Section */}
+              <div className="mb-8">
+                <h2 className="text-lg font-medium mb-4">Loyalty Metrics</h2>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+                  <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Gift className="h-4 w-4 text-gray-500" />
+                        <h3 className="text-sm font-medium text-gray-900">Active Rewards</h3>
+                      </div>
+                      {metricsLoading ? (
+                        <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
+                      ) : (
+                        <div className="text-2xl font-semibold text-gray-900">{metrics.activeRewards}</div>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-600">Currently available rewards</p>
+                  </div>
+                  
+                  <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Zap className="h-4 w-4 text-gray-500" />
+                        <h3 className="text-sm font-medium text-gray-900">Points Issued</h3>
+                      </div>
+                      {metricsLoading ? (
+                        <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
+                      ) : (
+                        <div className="text-2xl font-semibold text-gray-900">{metrics.totalPointsIssued}</div>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-600">Total loyalty points awarded</p>
+                  </div>
+                  
+                  <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Gift className="h-4 w-4 text-gray-500" />
+                        <h3 className="text-sm font-medium text-gray-900">Redemptions</h3>
+                      </div>
+                      {metricsLoading ? (
+                        <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
+                      ) : (
+                        <div className="text-2xl font-semibold text-gray-900">{metrics.totalRedemptions}</div>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-600">Total rewards redeemed</p>
+                  </div>
+                  
+                  <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-gray-500" />
+                        <h3 className="text-sm font-medium text-gray-900">Active Customers</h3>
+                      </div>
+                      {metricsLoading ? (
+                        <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
+                      ) : (
+                        <div className="text-2xl font-semibold text-gray-900">{metrics.activeCustomers}</div>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-600">Customers with recent activity</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Activity and Analytics Section for Loyalty */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Recent Activity */}
+                <div className="border border-gray-200 rounded-md bg-gray-50">
+                  <div className="p-6 border-b border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-md font-semibold mb-1">Recent Activity</h3>
+                        <p className="text-sm text-gray-600">Latest transactions and redemptions</p>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="rounded-md"
+                        asChild
+                      >
+                        <Link href="/store/activity" className="flex items-center gap-1">
+                          View all
+                          <ChevronRight className="h-3 w-3" />
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="p-6">
+                    {activityLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
+                      </div>
+                    ) : recentActivity.length === 0 ? (
+                      <div className="py-8 text-center">
+                        <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
+                          <Clock className="h-6 w-6 text-gray-400" />
+                        </div>
+                        <p className="text-sm font-medium text-gray-700">No recent activity</p>
+                        <p className="text-xs text-gray-500 mt-1">Transactions will appear here</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {recentActivity.slice(0, 5).map((activity, index) => (
+                          <div key={activity.id} className="flex items-center gap-3">
+                            <div className={`h-8 w-8 rounded-md ${
+                              activity.type === "transaction" ? 'bg-blue-100' : 'bg-purple-100'
+                            } flex items-center justify-center`}>
+                              {activity.type === "transaction" ? (
+                                <ShoppingCart className="h-4 w-4 text-blue-600" />
+                              ) : (
+                                <Gift className="h-4 w-4 text-purple-600" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900">{activity.customer.name}</p>
+                              <p className="text-xs text-gray-500">
+                                {activity.type === "transaction" ? "Purchase" : "Redemption"} • {formatTimeAgo(activity.timestamp)}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-medium text-gray-900">
+                                {activity.type === "transaction" 
+                                  ? `$${activity.amount.toFixed(2)}` 
+                                  : `${activity.points} pts`}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Popular Rewards */}
+                <div className="border border-gray-200 rounded-md bg-gray-50">
+                  <div className="p-6 border-b border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-md font-semibold mb-1">Popular Rewards</h3>
+                        <p className="text-sm text-gray-600">Most viewed and redeemed rewards</p>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="rounded-md"
+                        asChild
+                      >
+                        <Link href="/store/rewards" className="flex items-center gap-1">
+                          View all
+                          <ChevronRight className="h-3 w-3" />
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="p-6">
+                    {rewardsLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
+                      </div>
+                    ) : popularRewards.length === 0 ? (
+                      <div className="py-8 text-center">
+                        <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
+                          <Gift className="h-6 w-6 text-gray-400" />
+                        </div>
+                        <p className="text-sm font-medium text-gray-700">No rewards yet</p>
+                        <p className="text-xs text-gray-500 mt-1">Create rewards to see analytics</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {popularRewards.slice(0, 5).map((reward, index) => (
+                          <div key={reward.id} className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-md bg-green-100 flex items-center justify-center">
+                              <Gift className="h-4 w-4 text-green-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900">{reward.name}</p>
+                              <p className="text-xs text-gray-500">{reward.pointsCost} points</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-medium text-gray-900">{reward.views || 0}</p>
+                              <p className="text-xs text-gray-500">views</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Platform Metrics */}
+                <div className="border border-gray-200 rounded-md bg-gray-50">
+                  <div className="p-6 border-b border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-md font-semibold mb-1">Platform Metrics</h3>
+                        <p className="text-sm text-gray-600">Store performance overview</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-6">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Eye className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm font-medium text-gray-900">Store Views</span>
+                        </div>
+                        <span className="text-sm font-semibold text-gray-900">{metrics.totalStoreViews}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Eye className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm font-medium text-gray-900">Reward Views</span>
+                        </div>
+                        <span className="text-sm font-semibold text-gray-900">{metrics.totalRewardViews}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <ShoppingCart className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm font-medium text-gray-900">Transactions</span>
+                        </div>
+                        <span className="text-sm font-semibold text-gray-900">{metrics.totalTransactions}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <DollarSign className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm font-medium text-gray-900">Avg Order Value</span>
+                        </div>
+                        <span className="text-sm font-semibold text-gray-900">${metrics.avgOrderValue}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {metricsType === "merchant" && (
+            <>
+              {/* Setup Section for Merchant */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-medium">Essential Setup</h2>
+                  <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-md">0/2</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                  {/* Integrations */}
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors w-72">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <Settings className="h-4 w-4 text-blue-500" />
+                        <h3 className="text-sm font-semibold text-gray-900">Integrations</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                          10 min
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-600 mb-4 leading-relaxed">Connect your business tools and services.</p>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="w-full rounded-md mt-auto text-xs"
+                      asChild
+                    >
+                      <Link href="/dashboard/integrations">Setup Now</Link>
+                    </Button>
+                  </div>
+
+                  {/* Agent Creation */}
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors w-72">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <Bot className="h-4 w-4 text-blue-500" />
+                        <h3 className="text-sm font-semibold text-gray-900">Agent Creation</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                          7 min
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-600 mb-4 leading-relaxed">Create AI agents for business automation.</p>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="w-full rounded-md mt-auto text-xs"
+                      asChild
+                    >
+                      <Link href="/dashboard/agents">Setup Now</Link>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Connected Integrations Section */}
+              <div className="mb-8">
+                <h2 className="text-lg font-medium mb-4">Connected Integrations</h2>
+                <div className="border border-gray-200 rounded-md bg-gray-50">
+                  <div className="p-6 border-b border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-md font-semibold mb-1">Active Connections</h3>
+                        <p className="text-sm text-gray-600">Your connected business tools and services</p>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="rounded-md"
+                        asChild
+                      >
+                        <Link href="/dashboard/integrations" className="flex items-center gap-1">
+                          Manage all
+                          <ChevronRight className="h-3 w-3" />
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="p-6">
+                    {integrationsLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
+                      </div>
+                    ) : (() => {
+                      const connectedIntegrations = Object.entries(integrations).filter(([key, integration]) => integration.connected)
+                      
+                      if (connectedIntegrations.length === 0) {
+                        return (
+                          <div className="py-8 text-center">
+                            <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
+                              <Settings className="h-6 w-6 text-gray-400" />
+                            </div>
+                            <p className="text-sm font-medium text-gray-700">No integrations connected</p>
+                            <p className="text-xs text-gray-500 mt-1">Connect your business tools to see them here</p>
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {connectedIntegrations.map(([key, integration]) => {
+                            const getIntegrationIcon = (integrationKey: string) => {
+                              switch (integrationKey) {
+                                case 'gmail':
+                                  return <img src="/gmailpro.png" alt="Gmail" className="h-5 w-5 object-contain" />
+                                case 'google_calendar':
+                                  return <img src="/cal.svg" alt="Google Calendar" className="h-5 w-5 object-contain" />
+                                case 'google_docs':
+                                  return <img src="/docspro.png" alt="Google Docs" className="h-5 w-5 object-contain" />
+                                case 'google_sheets':
+                                  return <img src="/sheetspro.png" alt="Google Sheets" className="h-5 w-5 object-contain" />
+                                case 'square':
+                                  return <img src="/squarepro.png" alt="Square" className="h-5 w-5 object-contain" />
+                                case 'lightspeed_new':
+                                  return <img src="/lslogo.png" alt="Lightspeed" className="h-5 w-5 object-contain" />
+                                case 'hubspot':
+                                  return <img src="/hubspot.png" alt="HubSpot" className="h-5 w-5 object-contain" />
+                                case 'outlook':
+                                  return <img src="/outlook.png" alt="Outlook" className="h-5 w-5 object-contain" />
+                                default:
+                                  return <Settings className="h-5 w-5 text-gray-500" />
+                              }
                             }
-                          }
-                        }
-                        
-                        // Default fallback
-                        return <Bot className="h-4 w-4 text-gray-500" />;
-                      };
 
-                                              return (
-                          <div key={agent.id} className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-md bg-gray-200 flex items-center justify-center">
-                              {getAgentIcon(agent)}
-                            </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900">{agent.name}</p>
-                            <p className="text-xs text-gray-500">
-                              {agent.lastRun ? `Last run ${formatTimeAgo(agent.lastRun)}` : 'Never run'}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <div className="flex items-center gap-1">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <p className="text-xs text-gray-500">Active</p>
-                            </div>
-                          </div>
+                            const getIntegrationName = (integrationKey: string) => {
+                              switch (integrationKey) {
+                                case 'gmail': return 'Gmail'
+                                case 'google_calendar': return 'Google Calendar'
+                                case 'google_docs': return 'Google Docs'
+                                case 'google_sheets': return 'Google Sheets'
+                                case 'square': return 'Square'
+                                case 'lightspeed_new': return 'Lightspeed Retail'
+                                case 'hubspot': return 'HubSpot'
+                                case 'outlook': return 'Microsoft Outlook'
+                                default: return integrationKey
+                              }
+                            }
+
+                            const getIntegrationDescription = (integrationKey: string) => {
+                              switch (integrationKey) {
+                                case 'gmail': return 'Email Integration'
+                                case 'google_calendar': return 'Calendar Integration'
+                                case 'google_docs': return 'Document Management'
+                                case 'google_sheets': return 'Spreadsheet Integration'
+                                case 'square': return 'Point of Sale'
+                                case 'lightspeed_new': return 'Point of Sale'
+                                case 'hubspot': return 'CRM Integration'
+                                case 'outlook': return 'Email Integration'
+                                default: return 'Business Tool'
+                              }
+                            }
+
+                            return (
+                              <div key={key} className="border border-gray-200 rounded-md p-4 bg-white">
+                                <div className="flex items-start gap-3">
+                                  <div className="h-10 w-10 rounded-md bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                    {getIntegrationIcon(key)}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="text-sm font-medium text-gray-900 truncate">{getIntegrationName(key)}</h4>
+                                      <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-1">{getIntegrationDescription(key)}</p>
+                                    <div className="flex items-center gap-1 mt-2">
+                                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                      <span className="text-xs text-green-600 font-medium">Connected</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
                         </div>
-                      );
-                    })}
+                      )
+                    })()}
                   </div>
-                )}
+                </div>
               </div>
-            </div>
-          </div>
+
+              {/* Active Agents Section for Merchant */}
+              <div className="mb-8">
+                <h2 className="text-lg font-medium mb-4">Active Agents</h2>
+                <div className="border border-gray-200 rounded-md bg-gray-50">
+                  <div className="p-6 border-b border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-md font-semibold mb-1">Currently Running AI Agents</h3>
+                        <p className="text-sm text-gray-600">Manage and monitor your automated agents</p>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="rounded-md"
+                        asChild
+                      >
+                        <Link href="/dashboard/agents" className="flex items-center gap-1">
+                          View all
+                          <ChevronRight className="h-3 w-3" />
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="p-6">
+                    {agentsLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
+                      </div>
+                    ) : activeAgents.length === 0 ? (
+                      <div className="py-8 text-center">
+                        <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
+                          <Bot className="h-6 w-6 text-gray-400" />
+                        </div>
+                        <p className="text-sm font-medium text-gray-700">No active agents</p>
+                        <p className="text-xs text-gray-500 mt-1">Connect agents to see them here</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {activeAgents.map((agent, index) => {
+                          // Function to get tool logo based on tool name
+                          const getToolLogo = (toolName: string) => {
+                            const lowerToolName = toolName.toLowerCase();
+                            
+                            // Gmail/Google tools
+                            if (lowerToolName.includes('gmail') || lowerToolName.includes('google mail')) {
+                              return <Image src="/gmailnew.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain" />;
+                            }
+                            
+                            // Xero tools
+                            if (lowerToolName.includes('xero')) {
+                              return <Image src="/xero.png" width={16} height={16} alt="Xero" className="h-4 w-4 object-contain" />;
+                            }
+                            
+                            // Square tools
+                            if (lowerToolName.includes('square')) {
+                              return <Image src="/square.png" width={16} height={16} alt="Square" className="h-4 w-4 object-contain" />;
+                            }
+                            
+                            // Lightspeed tools
+                            if (lowerToolName.includes('lightspeed')) {
+                              return <Image src="/lslogo.png" width={16} height={16} alt="Lightspeed" className="h-4 w-4 object-contain" />;
+                            }
+                            
+                            // MailChimp tools
+                            if (lowerToolName.includes('mailchimp') || lowerToolName.includes('mail chimp')) {
+                              return <Image src="/mailchimp.png" width={16} height={16} alt="MailChimp" className="h-4 w-4 object-contain" />;
+                            }
+                            
+                            // HubSpot tools
+                            if (lowerToolName.includes('hubspot') || lowerToolName.includes('hub spot')) {
+                              return <Image src="/hubspot.png" width={16} height={16} alt="HubSpot" className="h-4 w-4 object-contain" />;
+                            }
+                            
+                            // Outlook tools
+                            if (lowerToolName.includes('outlook') || lowerToolName.includes('microsoft')) {
+                              return <Image src="/outlook.png" width={16} height={16} alt="Outlook" className="h-4 w-4 object-contain" />;
+                            }
+                            
+                            // Google Sheets tools
+                            if (lowerToolName.includes('sheets') || lowerToolName.includes('google sheets')) {
+                              return <Image src="/sheetspro.png" width={16} height={16} alt="Google Sheets" className="h-4 w-4 object-contain" />;
+                            }
+                            
+                            // Default fallback
+                            return <Bot className="h-4 w-4 text-gray-500" />;
+                          };
+
+                          // Function to get the appropriate icon for each agent
+                          const getAgentIcon = (agent: any) => {
+                            // Built-in agents
+                            switch (agent.id) {
+                              case 'customer-service':
+                              case 'email-summary':
+                              case 'email-executive':
+                                return <Image src="/gmailnew.png" width={20} height={20} alt="Gmail" className="h-5 w-5 object-contain" />;
+                            }
+                            
+                            // Custom agents - check their tools
+                            if (agent.type === 'custom' && (agent.tools || agent.selectedTools)) {
+                              const tools = agent.tools || agent.selectedTools || [];
+                              
+                              // If agent has tools, use the first tool's icon
+                              if (tools.length > 0) {
+                                const firstTool = tools[0];
+                                const toolName = typeof firstTool === 'string' ? firstTool : (firstTool.name || firstTool.tool || firstTool.app);
+                                if (toolName) {
+                                  return getToolLogo(toolName);
+                                }
+                              }
+                            }
+                            
+                            // Default fallback
+                            return <Bot className="h-5 w-5 text-gray-500" />;
+                          };
+
+                          return (
+                            <div key={agent.id} className="border border-gray-200 rounded-md p-4 bg-white">
+                              <div className="flex items-start gap-3">
+                                <div className="h-10 w-10 rounded-md bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                  {getAgentIcon(agent)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="text-sm font-medium text-gray-900 truncate">{agent.name}</h4>
+                                  <p className="text-xs text-gray-500 mt-1">{agent.description}</p>
+                                  <div className="flex items-center gap-2 mt-2">
+                                    <div className="flex items-center gap-1">
+                                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                      <span className="text-xs text-gray-500">Active</span>
+                                    </div>
+                                    <span className="text-xs text-gray-400">•</span>
+                                    <span className="text-xs text-gray-500">
+                                      {agent.lastRun ? `Last run ${formatTimeAgo(agent.lastRun)}` : 'Never run'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+
         </div>
       </div>
 

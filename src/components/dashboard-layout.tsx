@@ -2,7 +2,7 @@
 
 import { SideNav } from "@/components/side-nav"
 import { usePathname } from "next/navigation"
-import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic, Menu, Pencil, Loader2, ExternalLink, Plug, PanelRight, Send, Activity, Clock, Wrench, Code } from "lucide-react"
+import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic, Menu, Pencil, Loader2, ExternalLink, Plug, PanelRight, Send, Activity, Clock, Wrench, Code, Layers } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useState, useEffect, useRef } from "react"
@@ -2224,6 +2224,18 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           >
                             <Pencil className="h-4 w-4 text-gray-500" />
                             <span>Standard Note</span>
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuItem 
+                            onClick={() => {
+                              setQuickNoteOpen(false);
+                              // Open plan page with add task dialog
+                              router.push('/plan?addTask=true');
+                            }}
+                            className="flex items-center gap-2 cursor-pointer"
+                          >
+                            <Layers className="h-4 w-4 text-gray-500" />
+                            <span>Kanban Task</span>
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from "@/contexts/auth-context"
-import { OnboardingCheck } from "@/components/onboarding-check"
 import { OpenAIProvider } from '@/components/providers/openai-provider';
 import Link from 'next/link';
 import { TapAiDialogProvider } from "@/components/tap-ai-dialog-provider";
@@ -44,7 +43,6 @@ export default function RootLayout({
             <TapAiDialogProvider>
               {children}
               <Toaster />
-              <OnboardingCheck />
               <CommandPalette />
             </TapAiDialogProvider>
           </AuthProvider>

@@ -17,6 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { httpsCallable } from "firebase/functions"
 import { functions } from "@/lib/firebase"
+import { cn } from "@/lib/utils"
 
 interface CreatePointsRuleSheetProps {
   open: boolean
@@ -28,6 +29,7 @@ export function CreatePointsRuleSheet({ open, onOpenChange }: CreatePointsRuleSh
   const { toast } = useToast()
   const { user } = useAuth()
   const [instantClose, setInstantClose] = useState(false)
+  const [showForm, setShowForm] = useState(false)
 
   const [formData, setFormData] = useState({
     // Basic Details
@@ -72,6 +74,14 @@ export function CreatePointsRuleSheet({ open, onOpenChange }: CreatePointsRuleSh
       ]
     }
   ]
+
+  // Reset form visibility when sheet is closed
+  useEffect(() => {
+    if (!open) {
+      setShowForm(false)
+      setCurrentStep(1)
+    }
+  }, [open])
 
   // Reset instantClose when sheet is closed
   useEffect(() => {
@@ -226,42 +236,88 @@ export function CreatePointsRuleSheet({ open, onOpenChange }: CreatePointsRuleSh
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetOverlay className="bg-black/30" />
       <SheetContent
-        className="sm:max-w-[600px] p-0 overflow-auto h-screen rounded-md"
-        onInteractOutside={(e) => e.preventDefault()}
+        className="sm:max-w-[600px] p-0 overflow-hidden h-screen rounded-md flex flex-col"
         data-instant-close={instantClose ? "true" : "false"}
       >
-        <div className="flex-none px-6 py-3 border-b">
-          <SheetHeader className="mb-1">
-            <SheetTitle className="text-lg">
-              <span className="text-blue-500">Create</span> Points Rule
-            </SheetTitle>
-            <SheetDescription className="text-sm">
-              Define how customers earn points in your loyalty program
-            </SheetDescription>
-          </SheetHeader>
-        </div>
-        
+                  <div className="flex-none px-6 py-5 border-b">
+            <SheetHeader className="mb-4">
+              <SheetTitle className="text-lg">
+                <span className="text-[#007AFF]">Create</span> Points Rule
+              </SheetTitle>
+              <SheetDescription className="text-sm text-gray-600">
+                Define how customers earn points in your loyalty program
+              </SheetDescription>
+            </SheetHeader>
+            
+            {/* Main Tab Container - Only show when form is visible */}
+            {showForm && (
+              <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+                <button
+                  type="button"
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                    currentStep === 1
+                      ? "text-gray-800 bg-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-200/70"
+                  )}
+                  onClick={() => setCurrentStep(1)}
+                >
+                  <Info size={15} />
+                  Basic Details
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                    currentStep === 2
+                      ? "text-gray-800 bg-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-200/70"
+                  )}
+                  onClick={() => setCurrentStep(2)}
+                >
+                  <Settings size={15} />
+                  Conditions
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                    currentStep === 3
+                      ? "text-gray-800 bg-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-200/70"
+                  )}
+                  onClick={() => setCurrentStep(3)}
+                >
+                  <CheckCircle size={15} />
+                  Review
+                </button>
+              </div>
+            )}
+          </div>
         <ScrollArea className="flex-1">
-          <div className="p-6">
-            <form onSubmit={savePointsRule}>
-              <Tabs value={`step${currentStep}`} className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="step1" className="flex items-center gap-2">
-                    <Info className="h-4 w-4" />
-                    Basic Details
-                  </TabsTrigger>
-                  <TabsTrigger value="step2" className="flex items-center gap-2">
-                    <Settings className="h-4 w-4" />
-                    Conditions
-                  </TabsTrigger>
-                  <TabsTrigger value="step3" className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4" />
-                    Review
-                  </TabsTrigger>
-                </TabsList>
-
-                <div className="mt-4">
-                  <TabsContent value="step1" className="min-h-[300px] py-4">
+          <div className="p-6 pt-3">
+            {!showForm ? (
+              <div className="border border-gray-200 rounded-md p-6 bg-gray-50">
+                <div className="flex items-center gap-3 mb-3">
+                  <Zap className="h-5 w-5 text-blue-600" />
+                  <h3 className="text-md font-semibold">Points Rules</h3>
+                </div>
+                <p className="text-sm text-gray-600 mb-4">
+                  Create custom rules to control how customers earn points. Set multipliers for specific times, days, or spending amounts to boost engagement.
+                </p>
+                <Button 
+                  onClick={() => setShowForm(true)}
+                  variant="outline"
+                  className="rounded-md"
+                >
+                  Create Points Rule
+                </Button>
+              </div>
+            ) : (
+              <form onSubmit={savePointsRule}>
+                <Tabs value={`step${currentStep}`} className="w-full">
+                <div>
+                  <TabsContent value="step1" className="mt-3">
                     <div className="space-y-4">
                       {/* Add instruction panel */}
                       <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
@@ -654,55 +710,63 @@ export function CreatePointsRuleSheet({ open, onOpenChange }: CreatePointsRuleSh
                 </div>
               </Tabs>
             </form>
+            )}
           </div>
         </ScrollArea>
 
-        <div className="flex-none px-6 py-4 border-t">
-          <div className="flex justify-between items-center w-full">
-            <div className="flex items-center">
-              <span className="text-xl font-bold">
-                <span className="text-[#007AFF] font-extrabold">Tap</span>
-                {' '}
-                <span>Loyalty</span>
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                onClick={() => onOpenChange(false)}
-              >
-                Cancel
-              </Button>
-              {currentStep > 1 && (
-                <Button
-                  variant="outline"
-                  onClick={() => setCurrentStep(currentStep - 1)}
+        {showForm && (
+          <div className="flex-none sticky bottom-0 z-10 bg-white border-t px-6 py-4 shadow-lg">
+            <div className="flex justify-between items-center w-full">
+              <div className="flex items-center">
+                <span className="text-xl font-bold">
+                  <span className="text-[#007AFF] font-extrabold">Tap</span>
+                  {' '}
+                  <span>Loyalty</span>
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowForm(false)
+                    setCurrentStep(1)
+                  }}
+                  className="rounded-md"
                 >
-                  Back
+                  Cancel
                 </Button>
-              )}
-              <Button 
-                onClick={() => {
-                  if (currentStep < 3) {
-                    setCurrentStep(currentStep + 1)
-                  } else {
-                    savePointsRule()
+                {currentStep > 1 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentStep(currentStep - 1)}
+                    className="rounded-md"
+                  >
+                    Back
+                  </Button>
+                )}
+                <Button 
+                  onClick={() => {
+                    if (currentStep < 3) {
+                      setCurrentStep(currentStep + 1)
+                    } else {
+                      savePointsRule()
+                    }
+                  }}
+                  disabled={
+                    (currentStep === 1 && !formData.name) ||
+                    (currentStep === 2 && 
+                      ((formData.useTimeRestrictions && (!formData.startTime || !formData.endTime)) ||
+                       (formData.useMinimumSpend && !formData.minimumSpend) ||
+                       (formData.useDayRestrictions && formData.dayRestrictions.length === 0)))
                   }
-                }}
-                disabled={
-                  (currentStep === 1 && !formData.name) ||
-                  (currentStep === 2 && 
-                    ((formData.useTimeRestrictions && (!formData.startTime || !formData.endTime)) ||
-                     (formData.useMinimumSpend && !formData.minimumSpend) ||
-                     (formData.useDayRestrictions && formData.dayRestrictions.length === 0)))
-                }
-                className="bg-[#007AFF] hover:bg-[#0071E3] text-white"
-              >
-                {currentStep === 3 ? 'Create Rule' : 'Next'}
-              </Button>
+                  className="bg-[#007AFF] hover:bg-[#0071E3] text-white rounded-md"
+                >
+                  {currentStep === 3 ? 'Create Rule' : 'Next'}
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </SheetContent>
     </Sheet>
   )

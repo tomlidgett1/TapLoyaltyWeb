@@ -36,7 +36,10 @@ import {
   ShoppingCart,
   Brain,
   LineChart,
-  Building
+  Building,
+  Image as ImageIcon,
+  Star,
+  RotateCcw
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -720,7 +723,7 @@ export default function SetupPage() {
                 <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
                   <div>
                     <div className="flex items-center gap-3 mb-3">
-                      <Image src="/taplogo.png" alt="Tap" width={24} height={24} className="object-contain rounded-md" />
+                      <Image src="/taplogo.png" alt="Tap" width={24} height={24} className="object-contain rounded-sm" />
                       <h3 className="text-md font-semibold">Tap Loyalty</h3>
                     </div>
                     <p className="text-sm text-gray-600 mb-4">Create engaging loyalty programs, manage customer rewards, and build lasting relationships with your customers through personalised experiences.</p>
@@ -979,49 +982,93 @@ export default function SetupPage() {
           {activeTab === "loyalty" && (
             <div className="tab-section">
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                {/* Developer quickstart section */}
-                <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
-                  <div>
-                    <h3 className="text-md font-semibold mb-2">Loyalty program quickstart</h3>
-                    <p className="text-sm text-gray-600 mb-6">Learn how to set up your loyalty program and start rewarding your customers.</p>
-                  </div>
-                  <div className="mt-auto">
-                    <Link href="/guides/loyalty-setup">
-                      <Button variant="outline" className="rounded-md">
-                        View guide
-                      </Button>
-                    </Link>
-                </div>
-              </div>
-              
-                {/* Sample data demo */}
-                <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
-                  <div>
-                    <h3 className="text-md font-semibold mb-2">Configure rewards</h3>
-                    <p className="text-sm text-gray-600 mb-6">Set up your rewards catalog and points earning rules for your loyalty program.</p>
-                  </div>
-                  <div className="mt-auto">
-                    <Link href="/store/rewards">
-                      <Button variant="outline" className="rounded-md">
-                        Manage rewards
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mb-10">
-                <h2 className="text-lg font-medium mb-4">Program Management</h2>
-                
+              {/* Core Features */}
+              <div className="mb-8">
+                <h2 className="text-lg font-medium mb-4">Core Features</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  {/* Tap Agent */}
+                  {/* Create Individual Reward */}
                   <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
                     <div className="mb-2">
-                      <Sparkles className="h-8 w-8 text-amber-500" />
+                      <Gift className="h-5 w-5 text-gray-600" />
+                    </div>
+                    <h3 className="text-sm font-semibold mb-2">Create Individual Reward</h3>
+                    <p className="text-xs text-gray-600 mb-auto pb-4">Create one-time rewards and promotions for your customers.</p>
+                    <Link href="/store/rewards">
+                      <Button size="sm" variant="outline" className="w-full rounded-md">
+                        Create Reward
+                      </Button>
+                    </Link>
+                  </div>
+                  
+                  {/* Create Banner */}
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
+                    <div className="mb-2">
+                      <ImageIcon className="h-5 w-5 text-gray-600" />
+                    </div>
+                    <h3 className="text-sm font-semibold mb-2">Create Banner</h3>
+                    <p className="text-xs text-gray-600 mb-auto pb-4">Design promotional banners for your loyalty program.</p>
+                    <Link href="/store/banners">
+                      <Button size="sm" variant="outline" className="w-full rounded-md">
+                        Create Banner
+                      </Button>
+                    </Link>
+                  </div>
+                  
+                  {/* Create Intro Reward */}
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
+                    <div className="mb-2">
+                      <Star className="h-5 w-5 text-gray-600" />
+                    </div>
+                    <h3 className="text-sm font-semibold mb-2">Create Intro Reward</h3>
+                    <p className="text-xs text-gray-600 mb-auto pb-4">Set up welcome rewards for new customers joining your program.</p>
+                    <Link href="/store/intro-rewards">
+                      <Button size="sm" variant="outline" className="w-full rounded-md">
+                        Create Intro Reward
+                      </Button>
+                    </Link>
+                  </div>
+                  
+                  {/* Create Points Rule */}
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
+                    <div className="mb-2">
+                      <Zap className="h-5 w-5 text-gray-600" />
+                    </div>
+                    <h3 className="text-sm font-semibold mb-2">Create Points Rule</h3>
+                    <p className="text-xs text-gray-600 mb-auto pb-4">Configure how customers earn loyalty points in your program.</p>
+                    <Link href="/store/points-rules">
+                      <Button size="sm" variant="outline" className="w-full rounded-md">
+                        Create Rule
+                      </Button>
+                    </Link>
+                  </div>
+                  
+                  {/* Create Recurring Program */}
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
+                    <div className="mb-2">
+                      <RotateCcw className="h-5 w-5 text-gray-600" />
+                    </div>
+                    <h3 className="text-sm font-semibold mb-2">Create Recurring Program</h3>
+                    <p className="text-xs text-gray-600 mb-auto pb-4">Set up ongoing loyalty programs like coffee cards and recurring vouchers.</p>
+                    <Link href="/store/recurring">
+                      <Button size="sm" variant="outline" className="w-full rounded-md">
+                        Create Program
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
-                    <h3 className="text-sm font-semibold mb-2">Tap Loyalty Agent</h3>
-                    <p className="text-xs text-gray-600 mb-auto pb-4">AI-powered personalized rewards and communications.</p>
+              </div>
+              
+              {/* AI Features */}
+              <div>
+                <h2 className="text-lg font-medium mb-4">AI Features</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {/* Explore Tap Agent */}
+                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
+                    <div className="mb-2">
+                      <Sparkles className="h-5 w-5 text-gray-600" />
+                    </div>
+                    <h3 className="text-sm font-semibold mb-2">Explore Tap Agent</h3>
+                    <p className="text-xs text-gray-600 mb-auto pb-4">AI-powered personalized rewards and customer communications.</p>
                     {tapAgentActivated ? (
                       <Link href="/tap-agent/intro">
                         <Button size="sm" variant="outline" className="w-full rounded-md">
@@ -1030,69 +1077,9 @@ export default function SetupPage() {
                       </Link>
                     ) : (
                       <Button size="sm" onClick={handleActivateTapAgent} variant="outline" className="w-full rounded-md">
-                        Activate
+                        Explore
                       </Button>
                     )}
-              </div>
-              
-                  {/* Points Rules */}
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
-                    <div className="mb-2">
-                      <Zap className="h-8 w-8 text-orange-500" />
-                </div>
-                    <h3 className="text-sm font-semibold mb-2">Points Rules</h3>
-                    <p className="text-xs text-gray-600 mb-auto pb-4">Configure how customers earn loyalty points.</p>
-                    <Link href="/store/points-rules">
-                      <Button size="sm" variant="outline" className="w-full rounded-md">
-                        Manage Rules
-                      </Button>
-                    </Link>
-              </div>
-              
-                  {/* Rewards Catalog */}
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
-                    <div className="mb-2">
-                      <Gift className="h-8 w-8 text-pink-500" />
-                    </div>
-                    <h3 className="text-sm font-semibold mb-2">Rewards Catalog</h3>
-                    <p className="text-xs text-gray-600 mb-auto pb-4">Create and manage rewards for points redemption.</p>
-                    <Link href="/store/rewards">
-                      <Button size="sm" variant="outline" className="w-full rounded-md">
-                        Manage Catalog
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              </div>
-              
-              <div>
-                <h2 className="text-lg font-medium mb-4">Customer Analytics</h2>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
-                    <div className="mb-2">
-                      <Users className="h-8 w-8 text-blue-500" />
-                    </div>
-                    <h3 className="text-sm font-semibold mb-2">Customer Management</h3>
-                    <p className="text-xs text-gray-600 mb-auto pb-4">View and manage customer loyalty profiles and engagement.</p>
-                    <Link href="/customers">
-                      <Button size="sm" variant="outline" className="w-full rounded-md">
-                        View Customers
-                      </Button>
-                    </Link>
-                  </div>
-                  
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
-                    <div className="mb-2">
-                      <LineChart className="h-8 w-8 text-indigo-500" />
-                    </div>
-                    <h3 className="text-sm font-semibold mb-2">Loyalty Analytics</h3>
-                    <p className="text-xs text-gray-600 mb-auto pb-4">Analyse program performance metrics and customer engagement.</p>
-                    <Link href="/insights">
-                      <Button size="sm" variant="outline" className="w-full rounded-md">
-                        View Analytics
-                      </Button>
-                    </Link>
                   </div>
                 </div>
               </div>

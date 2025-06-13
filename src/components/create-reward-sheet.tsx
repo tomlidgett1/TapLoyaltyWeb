@@ -974,7 +974,7 @@ export function CreateRewardSheet({
           className={cn(
             "fixed z-50 gap-4 bg-background shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
             "inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
-            "sm:max-w-[600px] p-0 overflow-auto h-screen rounded-md"
+            "sm:max-w-[600px] p-0 overflow-auto h-screen rounded-md flex flex-col"
           )}
           data-instant-close={instantClose ? "true" : "false"}
         >
@@ -995,17 +995,16 @@ export function CreateRewardSheet({
             </SheetDescription>
           </SheetHeader>
         </div>
-
-        <div className="flex-none px-6 py-4 border-b">
-          <div className="flex items-center justify-between">
+        <div className="flex-none px-6 py-0 border-b">
+          <div className="flex items-center justify-between mb-2">
             <div className="flex items-center">
-              <h3 className="text-lg font-semibold">
+              <h3 className="text-sm font-semibold">
                 {currentStep === 1 ? "Basic Details" : 
                  currentStep === 2 ? "Visibility Settings" : 
                  currentStep === 3 ? "Conditions" : 
                  currentStep === 4 ? "Limitations" : "Review"}
               </h3>
-              <p className="ml-3 text-sm text-gray-500">Step {currentStep} of 5</p>
+              <p className="ml-3 text-xs text-gray-500">Step {currentStep} of 5</p>
             </div>
             
             <div className="flex items-center space-x-1">
@@ -1014,7 +1013,7 @@ export function CreateRewardSheet({
                   key={step}
                   type="button"
                   onClick={() => handleStepChange(step)}
-                  className={`h-2 w-10 rounded-full transition-all ${
+                  className={`h-2 w-10 rounded-md transition-all ${
                     step === currentStep 
                       ? "bg-blue-600" 
                       : step < currentStep 
@@ -1028,23 +1027,16 @@ export function CreateRewardSheet({
           </div>
         </div>
 
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 overflow-auto">
           {currentStep === 1 && (
             <div className="px-6 py-4">
-              <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-6">
-                <h3 className="text-sm font-medium text-blue-800 mb-1">Basic Details Instructions</h3>
-                <p className="text-xs text-blue-700">
-                  Start by entering the core information for your reward. A clear name and description will help customers understand what they're redeeming.
-                </p>
-              </div>
-              
               <div className="space-y-6">
                 {/* Core Details Card */}
-                <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                   <div className="border-b bg-gray-50 px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <FileText className="h-5 w-5 text-blue-600" />
-                      <h3 className="font-medium">Core Information</h3>
+                      <FileText className="h-4 w-4 text-blue-600" />
+                      <h3 className="font-medium text-sm">Core Information</h3>
                     </div>
                   </div>
                   
@@ -1053,9 +1045,9 @@ export function CreateRewardSheet({
                       <div className="grid gap-4">
                         <div className="grid gap-2">
                           <div className="flex items-center justify-between">
-                            <Label>Reward Name <span className="text-red-500">*</span></Label>
+                            <Label className="text-sm">Reward Name <span className="text-red-500">*</span></Label>
                             <div className="flex items-center gap-2">
-                              <Label className="text-sm text-gray-600">Active</Label>
+                              <Label className="text-xs text-gray-600">Active</Label>
                               <Switch
                                 checked={formData.isActive}
                                 onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
@@ -1066,17 +1058,18 @@ export function CreateRewardSheet({
                             value={formData.rewardName}
                             onChange={(e) => setFormData({ ...formData, rewardName: e.target.value })}
                             placeholder="Enter a clear, concise name (e.g., 'Free Coffee Reward')"
+                            className="text-sm h-9"
                           />
                           <p className="text-xs text-gray-500">Choose a name customers will easily understand</p>
                         </div>
                       
                         <div className="grid gap-2">
-                          <Label>Description <span className="text-red-500">*</span></Label>
+                          <Label className="text-sm">Description <span className="text-red-500">*</span></Label>
                           <Textarea
                             value={formData.description}
                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                             placeholder="Explain what customers will receive when they redeem this reward"
-                            className="min-h-[100px]"
+                            className="min-h-[70px] text-sm"
                           />
                           <p className="text-xs text-gray-500">Provide clear details about the reward and any important conditions</p>
                         </div>
@@ -1086,11 +1079,11 @@ export function CreateRewardSheet({
                 </div>
                 
                 {/* Reward Type and Points Card */}
-                <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                   <div className="border-b bg-gray-50 px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <ShoppingBag className="h-5 w-5 text-blue-600" />
-                      <h3 className="font-medium">Reward Type & Points</h3>
+                      <ShoppingBag className="h-4 w-4 text-blue-600" />
+                      <h3 className="font-medium text-sm">Reward Type & Points</h3>
                     </div>
                   </div>
                   
@@ -1098,12 +1091,12 @@ export function CreateRewardSheet({
                     <div className="space-y-4">
                       <div className="grid grid-cols-2 gap-6">
                         <div className="grid gap-2">
-                          <Label>Reward Type</Label>
+                          <Label className="text-sm">Reward Type</Label>
                           <Select
                             value={formData.type}
                             onValueChange={(value) => setFormData({ ...formData, type: value })}
                           >
-                            <SelectTrigger>
+                            <SelectTrigger className="text-sm h-9">
                               <SelectValue placeholder="Select reward type" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1119,13 +1112,14 @@ export function CreateRewardSheet({
                         </div>
                         
                         <div className="grid gap-2">
-                          <Label>Points Cost <span className="text-red-500">*</span></Label>
+                          <Label className="text-sm">Points Cost <span className="text-red-500">*</span></Label>
                           <Input
                             type="number"
                             min="0"
                             value={formData.pointsCost}
                             onChange={(e) => setFormData({ ...formData, pointsCost: e.target.value })}
                             placeholder="e.g., 100"
+                            className="text-sm h-9"
                           />
                           <p className="text-xs text-gray-500">Points customers will spend to redeem</p>
                         </div>
@@ -1134,7 +1128,7 @@ export function CreateRewardSheet({
                       {/* Type-specific fields - only showing a few for brevity */}
                       {formData.type === 'percentageDiscount' && (
                         <div className="grid gap-2 border-l-2 border-blue-100 pl-4 py-2">
-                          <Label>Discount Percentage <span className="text-red-500">*</span></Label>
+                          <Label className="text-sm">Discount Percentage <span className="text-red-500">*</span></Label>
                           <Input
                             type="number"
                             min="1"
@@ -1142,16 +1136,18 @@ export function CreateRewardSheet({
                             value={formData.discountValue}
                             onChange={(e) => setFormData({ ...formData, discountValue: e.target.value })}
                             placeholder="e.g., 15 for 15% off"
+                            className="text-sm h-9"
                           />
                           <p className="text-xs text-gray-500">Percentage discount the customer will receive</p>
                           
                           <div className="mt-2">
-                            <Label>Applies To (Optional)</Label>
+                            <Label className="text-sm">Applies To (Optional)</Label>
                             <Input
                               type="text"
                               value={formData.discountAppliesTo}
                               onChange={(e) => setFormData({ ...formData, discountAppliesTo: e.target.value })}
                               placeholder="e.g., Any purchase, Coffee only, etc."
+                              className="text-sm h-9"
                             />
                             <p className="text-xs text-gray-500">Specify what products this discount applies to</p>
                           </div>
@@ -1160,7 +1156,7 @@ export function CreateRewardSheet({
 
                       {formData.type === 'fixedDiscount' && (
                         <div className="grid gap-2 border-l-2 border-blue-100 pl-4 py-2">
-                          <Label>Discount Amount ($) <span className="text-red-500">*</span></Label>
+                          <Label className="text-sm">Discount Amount ($) <span className="text-red-500">*</span></Label>
                           <Input
                             type="number"
                             min="0.01"
@@ -1168,11 +1164,12 @@ export function CreateRewardSheet({
                             value={formData.discountValue}
                             onChange={(e) => setFormData({ ...formData, discountValue: e.target.value })}
                             placeholder="e.g., 10 for $10 off"
+                            className="text-sm h-9"
                           />
                           <p className="text-xs text-gray-500">Fixed amount discount the customer will receive</p>
                           
                           <div className="mt-2">
-                            <Label>Minimum Purchase ($) <span className="text-red-500">*</span></Label>
+                            <Label className="text-sm">Minimum Purchase ($) <span className="text-red-500">*</span></Label>
                             <Input
                               type="number"
                               min="0"
@@ -1180,6 +1177,7 @@ export function CreateRewardSheet({
                               value={formData.minimumPurchase}
                               onChange={(e) => setFormData({ ...formData, minimumPurchase: e.target.value })}
                               placeholder="e.g., 25 for minimum $25 purchase"
+                              className="text-sm h-9"
                             />
                             <p className="text-xs text-gray-500">Minimum purchase amount required to use this discount</p>
                           </div>
@@ -1188,22 +1186,24 @@ export function CreateRewardSheet({
 
                       {formData.type === 'freeItem' && (
                         <div className="grid gap-2 border-l-2 border-blue-100 pl-4 py-2">
-                          <Label>Free Item Name <span className="text-red-500">*</span></Label>
+                          <Label className="text-sm">Free Item Name <span className="text-red-500">*</span></Label>
                           <Input
                             type="text"
                             value={formData.itemName}
                             onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
                             placeholder="e.g., Coffee, Muffin, etc."
+                            className="text-sm h-9"
                           />
                           <p className="text-xs text-gray-500">Specify what item the customer will receive for free</p>
                           
                           <div className="mt-2">
-                            <Label>Item Description (Optional)</Label>
+                            <Label className="text-sm">Item Description (Optional)</Label>
                             <Input
                               type="text"
                               value={formData.itemDescription}
                               onChange={(e) => setFormData({ ...formData, itemDescription: e.target.value })}
                               placeholder="e.g., Any size, Specific flavor, etc."
+                              className="text-sm h-9"
                             />
                             <p className="text-xs text-gray-500">Additional details about the free item</p>
                           </div>
@@ -1214,17 +1214,17 @@ export function CreateRewardSheet({
                 </div>
                 
                 {/* Redemption PIN Card */}
-                <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                   <div className="border-b bg-gray-50 px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <Lock className="h-5 w-5 text-blue-600" />
-                      <h3 className="font-medium">Redemption PIN</h3>
+                      <Lock className="h-4 w-4 text-blue-600" />
+                      <h3 className="font-medium text-sm">Redemption PIN</h3>
                     </div>
                   </div>
                   
                   <div className="p-4">
                     <div className="grid gap-2 max-w-md">
-                      <Label>PIN Code (4 digits) <span className="text-red-500">*</span></Label>
+                      <Label className="text-sm">PIN Code (4 digits) <span className="text-red-500">*</span></Label>
                       <Input
                         maxLength={4}
                         value={formData.pin}
@@ -1233,6 +1233,7 @@ export function CreateRewardSheet({
                           setFormData({ ...formData, pin: value })
                         }}
                         placeholder="4-digit PIN (e.g., 1234)"
+                        className="text-sm h-9"
                       />
                       <p className="text-xs text-gray-500">Staff will use this PIN during redemption</p>
                     </div>
@@ -1253,16 +1254,16 @@ export function CreateRewardSheet({
 
               <div className="space-y-6">
                 {/* Visibility Type Card */}
-                <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                   <div className="border-b bg-gray-50 px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <Eye className="h-5 w-5 text-blue-600" />
-                      <h3 className="font-medium">Who Can See This Reward</h3>
+                      <Eye className="h-4 w-4 text-blue-600" />
+                      <h3 className="font-medium text-sm">Who Can See This Reward</h3>
                     </div>
                   </div>
                   
                   <div className="p-4">
-                    <p className="text-sm text-gray-600 mb-4">
+                    <p className="text-xs text-gray-600 mb-4">
                       Choose which customers will be able to see this reward in their account.
                     </p>
                     
@@ -1310,8 +1311,8 @@ export function CreateRewardSheet({
                         <div className={`flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 transition-all duration-200 ${formData.rewardVisibility === 'all' ? 'bg-blue-50 border-blue-200 shadow-sm' : ''}`}>
                           <RadioGroupItem value="all" id="all-customers" className="mt-1" />
                           <div className="flex-1">
-                            <p className={`font-medium transition-colors duration-200 ${formData.rewardVisibility === 'all' ? 'text-blue-700' : ''}`}>All Customers</p>
-                            <p className="text-sm text-gray-500 mt-1">
+                            <p className={`text-sm font-medium transition-colors duration-200 ${formData.rewardVisibility === 'all' ? 'text-blue-700' : ''}`}>All Customers</p>
+                            <p className="text-xs text-gray-500 mt-1">
                               This reward will be visible to all your customers (subject to any conditions)
                             </p>
                           </div>
@@ -1322,8 +1323,8 @@ export function CreateRewardSheet({
                         <div className={`flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 transition-all duration-200 ${formData.rewardVisibility === 'new' ? 'bg-blue-50 border-blue-200 shadow-sm' : ''}`}>
                           <RadioGroupItem value="new" id="new-customers" className="mt-1" />
                           <div className="flex-1">
-                            <p className={`font-medium transition-colors duration-200 ${formData.rewardVisibility === 'new' ? 'text-blue-700' : ''}`}>New Customers Only</p>
-                            <p className="text-sm text-gray-500 mt-1">
+                            <p className={`text-sm font-medium transition-colors duration-200 ${formData.rewardVisibility === 'new' ? 'text-blue-700' : ''}`}>New Customers Only</p>
+                            <p className="text-xs text-gray-500 mt-1">
                               Only customers who just joined your loyalty program will see this reward
                             </p>
                           </div>
@@ -1334,8 +1335,8 @@ export function CreateRewardSheet({
                         <div className={`flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 transition-all duration-200 ${formData.rewardVisibility === 'specific' ? 'bg-blue-50 border-blue-200 shadow-sm' : ''}`}>
                           <RadioGroupItem value="specific" id="specific-customer" className="mt-1" />
                           <div className="flex-1">
-                            <p className={`font-medium transition-colors duration-200 ${formData.rewardVisibility === 'specific' ? 'text-blue-700' : ''}`}>Specific Customer</p>
-                            <p className="text-sm text-gray-500 mt-1">
+                            <p className={`text-sm font-medium transition-colors duration-200 ${formData.rewardVisibility === 'specific' ? 'text-blue-700' : ''}`}>Specific Customer</p>
+                            <p className="text-xs text-gray-500 mt-1">
                               Choose a specific customer who can see this reward
                             </p>
                           </div>
@@ -1344,13 +1345,13 @@ export function CreateRewardSheet({
                     </RadioGroup>
                     
                     {formData.rewardVisibility === 'specific' && (
-                      <div className="mt-4 border-l-2 border-blue-100 pl-4 py-2">
-                        <div className="flex items-center justify-between mb-2">
-                          <Label>Select Customers</Label>
-                          <div className="text-xs text-blue-600">
-                            {selectedCustomers.length} selected
+                                              <div className="mt-4 border-l-2 border-blue-100 pl-4 py-2">
+                          <div className="flex items-center justify-between mb-2">
+                            <Label className="text-sm">Select Customers</Label>
+                            <div className="text-xs text-blue-600">
+                              {selectedCustomers.length} selected
+                            </div>
                           </div>
-                        </div>
                         
                         {isLoadingCustomers ? (
                           <div className="flex items-center gap-2 py-2">
@@ -1368,7 +1369,7 @@ export function CreateRewardSheet({
                               <Input
                                 type="text"
                                 placeholder="Search customers..."
-                                className="pl-8"
+                                className="pl-8 text-sm h-9"
                                 onChange={(e) => {
                                   // Add customer search functionality here
                                   console.log("Searching for:", e.target.value);
@@ -1428,7 +1429,7 @@ export function CreateRewardSheet({
                                       htmlFor={`customer-${customer.id}`}
                                       className="flex flex-col cursor-pointer"
                                     >
-                                      <span className="font-medium">{customer.name}</span>
+                                      <span className="text-sm font-medium">{customer.name}</span>
                                       {customer.email && (
                                         <span className="text-xs text-gray-500">{customer.email}</span>
                                       )}
@@ -1511,7 +1512,7 @@ export function CreateRewardSheet({
                 </div>
                 
                 {/* Progressive Unlock Card */}
-                <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                   <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Lock className="h-5 w-5 text-blue-600" />
@@ -1533,78 +1534,80 @@ export function CreateRewardSheet({
                   
                   {formData.delayedVisibility && (
                     <div className="p-4">
-                      <p className="text-sm text-gray-600 mb-4">
+                      <p className="text-xs text-gray-600 mb-4">
                         Hide this reward until the customer reaches a certain milestone.
                       </p>
                       
-                      <div className="space-y-4">
-                        <div className="grid gap-2">
-                          <Label>Unlock Type</Label>
-                          <RadioGroup 
-                            value={formData.delayedVisibilityType} 
-                            onValueChange={(value) => setFormData({
-                              ...formData,
-                              delayedVisibilityType: value
-                            })}
-                            className="grid grid-cols-2 gap-3"
-                          >
-                            <div className="flex items-center space-x-2 border rounded p-2 hover:bg-gray-50">
-                              <RadioGroupItem value="transactions" id="transactions" />
-                              <Label htmlFor="transactions" className="cursor-pointer">Transactions</Label>
-                            </div>
-                            <div className="flex items-center space-x-2 border rounded p-2 hover:bg-gray-50">
-                              <RadioGroupItem value="spend" id="spend" />
-                              <Label htmlFor="spend" className="cursor-pointer">Total Spend</Label>
-                            </div>
-                          </RadioGroup>
-                        </div>
+                                              <div className="space-y-4">
+                          <div className="grid gap-2">
+                            <Label className="text-sm">Unlock Type</Label>
+                            <RadioGroup 
+                              value={formData.delayedVisibilityType} 
+                              onValueChange={(value) => setFormData({
+                                ...formData,
+                                delayedVisibilityType: value
+                              })}
+                              className="grid grid-cols-2 gap-3"
+                            >
+                              <div className="flex items-center space-x-2 border rounded p-2 hover:bg-gray-50">
+                                <RadioGroupItem value="transactions" id="transactions" />
+                                <Label htmlFor="transactions" className="cursor-pointer text-sm">Transactions</Label>
+                              </div>
+                              <div className="flex items-center space-x-2 border rounded p-2 hover:bg-gray-50">
+                                <RadioGroupItem value="spend" id="spend" />
+                                <Label htmlFor="spend" className="cursor-pointer text-sm">Total Spend</Label>
+                              </div>
+                            </RadioGroup>
+                          </div>
                         
-                        {formData.delayedVisibilityType === 'transactions' ? (
-                          <div className="grid gap-2">
-                            <Label>Minimum Transactions</Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={formData.delayedVisibilityTransactions}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                delayedVisibilityTransactions: e.target.value
-                              })}
-                              placeholder="e.g., 5"
-                            />
-                            <p className="text-xs text-gray-500">
-                              Customer must make this many purchases before they can see the reward
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="grid gap-2">
-                            <Label>Minimum Spend ($)</Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={formData.delayedVisibilitySpend}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                delayedVisibilitySpend: e.target.value
-                              })}
-                              placeholder="e.g., 100"
-                            />
-                            <p className="text-xs text-gray-500">
-                              Customer must spend this much before they can see the reward
-                            </p>
-                          </div>
-                        )}
+                                                  {formData.delayedVisibilityType === 'transactions' ? (
+                            <div className="grid gap-2">
+                              <Label className="text-sm">Minimum Transactions</Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={formData.delayedVisibilityTransactions}
+                                onChange={(e) => setFormData({
+                                  ...formData,
+                                  delayedVisibilityTransactions: e.target.value
+                                })}
+                                placeholder="e.g., 5"
+                                className="text-sm h-9"
+                              />
+                              <p className="text-xs text-gray-500">
+                                Customer must make this many purchases before they can see the reward
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="grid gap-2">
+                              <Label className="text-sm">Minimum Spend ($)</Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={formData.delayedVisibilitySpend}
+                                onChange={(e) => setFormData({
+                                  ...formData,
+                                  delayedVisibilitySpend: e.target.value
+                                })}
+                                placeholder="e.g., 100"
+                                className="text-sm h-9"
+                              />
+                              <p className="text-xs text-gray-500">
+                                Customer must spend this much before they can see the reward
+                              </p>
+                            </div>
+                          )}
                       </div>
                     </div>
                   )}
                 </div>
                 
                 {/* Active Period Card */}
-                <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                   <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <CalendarIcon className="h-5 w-5 text-blue-600" />
-                      <h3 className="font-medium">Active Period</h3>
+                      <CalendarIcon className="h-4 w-4 text-blue-600" />
+                      <h3 className="font-medium text-sm">Active Period</h3>
                     </div>
                     <Switch
                       checked={formData.hasActivePeriod}
@@ -1625,19 +1628,19 @@ export function CreateRewardSheet({
                   
                   {formData.hasActivePeriod && (
                     <div className="p-4">
-                      <p className="text-sm text-gray-600 mb-4">
+                      <p className="text-xs text-gray-600 mb-4">
                         Set a date range when this reward is active and can be redeemed.
                       </p>
                       
                       <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-2">
-                          <Label>Start Date</Label>
+                          <Label className="text-sm">Start Date</Label>
                           <Popover>
                             <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className={`w-full justify-start text-left font-normal ${!formData.activePeriod.startDate && "text-muted-foreground"}`}
-                              >
+                                                        <Button
+                            variant="outline"
+                            className={`w-full justify-start text-left font-normal text-sm h-9 ${!formData.activePeriod.startDate && "text-muted-foreground"}`}
+                          >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 {formData.activePeriod.startDate ? formatDate(formData.activePeriod.startDate) : "Select date"}
                               </Button>
@@ -1666,12 +1669,12 @@ export function CreateRewardSheet({
                         </div>
                         
                         <div className="space-y-2">
-                          <Label>End Date</Label>
+                          <Label className="text-sm">End Date</Label>
                           <Popover>
                             <PopoverTrigger asChild>
                               <Button
                                 variant="outline"
-                                className={`w-full justify-start text-left font-normal ${!formData.activePeriod.endDate && "text-muted-foreground"}`}
+                                className={`w-full justify-start text-left font-normal text-sm h-9 ${!formData.activePeriod.endDate && "text-muted-foreground"}`}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 {formData.activePeriod.endDate ? formatDate(formData.activePeriod.endDate) : "Select date"}
@@ -1722,11 +1725,11 @@ export function CreateRewardSheet({
               </div>
                 
               {/* New Customer Card - Always visible at the top */}
-              <div className="bg-white border rounded-lg shadow-sm mb-6 overflow-hidden">
-                <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
+              <div className="bg-white border rounded-md shadow-sm mb-6 overflow-hidden">
+                                  <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <UserPlus className="h-5 w-5 text-blue-600" />
-                    <h3 className="font-medium">New Customer Only</h3>
+                    <UserPlus className="h-4 w-4 text-blue-600" />
+                    <h3 className="font-medium text-sm">New Customer Only</h3>
                   </div>
                   <Switch
                     checked={formData.conditions.newCustomer}
@@ -1770,7 +1773,7 @@ export function CreateRewardSheet({
                 </div>
                 
                 <div className="p-4">
-                  <p className="text-sm text-gray-600 mb-2">
+                  <p className="text-xs text-gray-600 mb-2">
                     Enable this to restrict the reward to customers who recently joined your loyalty program.
                   </p>
                   
@@ -1789,7 +1792,7 @@ export function CreateRewardSheet({
 
               <div className={`space-y-6 ${formData.rewardVisibility === 'new' ? 'opacity-50 pointer-events-none' : ''}`}>
                 {/* Transaction Card */}
-                <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                   <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <ShoppingBag className="h-5 w-5 text-blue-600" />
@@ -1813,13 +1816,13 @@ export function CreateRewardSheet({
                 
                   {formData.conditions.useTransactionRequirements && (
                     <div className="p-4">
-                      <p className="text-sm text-gray-600 mb-4">
+                      <p className="text-xs text-gray-600 mb-4">
                         Set purchase count conditions that determine eligibility based on the number of transactions.
                       </p>
                       
                       <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-2">
-                          <Label>Minimum Transactions</Label>
+                          <Label className="text-sm">Minimum Transactions</Label>
                           <Input
                             type="number"
                             min="0"
@@ -1832,6 +1835,7 @@ export function CreateRewardSheet({
                               }
                             })}
                             placeholder="e.g., 5"
+                            className="text-sm h-9"
                           />
                           <p className="text-xs text-gray-500 min-h-[2.5rem]">
                             Customer must have made at least this many purchases
@@ -1839,7 +1843,7 @@ export function CreateRewardSheet({
                         </div>
                         
                         <div className="space-y-2">
-                          <Label>Maximum Transactions</Label>
+                          <Label className="text-sm">Maximum Transactions</Label>
                           <Input
                             type="number"
                             min="0"
@@ -1852,6 +1856,7 @@ export function CreateRewardSheet({
                               }
                             })}
                             placeholder="e.g., 20"
+                            className="text-sm h-9"
                           />
                           <p className="text-xs text-gray-500 min-h-[2.5rem]">
                             Maximum purchases limit (leave empty for no limit)
@@ -1863,11 +1868,11 @@ export function CreateRewardSheet({
                 </div>
                 
                 {/* Spending Card */}
-                <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                   <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <DollarSign className="h-5 w-5 text-blue-600" />
-                      <h3 className="font-medium">Spending Requirements</h3>
+                      <DollarSign className="h-4 w-4 text-blue-600" />
+                      <h3 className="font-medium text-sm">Spending Requirements</h3>
                     </div>
                     <Switch
                       checked={formData.conditions.useSpendingRequirements}
@@ -1887,13 +1892,13 @@ export function CreateRewardSheet({
                 
                   {formData.conditions.useSpendingRequirements && (
                     <div className="p-4">
-                      <p className="text-sm text-gray-600 mb-4">
+                      <p className="text-xs text-gray-600 mb-4">
                         Set monetary or points requirements that determine eligibility based on spending or point balance.
                       </p>
                       
                       <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-2">
-                          <Label>Minimum Lifetime Spend ($)</Label>
+                          <Label className="text-sm">Minimum Lifetime Spend ($)</Label>
                           <Input
                             type="number"
                             min="0"
@@ -1906,6 +1911,7 @@ export function CreateRewardSheet({
                               }
                             })}
                             placeholder="e.g., 100"
+                            className="text-sm h-9"
                           />
                           <p className="text-xs text-gray-500">
                             Customer must have spent at least this amount across all purchases
@@ -1913,7 +1919,7 @@ export function CreateRewardSheet({
                         </div>
                         
                         <div className="space-y-2">
-                          <Label>Minimum Points Balance</Label>
+                          <Label className="text-sm">Minimum Points Balance</Label>
                           <Input
                             type="number"
                             min="0"
@@ -1926,6 +1932,7 @@ export function CreateRewardSheet({
                               }
                             })}
                             placeholder="e.g., 500"
+                            className="text-sm h-9"
                           />
                           <p className="text-xs text-gray-500">
                             Customer must have at least this many points in their account
@@ -1937,11 +1944,11 @@ export function CreateRewardSheet({
                 </div>
                 
                 {/* Time Requirements Card */}
-                <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                   <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Clock className="h-5 w-5 text-blue-600" />
-                      <h3 className="font-medium">Time-Based Requirements</h3>
+                      <Clock className="h-4 w-4 text-blue-600" />
+                      <h3 className="font-medium text-sm">Time-Based Requirements</h3>
                     </div>
                     <Switch
                       checked={formData.conditions.useTimeRequirements}
@@ -1961,13 +1968,13 @@ export function CreateRewardSheet({
                 
                   {formData.conditions.useTimeRequirements && (
                     <div className="p-4">
-                      <p className="text-sm text-gray-600 mb-4">
+                      <p className="text-xs text-gray-600 mb-4">
                         Set time-based conditions that determine eligibility based on membership duration or last visit.
                       </p>
                       
                       <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-2">
-                          <Label>Minimum Days as Member</Label>
+                          <Label className="text-sm">Minimum Days as Member</Label>
                           <Input
                             type="number"
                             min="0"
@@ -1980,6 +1987,7 @@ export function CreateRewardSheet({
                               }
                             })}
                             placeholder="e.g., 30"
+                            className="text-sm h-9"
                           />
                           <p className="text-xs text-gray-500">
                             Customer must have been a member for at least this many days
@@ -1987,7 +1995,7 @@ export function CreateRewardSheet({
                         </div>
                         
                         <div className="space-y-2">
-                          <Label>Days Since Last Visit</Label>
+                          <Label className="text-sm">Days Since Last Visit</Label>
                           <Input
                             type="number"
                             min="0"
@@ -2000,6 +2008,7 @@ export function CreateRewardSheet({
                               }
                             })}
                             placeholder="e.g., 14"
+                            className="text-sm h-9"
                           />
                           <p className="text-xs text-gray-500">
                             It must have been at least this many days since the customer's last purchase
@@ -2011,11 +2020,11 @@ export function CreateRewardSheet({
                 </div>
 
                 {/* Membership Level Card */}
-                <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                   <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Award className="h-5 w-5 text-blue-600" />
-                      <h3 className="font-medium">Membership Level Requirement</h3>
+                      <Award className="h-4 w-4 text-blue-600" />
+                      <h3 className="font-medium text-sm">Membership Level Requirement</h3>
                     </div>
                     <Switch
                       checked={formData.rewardVisibility === 'new' ? false : formData.conditions.useMembershipRequirements}
@@ -2047,7 +2056,7 @@ export function CreateRewardSheet({
                   ) : formData.conditions.useMembershipRequirements && (
                     <div className="p-4 space-y-3">
                       <div className="space-y-2">
-                        <Label htmlFor="membershipLevel">Minimum Membership Level</Label>
+                        <Label htmlFor="membershipLevel" className="text-sm">Minimum Membership Level</Label>
                         <Select
                           value={formData.conditions.membershipLevel || ""}
                           onValueChange={(value) => {
@@ -2060,7 +2069,7 @@ export function CreateRewardSheet({
                             });
                           }}
                         >
-                          <SelectTrigger id="membershipLevel">
+                          <SelectTrigger id="membershipLevel" className="text-sm h-9">
                             <SelectValue placeholder="Select a membership level" />
                           </SelectTrigger>
                           <SelectContent>
@@ -2090,17 +2099,17 @@ export function CreateRewardSheet({
               </div>
 
               {/* Redemption Limits Card */}
-              <div className="bg-white border rounded-lg shadow-sm mb-6 overflow-hidden">
+              <div className="bg-white border rounded-md shadow-sm mb-6 overflow-hidden">
                 <div className="border-b bg-gray-50 px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <Users className="h-5 w-5 text-blue-600" />
-                    <h3 className="font-medium">Redemption Limits</h3>
+                    <Users className="h-4 w-4 text-blue-600" />
+                    <h3 className="font-medium text-sm">Redemption Limits</h3>
                   </div>
                 </div>
                 
                 <div className="p-4 space-y-6">
                   <div className="space-y-2">
-                    <Label htmlFor="totalRedemptionLimit">Total Redemption Limit</Label>
+                    <Label htmlFor="totalRedemptionLimit" className="text-sm">Total Redemption Limit</Label>
                     <Input
                       id="totalRedemptionLimit"
                       type="number"
@@ -2117,6 +2126,7 @@ export function CreateRewardSheet({
                         })
                       }}
                       placeholder="Unlimited"
+                      className="text-sm h-9"
                     />
                     <p className="text-xs text-gray-500">
                       Maximum number of times this reward can be redeemed across all customers (leave empty for unlimited)
@@ -2124,7 +2134,7 @@ export function CreateRewardSheet({
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="perCustomerLimit">Per-Customer Limit</Label>
+                    <Label htmlFor="perCustomerLimit" className="text-sm">Per-Customer Limit</Label>
                     <Input
                       id="perCustomerLimit"
                       type="number"
@@ -2141,6 +2151,7 @@ export function CreateRewardSheet({
                         })
                       }}
                       placeholder="Unlimited"
+                      className="text-sm h-9"
                     />
                     <p className="text-xs text-gray-500">
                       How many times each individual customer can redeem this reward (leave empty for unlimited)
@@ -2150,11 +2161,11 @@ export function CreateRewardSheet({
               </div>
 
               {/* Time Restrictions Card */}
-              <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+              <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                 <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-blue-600" />
-                    <h3 className="font-medium">Time Restrictions</h3>
+                    <Clock className="h-4 w-4 text-blue-600" />
+                    <h3 className="font-medium text-sm">Time Restrictions</h3>
                   </div>
                   <Switch 
                     checked={formData.limitations.useTimeRestrictions}
@@ -2258,11 +2269,11 @@ export function CreateRewardSheet({
               </div>
 
               {/* Date Restrictions Card */}
-              <div className="bg-white border rounded-lg shadow-sm overflow-hidden mt-6">
+              <div className="bg-white border rounded-md shadow-sm overflow-hidden mt-6">
                 <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5 text-blue-600" />
-                    <h3 className="font-medium">Date Range Restrictions</h3>
+                    <Calendar className="h-4 w-4 text-blue-600" />
+                    <h3 className="font-medium text-sm">Date Range Restrictions</h3>
                   </div>
                   <Switch 
                     checked={formData.limitations.useDateRestrictions}
@@ -2376,11 +2387,11 @@ export function CreateRewardSheet({
               </div>
 
               {/* Basic Details Review */}
-              <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+              <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                 <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-blue-600" />
-                    <h3 className="font-medium">Basic Details</h3>
+                    <FileText className="h-4 w-4 text-blue-600" />
+                    <h3 className="font-medium text-sm">Basic Details</h3>
                   </div>
                   <Button 
                     variant="ghost" 
@@ -2441,7 +2452,7 @@ export function CreateRewardSheet({
               </div>
               
               {/* Reward Details Review */}
-              <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+              <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                 <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Gift className="h-5 w-5 text-blue-600" />
@@ -2548,7 +2559,7 @@ export function CreateRewardSheet({
               </div>
               
               {/* Conditions Review */}
-              <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+              <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                 <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <ListChecks className="h-5 w-5 text-blue-600" />
@@ -2652,7 +2663,7 @@ export function CreateRewardSheet({
               </div>
               
               {/* Limitations Review */}
-              <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+              <div className="bg-white border rounded-md shadow-sm overflow-hidden">
                 <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Lock className="h-5 w-5 text-blue-600" />
@@ -2761,7 +2772,7 @@ export function CreateRewardSheet({
               </div>
               
               {/* Summary card */}
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+              <div className="bg-blue-50 border border-blue-100 rounded-md p-4">
                 <div className="flex gap-3">
                   <CheckCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
                   <div>
@@ -2776,7 +2787,7 @@ export function CreateRewardSheet({
           )}
         </ScrollArea>
 
-        <div className="flex-none px-6 py-4 border-t">
+        <div className="flex-none px-6 py-4 border-t bg-background sticky bottom-0 w-full z-10 shadow-[0_-1px_3px_rgba(0,0,0,0.1)]">
           <div className="flex justify-between">
             <div className="flex gap-2">
               <Button 

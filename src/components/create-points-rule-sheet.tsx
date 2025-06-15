@@ -236,7 +236,7 @@ export function CreatePointsRuleSheet({ open, onOpenChange }: CreatePointsRuleSh
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetOverlay className="bg-black/30" />
       <SheetContent
-        className="sm:max-w-[600px] p-0 overflow-hidden h-screen rounded-md flex flex-col"
+        className="sm:max-w-[600px] p-0 overflow-hidden h-screen flex flex-col"
         data-instant-close={instantClose ? "true" : "false"}
       >
                   <div className="flex-none px-6 py-5 border-b">

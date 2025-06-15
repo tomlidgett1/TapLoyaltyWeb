@@ -1699,7 +1699,7 @@ export function CreateRewardDialog({
         }
       `}</style>
       <DialogContent 
-        className={`sm:max-w-[${currentStep === 5 ? "700px" : "600px"}] h-[${currentStep === 5 ? "700px" : "600px"}] flex flex-col max-h-[97vh] overflow-hidden`}
+        className={`sm:max-w-[${currentStep === 5 ? "900px" : "800px"}] h-[95vh] flex flex-col max-h-[95vh] overflow-hidden`}
         onInteractOutside={(e) => {
           // Prevent closing when clicking outside if on later steps
           if (currentStep > 1) {

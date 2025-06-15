@@ -257,6 +257,49 @@ interface InventoryCount {
   updatedAt: string;
 }
 
+// Activity interfaces
+interface Transaction {
+  id: string
+  actualcreatedAt: Timestamp | string
+  amount: number
+  createdAt: Timestamp | string
+  customerId: string
+  day: string
+  merchantId: string
+  merchantName: string
+  status: string
+  type: string
+}
+
+interface Redemption {
+  id: string
+  customerId: string
+  merchantId: string
+  pointsUsed: number
+  redemptionDate: any
+  redemptionId: string
+  rewardId: string
+  rewardName: string
+  status: string
+}
+
+interface ActivityCustomer {
+  id: string
+  fullName: string
+}
+
+interface CombinedActivity {
+  id: string
+  type: "transaction" | "redemption"
+  date: any
+  customerId: string
+  displayName: string
+  amount: number | string
+  status: string
+  day?: string
+  originalData: Transaction | Redemption
+}
+
 // Add a gradient text component for Tap Agent branding
 const GradientText = ({ children }: { children: React.ReactNode }) => {
   return (
@@ -3502,6 +3545,72 @@ const BannersTabContent = () => {
   );
 };
 
+// Activity Tab Component  
+const ActivityTabContent = () => {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Activity</h2>
+          <p className="text-muted-foreground">View all transactions and redemptions</p>
+        </div>
+        <Button variant="outline" asChild>
+          <Link href="/store/activity">
+            Open Full Activity Page
+            <ArrowRight className="h-4 w-4 ml-2" />
+          </Link>
+        </Button>
+      </div>
+
+      {/* Sub-Tab Container */}
+      <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+        <button
+          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors text-gray-800 bg-white shadow-sm"
+        >
+          <Calendar className="h-3 w-3" />
+          All Activity
+        </button>
+        <button
+          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors text-gray-600 hover:bg-gray-200/70"
+        >
+          <ShoppingCart className="h-3 w-3" />
+          Transactions
+        </button>
+        <button
+          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors text-gray-600 hover:bg-gray-200/70"
+        >
+          <Gift className="h-3 w-3" />
+          Redemptions
+        </button>
+        <button
+          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors text-gray-600 hover:bg-gray-200/70"
+        >
+          <DollarSign className="h-3 w-3" />
+          Square Sales
+        </button>
+        <button
+          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors text-gray-600 hover:bg-gray-200/70"
+        >
+          <DollarSign className="h-3 w-3" />
+          Lightspeed Sales
+        </button>
+             </div>
+
+      <Card className="rounded-md border border-gray-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            All Activity
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center py-8 text-muted-foreground">Click "Open Full Activity Page" to view detailed activity data with all functionality</p>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 export default function StoreOverviewPage() {
   const router = useRouter()
   const { user } = useAuth()
@@ -4333,15 +4442,19 @@ export default function StoreOverviewPage() {
               <Image size={15} />
               Banners
             </button>
+            <button
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                activeTab === "activity"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+              onClick={() => setActiveTab("activity")}
+            >
+              <Activity size={15} />
+              Activity
+            </button>
           </div>
-          
-          <Button 
-            className="gap-2 rounded-md"
-            onClick={() => router.push('/create')}
-          >
-            <PlusCircle className="h-4 w-4" />
-            Create New
-          </Button>
         </div>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
@@ -4401,6 +4514,10 @@ export default function StoreOverviewPage() {
           
           <TabsContent value="banners">
             <BannersTabContent />
+          </TabsContent>
+          
+          <TabsContent value="activity">
+            <ActivityTabContent />
           </TabsContent>
           
           <TabsContent value="inventory">

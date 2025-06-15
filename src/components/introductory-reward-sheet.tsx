@@ -488,7 +488,7 @@ export function IntroductoryRewardSheet({ open, onOpenChange }: IntroductoryRewa
       <SheetOverlay className="bg-black/30" />
       <SheetContent
         side="right"
-        className="w-full sm:max-w-md md:max-w-xl lg:max-w-2xl p-0 overflow-hidden flex flex-col rounded-md"
+        className="w-full sm:max-w-md md:max-w-xl lg:max-w-2xl p-0 overflow-hidden flex flex-col"
         data-instant-close={instantClose ? "true" : "false"}
       >
         <div className="flex-none px-6 py-3 border-b">

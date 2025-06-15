@@ -2530,7 +2530,7 @@ export default function DashboardPage() {
           </div>
         </div>
         
-        <div className="px-6 pt-6 pb-14 flex-1 overflow-y-auto bg-white">
+        <div className="px-6 pt-2 pb-14 flex-1 overflow-y-auto bg-white">
           {/* Content based on selected tab */}
           {metricsType === "loyalty" && (
             <>
@@ -2549,7 +2549,8 @@ export default function DashboardPage() {
                         <h3 className="text-sm font-semibold text-gray-900">Recurring Program</h3>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                          <Clock className="h-3 w-3" />
                           5 min
                         </span>
                       </div>
@@ -2573,7 +2574,8 @@ export default function DashboardPage() {
                         <h3 className="text-sm font-semibold text-gray-900">Individual Reward</h3>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                          <Clock className="h-3 w-3" />
                           2 min
                         </span>
                       </div>
@@ -2597,7 +2599,8 @@ export default function DashboardPage() {
                         <h3 className="text-sm font-semibold text-gray-900">Banner</h3>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                          <Clock className="h-3 w-3" />
                           3 min
                         </span>
                       </div>
@@ -2624,7 +2627,8 @@ export default function DashboardPage() {
                         <h3 className="text-sm font-semibold text-gray-900">Intro Reward</h3>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                          <Clock className="h-3 w-3" />
                           4 min
                         </span>
                       </div>
@@ -2897,7 +2901,8 @@ export default function DashboardPage() {
                         <h3 className="text-sm font-semibold text-gray-900">Integrations</h3>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                          <Clock className="h-3 w-3" />
                           10 min
                         </span>
                       </div>
@@ -2921,7 +2926,8 @@ export default function DashboardPage() {
                         <h3 className="text-sm font-semibold text-gray-900">Agent Creation</h3>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                          <Clock className="h-3 w-3" />
                           7 min
                         </span>
                       </div>

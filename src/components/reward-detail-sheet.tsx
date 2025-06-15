@@ -27,6 +27,47 @@ import {
 import { formatDate } from '@/lib/date-utils'
 import { cn } from "@/lib/utils"
 
+// Component to display customer badge with name
+function CustomerBadge({ customerId }: { customerId: string }) {
+  const [customerName, setCustomerName] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchCustomerName() {
+      try {
+        const customerDoc = await getDoc(doc(db, 'customers', customerId));
+        if (customerDoc.exists()) {
+          const customerData = customerDoc.data();
+          setCustomerName(customerData.firstName || customerData.name || customerData.fullName || 'Unknown');
+        } else {
+          setCustomerName('Unknown');
+        }
+      } catch (error) {
+        console.error('Error fetching customer name:', error);
+        setCustomerName('Unknown');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchCustomerName();
+  }, [customerId]);
+
+  if (loading) {
+    return (
+      <div className="px-2 py-1 bg-white border border-blue-200 rounded-sm text-xs animate-pulse">
+        Loading...
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-2 py-1 bg-white border border-blue-200 rounded-sm text-xs">
+      {customerName}
+    </div>
+  );
+}
+
 interface Condition {
   type: string
   value: number | string
@@ -95,6 +136,15 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
+  const [customerVisibility, setCustomerVisibility] = useState<Array<{
+    id: string;
+    name: string;
+    email?: string;
+    profilePictureUrl?: string;
+    visibilityReason?: string;
+    isVisible: boolean;
+  }>>([]);
+  const [visibilityLoading, setVisibilityLoading] = useState(false);
 
   // Helper functions
   const capitalize = (str?: string) => {
@@ -219,6 +269,74 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
       fetchRedemptions();
     }
   }, [user?.uid, rewardId, reward]);
+
+  // Fetch customer visibility
+  useEffect(() => {
+    async function fetchCustomerVisibility() {
+      if (!user?.uid || !rewardId) return;
+      
+      try {
+        setVisibilityLoading(true);
+        
+        // First, get all customers for this merchant
+        const customersRef = collection(db, 'merchants', user.uid, 'customers');
+        const customersSnapshot = await getDocs(customersRef);
+        
+        // For each customer, check their visibility status for this reward
+        const visibilityPromises = customersSnapshot.docs.map(async (customerDoc) => {
+          const customerData = customerDoc.data();
+          const customerId = customerDoc.id;
+          
+          try {
+            // Check if this customer has visibility data for this reward
+            const customerRewardRef = doc(db, 'customers', customerId, 'rewards', rewardId);
+            const customerRewardDoc = await getDoc(customerRewardRef);
+            
+            let visibilityReason = '';
+            let isVisible = true; // Default to visible if no specific data
+            
+            if (customerRewardDoc.exists()) {
+              const rewardData = customerRewardDoc.data();
+              visibilityReason = rewardData.reason || '';
+              // If there's a reason, it usually means it's hidden/restricted
+              isVisible = !visibilityReason || visibilityReason === 'visible';
+            }
+            
+            return {
+              id: customerId,
+              name: customerData.name || customerData.fullName || 'Unknown Customer',
+              email: customerData.email || '',
+              profilePictureUrl: customerData.profilePictureUrl || null,
+              visibilityReason,
+              isVisible
+            };
+          } catch (error) {
+            console.error(`Error fetching visibility for customer ${customerId}:`, error);
+            return {
+              id: customerId,
+              name: customerData.name || customerData.fullName || 'Unknown Customer',
+              email: customerData.email || '',
+              profilePictureUrl: customerData.profilePictureUrl || null,
+              visibilityReason: 'Error loading',
+              isVisible: false
+            };
+          }
+        });
+        
+        const visibilityData = await Promise.all(visibilityPromises);
+        setCustomerVisibility(visibilityData);
+        
+      } catch (error) {
+        console.error("Error fetching customer visibility:", error);
+      } finally {
+        setVisibilityLoading(false);
+      }
+    }
+
+    if (open && rewardId && activeTab === 'visibility') {
+      fetchCustomerVisibility();
+    }
+  }, [rewardId, user?.uid, open, activeTab]);
 
   // Format the conditions and limitations for display
   const formatCondition = (condition: Condition) => {
@@ -393,92 +511,138 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-lg md:max-w-xl lg:max-w-2xl p-0 overflow-y-auto">
-        <div className="sticky top-0 z-20 bg-white border-b p-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <SheetClose asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </SheetClose>
-            <h2 className="text-lg font-semibold">{reward.rewardName}</h2>
-            <Badge variant="outline" className={cn(
-              "ml-2",
-              reward.status === 'active' ? "bg-green-50 text-green-600 border-green-200" : "bg-gray-100 text-gray-600"
-            )}>
-              {capitalize(reward.status)}
-            </Badge>
+        <div className="sticky top-0 z-20 bg-white border-b p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <SheetClose asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              </SheetClose>
+              <h2 className="text-lg font-semibold">{reward.rewardName}</h2>
+              <Badge variant="outline" className={cn(
+                "ml-2 rounded-sm",
+                reward.status === 'active' ? "bg-green-50 text-green-600 border-green-200" : "bg-gray-100 text-gray-600"
+              )}>
+                {capitalize(reward.status)}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch 
+                checked={reward.status === 'active'} 
+                onCheckedChange={async (checked) => {
+                  console.log("Switch toggled, new value:", checked);
+                  if (!user?.uid || !rewardId) {
+                    console.error("Missing user ID or reward ID", { userId: user?.uid, rewardId });
+                    return;
+                  }
+                  try {
+                    setIsToggling(true);
+                    console.log("Updating reward status to:", checked ? 'active' : 'inactive');
+                    
+                    // Update the reward status in Firestore
+                    const rewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
+                    console.log("Updating merchant reward at path:", `merchants/${user.uid}/rewards/${rewardId}`);
+                    
+                    await updateDoc(rewardRef, {
+                      status: checked ? 'active' : 'inactive',
+                      updatedAt: new Date().toISOString()
+                    });
+                    
+                    // Also update in top-level rewards collection
+                    const globalRewardRef = doc(db, 'rewards', rewardId);
+                    console.log("Updating global reward at path:", `rewards/${rewardId}`);
+                    
+                    await updateDoc(globalRewardRef, {
+                      status: checked ? 'active' : 'inactive',
+                      updatedAt: new Date().toISOString()
+                    });
+                    
+                    // Update the local state
+                    console.log("Updating local state");
+                    setReward(prev => {
+                      const newState = prev ? {...prev, status: checked ? 'active' : 'inactive'} : null;
+                      console.log("New reward state:", newState);
+                      return newState;
+                    });
+                    
+                    showToast({
+                      title: "Success",
+                      description: `Reward ${checked ? 'activated' : 'deactivated'} successfully.`,
+                    });
+                    console.log("Toast shown");
+                  } catch (error) {
+                    console.error("Error updating reward status:", error);
+                    showToast({
+                      title: "Error",
+                      description: "Failed to update reward status. Please try again.",
+                      variant: "destructive"
+                    });
+                  } finally {
+                    setIsToggling(false);
+                    console.log("Toggle state reset");
+                  }
+                }}
+                disabled={isToggling}
+                className="data-[state=checked]:bg-green-500"
+              />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Switch 
-              checked={reward.status === 'active'} 
-              onCheckedChange={async (checked) => {
-                console.log("Switch toggled, new value:", checked);
-                if (!user?.uid || !rewardId) {
-                  console.error("Missing user ID or reward ID", { userId: user?.uid, rewardId });
-                  return;
-                }
-                try {
-                  setIsToggling(true);
-                  console.log("Updating reward status to:", checked ? 'active' : 'inactive');
-                  
-                  // Update the reward status in Firestore
-                  const rewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
-                  console.log("Updating merchant reward at path:", `merchants/${user.uid}/rewards/${rewardId}`);
-                  
-                  await updateDoc(rewardRef, {
-                    status: checked ? 'active' : 'inactive',
-                    updatedAt: new Date().toISOString()
-                  });
-                  
-                  // Also update in top-level rewards collection
-                  const globalRewardRef = doc(db, 'rewards', rewardId);
-                  console.log("Updating global reward at path:", `rewards/${rewardId}`);
-                  
-                  await updateDoc(globalRewardRef, {
-                    status: checked ? 'active' : 'inactive',
-                    updatedAt: new Date().toISOString()
-                  });
-                  
-                  // Update the local state
-                  console.log("Updating local state");
-                  setReward(prev => {
-                    const newState = prev ? {...prev, status: checked ? 'active' : 'inactive'} : null;
-                    console.log("New reward state:", newState);
-                    return newState;
-                  });
-                  
-                  showToast({
-                    title: "Success",
-                    description: `Reward ${checked ? 'activated' : 'deactivated'} successfully.`,
-                  });
-                  console.log("Toast shown");
-                } catch (error) {
-                  console.error("Error updating reward status:", error);
-                  showToast({
-                    title: "Error",
-                    description: "Failed to update reward status. Please try again.",
-                    variant: "destructive"
-                  });
-                } finally {
-                  setIsToggling(false);
-                  console.log("Toggle state reset");
-                }
-              }}
-              disabled={isToggling}
-              className="data-[state=checked]:bg-green-500"
-            />
+          
+          {/* Tabs in header */}
+          <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+            <button
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                activeTab === "overview"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+              onClick={() => setActiveTab("overview")}
+            >
+              <BarChart className="h-4 w-4" />
+              Overview
+            </button>
+            <button
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                activeTab === "details"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+              onClick={() => setActiveTab("details")}
+            >
+              <CheckCircle className="h-4 w-4" />
+              Details
+            </button>
+            <button
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                activeTab === "redemptions"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+              onClick={() => setActiveTab("redemptions")}
+            >
+              <Gift className="h-4 w-4" />
+              Redemptions
+            </button>
+            <button
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                activeTab === "visibility"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+              onClick={() => setActiveTab("visibility")}
+            >
+              <Eye className="h-4 w-4" />
+              Visibility
+            </button>
           </div>
         </div>
 
         <Tabs defaultValue="overview" className="w-full" value={activeTab} onValueChange={setActiveTab}>
-          <div className="border-b sticky top-16 z-10 bg-white">
-            <TabsList className="w-full justify-start rounded-none border-b px-4">
-              <TabsTrigger value="overview" className="data-[state=active]:border-primary data-[state=active]:bg-white">Overview</TabsTrigger>
-              <TabsTrigger value="details" className="data-[state=active]:border-primary data-[state=active]:bg-white">Details</TabsTrigger>
-              <TabsTrigger value="redemptions" className="data-[state=active]:border-primary data-[state=active]:bg-white">Redemptions</TabsTrigger>
-            </TabsList>
-          </div>
-
           <ScrollArea className="h-[calc(100vh-8rem)]">
             <div className="px-6 py-6">
               <TabsContent value="overview" className="mt-0 space-y-6">
@@ -488,7 +652,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         {reward.customers && reward.customers.length > 0 && (
-                          <Badge className="bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200">
+                          <Badge className="bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200 rounded-sm">
                             Customer Specific
                           </Badge>
                         )}
@@ -584,7 +748,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                         <div>
                           <Badge 
                             variant="outline" 
-                            className={`rounded-md ${
+                            className={`rounded-sm ${
                               reward.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' :
                               'bg-gray-100 text-gray-700 border-gray-200'
                             }`}
@@ -626,21 +790,19 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                     {reward.customers && reward.customers.length > 0 && (
                       <div className="mt-4 pt-4 border-t">
                         <div className="flex items-center gap-2 mb-2">
-                          <Users className="h-4 w-4 text-purple-600" />
-                          <h2 className="text-sm font-medium text-purple-800">Customer-Specific Reward</h2>
+                          <Users className="h-4 w-4 text-blue-600" />
+                          <h2 className="text-sm font-medium text-blue-800">Customer-Specific Reward</h2>
                         </div>
-                        <div className="bg-purple-50 border border-purple-100 rounded-md p-3">
-                          <p className="text-xs text-purple-800 mb-2">
+                        <div className="bg-blue-50 border border-blue-100 rounded-md p-3">
+                          <p className="text-xs text-blue-800 mb-2">
                             This reward is only visible to {reward.customers.length} specific customer{reward.customers.length !== 1 ? 's' : ''}:
                           </p>
                           <div className="flex flex-wrap gap-1 mt-2">
                             {reward.customers.slice(0, 3).map((customerId, index) => (
-                              <div key={index} className="px-2 py-1 bg-white border border-purple-200 rounded-md text-xs">
-                                {customerId}
-                              </div>
+                              <CustomerBadge key={index} customerId={customerId} />
                             ))}
                             {reward.customers.length > 3 && (
-                              <div className="px-2 py-1 bg-white border border-purple-200 rounded-md text-xs">
+                              <div className="px-2 py-1 bg-white border border-blue-200 rounded-sm text-xs">
                                 +{reward.customers.length - 3} more
                               </div>
                             )}
@@ -709,7 +871,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                       <h3 className="text-sm font-medium">Reward Type</h3>
                     </div>
                     <div className="flex gap-2 items-center">
-                      <Badge className="capitalize bg-blue-50 text-blue-700 border-blue-200">
+                      <Badge className="capitalize bg-blue-50 text-blue-700 border-blue-200 rounded-sm">
                         {reward.rewardType || reward.category || 'Discount'}
                       </Badge>
                       <span className="text-xs text-gray-500">
@@ -734,7 +896,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                     <div className="space-y-3 text-xs">
                       <div className="flex items-center justify-between">
                         <span className="text-gray-700">Visibility</span>
-                        <Badge variant="outline" className="rounded-md bg-gray-50 text-gray-700">
+                        <Badge variant="outline" className="rounded-sm bg-gray-50 text-gray-700">
                           {reward.customers && reward.customers.length > 0 ? 'Selected Customers' : 'All Customers'}
                         </Badge>
                       </div>
@@ -769,7 +931,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                           <Gift className="h-4 w-4 text-gray-600" />
                           <h3 className="text-sm font-medium">Redemption History</h3>
                         </div>
-                        <Badge className="bg-blue-50 text-blue-700 border-blue-200">
+                        <Badge className="bg-blue-50 text-blue-700 border-blue-200 rounded-sm">
                           {reward.redemptionCount || 0} total
                         </Badge>
                       </div>
@@ -864,7 +1026,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                                   <Badge 
                                     variant="outline" 
                                     className={cn(
-                                      "rounded-md text-xs",
+                                      "rounded-sm text-xs",
                                       redemption.status === 'successful' || redemption.status === 'completed'
                                         ? "bg-green-50 text-green-700 border-green-200" 
                                         : redemption.status === 'pending'
@@ -921,6 +1083,143 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                   </Card>
                 </div>
               </TabsContent>
+
+              <TabsContent value="visibility" className="mt-0 space-y-6">
+                <Card className="rounded-md shadow-sm">
+                  <CardContent className="p-0">
+                    <div className="p-4 border-b">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Eye className="h-4 w-4 text-gray-600" />
+                          <h3 className="text-sm font-medium">Customer Visibility</h3>
+                        </div>
+                        <Badge className="bg-blue-50 text-blue-700 border-blue-200 rounded-sm">
+                          {customerVisibility.length} customers
+                        </Badge>
+                      </div>
+                    </div>
+                    <div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">Customer</TableHead>
+                            <TableHead className="text-xs">Email</TableHead>
+                            <TableHead className="text-xs">Status</TableHead>
+                            <TableHead className="text-xs">Reason</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {visibilityLoading ? (
+                            <TableRow>
+                              <TableCell colSpan={4} className="h-24 text-center">
+                                <div className="flex justify-center">
+                                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ) : customerVisibility.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={4} className="h-24 text-center">
+                                <div className="flex flex-col items-center justify-center py-6">
+                                  <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
+                                    <Users className="h-5 w-5 text-gray-400" />
+                                  </div>
+                                  <h3 className="mt-3 text-sm font-medium">No customers found</h3>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    No customers are registered for this merchant
+                                  </p>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            customerVisibility.map((customer) => (
+                              <TableRow 
+                                key={customer.id}
+                                className="hover:bg-gray-50"
+                              >
+                                <TableCell className="text-xs py-2">
+                                  <div className="flex items-center gap-2">
+                                    {customer.profilePictureUrl ? (
+                                      <img 
+                                        src={customer.profilePictureUrl} 
+                                        alt={customer.name} 
+                                        className="h-6 w-6 rounded-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center">
+                                        <Users className="h-3 w-3 text-gray-400" />
+                                      </div>
+                                    )}
+                                    <span className="truncate max-w-[120px] font-medium">{customer.name}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs py-2">
+                                  <span className="text-gray-600 truncate max-w-[150px]">
+                                    {customer.email || 'No email'}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-xs py-2">
+                                  <Badge 
+                                    variant="outline" 
+                                    className={cn(
+                                      "rounded-sm text-xs",
+                                      customer.isVisible
+                                        ? "bg-green-50 text-green-700 border-green-200" 
+                                        : "bg-red-50 text-red-700 border-red-200"
+                                    )}
+                                  >
+                                    {customer.isVisible ? 'Visible' : 'Hidden'}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-xs py-2">
+                                  <span className="text-gray-600 truncate max-w-[150px]">
+                                    {customer.visibilityReason || 'Default visibility'}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                {/* Visibility Summary */}
+                <div className="grid grid-cols-2 gap-3">
+                  <Card className="rounded-md shadow-sm">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-md bg-green-50 flex items-center justify-center">
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Visible to</div>
+                          <div className="font-medium">
+                            {customerVisibility.filter(c => c.isVisible).length} customers
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="rounded-md shadow-sm">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-md bg-red-50 flex items-center justify-center">
+                          <AlertCircle className="h-4 w-4 text-red-600" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Hidden from</div>
+                          <div className="font-medium">
+                            {customerVisibility.filter(c => !c.isVisible).length} customers
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
             </div>
           </ScrollArea>
         </Tabs>
@@ -928,7 +1227,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
         <div className="border-t sticky bottom-0 bg-white p-4 flex justify-between">
           <Button 
             variant="outline" 
-            className="gap-2 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700" 
+            className="gap-2 rounded-md text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700" 
             onClick={() => setIsDeleteConfirmOpen(true)}
           >
             <Trash className="h-4 w-4" />
@@ -937,7 +1236,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
           <div className="flex gap-2">
             <Button 
               variant="outline"
-              className="gap-2" 
+              className="gap-2 rounded-md" 
               onClick={() => setIsDuplicateModalOpen(true)}
             >
               <Copy className="h-4 w-4" />
@@ -945,7 +1244,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
             </Button>
             <Button 
               variant="outline" 
-              className="gap-2 border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700" 
+              className="gap-2 rounded-md text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700" 
               onClick={() => setIsEditModalOpen(true)}
             >
               <Edit className="h-4 w-4" />

@@ -974,7 +974,7 @@ export function CreateRewardSheet({
           className={cn(
             "fixed z-50 gap-4 bg-background shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
             "inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
-            "sm:max-w-[600px] p-0 overflow-auto h-screen rounded-md flex flex-col"
+            "sm:max-w-[600px] p-0 overflow-auto h-screen flex flex-col"
           )}
           data-instant-close={instantClose ? "true" : "false"}
         >
@@ -987,27 +987,18 @@ export function CreateRewardSheet({
           </SheetPrimitive.Close>
         <div className="flex-none px-6 py-3 border-b">
           <SheetHeader className="mb-1">
-            <SheetTitle className="text-lg">
-              <span className="text-blue-500">Create</span> Reward
-            </SheetTitle>
-            <SheetDescription className="text-sm">
-              Offer rewards that motivate customers to engage with your loyalty program
-            </SheetDescription>
-          </SheetHeader>
-        </div>
-        <div className="flex-none px-6 py-0 border-b">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center">
-              <h3 className="text-sm font-semibold">
-                {currentStep === 1 ? "Basic Details" : 
-                 currentStep === 2 ? "Visibility Settings" : 
-                 currentStep === 3 ? "Conditions" : 
-                 currentStep === 4 ? "Limitations" : "Review"}
-              </h3>
-              <p className="ml-3 text-xs text-gray-500">Step {currentStep} of 5</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <SheetTitle className="text-lg">
+                  <span className="text-blue-500">Create</span> Reward
+                </SheetTitle>
+                <SheetDescription className="text-sm">
+                  Offer rewards that motivate customers to engage with your loyalty program
+                </SheetDescription>
+              </div>
             </div>
             
-            <div className="flex items-center space-x-1">
+            <div className="flex items-center space-x-1 mt-3">
               {[1, 2, 3, 4, 5].map((step) => (
                 <button
                   key={step}
@@ -1024,12 +1015,15 @@ export function CreateRewardSheet({
                 />
               ))}
             </div>
-          </div>
+          </SheetHeader>
         </div>
 
         <ScrollArea className="flex-1 overflow-auto">
           {currentStep === 1 && (
-            <div className="px-6 py-4">
+            <div className="px-6 pt-2 pb-4">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Basic Details</h2>
+              </div>
               <div className="space-y-6">
                 {/* Core Details Card */}
                 <div className="bg-white border rounded-md shadow-sm overflow-hidden">
@@ -1244,12 +1238,9 @@ export function CreateRewardSheet({
           )}
           
           {currentStep === 2 && (
-            <div className="px-6 py-4">
-              <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-6">
-                <h3 className="text-sm font-medium text-blue-800 mb-1">Visibility Settings</h3>
-                <p className="text-xs text-blue-700">
-                  Control who can see this reward and when it appears for your customers.
-                </p>
+            <div className="px-6 pt-2 pb-4">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Visibility Settings</h2>
               </div>
 
               <div className="space-y-6">
@@ -1716,12 +1707,9 @@ export function CreateRewardSheet({
           )}
           
           {currentStep === 3 && (
-            <div className="px-6 py-4">
-              <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-6">
-                <h3 className="text-sm font-medium text-blue-800 mb-1">Reward Conditions</h3>
-                <p className="text-xs text-blue-700">
-                  Set specific requirements that determine which customers can access this reward.
-                </p>
+            <div className="px-6 pt-2 pb-4">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Conditions</h2>
               </div>
                 
               {/* New Customer Card - Always visible at the top */}
@@ -2090,12 +2078,9 @@ export function CreateRewardSheet({
           )}
           
           {currentStep === 4 && (
-            <div className="px-6 py-4">
-              <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-6">
-                <h3 className="text-sm font-medium text-blue-800 mb-1">Reward Limitations</h3>
-                <p className="text-xs text-blue-700">
-                  Set constraints on when and how often this reward can be redeemed by your customers.
-                </p>
+            <div className="px-6 pt-2 pb-4">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Limitations</h2>
               </div>
 
               {/* Redemption Limits Card */}
@@ -2378,12 +2363,9 @@ export function CreateRewardSheet({
           )}
           
           {currentStep === 5 && (
-            <div className="px-6 py-4 space-y-6">
-              <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-6">
-                <h3 className="text-sm font-medium text-blue-800 mb-1">Review Your Reward</h3>
-                <p className="text-xs text-blue-700">
-                  Please review the details of your reward before {isEditing ? 'updating' : 'creating'} it.
-                </p>
+            <div className="px-6 pt-2 pb-4 space-y-6">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Review</h2>
               </div>
 
               {/* Basic Details Review */}

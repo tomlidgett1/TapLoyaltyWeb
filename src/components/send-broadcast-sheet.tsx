@@ -539,7 +539,7 @@ export function SendBroadcastSheet({ open, onOpenChange }: SendBroadcastSheetPro
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetOverlay className="bg-black/30" />
       <SheetContent
-        className="sm:max-w-[600px] p-0 overflow-hidden h-screen flex flex-col rounded-md"
+        className="sm:max-w-[600px] p-0 overflow-hidden h-screen flex flex-col"
         onInteractOutside={(e) => e.preventDefault()}
         data-instant-close={instantClose ? "true" : "false"}
       >

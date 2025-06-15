@@ -49,7 +49,8 @@ import {
   Receipt,
   Headphones,
   Brain,
-  BarChart3
+  BarChart3,
+  Megaphone
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -165,6 +166,7 @@ export default function DashboardPage() {
   const [activeBanners, setActiveBanners] = useState<any[]>([])
   const [scheduledBanners, setScheduledBanners] = useState<any[]>([])
   const [metricsType, setMetricsType] = useState<"loyalty" | "merchant">("loyalty")
+  const [metricsTab, setMetricsTab] = useState<'platform' | 'loyalty'>('platform')
   const [tapAgentMetrics, setTapAgentMetrics] = useState({
     lastRun: null as Date | null,
     rewardsCreated: 0,
@@ -1641,7 +1643,7 @@ export default function DashboardPage() {
         setIntegrationsLoading(false)
       }
     }
-
+    
     if (user?.uid) {
       fetchActiveAgents()
       fetchIntegrations()
@@ -2510,7 +2512,6 @@ export default function DashboardPage() {
                       : "text-gray-600 hover:bg-gray-200/70"
                   )}
                 >
-                  <Gift className="h-4 w-4" />
                   <span>Loyalty</span>
                 </button>
                 <button
@@ -2522,14 +2523,13 @@ export default function DashboardPage() {
                       : "text-gray-600 hover:bg-gray-200/70"
                   )}
                 >
-                  <Bot className="h-4 w-4" />
                   <span>Merchant</span>
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-        
+              </div>
+            </div>
+            
         <div className="px-6 pt-2 pb-14 flex-1 overflow-y-auto bg-white">
           {/* Content based on selected tab */}
           {metricsType === "loyalty" && (
@@ -2544,43 +2544,77 @@ export default function DashboardPage() {
                   {/* Recurring Program */}
                   <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors w-72">
                     <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3">
                         <Gift className="h-4 w-4 text-blue-500" />
                         <h3 className="text-sm font-semibold text-gray-900">Recurring Program</h3>
-                      </div>
+              </div>
                       <div className="flex items-center gap-2">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
                           <Clock className="h-3 w-3" />
                           5 min
                         </span>
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-600 mb-4 leading-relaxed">Set up automatic loyalty rewards for your customers.</p>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="w-full rounded-md mt-auto text-xs"
+            </div>
+          </div>
+                    <p className="text-xs text-gray-600 mb-3 leading-relaxed">Set up automatic loyalty rewards for your customers.</p>
+                    
+                    {/* Program Types */}
+                    <div className="mb-4 space-y-2">
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <Coffee className="h-3 w-3" />
+                        <span>Coffee Program</span>
+                </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <Percent className="h-3 w-3" />
+                        <span>Recurring Voucher</span>
+              </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <ShoppingCart className="h-3 w-3" />
+                        <span>Transaction-Based</span>
+                </div>
+              </div>
+
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="w-full rounded-md mt-auto text-xs"
                       asChild
-                    >
+                >
                       <Link href="/dashboard/rewards">Setup Now</Link>
-                    </Button>
-                  </div>
+                </Button>
+          </div>
 
                   {/* Individual Reward */}
                   <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors w-72">
-                    <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
                         <Star className="h-4 w-4 text-blue-500" />
                         <h3 className="text-sm font-semibold text-gray-900">Individual Reward</h3>
                       </div>
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
                           <Clock className="h-3 w-3" />
                           2 min
                         </span>
-                      </div>
                     </div>
-                    <p className="text-xs text-gray-600 mb-4 leading-relaxed">Create custom rewards for specific customers.</p>
+                  </div>
+                    <p className="text-xs text-gray-600 mb-3 leading-relaxed">Create custom rewards for specific customers.</p>
+                    
+                    {/* Reward Types */}
+                    <div className="mb-4 space-y-2">
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <Percent className="h-3 w-3" />
+                        <span>Percentage Discounts</span>
+                    </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <DollarSign className="h-3 w-3" />
+                        <span>Fixed Amount Off</span>
+                  </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <Gift className="h-3 w-3" />
+                        <span>Free Items & Bundles</span>
+                      </div>
+                </div>
+                
                     <Button 
                       size="sm" 
                       variant="outline" 
@@ -2589,23 +2623,37 @@ export default function DashboardPage() {
                     >
                       Setup Now
                     </Button>
-                  </div>
-
+                </div>
+                
                   {/* Banner */}
                   <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors w-72">
-                    <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
                         <Eye className="h-4 w-4 text-blue-500" />
                         <h3 className="text-sm font-semibold text-gray-900">Banner</h3>
                       </div>
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
                           <Clock className="h-3 w-3" />
                           3 min
                         </span>
-                      </div>
                     </div>
-                    <p className="text-xs text-gray-600 mb-4 leading-relaxed">Display promotional banners to customers.</p>
+                  </div>
+                    <p className="text-xs text-gray-600 mb-3 leading-relaxed">Create eye-catching promotional banners</p>
+                    <div className="space-y-1.5 mb-4">
+                      <div className="flex items-center gap-2 text-xs text-gray-600">
+                        <Megaphone className="h-3 w-3" />
+                        <span>Special Offers & Events</span>
+                </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-600">
+                        <Calendar className="h-3 w-3" />
+                        <span>Seasonal Promotions</span>
+              </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-600">
+                        <Sparkles className="h-3 w-3" />
+                        <span>Featured Products</span>
+                    </div>
+                  </div>
                     <Button 
                       size="sm" 
                       variant="outline" 
@@ -2617,23 +2665,43 @@ export default function DashboardPage() {
                         Configured
                       </Link>
                     </Button>
-                  </div>
-
+                </div>
+                
                   {/* Intro Reward */}
                   <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors w-72">
-                    <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
                         <Sparkles className="h-4 w-4 text-blue-500" />
                         <h3 className="text-sm font-semibold text-gray-900">Intro Reward</h3>
-                      </div>
-                      <div className="flex items-center gap-2">
+                    </div>
+                    <div className="flex items-center gap-2">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
                           <Clock className="h-3 w-3" />
                           4 min
                         </span>
-                      </div>
                     </div>
-                    <p className="text-xs text-gray-600 mb-4 leading-relaxed">Welcome new customers with special rewards.</p>
+                  </div>
+                    <p className="text-xs text-gray-600 mb-3 leading-relaxed">Welcome new customers with special rewards</p>
+                    <div className="space-y-1.5 mb-4">
+                      <div className="flex items-center gap-2 text-xs text-gray-600">
+                        <DollarSign className="h-3 w-3" />
+                        <span>$5 Gift Vouchers</span>
+                </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-600">
+                        <Coffee className="h-3 w-3" />
+                        <span>Free Items (up to $5)</span>
+                    </div>
+                      <div className="flex items-center gap-2 text-xs">
+                        <Image 
+                          src="/taplogo.png" 
+                          alt="Tap Logo" 
+                          width={12} 
+                          height={12} 
+                          className="h-3 w-3 rounded-sm"
+                        />
+                        <span className="font-semibold text-blue-600">Funded by Tap Loyalty</span>
+                  </div>
+                </div>
                     <Button 
                       size="sm" 
                       variant="outline" 
@@ -2642,242 +2710,329 @@ export default function DashboardPage() {
                     >
                       Setup Now
                     </Button>
-                  </div>
-                </div>
               </div>
+                </div>
+          </div>
 
-              {/* Loyalty Metrics Section */}
-              <div className="mb-8">
-                <h2 className="text-lg font-medium mb-4">Loyalty Metrics</h2>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-                  <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Gift className="h-4 w-4 text-gray-500" />
-                        <h3 className="text-sm font-medium text-gray-900">Active Rewards</h3>
-                      </div>
-                      {metricsLoading ? (
-                        <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
-                      ) : (
-                        <div className="text-2xl font-semibold text-gray-900">{metrics.activeRewards}</div>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-600">Currently available rewards</p>
-                  </div>
-                  
-                  <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Zap className="h-4 w-4 text-gray-500" />
-                        <h3 className="text-sm font-medium text-gray-900">Points Issued</h3>
-                      </div>
-                      {metricsLoading ? (
-                        <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
-                      ) : (
-                        <div className="text-2xl font-semibold text-gray-900">{metrics.totalPointsIssued}</div>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-600">Total loyalty points awarded</p>
-                  </div>
-                  
-                  <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Gift className="h-4 w-4 text-gray-500" />
-                        <h3 className="text-sm font-medium text-gray-900">Redemptions</h3>
-                      </div>
-                      {metricsLoading ? (
-                        <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
-                      ) : (
-                        <div className="text-2xl font-semibold text-gray-900">{metrics.totalRedemptions}</div>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-600">Total rewards redeemed</p>
-                  </div>
-                  
-                  <div className="border border-gray-200 rounded-md p-5 bg-gray-50">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-gray-500" />
-                        <h3 className="text-sm font-medium text-gray-900">Active Customers</h3>
-                      </div>
-                      {metricsLoading ? (
-                        <div className="h-6 w-12 bg-gray-200 animate-pulse rounded-md"></div>
-                      ) : (
-                        <div className="text-2xl font-semibold text-gray-900">{metrics.activeCustomers}</div>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-600">Customers with recent activity</p>
-                  </div>
-                </div>
-              </div>
+
 
               {/* Activity and Analytics Section for Loyalty */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Recent Activity */}
-                <div className="border border-gray-200 rounded-md bg-gray-50">
-                  <div className="p-6 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-md font-semibold mb-1">Recent Activity</h3>
-                        <p className="text-sm text-gray-600">Latest transactions and redemptions</p>
-                      </div>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        className="rounded-md"
-                        asChild
-                      >
-                        <Link href="/store/activity" className="flex items-center gap-1">
-                          View all
-                          <ChevronRight className="h-3 w-3" />
-                        </Link>
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="p-6">
-                    {activityLoading ? (
-                      <div className="flex items-center justify-center py-8">
-                        <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
-                      </div>
-                    ) : recentActivity.length === 0 ? (
-                      <div className="py-8 text-center">
-                        <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
-                          <Clock className="h-6 w-6 text-gray-400" />
-                        </div>
-                        <p className="text-sm font-medium text-gray-700">No recent activity</p>
-                        <p className="text-xs text-gray-500 mt-1">Transactions will appear here</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {recentActivity.slice(0, 5).map((activity, index) => (
-                          <div key={activity.id} className="flex items-center gap-3">
-                            <div className={`h-8 w-8 rounded-md ${
-                              activity.type === "transaction" ? 'bg-blue-100' : 'bg-purple-100'
-                            } flex items-center justify-center`}>
-                              {activity.type === "transaction" ? (
-                                <ShoppingCart className="h-4 w-4 text-blue-600" />
-                              ) : (
-                                <Gift className="h-4 w-4 text-purple-600" />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900">{activity.customer.name}</p>
-                              <p className="text-xs text-gray-500">
-                                {activity.type === "transaction" ? "Purchase" : "Redemption"} • {formatTimeAgo(activity.timestamp)}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm font-medium text-gray-900">
-                                {activity.type === "transaction" 
-                                  ? `$${activity.amount.toFixed(2)}` 
-                                  : `${activity.points} pts`}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Recent Activity */}
+                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-900">Recent Activity</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                        className="h-7 px-2 text-xs rounded-md"
+                    asChild
+                  >
+                    <Link href="/store/activity" className="flex items-center gap-1">
+                      View all
+                      <ChevronRight className="h-3 w-3" />
+                    </Link>
+                  </Button>
                 </div>
-
-                {/* Popular Rewards */}
-                <div className="border border-gray-200 rounded-md bg-gray-50">
-                  <div className="p-6 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-md font-semibold mb-1">Popular Rewards</h3>
-                        <p className="text-sm text-gray-600">Most viewed and redeemed rewards</p>
-                      </div>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        className="rounded-md"
-                        asChild
-                      >
-                        <Link href="/store/rewards" className="flex items-center gap-1">
-                          View all
-                          <ChevronRight className="h-3 w-3" />
-                        </Link>
-                      </Button>
+              </div>
+                  <div className="overflow-x-auto">
+                {activityLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                        <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
+                  </div>
+                ) : recentActivity.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
+                      <Clock className="h-6 w-6 text-gray-400" />
                     </div>
+                    <p className="text-sm font-medium text-gray-700">No recent activity</p>
+                    <p className="text-xs text-gray-500 mt-1">Transactions will appear here</p>
                   </div>
-                  <div className="p-6">
-                    {rewardsLoading ? (
-                      <div className="flex items-center justify-center py-8">
-                        <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
-                      </div>
-                    ) : popularRewards.length === 0 ? (
-                      <div className="py-8 text-center">
-                        <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
-                          <Gift className="h-6 w-6 text-gray-400" />
+                ) : (
+                      <table className="w-full">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                    {recentActivity.slice(0, 5).map((activity, index) => (
+                            <tr key={activity.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <div className={`h-6 w-6 rounded-full ${
+                                    activity.type === "transaction" ? 'bg-green-100' : 'bg-purple-100'
+                                  } flex items-center justify-center flex-shrink-0`}>
+                          {activity.type === "transaction" ? (
+                                      <ShoppingCart className="h-3 w-3 text-green-600" />
+                          ) : (
+                                      <Gift className="h-3 w-3 text-purple-600" />
+                          )}
                         </div>
-                        <p className="text-sm font-medium text-gray-700">No rewards yet</p>
-                        <p className="text-xs text-gray-500 mt-1">Create rewards to see analytics</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {popularRewards.slice(0, 5).map((reward, index) => (
-                          <div key={reward.id} className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-md bg-green-100 flex items-center justify-center">
-                              <Gift className="h-4 w-4 text-green-600" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900">{reward.name}</p>
-                              <p className="text-xs text-gray-500">{reward.pointsCost} points</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm font-medium text-gray-900">{reward.views || 0}</p>
-                              <p className="text-xs text-gray-500">views</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium text-gray-900 truncate">{activity.customer.name}</p>
+                                    <p className="text-xs text-gray-500">{formatTimeAgo(activity.timestamp)}</p>
+                        </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                  activity.type === "transaction" 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-purple-100 text-purple-800'
+                                }`}>
+                                  {activity.type === "transaction" ? "Purchase" : "Redemption"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-sm font-semibold text-gray-900">
+                            {activity.type === "transaction" 
+                              ? `$${activity.amount.toFixed(2)}` 
+                              : `${activity.points} pts`}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                )}
+              </div>
+            </div>
+
+            {/* Popular Rewards */}
+                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-900">Popular Rewards</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                        className="h-7 px-2 text-xs rounded-md"
+                    asChild
+                  >
+                    <Link href="/store/rewards" className="flex items-center gap-1">
+                      View all
+                      <ChevronRight className="h-3 w-3" />
+                    </Link>
+                  </Button>
                 </div>
+              </div>
+                  <div className="overflow-x-auto">
+                {rewardsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                        <div className="h-5 w-5 rounded-full border-2 border-green-200 border-t-green-600 animate-spin"></div>
+                  </div>
+                ) : popularRewards.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
+                      <Gift className="h-6 w-6 text-gray-400" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-700">No rewards yet</p>
+                    <p className="text-xs text-gray-500 mt-1">Create rewards to see analytics</p>
+                  </div>
+                ) : (
+                      <table className="w-full">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reward</th>
+                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Views</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                    {popularRewards.slice(0, 5).map((reward, index) => (
+                            <tr key={reward.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="h-6 w-6 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                                    <Star className="h-3 w-3 text-orange-600" />
+                        </div>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium text-gray-900 truncate">{reward.name}</p>
+                        </div>
+                        </div>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  {reward.pointsCost} pts
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-sm font-semibold text-gray-900">{reward.views || 0}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                )}
+              </div>
+            </div>
 
-                {/* Platform Metrics */}
-                <div className="border border-gray-200 rounded-md bg-gray-50">
-                  <div className="p-6 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-md font-semibold mb-1">Platform Metrics</h3>
-                        <p className="text-sm text-gray-600">Store performance overview</p>
-                      </div>
+                {/* Metrics */}
+                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-900">Metrics</h3>
+                      {/* Metrics Tab Container */}
+                      <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+                        <button
+                          className={cn(
+                            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                            metricsTab === 'platform'
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                          onClick={() => setMetricsTab('platform')}
+                        >
+                          <BarChart3 className="h-3 w-3" />
+                          Platform
+                        </button>
+                        <button
+                          className={cn(
+                            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                            metricsTab === 'loyalty'
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                          onClick={() => setMetricsTab('loyalty')}
+                        >
+                          <Gift className="h-3 w-3" />
+                          Loyalty
+                        </button>
+                  </div>
                     </div>
                   </div>
-                  <div className="p-6">
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Eye className="h-4 w-4 text-gray-500" />
-                          <span className="text-sm font-medium text-gray-900">Store Views</span>
-                        </div>
-                        <span className="text-sm font-semibold text-gray-900">{metrics.totalStoreViews}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Eye className="h-4 w-4 text-gray-500" />
-                          <span className="text-sm font-medium text-gray-900">Reward Views</span>
-                        </div>
-                        <span className="text-sm font-semibold text-gray-900">{metrics.totalRewardViews}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <ShoppingCart className="h-4 w-4 text-gray-500" />
-                          <span className="text-sm font-medium text-gray-900">Transactions</span>
-                        </div>
-                        <span className="text-sm font-semibold text-gray-900">{metrics.totalTransactions}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <DollarSign className="h-4 w-4 text-gray-500" />
-                          <span className="text-sm font-medium text-gray-900">Avg Order Value</span>
-                        </div>
-                        <span className="text-sm font-semibold text-gray-900">${metrics.avgOrderValue}</span>
-                      </div>
-                    </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Metric</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {metricsTab === 'platform' ? (
+                          <>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <Eye className="h-4 w-4 text-gray-500" />
+                                  <span className="text-sm font-medium text-gray-900">Store Views</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-sm font-semibold text-gray-900">{metrics.totalStoreViews}</span>
+                              </td>
+                            </tr>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <Gift className="h-4 w-4 text-gray-500" />
+                                  <span className="text-sm font-medium text-gray-900">Reward Views</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-sm font-semibold text-gray-900">{metrics.totalRewardViews}</span>
+                              </td>
+                            </tr>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <ShoppingCart className="h-4 w-4 text-gray-500" />
+                                  <span className="text-sm font-medium text-gray-900">Transactions</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-sm font-semibold text-gray-900">{metrics.totalTransactions}</span>
+                              </td>
+                            </tr>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <DollarSign className="h-4 w-4 text-gray-500" />
+                                  <span className="text-sm font-medium text-gray-900">Avg Order Value</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-sm font-semibold text-gray-900">${metrics.avgOrderValue}</span>
+                              </td>
+                            </tr>
+                          </>
+                        ) : (
+                          <>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <Users className="h-4 w-4 text-blue-500" />
+                                  <span className="text-sm font-medium text-gray-900">Total Customers</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-sm font-semibold text-gray-900">{metrics.totalCustomers}</span>
+                              </td>
+                            </tr>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <Users className="h-4 w-4 text-blue-500" />
+                                  <span className="text-sm font-medium text-gray-900">Active Customers</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-sm font-semibold text-gray-900">{metrics.activeCustomers}</span>
+                              </td>
+                            </tr>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <Star className="h-4 w-4 text-blue-500" />
+                                  <span className="text-sm font-medium text-gray-900">Points Issued</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-sm font-semibold text-gray-900">{metrics.totalPointsIssued.toLocaleString()}</span>
+                              </td>
+                            </tr>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <Gift className="h-4 w-4 text-blue-500" />
+                                  <span className="text-sm font-medium text-gray-900">Total Redemptions</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-sm font-semibold text-gray-900">{metrics.totalRedemptions}</span>
+                              </td>
+                            </tr>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <Percent className="h-4 w-4 text-blue-500" />
+                                  <span className="text-sm font-medium text-gray-900">Redemption Rate</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-sm font-semibold text-gray-900">{metrics.redemptionRate}%</span>
+                              </td>
+                            </tr>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <Zap className="h-4 w-4 text-blue-500" />
+                                  <span className="text-sm font-medium text-gray-900">Active Rewards</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-sm font-semibold text-gray-900">{metrics.activeRewards}</span>
+                              </td>
+                            </tr>
+                          </>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
@@ -2908,15 +3063,15 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <p className="text-xs text-gray-600 mb-4 leading-relaxed">Connect your business tools and services.</p>
-                    <Button 
-                      size="sm" 
+                  <Button 
+                    size="sm"
                       variant="outline" 
                       className="w-full rounded-md mt-auto text-xs"
-                      asChild
-                    >
+                    asChild
+                  >
                       <Link href="/dashboard/integrations">Setup Now</Link>
-                    </Button>
-                  </div>
+                  </Button>
+                </div>
 
                   {/* Agent Creation */}
                   <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors w-72">
@@ -2924,13 +3079,13 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-3">
                         <Bot className="h-4 w-4 text-blue-500" />
                         <h3 className="text-sm font-semibold text-gray-900">Agent Creation</h3>
-                      </div>
+              </div>
                       <div className="flex items-center gap-2">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
                           <Clock className="h-3 w-3" />
                           7 min
                         </span>
-                      </div>
+                  </div>
                     </div>
                     <p className="text-xs text-gray-600 mb-4 leading-relaxed">Create AI agents for business automation.</p>
                     <Button 
@@ -2948,271 +3103,164 @@ export default function DashboardPage() {
               {/* Connected Integrations Section */}
               <div className="mb-8">
                 <h2 className="text-lg font-medium mb-4">Connected Integrations</h2>
-                <div className="border border-gray-200 rounded-md bg-gray-50">
-                  <div className="p-6 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-md font-semibold mb-1">Active Connections</h3>
-                        <p className="text-sm text-gray-600">Your connected business tools and services</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {integrationsLoading ? (
+                    <div className="col-span-full flex items-center justify-center py-8">
+                      <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
+                    </div>
+                  ) : (() => {
+                    const connectedIntegrations = Object.entries(integrations).filter(([key, integration]) => integration.connected)
+                    
+                    const getIntegrationIcon = (integrationKey: string) => {
+                      switch (integrationKey) {
+                        case 'gmail':
+                          return <img src="/gmailpro.png" alt="Gmail" className="h-8 w-8 object-contain" />
+                        case 'google_calendar':
+                          return <img src="/cal.svg" alt="Google Calendar" className="h-8 w-8 object-contain" />
+                        case 'google_docs':
+                          return <img src="/docspro.png" alt="Google Docs" className="h-8 w-8 object-contain" />
+                        case 'google_sheets':
+                          return <img src="/sheetspro.png" alt="Google Sheets" className="h-8 w-8 object-contain" />
+                        case 'square':
+                          return <img src="/squarepro.png" alt="Square" className="h-8 w-8 object-contain" />
+                        case 'lightspeed_new':
+                          return <img src="/lslogo.png" alt="Lightspeed" className="h-8 w-8 object-contain" />
+                        case 'hubspot':
+                          return <img src="/hubspot.png" alt="HubSpot" className="h-8 w-8 object-contain" />
+                        case 'outlook':
+                          return <img src="/outlook.png" alt="Outlook" className="h-8 w-8 object-contain" />
+                        default:
+                          return <Settings className="h-8 w-8 text-gray-500" />
+                      }
+                    }
+
+                    const getIntegrationName = (integrationKey: string) => {
+                      switch (integrationKey) {
+                        case 'gmail': return 'Gmail'
+                        case 'google_calendar': return 'Google Calendar'
+                        case 'google_docs': return 'Google Docs'
+                        case 'google_sheets': return 'Google Sheets'
+                        case 'square': return 'Square'
+                        case 'lightspeed_new': return 'Lightspeed Retail'
+                        case 'hubspot': return 'HubSpot'
+                        case 'outlook': return 'Microsoft Outlook'
+                        default: return integrationKey
+                      }
+                    }
+
+                    const getIntegrationDescription = (integrationKey: string) => {
+                      switch (integrationKey) {
+                        case 'gmail': return 'Email Integration'
+                        case 'google_calendar': return 'Calendar Integration'
+                        case 'google_docs': return 'Document Management'
+                        case 'google_sheets': return 'Spreadsheet Integration'
+                        case 'square': return 'Point of Sale'
+                        case 'lightspeed_new': return 'Point of Sale'
+                        case 'hubspot': return 'CRM Integration'
+                        case 'outlook': return 'Email Integration'
+                        default: return 'Business Tool'
+                      }
+                    }
+
+                    const integrationBoxes = connectedIntegrations.map(([key, integration]) => (
+                      <div key={key} className="bg-white border border-gray-200 rounded-md p-6 hover:shadow-sm transition-shadow">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="h-12 w-12 rounded-md bg-gray-100 flex items-center justify-center">
+                            {getIntegrationIcon(key)}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span className="text-xs text-green-600 font-medium">Connected</span>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="text-sm font-semibold text-gray-900">{getIntegrationName(key)}</h3>
+                            <CheckCircle className="h-3 w-3 text-green-500" />
+                          </div>
+                          <p className="text-xs text-gray-500">{getIntegrationDescription(key)}</p>
+                        </div>
                       </div>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        className="rounded-md"
+                    ))
+
+                    // Add the "Add Integrations" box
+                    const addIntegrationsBox = (
+                      <Button
+                        key="add-integrations"
+                        variant="outline"
+                        className="bg-white border border-gray-200 rounded-md p-6 h-auto flex flex-col items-center justify-center gap-3 hover:bg-gray-50 hover:border-gray-300 transition-colors min-h-[140px]"
                         asChild
                       >
-                        <Link href="/dashboard/integrations" className="flex items-center gap-1">
-                          Manage all
-                          <ChevronRight className="h-3 w-3" />
+                        <Link href="/dashboard/integrations">
+                          <div className="h-12 w-12 rounded-md bg-blue-50 flex items-center justify-center">
+                            <PlusCircle className="h-8 w-8 text-blue-500" />
+                          </div>
+                          <div className="text-center">
+                            <h3 className="text-sm font-semibold text-gray-900 mb-1">Add Integrations</h3>
+                            <p className="text-xs text-gray-500">Connect your business tools</p>
+                          </div>
                         </Link>
                       </Button>
-                    </div>
-                  </div>
-                  <div className="p-6">
-                    {integrationsLoading ? (
-                      <div className="flex items-center justify-center py-8">
-                        <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
-                      </div>
-                    ) : (() => {
-                      const connectedIntegrations = Object.entries(integrations).filter(([key, integration]) => integration.connected)
-                      
-                      if (connectedIntegrations.length === 0) {
-                        return (
-                          <div className="py-8 text-center">
-                            <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
-                              <Settings className="h-6 w-6 text-gray-400" />
-                            </div>
-                            <p className="text-sm font-medium text-gray-700">No integrations connected</p>
-                            <p className="text-xs text-gray-500 mt-1">Connect your business tools to see them here</p>
-                          </div>
-                        )
-                      }
+                    )
 
-                      return (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {connectedIntegrations.map(([key, integration]) => {
-                            const getIntegrationIcon = (integrationKey: string) => {
-                              switch (integrationKey) {
-                                case 'gmail':
-                                  return <img src="/gmailpro.png" alt="Gmail" className="h-5 w-5 object-contain" />
-                                case 'google_calendar':
-                                  return <img src="/cal.svg" alt="Google Calendar" className="h-5 w-5 object-contain" />
-                                case 'google_docs':
-                                  return <img src="/docspro.png" alt="Google Docs" className="h-5 w-5 object-contain" />
-                                case 'google_sheets':
-                                  return <img src="/sheetspro.png" alt="Google Sheets" className="h-5 w-5 object-contain" />
-                                case 'square':
-                                  return <img src="/squarepro.png" alt="Square" className="h-5 w-5 object-contain" />
-                                case 'lightspeed_new':
-                                  return <img src="/lslogo.png" alt="Lightspeed" className="h-5 w-5 object-contain" />
-                                case 'hubspot':
-                                  return <img src="/hubspot.png" alt="HubSpot" className="h-5 w-5 object-contain" />
-                                case 'outlook':
-                                  return <img src="/outlook.png" alt="Outlook" className="h-5 w-5 object-contain" />
-                                default:
-                                  return <Settings className="h-5 w-5 text-gray-500" />
-                              }
-                            }
+                    if (connectedIntegrations.length === 0) {
+                      return [addIntegrationsBox]
+                    }
 
-                            const getIntegrationName = (integrationKey: string) => {
-                              switch (integrationKey) {
-                                case 'gmail': return 'Gmail'
-                                case 'google_calendar': return 'Google Calendar'
-                                case 'google_docs': return 'Google Docs'
-                                case 'google_sheets': return 'Google Sheets'
-                                case 'square': return 'Square'
-                                case 'lightspeed_new': return 'Lightspeed Retail'
-                                case 'hubspot': return 'HubSpot'
-                                case 'outlook': return 'Microsoft Outlook'
-                                default: return integrationKey
-                              }
-                            }
-
-                            const getIntegrationDescription = (integrationKey: string) => {
-                              switch (integrationKey) {
-                                case 'gmail': return 'Email Integration'
-                                case 'google_calendar': return 'Calendar Integration'
-                                case 'google_docs': return 'Document Management'
-                                case 'google_sheets': return 'Spreadsheet Integration'
-                                case 'square': return 'Point of Sale'
-                                case 'lightspeed_new': return 'Point of Sale'
-                                case 'hubspot': return 'CRM Integration'
-                                case 'outlook': return 'Email Integration'
-                                default: return 'Business Tool'
-                              }
-                            }
-
-                            return (
-                              <div key={key} className="border border-gray-200 rounded-md p-4 bg-white">
-                                <div className="flex items-start gap-3">
-                                  <div className="h-10 w-10 rounded-md bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                    {getIntegrationIcon(key)}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <h4 className="text-sm font-medium text-gray-900 truncate">{getIntegrationName(key)}</h4>
-                                      <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
-                                    </div>
-                                    <p className="text-xs text-gray-500 mt-1">{getIntegrationDescription(key)}</p>
-                                    <div className="flex items-center gap-1 mt-2">
-                                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                      <span className="text-xs text-green-600 font-medium">Connected</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )
-                    })()}
-                  </div>
+                    return [...integrationBoxes, addIntegrationsBox]
+                  })()}
                 </div>
               </div>
 
-              {/* Active Agents Section for Merchant */}
+                            {/* Active Agents Section for Merchant */}
               <div className="mb-8">
                 <h2 className="text-lg font-medium mb-4">Active Agents</h2>
-                <div className="border border-gray-200 rounded-md bg-gray-50">
-                  <div className="p-6 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-md font-semibold mb-1">Currently Running AI Agents</h3>
-                        <p className="text-sm text-gray-600">Manage and monitor your automated agents</p>
-                      </div>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        className="rounded-md"
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {agentsLoading ? (
+                    <div className="col-span-full flex items-center justify-center py-8">
+                      <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
+                            </div>
+                  ) : (
+                    <>
+                      {activeAgents.map((agent, index) => (
+                        <div key={agent.id} className="bg-white border border-gray-200 rounded-md p-6 hover:shadow-sm transition-shadow">
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="h-12 w-12 rounded-md bg-gray-100 flex items-center justify-center">
+                              <Bot className="h-8 w-8 text-gray-500" />
+                          </div>
+                            <div className="flex items-center gap-1">
+                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                              <span className="text-xs text-green-600 font-medium">Active</span>
+                            </div>
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-semibold text-gray-900 mb-1">{agent.name}</h3>
+                            <p className="text-xs text-gray-500 mb-2">{agent.description}</p>
+                            <p className="text-xs text-gray-400">
+                              {agent.lastRun ? `Last run ${formatTimeAgo(agent.lastRun)}` : 'Never run'}
+                            </p>
+                        </div>
+                  </div>
+                      ))}
+                      
+                      <Button
+                        variant="outline"
+                        className="bg-white border border-gray-200 rounded-md p-6 h-auto flex flex-col items-center justify-center gap-3 hover:bg-gray-50 hover:border-gray-300 transition-colors min-h-[140px]"
                         asChild
                       >
-                        <Link href="/dashboard/agents" className="flex items-center gap-1">
-                          View all
-                          <ChevronRight className="h-3 w-3" />
+                        <Link href="/dashboard/agents">
+                          <div className="h-12 w-12 rounded-md bg-blue-50 flex items-center justify-center">
+                            <PlusCircle className="h-8 w-8 text-blue-500" />
+              </div>
+                          <div className="text-center">
+                            <h3 className="text-sm font-semibold text-gray-900 mb-1">Add Agents</h3>
+                            <p className="text-xs text-gray-500">Create AI agents</p>
+            </div>
                         </Link>
                       </Button>
-                    </div>
-                  </div>
-                  <div className="p-6">
-                    {agentsLoading ? (
-                      <div className="flex items-center justify-center py-8">
-                        <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
-                      </div>
-                    ) : activeAgents.length === 0 ? (
-                      <div className="py-8 text-center">
-                        <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
-                          <Bot className="h-6 w-6 text-gray-400" />
-                        </div>
-                        <p className="text-sm font-medium text-gray-700">No active agents</p>
-                        <p className="text-xs text-gray-500 mt-1">Connect agents to see them here</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {activeAgents.map((agent, index) => {
-                          // Function to get tool logo based on tool name
-                          const getToolLogo = (toolName: string) => {
-                            const lowerToolName = toolName.toLowerCase();
-                            
-                            // Gmail/Google tools
-                            if (lowerToolName.includes('gmail') || lowerToolName.includes('google mail')) {
-                              return <Image src="/gmailnew.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain" />;
-                            }
-                            
-                            // Xero tools
-                            if (lowerToolName.includes('xero')) {
-                              return <Image src="/xero.png" width={16} height={16} alt="Xero" className="h-4 w-4 object-contain" />;
-                            }
-                            
-                            // Square tools
-                            if (lowerToolName.includes('square')) {
-                              return <Image src="/square.png" width={16} height={16} alt="Square" className="h-4 w-4 object-contain" />;
-                            }
-                            
-                            // Lightspeed tools
-                            if (lowerToolName.includes('lightspeed')) {
-                              return <Image src="/lslogo.png" width={16} height={16} alt="Lightspeed" className="h-4 w-4 object-contain" />;
-                            }
-                            
-                            // MailChimp tools
-                            if (lowerToolName.includes('mailchimp') || lowerToolName.includes('mail chimp')) {
-                              return <Image src="/mailchimp.png" width={16} height={16} alt="MailChimp" className="h-4 w-4 object-contain" />;
-                            }
-                            
-                            // HubSpot tools
-                            if (lowerToolName.includes('hubspot') || lowerToolName.includes('hub spot')) {
-                              return <Image src="/hubspot.png" width={16} height={16} alt="HubSpot" className="h-4 w-4 object-contain" />;
-                            }
-                            
-                            // Outlook tools
-                            if (lowerToolName.includes('outlook') || lowerToolName.includes('microsoft')) {
-                              return <Image src="/outlook.png" width={16} height={16} alt="Outlook" className="h-4 w-4 object-contain" />;
-                            }
-                            
-                            // Google Sheets tools
-                            if (lowerToolName.includes('sheets') || lowerToolName.includes('google sheets')) {
-                              return <Image src="/sheetspro.png" width={16} height={16} alt="Google Sheets" className="h-4 w-4 object-contain" />;
-                            }
-                            
-                            // Default fallback
-                            return <Bot className="h-4 w-4 text-gray-500" />;
-                          };
-
-                          // Function to get the appropriate icon for each agent
-                          const getAgentIcon = (agent: any) => {
-                            // Built-in agents
-                            switch (agent.id) {
-                              case 'customer-service':
-                              case 'email-summary':
-                              case 'email-executive':
-                                return <Image src="/gmailnew.png" width={20} height={20} alt="Gmail" className="h-5 w-5 object-contain" />;
-                            }
-                            
-                            // Custom agents - check their tools
-                            if (agent.type === 'custom' && (agent.tools || agent.selectedTools)) {
-                              const tools = agent.tools || agent.selectedTools || [];
-                              
-                              // If agent has tools, use the first tool's icon
-                              if (tools.length > 0) {
-                                const firstTool = tools[0];
-                                const toolName = typeof firstTool === 'string' ? firstTool : (firstTool.name || firstTool.tool || firstTool.app);
-                                if (toolName) {
-                                  return getToolLogo(toolName);
-                                }
-                              }
-                            }
-                            
-                            // Default fallback
-                            return <Bot className="h-5 w-5 text-gray-500" />;
-                          };
-
-                          return (
-                            <div key={agent.id} className="border border-gray-200 rounded-md p-4 bg-white">
-                              <div className="flex items-start gap-3">
-                                <div className="h-10 w-10 rounded-md bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                  {getAgentIcon(agent)}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="text-sm font-medium text-gray-900 truncate">{agent.name}</h4>
-                                  <p className="text-xs text-gray-500 mt-1">{agent.description}</p>
-                                  <div className="flex items-center gap-2 mt-2">
-                                    <div className="flex items-center gap-1">
-                                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                      <span className="text-xs text-gray-500">Active</span>
-                                    </div>
-                                    <span className="text-xs text-gray-400">•</span>
-                                    <span className="text-xs text-gray-500">
-                                      {agent.lastRun ? `Last run ${formatTimeAgo(agent.lastRun)}` : 'Never run'}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                    </>
+                  )}
+          </div>
               </div>
             </>
           )}

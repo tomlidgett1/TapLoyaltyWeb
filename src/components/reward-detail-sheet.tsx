@@ -143,6 +143,8 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
     profilePictureUrl?: string;
     visibilityReason?: string;
     isVisible: boolean;
+    redeemable: boolean;
+    visible: boolean;
   }>>([]);
   const [visibilityLoading, setVisibilityLoading] = useState(false);
 
@@ -294,12 +296,16 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
             
             let visibilityReason = '';
             let isVisible = true; // Default to visible if no specific data
+            let redeemable = false;
+            let visible = false;
             
             if (customerRewardDoc.exists()) {
               const rewardData = customerRewardDoc.data();
               visibilityReason = rewardData.reason || '';
               // If there's a reason, it usually means it's hidden/restricted
               isVisible = !visibilityReason || visibilityReason === 'visible';
+              redeemable = rewardData.redeemable || false;
+              visible = rewardData.visible || false;
             }
             
             return {
@@ -308,7 +314,9 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
               email: customerData.email || '',
               profilePictureUrl: customerData.profilePictureUrl || null,
               visibilityReason,
-              isVisible
+              isVisible,
+              redeemable,
+              visible
             };
           } catch (error) {
             console.error(`Error fetching visibility for customer ${customerId}:`, error);
@@ -318,7 +326,9 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
               email: customerData.email || '',
               profilePictureUrl: customerData.profilePictureUrl || null,
               visibilityReason: 'Error loading',
-              isVisible: false
+              isVisible: false,
+              redeemable: false,
+              visible: false
             };
           }
         });
@@ -1116,8 +1126,8 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                           <TableRow>
                             <TableHead className="text-xs">Customer</TableHead>
                             <TableHead className="text-xs">Email</TableHead>
-                            <TableHead className="text-xs">Status</TableHead>
-                            <TableHead className="text-xs">Reason</TableHead>
+                            <TableHead className="text-xs">Redeemable</TableHead>
+                            <TableHead className="text-xs">Visible</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1175,18 +1185,26 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                                     variant="outline" 
                                     className={cn(
                                       "rounded-sm text-xs",
-                                      customer.isVisible
+                                      customer.redeemable
                                         ? "bg-green-50 text-green-700 border-green-200" 
                                         : "bg-red-50 text-red-700 border-red-200"
                                     )}
                                   >
-                                    {customer.isVisible ? 'Visible' : 'Hidden'}
+                                    {customer.redeemable ? 'true' : 'false'}
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="text-xs py-2">
-                                  <span className="text-gray-600 truncate max-w-[150px]">
-                                    {customer.visibilityReason || 'Default visibility'}
-                                  </span>
+                                  <Badge 
+                                    variant="outline" 
+                                    className={cn(
+                                      "rounded-sm text-xs",
+                                      customer.visible
+                                        ? "bg-green-50 text-green-700 border-green-200" 
+                                        : "bg-red-50 text-red-700 border-red-200"
+                                    )}
+                                  >
+                                    {customer.visible ? 'true' : 'false'}
+                                  </Badge>
                                 </TableCell>
                               </TableRow>
                             ))

@@ -37,9 +37,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { RewardDetailSheet } from "@/components/reward-detail-sheet"
 import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banner-preview"
 import { BannerScheduler } from "@/components/banner-scheduler"
+import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
 import { cn } from "@/lib/utils"
 import { updateDoc, deleteDoc } from "firebase/firestore"
 
@@ -1057,24 +1064,12 @@ const RewardsTabContent = () => {
   const [sortField, setSortField] = useState<"rewardName" | "type" | "programType" | "pointsCost" | "redemptionCount" | "redeemableCustomers" | "impressions" | "createdAt" | "lastRedeemed" | "isActive">("rewardName")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   const [loadingRewards, setLoadingRewards] = useState(true)
-  const [showFilters, setShowFilters] = useState(false)
-  const [statusFilters, setStatusFilters] = useState({
-    active: true,
-    inactive: true
-  })
-  const [typeFilters, setTypeFilters] = useState({
-    coffee: true,
-    discount: true,
-    gift: true,
-    ticket: true,
-    other: true
-  })
-  const [pointsCostRange, setPointsCostRange] = useState([0, 500])
   const [selectedRewardId, setSelectedRewardId] = useState<string | null>(null)
   const [isRewardDetailOpen, setIsRewardDetailOpen] = useState(false)
   const [rewardToDelete, setRewardToDelete] = useState<string | null>(null)
   const [expandedPrograms, setExpandedPrograms] = useState<Record<string, boolean>>({})
   const [customerNames, setCustomerNames] = useState<Record<string, string>>({})
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
 
     // Function to get customer name by ID from top-level customers collection
   const getCustomerName = async (customerId: string): Promise<string> => {
@@ -1220,13 +1215,13 @@ const RewardsTabContent = () => {
   const getRewardTypeIcon = (type: string) => {
     switch (type?.toLowerCase()) {
       case 'coffee':
-        return <Coffee className="h-5 w-5 text-amber-600" />;
+        return <Coffee className="h-5 w-5 text-blue-600" />;
       case 'ticket':
-        return <Ticket className="h-5 w-5 text-purple-600" />;
+        return <Ticket className="h-5 w-5 text-blue-600" />;
       case 'discount':
-        return <Tag className="h-5 w-5 text-green-600" />;
+        return <Tag className="h-5 w-5 text-blue-600" />;
       case 'gift':
-        return <Gift className="h-5 w-5 text-red-600" />;
+        return <Gift className="h-5 w-5 text-blue-600" />;
       default:
         return <Gift className="h-5 w-5 text-blue-600" />;
     }
@@ -1241,42 +1236,7 @@ const RewardsTabContent = () => {
     }
   }
 
-  const handleStatusFilterChange = (status: string, checked: boolean) => {
-    setStatusFilters(prev => ({
-      ...prev,
-      [status.toLowerCase()]: checked
-    }))
-  }
 
-  const handleTypeFilterChange = (type: string, checked: boolean) => {
-    setTypeFilters(prev => ({
-      ...prev,
-      [type.toLowerCase()]: checked
-    }))
-  }
-
-  const applyFilters = (data: Reward[]) => {
-    return data.filter(reward => {
-      // Apply status filter
-      const isActive = reward.isActive
-      if ((isActive && !statusFilters.active) || (!isActive && !statusFilters.inactive)) {
-        return false
-      }
-
-      // Apply type filter
-      const type = reward.type?.toLowerCase() || 'other'
-      if (!typeFilters[type as keyof typeof typeFilters] && !typeFilters.other) {
-        return false
-      }
-
-      // Apply points cost filter
-      if (reward.pointsCost < pointsCostRange[0] || reward.pointsCost > pointsCostRange[1]) {
-        return false
-      }
-
-      return true
-    })
-  }
 
   const getFilteredRewards = () => {
     console.log('🔍 getFilteredRewards called');
@@ -1286,8 +1246,8 @@ const RewardsTabContent = () => {
     
     let filtered = [...rewardsData]
     console.log('🔄 Starting with rewards:', filtered.length);
-
-    // Apply search filter
+      
+      // Apply search filter
     if (searchQuery) {
       console.log('🔍 Applying search filter for:', searchQuery);
       filtered = filtered.filter(reward => 
@@ -1326,7 +1286,50 @@ const RewardsTabContent = () => {
     }
 
     console.log('✅ Final filtered rewards:', filtered.length);
-    return applyFilters(filtered)
+    return filtered.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortField) {
+        case "rewardName":
+          comparison = (a.rewardName || "").localeCompare(b.rewardName || "");
+          break;
+        case "type":
+          comparison = (a.type || "").localeCompare(b.type || "");
+          break;
+        case "programType":
+          comparison = (a.programType || "").localeCompare(b.programType || "");
+          break;
+        case "pointsCost":
+          comparison = (a.pointsCost || 0) - (b.pointsCost || 0);
+          break;
+        case "redemptionCount":
+          comparison = (a.redemptionCount || 0) - (b.redemptionCount || 0);
+          break;
+        case "redeemableCustomers":
+          comparison = (a.redeemableCustomers || 0) - (b.redeemableCustomers || 0);
+          break;
+        case "impressions":
+          comparison = (a.impressions || 0) - (b.impressions || 0);
+          break;
+        case "createdAt":
+          const aTime = a.createdAt ? a.createdAt.getTime() : 0;
+          const bTime = b.createdAt ? b.createdAt.getTime() : 0;
+          comparison = aTime - bTime;
+          break;
+        case "lastRedeemed":
+          const aRedeemed = a.lastRedeemed ? a.lastRedeemed.getTime() : 0;
+          const bRedeemed = b.lastRedeemed ? b.lastRedeemed.getTime() : 0;
+          comparison = aRedeemed - bRedeemed;
+          break;
+        case "isActive":
+          comparison = (a.isActive ? 1 : 0) - (b.isActive ? 1 : 0);
+          break;
+        default:
+          comparison = 0;
+      }
+      
+      return sortDirection === "asc" ? comparison : -comparison;
+    })
   }
 
   const toggleRewardStatus = async (rewardId: string, currentStatus: boolean) => {
@@ -1413,6 +1416,20 @@ const RewardsTabContent = () => {
     }
   };
 
+  const getRedeemableCustomers = (reward: Reward): string[] => {
+    // Get customer IDs who can redeem this reward
+    const customerIds = reward.customerIds || reward.customers || reward.uniqueCustomerIds || []
+    
+    // Convert to customer names using the customerNames state
+    const redeemableCustomerNames: string[] = []
+    customerIds.forEach(customerId => {
+      const customerName = customerNames[customerId] || `Customer ${customerId.slice(0, 8)}`
+      redeemableCustomerNames.push(customerName)
+    })
+    
+    return redeemableCustomerNames.length > 0 ? redeemableCustomerNames : ['No eligible customers']
+  };
+
   return (
     <div>
       <Tabs defaultValue="all" onValueChange={(value) => setRewardCategory(value as typeof rewardCategory)}>
@@ -1483,140 +1500,47 @@ const RewardsTabContent = () => {
           </div>
           
           <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input 
-                type="search" 
-                placeholder="Search rewards..." 
-                className="w-[250px] pl-9 h-9 rounded-md"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            
-            <Popover open={showFilters} onOpenChange={setShowFilters}>
-              <PopoverTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  className="h-9 gap-2 rounded-md"
-                  onClick={() => setShowFilters(true)}
-                >
-                  <Filter className="h-4 w-4" />
-                  Filter
-                  {(Object.values(statusFilters).some(v => !v) || 
-                    Object.values(typeFilters).some(v => !v)) && (
-                    <Badge className="ml-1 bg-primary h-5 w-5 p-0 flex items-center justify-center">
-                      <span className="text-xs">!</span>
-                    </Badge>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-96 p-4">
-                <div className="space-y-4">
-                  <h4 className="font-medium">Filter Rewards</h4>
-                  
-                  <div className="space-y-2">
-                    <Label>Status</Label>
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox 
-                          id="status-active" 
-                          checked={statusFilters.active}
-                          onCheckedChange={(checked) => 
-                            handleStatusFilterChange('active', checked as boolean)}
-                        />
-                        <Label htmlFor="status-active" className="cursor-pointer">Active</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox 
-                          id="status-inactive" 
-                          checked={statusFilters.inactive}
-                          onCheckedChange={(checked) => 
-                            handleStatusFilterChange('inactive', checked as boolean)}
-                        />
-                        <Label htmlFor="status-inactive" className="cursor-pointer">Inactive</Label>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Type</Label>
-                    <div className="flex flex-col gap-2">
-                      {['coffee', 'discount', 'gift', 'ticket', 'other'].map(type => (
-                        <div key={type} className="flex items-center space-x-2">
-                          <Checkbox 
-                            id={`type-${type}`}
-                            checked={typeFilters[type as keyof typeof typeFilters]}
-                            onCheckedChange={(checked) => 
-                              handleTypeFilterChange(type, checked as boolean)}
-                          />
-                          <Label htmlFor={`type-${type}`} className="cursor-pointer capitalize">{type}</Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <Label>Points Cost Range</Label>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="min-points" className="text-xs">Min</Label>
-                        <Input
-                          id="min-points"
-                          type="number"
-                          min={0}
-                          max={500}
-                          value={pointsCostRange[0]}
-                          onChange={(e) => setPointsCostRange([Number(e.target.value), pointsCostRange[1]])}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="max-points" className="text-xs">Max</Label>
-                        <Input
-                          id="max-points"
-                          type="number"
-                          min={0}
-                          max={500}
-                          value={pointsCostRange[1]}
-                          onChange={(e) => setPointsCostRange([pointsCostRange[0], Number(e.target.value)])}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-between pt-2">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setStatusFilters({ active: true, inactive: true })
-                        setTypeFilters({ 
-                          coffee: true, 
-                          discount: true, 
-                          gift: true, 
-                          ticket: true, 
-                          other: true 
-                        })
-                        setPointsCostRange([0, 500])
-                      }}
-                    >
-                      Reset Filters
-                    </Button>
-                    <Button onClick={() => setShowFilters(false)}>Apply Filters</Button>
-                  </div>
+            <div className="relative w-[250px] h-9">
+              {/* Search Icon Button */}
+              <Button
+                variant="outline"
+                size="icon"
+                className={cn(
+                  "absolute right-0 top-0 h-9 w-9 rounded-md transition-all duration-150 ease-out",
+                  isSearchOpen ? "opacity-0 scale-95 pointer-events-none" : "opacity-100 scale-100"
+                )}
+                onClick={() => setIsSearchOpen(true)}
+              >
+                <Search className="h-4 w-4" />
+              </Button>
+              
+              {/* Search Input */}
+              <div 
+                className={cn(
+                  "absolute right-0 top-0 transition-all duration-150 ease-out",
+                  isSearchOpen 
+                    ? "w-full opacity-100 scale-100" 
+                    : "w-9 opacity-0 scale-95 pointer-events-none"
+                )}
+              >
+                <div className="relative w-full">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    type="search" 
+                    placeholder="Search rewards..." 
+                    className="w-full pl-9 h-9 rounded-md"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onBlur={() => {
+                      if (!searchQuery) {
+                        setTimeout(() => setIsSearchOpen(false), 100)
+                      }
+                    }}
+                    autoFocus={isSearchOpen}
+                  />
                 </div>
-              </PopoverContent>
-            </Popover>
-
-            <Button 
-              variant="outline" 
-              className="gap-2 rounded-md"
-              onClick={handleExportPDF}
-            >
-              <Download className="h-4 w-4" />
-              Export
-            </Button>
+              </div>
+            </div>
           </div>
         </div>
         
@@ -1624,9 +1548,9 @@ const RewardsTabContent = () => {
           {rewardCategory === "programs" ? (
             <ProgramRewardsTable />
           ) : (
-            <Card className="rounded-md overflow-hidden">
-              <CardContent className="p-0">
-                <Table>
+          <Card className="rounded-md overflow-hidden">
+            <CardContent className="p-0">
+              <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[300px]">
@@ -1693,6 +1617,18 @@ const RewardsTabContent = () => {
                     <TableHead className="text-center">
                       <Button 
                         variant="ghost" 
+                        onClick={() => handleSort("impressions")}
+                        className="flex items-center gap-1 px-0 font-medium mx-auto"
+                      >
+                        Impressions
+                        {sortField === "impressions" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TableHead>
+                    <TableHead className="text-center">
+                      <Button 
+                        variant="ghost" 
                         onClick={() => handleSort("createdAt")}
                         className="flex items-center gap-1 px-0 font-medium mx-auto"
                       >
@@ -1708,7 +1644,7 @@ const RewardsTabContent = () => {
                         onClick={() => handleSort("isActive")}
                         className="flex items-center gap-1 px-0 font-medium mx-auto"
                       >
-                        Status
+                        Active
                         {sortField === "isActive" && (
                           sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
                         )}
@@ -1720,7 +1656,7 @@ const RewardsTabContent = () => {
                 <TableBody>
                   {loadingRewards ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center">
+                      <TableCell colSpan={9} className="h-24 text-center">
                         <div className="flex justify-center">
                           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
                         </div>
@@ -1728,7 +1664,7 @@ const RewardsTabContent = () => {
                     </TableRow>
                   ) : getFilteredRewards().length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center">
+                      <TableCell colSpan={9} className="h-24 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
                             <Gift className="h-6 w-6 text-muted-foreground" />
@@ -1760,7 +1696,7 @@ const RewardsTabContent = () => {
                           <div className="flex items-center gap-2">
                             <div className="h-9 w-9 min-w-[36px] rounded-md bg-muted flex items-center justify-center">
                               {reward.category === "program" 
-                                ? <Award className="h-5 w-5 text-amber-600" />
+                                ? <Award className="h-5 w-5 text-blue-600" />
                                 : getRewardTypeIcon(reward.type)}
                             </div>
                             <div className="min-w-0">
@@ -1768,7 +1704,7 @@ const RewardsTabContent = () => {
                                 {reward.rewardName}
                                 {Array.isArray(reward.conditions) && 
                                   reward.conditions.find(c => c.type === 'maximumTransactions')?.value === 0 && (
-                                  <Badge variant="outline" className="ml-1 py-0 h-4 text-[10px] px-1.5 bg-teal-50 text-teal-700 border-teal-200">
+                                  <Badge variant="outline" className="ml-1 py-0 h-4 text-[10px] px-1.5 bg-gray-50 text-gray-700 border-gray-200 rounded-md">
                                     New Customers
                                   </Badge>
                                 )}
@@ -1787,26 +1723,14 @@ const RewardsTabContent = () => {
                               </span>
                             </div>
                           ) : reward.programType ? (
-                            <div className={cn(
-                              "font-medium",
-                              reward.programType === "voucherprogramnew" && "text-purple-700",
-                              reward.programType === "coffeeprogramnew" && "text-amber-700",
-                              reward.programType === "transactionrewardsnew" && "text-blue-700"
-                            )}>
+                            <div className="font-medium text-gray-700">
                               {reward.programType === "coffeeprogramnew" ? "Coffee Program" :
                                reward.programType === "voucherprogramnew" ? "Voucher Program" :
                                reward.programType === "transactionrewardsnew" ? "Transaction Rewards" :
                                reward.programType.charAt(0).toUpperCase() + reward.programType.slice(1)}
                             </div>
                           ) : (
-                            <div className={cn(
-                              "font-medium",
-                              reward.programtype === "voucher" && "text-purple-700",
-                              reward.programtype === "points" && "text-blue-700",
-                              reward.programtype === "coffee" && "text-amber-700",
-                              reward.programtype === "discount" && "text-emerald-700",
-                              !reward.programtype && "text-gray-700"
-                            )}>
+                            <div className="font-medium text-gray-700">
                               {reward.programtype 
                                 ? reward.programtype.charAt(0).toUpperCase() + reward.programtype.slice(1)
                                 : "Individual Reward"}
@@ -1814,29 +1738,65 @@ const RewardsTabContent = () => {
                           )}
                         </TableCell>
                         <TableCell className="text-center">
-                          <div className="font-medium text-blue-700">
-                            {reward.pointsCost}
-                          </div>
+                          <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 rounded-md">
+                            {reward.pointsCost > 0 ? `${reward.pointsCost} pts` : 'Free'}
+                          </Badge>
                         </TableCell>
                         <TableCell className="text-center">
-                          <div className="font-medium text-green-700">
+                          <div className="font-medium" style={{ color: '#007AFF' }}>
                             {reward.redemptionCount || 0}
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          <div className="font-medium text-blue-700">
-                            {reward.redeemableCustomers || 0}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                className="h-7 gap-2 rounded-md"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Users className="h-3 w-3" />
+                                {reward.redeemableCustomers || 0}
+                                <ChevronDown className="h-3 w-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="center" className="w-64">
+                              <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
+                                Eligible Customers
+                              </div>
+                              <DropdownMenuSeparator />
+                              {getRedeemableCustomers(reward).map((customerName, index) => (
+                                <DropdownMenuItem 
+                                  key={index}
+                                  className="text-sm cursor-default"
+                                >
+                                  <User className="h-3 w-3 mr-2" />
+                                  {customerName}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="space-y-1">
+                            <div className="font-medium" style={{ color: '#007AFF' }}>
+                              {reward.impressions || 0}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {(reward as any).impressioncustomercount || 0} customers
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
                           {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
                         </TableCell>
                         <TableCell className="text-center">
-                          <div className={cn(
-                            "font-medium",
-                            reward.isActive ? "text-green-700" : "text-red-700"
-                          )}>
-                            {reward.isActive ? "Live" : "Inactive"}
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <Switch
+                              checked={reward.isActive}
+                              onCheckedChange={() => toggleRewardStatus(reward.id, reward.isActive)}
+                            />
                           </div>
                         </TableCell>
                         <TableCell>
@@ -1908,7 +1868,7 @@ const RewardsTabContent = () => {
                     <TableHead className="text-center">Points</TableHead>
                     <TableHead className="text-center">Redemptions</TableHead>
                     <TableHead className="text-center">Created</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-center">Active</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1956,12 +1916,12 @@ const RewardsTabContent = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          <div className="font-medium text-blue-700">
-                            {reward.pointsCost}
-                          </div>
+                          <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 rounded-md">
+                            {reward.pointsCost > 0 ? `${reward.pointsCost} pts` : 'Free'}
+                          </Badge>
                         </TableCell>
                         <TableCell className="text-center">
-                          <div className="font-medium text-green-700">
+                          <div className="font-medium" style={{ color: '#007AFF' }}>
                             {reward.redemptionCount || 0}
                           </div>
                         </TableCell>
@@ -1969,11 +1929,11 @@ const RewardsTabContent = () => {
                           {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
                         </TableCell>
                         <TableCell className="text-center">
-                          <div className={cn(
-                            "font-medium",
-                            reward.isActive ? "text-green-700" : "text-red-700"
-                          )}>
-                            {reward.isActive ? "Live" : "Inactive"}
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <Switch
+                              checked={reward.isActive}
+                              onCheckedChange={() => toggleRewardStatus(reward.id, reward.isActive)}
+                            />
                           </div>
                         </TableCell>
                         <TableCell>
@@ -3755,6 +3715,10 @@ const ProgramRewardsTable = () => {
   const [activePrograms, setActivePrograms] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [programRewardCounts, setProgramRewardCounts] = useState<Record<string, number>>({})
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [selectedProgramType, setSelectedProgramType] = useState<'coffee' | 'discount' | 'transaction'>('coffee')
+  const [showRewardDetail, setShowRewardDetail] = useState(false)
+  const [selectedRewardId, setSelectedRewardId] = useState<string | undefined>(undefined)
   
   console.log('🔍 ProgramRewardsTable state:', {
     user: user?.uid,
@@ -3807,8 +3771,9 @@ const ProgramRewardsTable = () => {
             
             let customerNames: string[] = []
             
-             // Get customer names from the customers array (from top-level customers collection)
+             // Get customer names and profile pictures from the customers array (from top-level customers collection)
              const customerIds = data.customers || data.uniqueCustomerIds || []
+             let customerProfilePicture = null
              if (customerIds.length > 0) {
                for (const customerId of customerIds.slice(0, 5)) { // Limit to first 5 customers
                  try {
@@ -3818,6 +3783,11 @@ const ProgramRewardsTable = () => {
                      const customerData = customerSnapshot.data() as any
                      const fullName = customerData.fullName || customerData.firstName || customerData.name || 'Unknown'
                      customerNames.push(fullName)
+                     
+                     // Get profile picture from the first customer
+                     if (!customerProfilePicture && customerData.profilePictureUrl) {
+                       customerProfilePicture = customerData.profilePictureUrl
+                     }
                    }
                  } catch (error) {
                    console.error("Error fetching customer from top-level collection:", error)
@@ -3837,6 +3807,7 @@ const ProgramRewardsTable = () => {
               description: data.description || '',
               type: data.rewardType || data.type || 'gift',
               programtype: data.programType || '',
+              programType: data.programType || '', // Add programType for badge logic
               category: 'program',
               pointsCost: data.pointsCost || 0,
               redemptionCount: data.redemptionCount || 0,
@@ -3849,8 +3820,11 @@ const ProgramRewardsTable = () => {
               redeemableCustomers: data.uniqueCustomersCount || 0,
               hasActivePeriod: false,
               activePeriod: { startDate: '', endDate: '' },
-              customerName: customerDisplayText
-            } as Reward & { customerName: string })
+              customerName: customerDisplayText,
+              customerProfilePicture: customerProfilePicture, // Add profile picture
+              voucherAmount: data.voucherAmount || 0, // Add voucherAmount field
+              rewardTypeDetails: data.rewardTypeDetails || {} // Add rewardTypeDetails field
+            } as Reward & { customerName: string; customerProfilePicture: string | null })
           }
         }
         
@@ -3980,6 +3954,22 @@ const ProgramRewardsTable = () => {
     }
   }
 
+  // Handle edit program
+  const handleEditProgram = (programType: 'coffee' | 'voucher' | 'transaction') => {
+    let dialogType: 'coffee' | 'discount' | 'transaction' = 'coffee'
+    
+    if (programType === 'voucher') {
+      dialogType = 'discount'
+    } else if (programType === 'transaction') {
+      dialogType = 'transaction'
+    } else {
+      dialogType = 'coffee'
+    }
+    
+    setSelectedProgramType(dialogType)
+    setShowCreateDialog(true)
+  }
+
   // Get program type display name
   const getProgramTypeDisplay = (programType: string) => {
     switch (programType) {
@@ -3998,7 +3988,7 @@ const ProgramRewardsTable = () => {
   const getProgramTypeIcon = (programType: string) => {
     switch (programType) {
       case 'coffeeprogramnew':
-        return <Coffee className="h-4 w-4 text-blue-600" />
+        return <DollarSign className="h-4 w-4 text-blue-600" />
       case 'voucherprogramnew':
         return <Percent className="h-4 w-4 text-blue-600" />
       case 'transactionrewardsnew':
@@ -4014,11 +4004,41 @@ const ProgramRewardsTable = () => {
       case 'coffee':
         return <Coffee className="h-4 w-4 text-blue-600" />
       case 'voucher':
-        return <Percent className="h-4 w-4 text-blue-600" />
+        return <DollarSign className="h-4 w-4 text-blue-600" />
       case 'transaction':
         return <ShoppingBag className="h-4 w-4 text-blue-600" />
       default:
         return <Award className="h-4 w-4 text-blue-600" />
+    }
+  }
+
+  // Handle reward click to open detail sheet
+  const handleRewardClick = (rewardId: string) => {
+    setSelectedRewardId(rewardId)
+    setShowRewardDetail(true)
+  }
+
+  // Toggle reward active status
+  const toggleRewardActive = async (rewardId: string, currentStatus: boolean) => {
+    if (!user?.uid) return
+
+    try {
+      const rewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId)
+      await updateDoc(rewardRef, {
+        isActive: !currentStatus,
+        updatedAt: new Date()
+      })
+
+      // Update local state
+      setProgramRewards(prev => 
+        prev.map(reward => 
+          reward.id === rewardId 
+            ? { ...reward, isActive: !currentStatus }
+            : reward
+        )
+      )
+    } catch (error) {
+      console.error('Error toggling reward status:', error)
     }
   }
 
@@ -4027,7 +4047,7 @@ const ProgramRewardsTable = () => {
       {/* Programs Section */}
       {activePrograms.length > 0 && (
         <div className="mb-6">
-          <h3 className="text-lg font-medium mb-3">Programs</h3>
+          <h3 className="text-md font-medium mb-3">Programs</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {activePrograms.map((program, index) => {
               const rewardCount = programRewardCounts[program.type] || 0
@@ -4038,20 +4058,41 @@ const ProgramRewardsTable = () => {
                       {getActiveeProgramIcon(program.type)}
                       <span className="font-medium text-sm capitalize">{program.type} Program</span>
                     </div>
-                    <Switch
-                      checked={program.active}
-                      onCheckedChange={() => toggleProgramActive(program.originalIndex, program.type)}
-                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleEditProgram(program.type)}
+                        className="p-1 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                      >
+                        <Settings className="h-4 w-4" />
+                      </button>
+                      <Switch
+                        checked={program.active}
+                        onCheckedChange={() => toggleProgramActive(program.originalIndex, program.type)}
+                      />
+                    </div>
                   </div>
                   <p className="text-xs text-gray-600 mb-2">{program.name || 'Unnamed Program'}</p>
                   <div className="flex items-center justify-between">
                     <div className={`text-xs font-medium ${program.active ? 'text-green-600' : 'text-gray-500'}`}>
                       {program.active ? 'Active' : 'Inactive'}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {rewardCount} unredeemed reward{rewardCount !== 1 ? 's' : ''}
-                    </div>
+                    {rewardCount > 0 && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-1 text-gray-500 cursor-help">
+                              <Award className="h-3 w-3" />
+                              <span className="text-xs font-medium">{rewardCount}</span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            <p className="text-xs">Unredeemed rewards available for customers</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
                   </div>
+
                 </div>
               )
             })}
@@ -4067,17 +4108,18 @@ const ProgramRewardsTable = () => {
                 <TableHead className="w-[300px]">Reward Name</TableHead>
                 <TableHead className="text-center">Program Type</TableHead>
                 <TableHead className="text-center">Customer</TableHead>
-                <TableHead className="text-center">Redemptions</TableHead>
                 <TableHead className="text-center">Value</TableHead>
+                <TableHead className="text-center">Impressions</TableHead>
                 <TableHead className="text-center">Created</TableHead>
-                <TableHead className="text-center">Status</TableHead>
+                <TableHead className="text-center">Active</TableHead>
+                <TableHead className="text-center">Redemption Status</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center">
+                  <TableCell colSpan={9} className="h-24 text-center">
                     <div className="flex justify-center">
                       <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
                     </div>
@@ -4085,7 +4127,7 @@ const ProgramRewardsTable = () => {
                 </TableRow>
               ) : programRewards.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center">
+                  <TableCell colSpan={9} className="h-24 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
                         <Award className="h-6 w-6 text-muted-foreground" />
@@ -4102,7 +4144,7 @@ const ProgramRewardsTable = () => {
                   <TableRow 
                     key={reward.id}
                     className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => router.push(`/store/rewards/${reward.id}`)}
+                    onClick={() => handleRewardClick(reward.id)}
                   >
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
@@ -4125,6 +4167,12 @@ const ProgramRewardsTable = () => {
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">
                         <Avatar className="size-6">
+                          {(reward as any).customerProfilePicture ? (
+                            <AvatarImage 
+                              src={(reward as any).customerProfilePicture} 
+                              alt={reward.customerName || 'Customer'} 
+                            />
+                          ) : null}
                           <AvatarFallback className="bg-blue-100 text-blue-600 text-xs">
                             {reward.customerName?.split(' ').map(n => n[0]).join('') || 'U'}
                           </AvatarFallback>
@@ -4133,24 +4181,73 @@ const ProgramRewardsTable = () => {
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <div className="font-medium text-green-700">
-                        {reward.redemptionCount || 0}
-                      </div>
+                      {(() => {
+                        console.log('🔍 Badge logic for reward:', {
+                          id: reward.id,
+                          programType: reward.programType,
+                          voucherAmount: reward.voucherAmount,
+                          rewardTypeDetails: reward.rewardTypeDetails,
+                          pointsCost: reward.pointsCost
+                        })
+                        
+                        if (reward.programType === 'coffeeprogramnew') {
+                          return (
+                            <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 rounded-md">
+                              Free Coffee
+                            </Badge>
+                          )
+                        } else if (reward.programType === 'voucherprogramnew') {
+                          return (
+                            <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 rounded-md">
+                              ${reward.voucherAmount || 0} Voucher
+                            </Badge>
+                          )
+                        } else if (reward.programType === 'transactionrewardsnew') {
+                          return (
+                            <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 rounded-md">
+                              {reward.rewardTypeDetails?.itemName || 'Item'}
+                            </Badge>
+                          )
+                        } else {
+                          return (
+                            <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 rounded-md">
+                              {reward.pointsCost > 0 ? `${reward.pointsCost} pts` : 'Free'}
+                            </Badge>
+                          )
+                        }
+                      })()}
                     </TableCell>
                     <TableCell className="text-center">
-                      <div className="font-medium text-blue-700">
-                        {reward.pointsCost > 0 ? `${reward.pointsCost} pts` : 'Free'}
+                      <div className="space-y-1">
+                        <div className="font-medium" style={{ color: '#007AFF' }}>
+                          {reward.impressions || 0}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {(reward as any).impressioncustomercount || 0} customers
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
                       {reward.createdAt ? formatDistanceToNow(reward.createdAt.toDate(), { addSuffix: true }) : "Unknown"}
                     </TableCell>
                     <TableCell className="text-center">
-                      <div className={cn(
-                        "font-medium",
-                        reward.isActive ? "text-green-700" : "text-red-700"
-                      )}>
-                        {reward.isActive ? "Active" : "Inactive"}
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <Switch
+                          checked={reward.isActive}
+                          onCheckedChange={() => toggleRewardActive(reward.id, reward.isActive)}
+                        />
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        {reward.redemptionCount > 0 ? (
+                          <>
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                            <span className="font-medium text-green-700">Redeemed</span>
+                          </>
+                        ) : (
+                          <span className="font-medium text-gray-600">Not Redeemed</span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -4168,7 +4265,7 @@ const ProgramRewardsTable = () => {
                           align="end"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <DropdownMenuItem onClick={() => router.push(`/store/rewards/${reward.id}`)}>
+                          <DropdownMenuItem onClick={() => handleRewardClick(reward.id)}>
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
                           </DropdownMenuItem>
@@ -4186,6 +4283,20 @@ const ProgramRewardsTable = () => {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Reward Detail Sheet */}
+      <RewardDetailSheet
+        open={showRewardDetail}
+        onOpenChange={setShowRewardDetail}
+        rewardId={selectedRewardId}
+      />
+
+      {/* Create Recurring Reward Dialog */}
+      <CreateRecurringRewardDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        programType={selectedProgramType}
+      />
     </div>
   )
 }
@@ -5036,7 +5147,7 @@ export default function StoreOverviewPage() {
           </div>
         </div>
         
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-3">
           {/* TabsList hidden since we have navigation tabs in header */}
           
           <TabsContent value="rewards">

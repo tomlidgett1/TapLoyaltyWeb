@@ -1430,9 +1430,21 @@ const RewardsTabContent = () => {
     }
   };
 
-  const [eligibleCustomers, setEligibleCustomers] = useState<Record<string, Array<{id: string, fullName: string}>>>({})
+    const [eligibleCustomers, setEligibleCustomers] = useState<Record<string, Array<{
+    id: string, 
+    fullName: string,
+    currentCohort?: { name: string },
+    daysSinceLastVisit?: number,
+    lifetimeTransactionCount?: number
+  }>>>({})
 
-    const getEligibleCustomers = async (rewardId: string): Promise<Array<{id: string, fullName: string}>> => {
+  const getEligibleCustomers = async (rewardId: string): Promise<Array<{
+    id: string, 
+    fullName: string,
+    currentCohort?: { name: string },
+    daysSinceLastVisit?: number,
+    lifetimeTransactionCount?: number
+  }>> => {
     console.log('🔍 getEligibleCustomers called for rewardId:', rewardId)
     console.log('👤 User UID:', user?.uid)
     
@@ -1456,7 +1468,13 @@ const RewardsTabContent = () => {
       
       console.log('👥 Found', merchantCustomersSnapshot.docs.length, 'merchant customers')
       
-      const eligible: Array<{id: string, fullName: string}> = []
+      const eligible: Array<{
+        id: string, 
+        fullName: string,
+        currentCohort?: { name: string },
+        daysSinceLastVisit?: number,
+        lifetimeTransactionCount?: number
+      }> = []
       
       // Check each customer to see if they can redeem this reward
       for (const customerDoc of merchantCustomersSnapshot.docs) {
@@ -1464,6 +1482,11 @@ const RewardsTabContent = () => {
         const customerData = customerDoc.data()
         
         console.log('🔍 Checking customer:', customerId, 'Name:', customerData.fullName || customerData.firstName)
+        console.log('📊 Customer metrics:', {
+          currentCohort: customerData.currentCohort,
+          daysSinceLastVisit: customerData.daysSinceLastVisit,
+          lifetimeTransactionCount: customerData.lifetimeTransactionCount
+        })
         
         try {
           // Check the customer's rewards subcollection for this specific reward
@@ -1488,7 +1511,10 @@ const RewardsTabContent = () => {
               console.log('✅ Customer eligible:', customerId, customerData.fullName || customerData.firstName)
               eligible.push({
                 id: customerId,
-                fullName: customerData.fullName || customerData.firstName || 'Unknown Customer'
+                fullName: customerData.fullName || customerData.firstName || 'Unknown Customer',
+                currentCohort: customerData.currentCohort,
+                daysSinceLastVisit: customerData.daysSinceLastVisit,
+                lifetimeTransactionCount: customerData.lifetimeTransactionCount
               })
             } else {
               console.log('❌ Customer not eligible:', customerId, 'visible:', rewardData.visible, 'redeemable:', rewardData.redeemable)
@@ -1537,7 +1563,7 @@ const RewardsTabContent = () => {
             <ChevronDown className="h-3 w-3" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="center" className="w-64">
+        <DropdownMenuContent align="center" className="w-80">
           <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
             Eligible Customers
           </div>
@@ -1550,11 +1576,29 @@ const RewardsTabContent = () => {
             customers.map((customer) => (
               <DropdownMenuItem 
                 key={customer.id}
-                className="text-sm cursor-default"
+                className="cursor-default p-3"
                 title={`Customer ID: ${customer.id}`}
               >
-                <User className="h-3 w-3 mr-2" />
-                {customer.fullName}
+                <div className="flex items-start gap-3 w-full">
+                  <User className="h-4 w-4 mt-0.5 text-gray-500" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm truncate">
+                      {customer.fullName}
+                    </div>
+                    <div className="mt-1 space-y-1">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 rounded-md text-xs px-1.5 py-0.5">
+                          {customer.currentCohort?.name || 'No Cohort'}
+                        </Badge>
+                        <span>•</span>
+                        <span>{customer.daysSinceLastVisit || 0} days ago</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {customer.lifetimeTransactionCount || 0} lifetime transactions
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </DropdownMenuItem>
             ))
           )}

@@ -28,7 +28,12 @@ import {
   Image,
   Zap,
   Sparkles,
-  Inbox
+  Inbox,
+  CheckCircle,
+  Circle,
+  Crown,
+  Star,
+  Zap as ZapIcon
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -298,6 +303,10 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 })
   const createButtonRef = useRef<HTMLButtonElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  
+  // Merchant status and plan state
+  const [merchantStatus, setMerchantStatus] = useState<'active' | 'inactive'>('active')
+  const [merchantPlan, setMerchantPlan] = useState<'light' | 'advanced' | 'pro'>('light')
 
   // Handle clicks outside of the dropdown to close it
   useEffect(() => {
@@ -613,7 +622,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                   {isCollapsed ? (
           <div className="relative">
             <button
-              className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-normal transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 w-full h-9"
+              className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 w-full h-9"
               title="Create"
               onClick={() => setCreateMenuOpen(!createMenuOpen)}
               ref={createButtonRef}
@@ -623,7 +632,11 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
               </div>
             </button>
             {createMenuOpen && (
-              <div ref={dropdownRef} className="fixed z-[1000] bg-white rounded-md shadow-lg border border-gray-200 py-1 w-56" style={dropdownPosition}>
+              <div 
+                ref={dropdownRef} 
+                className="fixed z-[1000] bg-white rounded-md shadow-lg border border-gray-200 py-1 w-56 animate-in fade-in-0 zoom-in-95 duration-200 ease-out" 
+                style={dropdownPosition}
+              >
                 <button
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
                   onClick={() => {
@@ -701,7 +714,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                   ) : (
           <div className="relative">
             <button
-              className="group flex items-center justify-between w-full gap-3 rounded-md px-3 py-2 text-sm font-normal transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 h-9"
+              className="group flex items-center justify-between w-full gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 h-9"
               onClick={() => setCreateMenuOpen(!createMenuOpen)}
               ref={createButtonRef}
             >
@@ -726,7 +739,11 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
               </div>
             </button>
             {createMenuOpen && (
-              <div ref={dropdownRef} className="fixed z-[1000] bg-white rounded-md shadow-lg border border-gray-200 py-1 w-56" style={dropdownPosition}>
+              <div 
+                ref={dropdownRef} 
+                className="fixed z-[1000] bg-white rounded-md shadow-lg border border-gray-200 py-1 w-56 animate-in fade-in-0 zoom-in-95 duration-200 ease-out" 
+                style={dropdownPosition}
+              >
                 <button
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
                   onClick={() => {
@@ -835,7 +852,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                     <CollapsibleTrigger asChild>
                       <button
                         className={cn(
-                          "group flex items-center justify-between w-full gap-3 rounded-md px-3 text-sm font-normal transition-all duration-200 ease-in-out h-9",
+                          "group flex items-center justify-between w-full gap-3 rounded-md px-3 text-sm font-medium transition-all duration-200 ease-in-out h-9",
                           isActive 
                             ? "bg-[#007AFF]/10 text-[#007AFF]" 
                             : "text-gray-800 hover:bg-[#007AFF]/5"
@@ -883,7 +900,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                                 <Link
                                   href={subItem.href}
                                   className={cn(
-                                    "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-normal transition-colors h-8",
+                                    "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition-colors h-8",
                                     isSubActive 
                                       ? "bg-[#007AFF]/10 text-[#007AFF]" 
                                       : "text-gray-700 hover:bg-[#007AFF]/5"
@@ -917,7 +934,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                   <Link
                     href={item.href}
                     className={cn(
-                      "group flex items-center gap-3 rounded-md px-3 text-sm font-normal transition-all duration-200 ease-in-out whitespace-nowrap relative h-9",
+                      "group flex items-center gap-3 rounded-md px-3 text-sm font-medium transition-all duration-200 ease-in-out whitespace-nowrap relative h-9",
                       isActive 
                         ? "bg-[#007AFF]/10 text-[#007AFF]" 
                         : "text-gray-800 hover:bg-[#007AFF]/5"
@@ -974,13 +991,84 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       </nav>
       
       {/* Account section at the bottom */}
-      <div className="mt-auto border-t border-gray-200 py-2 px-3">
-        {isCollapsed ? (
-          <div className="flex justify-center">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full">
-                  <Avatar className="h-8 w-8">
+      <div className="mt-auto border-t border-gray-200 py-3 px-3">
+          {isCollapsed ? (
+            <div className="flex justify-center">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full relative">
+                    <Avatar className="h-8 w-8">
+                      {merchantData?.logoUrl && !logoError ? (
+                        <div className="merchant-avatar-container">
+                          <img 
+                            src={merchantData.logoUrl} 
+                            alt={merchantName} 
+                            className="merchant-avatar-image"
+                            onError={() => setLogoError(true)}
+                            onLoad={() => setLogoLoading(false)}
+                            style={{ opacity: logoLoading ? 0 : 1, transition: 'opacity 0.2s ease-in-out' }}
+                          />
+                          {logoLoading && (
+                            <AvatarFallback className="bg-primary text-white text-xs avatar-fallback">
+                              {initials}
+                            </AvatarFallback>
+                          )}
+                        </div>
+                      ) : (
+                        <AvatarFallback className="bg-primary text-white text-xs avatar-fallback">
+                          {initials}
+                        </AvatarFallback>
+                      )}
+                    </Avatar>
+                    {/* Status indicator for collapsed view */}
+                    <div className="absolute -bottom-0.5 -right-0.5">
+                      {merchantStatus === 'active' ? (
+                        <CheckCircle className="h-3 w-3 text-green-500 bg-white rounded-full" />
+                      ) : (
+                        <Circle className="h-3 w-3 text-gray-400 bg-white rounded-full" />
+                      )}
+                    </div>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem asChild>
+                    <Link href="/merchant/profile" className="cursor-pointer flex items-center">
+                      <User className="h-4 w-4 mr-2" />
+                      <span>Profile</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/settings" className="cursor-pointer flex items-center">
+                      <Settings className="h-4 w-4 mr-2" />
+                      <span>Settings</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/integrations" className="cursor-pointer flex items-center">
+                      <Layers className="h-4 w-4 mr-2" />
+                      <span>Integrations</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/docs" className="cursor-pointer flex items-center">
+                      <FileText className="h-4 w-4 mr-2" />
+                      <span>Help Guide</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
+                    <LogOut className="h-4 w-4 mr-2" />
+                    <span>Log out</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Top row: Avatar, Name, Email, and Menu */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3 overflow-hidden min-w-0 max-w-[80%]">
+                  <Avatar className="h-8 w-8 flex-shrink-0">
                     {merchantData?.logoUrl && !logoError ? (
                       <div className="merchant-avatar-container">
                         <img 
@@ -1003,113 +1091,141 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                       </AvatarFallback>
                     )}
                   </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem asChild>
-                  <Link href="/merchant/profile" className="cursor-pointer flex items-center">
-                    <User className="h-4 w-4 mr-2" />
-                    <span>Profile</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/dashboard/settings" className="cursor-pointer flex items-center">
-                    <Settings className="h-4 w-4 mr-2" />
-                    <span>Settings</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/dashboard/integrations" className="cursor-pointer flex items-center">
-                    <Layers className="h-4 w-4 mr-2" />
-                    <span>Integrations</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/docs" className="cursor-pointer flex items-center">
-                    <FileText className="h-4 w-4 mr-2" />
-                    <span>Help Guide</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  <span>Log out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3 overflow-hidden min-w-0 max-w-[80%]">
-              <Avatar className="h-8 w-8 flex-shrink-0">
-                {merchantData?.logoUrl && !logoError ? (
-                  <div className="merchant-avatar-container">
-                    <img 
-                      src={merchantData.logoUrl} 
-                      alt={merchantName} 
-                      className="merchant-avatar-image"
-                      onError={() => setLogoError(true)}
-                      onLoad={() => setLogoLoading(false)}
-                      style={{ opacity: logoLoading ? 0 : 1, transition: 'opacity 0.2s ease-in-out' }}
-                    />
-                    {logoLoading && (
-                      <AvatarFallback className="bg-primary text-white text-xs avatar-fallback">
-                        {initials}
-                      </AvatarFallback>
+                  <div className="overflow-hidden">
+                    <p className="text-sm font-medium truncate">{merchantName}</p>
+                    <p className="text-xs text-muted-foreground truncate">{merchantEmail}</p>
+                  </div>
+                </div>
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild className="flex-shrink-0 ml-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem asChild>
+                      <Link href="/merchant/profile" className="cursor-pointer flex items-center">
+                        <User className="h-4 w-4 mr-2" />
+                        <span>Profile</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/settings" className="cursor-pointer flex items-center">
+                        <Settings className="h-4 w-4 mr-2" />
+                        <span>Settings</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/integrations" className="cursor-pointer flex items-center">
+                        <Layers className="h-4 w-4 mr-2" />
+                        <span>Integrations</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/docs" className="cursor-pointer flex items-center">
+                        <FileText className="h-4 w-4 mr-2" />
+                        <span>Help Guide</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
+                      <LogOut className="h-4 w-4 mr-2" />
+                      <span>Log out</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              {/* Status and Plan Info */}
+              <div className="pt-3 border-t border-gray-200 space-y-2">
+                {/* Status Row */}
+                <div className="flex items-center justify-between group">
+                  <span className="text-xs text-gray-500">Status</span>
+                  <div className="relative">
+                    {/* Default status display */}
+                    <div className="flex items-center gap-1.5 group-hover:opacity-0 transition-opacity duration-500 ease-out">
+                      <div className={cn(
+                        "h-2 w-2 rounded-full",
+                        merchantStatus === 'active' ? "bg-green-500" : "bg-gray-400"
+                      )} />
+                      <span className={cn(
+                        "text-xs font-medium",
+                        merchantStatus === 'active' ? "text-green-700" : "text-gray-600"
+                      )}>
+                        {merchantStatus === 'active' ? 'Live' : 'Offline'}
+                      </span>
+                    </div>
+                    
+                    {/* Hover state: Deactivate/Activate button */}
+                    {merchantStatus === 'active' && (
+                      <button 
+                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out flex items-center justify-end"
+                        onClick={() => {
+                          // Add deactivation logic here
+                          setMerchantStatus('inactive');
+                          console.log('Deactivate clicked');
+                        }}
+                      >
+                        <span className="bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-md border border-red-200 hover:bg-red-200 transition-colors whitespace-nowrap">
+                          Deactivate
+                        </span>
+                      </button>
+                    )}
+                    
+                    {merchantStatus === 'inactive' && (
+                      <button 
+                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out flex items-center justify-end"
+                        onClick={() => {
+                          // Add activation logic here
+                          setMerchantStatus('active');
+                          console.log('Activate clicked');
+                        }}
+                      >
+                        <span className="bg-green-100 text-green-700 text-xs font-medium px-2 py-0.5 rounded-md border border-green-200 hover:bg-green-200 transition-colors whitespace-nowrap">
+                          Activate
+                        </span>
+                      </button>
                     )}
                   </div>
-                ) : (
-                  <AvatarFallback className="bg-primary text-white text-xs avatar-fallback">
-                    {initials}
-                  </AvatarFallback>
-                )}
-              </Avatar>
-              <div className="overflow-hidden">
-                <p className="text-sm font-medium truncate">{merchantName}</p>
-                <p className="text-xs text-muted-foreground truncate">{merchantEmail}</p>
+                </div>
+                
+                {/* Plan Row */}
+                <div className="flex items-center justify-between group">
+                  <span className="text-xs text-gray-500">Plan</span>
+                  <div className="relative">
+                    {/* Default plan display */}
+                    <div className="flex items-center gap-1.5 group-hover:opacity-0 transition-opacity duration-500 ease-out">
+                      {merchantPlan === 'light' && <Circle className="h-3 w-3 text-gray-500" />}
+                      {merchantPlan === 'advanced' && <Star className="h-3 w-3 text-blue-500" />}
+                      {merchantPlan === 'pro' && <Crown className="h-3 w-3 text-purple-500" />}
+                      <span className={cn(
+                        "text-xs font-medium capitalize",
+                        merchantPlan === 'light' && "text-gray-700",
+                        merchantPlan === 'advanced' && "text-blue-700",
+                        merchantPlan === 'pro' && "text-purple-700"
+                      )}>
+                        Tap {merchantPlan}
+                      </span>
+                    </div>
+                    
+                    {/* Hover state: Change Plan badge */}
+                    <button 
+                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out flex items-center justify-end"
+                      onClick={() => {
+                        // Add navigation to plan page or plan change modal
+                        window.location.href = '/plan';
+                      }}
+                    >
+                      <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-md border border-blue-200 hover:bg-blue-200 transition-colors whitespace-nowrap">
+                        Change Plan
+                      </span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild className="flex-shrink-0 ml-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem asChild>
-                  <Link href="/merchant/profile" className="cursor-pointer flex items-center">
-                    <User className="h-4 w-4 mr-2" />
-                    <span>Profile</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/dashboard/settings" className="cursor-pointer flex items-center">
-                    <Settings className="h-4 w-4 mr-2" />
-                    <span>Settings</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/dashboard/integrations" className="cursor-pointer flex items-center">
-                    <Layers className="h-4 w-4 mr-2" />
-                    <span>Integrations</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/docs" className="cursor-pointer flex items-center">
-                    <FileText className="h-4 w-4 mr-2" />
-                    <span>Help Guide</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  <span>Log out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        )}
+          )}
       </div>
 
       {/* CreateSheet component */}

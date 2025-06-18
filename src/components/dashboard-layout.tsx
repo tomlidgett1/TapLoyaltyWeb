@@ -2151,7 +2151,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <style jsx global>{scrollbarStyles}</style>
         
         {/* Main Content with Chatbot Panel */}
-        <main className="flex-1 overflow-hidden p-2 relative">
+        <main className="flex-1 overflow-hidden pr-2 pt-2 pb-2 relative">
           <div className="flex h-full">
             {/* Main content area - no width animation, just translate */}
             <div 
@@ -2162,7 +2162,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               }}
             >
               {/* Header moved inside main content */}
-              <header className="h-16 flex items-center justify-between px-4 border-b border-gray-200 bg-white">
+              <header className="h-14 flex items-center justify-between px-4 border-b border-gray-200 bg-white">
                 <div className="flex items-center gap-4 flex-grow mr-4">
                   {/* Title removed from setup page header */}
                   <h1 className="text-lg font-medium ml-2">{getPageTitle()}</h1>
@@ -2547,7 +2547,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               }}
             >
               {/* Chat header */}
-              <div className="h-16 px-4 border-b flex items-center justify-between">
+              <div className="h-14 px-4 border-b flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="font-semibold text-sm bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent">
                     Tap Agent

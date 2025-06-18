@@ -1,6 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import Image from "next/image"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -35,14 +38,11 @@ import {
   Mail,
   ShoppingCart,
   Brain,
-  LineChart,
-  Building,
   Image as ImageIcon,
   Star,
-  RotateCcw
+  RotateCcw,
+  Settings
 } from "lucide-react"
-import Image from "next/image"
-import Link from "next/link"
 import { toast } from "@/components/ui/use-toast"
 import { 
   Tooltip,
@@ -433,6 +433,31 @@ const SetupCard = ({
 };
 
 // Integration Logo Card
+const FAQItem = ({ question, answer }: { question: string; answer: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="border border-gray-200 rounded-md bg-white">
+      <button
+        className="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-gray-50 transition-colors"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className="font-medium text-gray-900">{question}</span>
+        <ChevronDown 
+          className={`h-5 w-5 text-gray-500 transition-transform ${
+            isOpen ? 'transform rotate-180' : ''
+          }`} 
+        />
+      </button>
+      {isOpen && (
+        <div className="px-6 pb-4 pt-0">
+          <p className="text-gray-600 text-sm leading-relaxed">{answer}</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const LogoCard = ({
   logo,
   title,
@@ -501,6 +526,7 @@ const LogoCard = ({
 };
 
 export default function SetupPage() {
+  const router = useRouter()
   const [gmailConnected, setGmailConnected] = useState(false);
   const [vaultActivated, setVaultActivated] = useState(false);
   const [csVaultActivated, setCsVaultActivated] = useState(false);
@@ -514,7 +540,7 @@ export default function SetupPage() {
   const [competitorAgentActivated, setCompetitorAgentActivated] = useState(false);
   
   // Tab state
-  const [activeTab, setActiveTab] = useState("main");
+  const [activeTab, setActiveTab] = useState("merchant");
   
   // Info drawer state
   const [infoDrawerOpen, setInfoDrawerOpen] = useState(false);
@@ -758,221 +784,135 @@ export default function SetupPage() {
           {/* Tap Merchant Tab Content */}
           {activeTab === "merchant" && (
             <div className="tab-section">
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                {/* Developer quickstart section */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Set up integrations */}
                 <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
-                  <div>
-                    <h3 className="text-md font-semibold mb-2">Business setup quickstart</h3>
-                    <p className="text-sm text-gray-600 mb-6">Learn how to get started with Tap Merchant and start building your first connected business application.</p>
-                  </div>
-                  <div className="mt-auto">
-                    <Link href="/guides/merchant-setup">
-                      <Button variant="outline" className="rounded-md">
-                        View guide
-                      </Button>
-                    </Link>
-                </div>
-              </div>
-              
-                {/* Creating core connections */}
-                <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
-                  <div>
-                    <h3 className="text-md font-semibold mb-2">Create core connections</h3>
-                    <p className="text-sm text-gray-600 mb-6">Configure and create connections to your core business systems to start gathering data.</p>
-                  </div>
-                  <div className="mt-auto">
-                    <Button 
-                      variant="outline" 
-                      className="rounded-md"
-                      onClick={() => setShowIntegrationsPopup(true)}
-                    >
-                      Begin setup
-                    </Button>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mb-10">
-                <h2 className="text-lg font-medium mb-4">Connect Your Systems</h2>
-                
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                  {/* Gmail Connection */}
-                  <div className="border border-gray-200 rounded-md p-3 flex flex-col bg-gray-50 text-center">
-                    <div className="mb-2 h-10 flex items-center justify-center">
-                      <Image 
-                        src="/gmailnew.png"
-                        alt="Gmail"
-                        width={32}
-                        height={24}
-                        className="object-contain"
-                      />
-                    </div>
-                    <h3 className="text-xs font-semibold mb-1">Gmail</h3>
-                    {gmailConnected ? (
-                      <Badge variant="outline" className="w-fit mx-auto flex gap-1 items-center px-1.5 py-0.5 text-emerald-600 border-emerald-200 bg-emerald-50">
-                        <Check size={10} />
-                        <span className="text-xs">Connected</span>
-                      </Badge>
-                    ) : (
-                      <Button size="sm" onClick={handleConnectGmail} variant="outline" className="w-full rounded-md text-xs py-1 h-7">
-                        Connect
-                      </Button>
-                    )}
-                  </div>
-                  
-                  {/* Square Connection */}
-                  <div className="border border-gray-200 rounded-md p-3 flex flex-col bg-gray-50 text-center">
-                    <div className="mb-2 h-10 flex items-center justify-center">
-                      <Image 
-                        src="/square.png"
-                        alt="Square"
-                        width={32}
-                        height={24}
-                        className="object-contain"
-                      />
-                    </div>
-                    <h3 className="text-xs font-semibold mb-1">Square</h3>
-                    {squareConnected ? (
-                      <Badge variant="outline" className="w-fit mx-auto flex gap-1 items-center px-1.5 py-0.5 text-emerald-600 border-emerald-200 bg-emerald-50">
-                        <Check size={10} />
-                        <span className="text-xs">Connected</span>
-                      </Badge>
-                    ) : (
-                      <Button size="sm" onClick={() => handleConnectPos('Square')} variant="outline" className="w-full rounded-md text-xs py-1 h-7">
-                        Connect
-                      </Button>
-                    )}
-                  </div>
-                  
-                  {/* Lightspeed Connection */}
-                  <div className="border border-gray-200 rounded-md p-3 flex flex-col bg-gray-50 text-center">
-                    <div className="mb-2 h-10 flex items-center justify-center">
-                      <Image 
-                        src="/lslogo.png"
-                        alt="Lightspeed"
-                        width={32}
-                        height={24}
-                        className="object-contain"
-                      />
-                    </div>
-                    <h3 className="text-xs font-semibold mb-1">Lightspeed</h3>
-                    {lightspeedConnected ? (
-                      <Badge variant="outline" className="w-fit mx-auto flex gap-1 items-center px-1.5 py-0.5 text-emerald-600 border-emerald-200 bg-emerald-50">
-                        <Check size={10} />
-                        <span className="text-xs">Connected</span>
-                      </Badge>
-                    ) : (
-                      <Button size="sm" onClick={() => handleConnectPos('Lightspeed')} variant="outline" className="w-full rounded-md text-xs py-1 h-7">
-                        Connect
-                      </Button>
-                    )}
-                  </div>
-                  
-                  {/* Xero Connection */}
-                  <div className="border border-gray-200 rounded-md p-3 flex flex-col bg-gray-50 text-center">
-                    <div className="mb-2 h-10 flex items-center justify-center">
-                      <Image 
-                        src="/xero.png"
-                        alt="Xero"
-                        width={32}
-                        height={24}
-                        className="object-contain"
-                      />
-                    </div>
-                    <h3 className="text-xs font-semibold mb-1">Xero</h3>
-                    {xeroConnected ? (
-                      <Badge variant="outline" className="w-fit mx-auto flex gap-1 items-center px-1.5 py-0.5 text-emerald-600 border-emerald-200 bg-emerald-50">
-                        <Check size={10} />
-                        <span className="text-xs">Connected</span>
-                      </Badge>
-                    ) : (
-                      <Button size="sm" onClick={handleConnectXero} variant="outline" className="w-full rounded-md text-xs py-1 h-7">
-                        Connect
-                      </Button>
-                    )}
-                  </div>
-                  
-                  {/* Plus More Section */}
-                  <div className="border border-gray-200 rounded-md p-3 flex flex-col bg-gray-50 text-center">
-                    <div className="mb-2 h-10 flex items-center justify-center">
-                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                        <span className="text-gray-500 text-lg font-bold">+</span>
+                  <div className="flex items-start justify-between mb-4">
+                    <Settings className="h-8 w-8 text-blue-500" />
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <div className="bg-white p-2 rounded border border-gray-200 shadow-sm">
+                          <Image src="/gmailnew.png" alt="Gmail" width={16} height={16} className="object-contain" />
+                        </div>
+                        <div className="bg-white p-2 rounded border border-gray-200 shadow-sm">
+                          <Image src="/integrations/square.png" alt="Square" width={16} height={16} className="object-contain" />
+                        </div>
+                        <div className="bg-white p-2 rounded border border-gray-200 shadow-sm">
+                          <Image src="/integrations/ls.png" alt="Lightspeed" width={16} height={16} className="object-contain" />
+                        </div>
+                        <div className="bg-white p-2 rounded border border-gray-200 shadow-sm">
+                          <Image src="/xero.png" alt="Xero" width={16} height={16} className="object-contain" />
+                        </div>
+                        <div className="bg-gray-200 p-2 rounded border border-gray-300 text-xs font-medium text-gray-600 min-w-[28px] text-center">
+                          +6
+                        </div>
                       </div>
                     </div>
-                    <h3 className="text-xs font-semibold mb-1">10+ More</h3>
+                  </div>
+                  <h3 className="text-lg font-semibold mb-3">Set up integrations</h3>
+                  <p className="text-sm text-gray-600 mb-6">Connect your business systems like POS, email, and accounting software to centralise your data.</p>
+                  <div className="mt-auto">
                     <Button 
-                      size="sm" 
-                      onClick={() => setShowIntegrationsPopup(true)} 
                       variant="outline" 
-                      className="w-full rounded-md text-xs py-1 h-7"
+                      className="w-full rounded-md"
+                      onClick={() => router.push('/dashboard/integrations')}
                     >
-                      View All
+                      Get Started
                     </Button>
                   </div>
                 </div>
-              </div>
-              
-              <div>
-                <h2 className="text-lg font-medium mb-4">Start Building</h2>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
-                    <div className="mb-2">
-                      <Database className="h-8 w-8 text-blue-500" />
+                {/* Set up your vault */}
+                <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
+                  <div className="mb-4">
+                    <Database className="h-8 w-8 text-blue-500" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-3">Set up your vault</h3>
+                  <p className="text-sm text-gray-600 mb-6">Create an AI-powered knowledge base using RAG (Retrieval Augmented Generation). Upload PDFs, documents, and notes to build a searchable vault you can query and interact with.</p>
+                  <div className="mt-auto">
+                    <Button 
+                      variant="outline" 
+                      className="w-full rounded-md"
+                      onClick={handleActivateVault}
+                    >
+                      Get Started
+                    </Button>
+                  </div>
+                </div>
+                
+                {/* Create your first agent */}
+                <div className="border border-gray-200 rounded-md p-6 flex flex-col bg-gray-50">
+                  <div className="mb-4">
+                    <Bot className="h-8 w-8 text-blue-500" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-3">Create your first agent</h3>
+                  <p className="text-sm text-gray-600 mb-6">Build AI agents that can automate tasks, respond to customers, and analyse your business data.</p>
+                  
+                  {/* Agent Type Icons */}
+                  <div className="mb-6">
+                    <p className="text-xs text-gray-500 mb-3 font-medium">AGENT TYPES</p>
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <div className="bg-white p-3 rounded-md border border-gray-200 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-700">Customer Service</span>
+                          <Image src="/gmailnew.png" alt="Gmail" width={16} height={16} className="object-contain" />
+                          <Image src="/outlook.png" alt="Outlook" width={16} height={16} className="object-contain" />
+                        </div>
+                      </div>
+                      <div className="bg-white p-3 rounded-md border border-gray-200 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-700">Email Agent</span>
+                          <Image src="/gmailnew.png" alt="Gmail" width={16} height={16} className="object-contain" />
+                          <Image src="/outlook.png" alt="Outlook" width={16} height={16} className="object-contain" />
+                        </div>
+                      </div>
                     </div>
-                    <h3 className="text-sm font-semibold mb-2">Knowledge Vault</h3>
-                    <p className="text-xs text-gray-600 mb-auto pb-4">Securely store and manage your business knowledge.</p>
-                    {vaultActivated ? (
-                      <Link href="/notes">
-                        <Button size="sm" variant="outline" className="w-full rounded-md">
-                          Manage Vault
-                        </Button>
-                      </Link>
-                    ) : (
-                      <Button size="sm" onClick={handleActivateVault} variant="outline" className="w-full rounded-md">
-                        Activate
-                      </Button>
-                    )}
                   </div>
                   
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
-                    <div className="mb-2">
-                      <Bot className="h-8 w-8 text-indigo-500" />
-                    </div>
-                    <h3 className="text-sm font-semibold mb-2">Customer Service Agent</h3>
-                    <p className="text-xs text-gray-600 mb-auto pb-4">AI-powered customer service automation.</p>
+                  <div className="mt-auto">
                     {csAgentActivated ? (
                       <Link href="/dashboard/agent-inbox">
-                        <Button size="sm" variant="outline" className="w-full rounded-md">
+                        <Button variant="outline" className="w-full rounded-md">
                           Manage Agent
                         </Button>
                       </Link>
                     ) : (
-                      <Button size="sm" onClick={handleActivateCSAgent} variant="outline" className="w-full rounded-md">
-                        Activate
+                      <Button 
+                        variant="outline" 
+                        className="w-full rounded-md"
+                        onClick={handleActivateCSAgent}
+                      >
+                        Get Started
                       </Button>
                     )}
                   </div>
-                  
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50">
-                    <div className="mb-2">
-                      <BarChart className="h-8 w-8 text-green-500" />
-                    </div>
-                    <h3 className="text-sm font-semibold mb-2">Insights Agent</h3>
-                    <p className="text-xs text-gray-600 mb-auto pb-4">Get AI-powered business insights and analytics.</p>
-                    {insightsActivated ? (
-                      <Link href="/insights">
-                        <Button size="sm" variant="outline" className="w-full rounded-md">
-                          View Insights
-                        </Button>
-                      </Link>
-                    ) : (
-                      <Button size="sm" onClick={handleActivateInsights} variant="outline" className="w-full rounded-md">
-                        Activate
-                      </Button>
-                    )}
-                  </div>
+                </div>
+              </div>
+              
+              {/* FAQ Section */}
+              <div className="mt-12 pt-8 border-t border-gray-200">
+                <h2 className="text-lg font-semibold mb-6 text-gray-900">Frequently Asked Questions</h2>
+                <div className="space-y-4">
+                  <FAQItem 
+                    question="How long does it take to set up integrations?"
+                    answer="Most integrations can be set up in 5-10 minutes. Gmail and POS systems typically connect instantly, while accounting software like Xero may take a few minutes to sync your data."
+                  />
+                  <FAQItem 
+                    question="What data is stored in the vault?"
+                    answer="Your vault securely stores business documents, customer information, product catalogues, and any other business knowledge you choose to upload. All data is encrypted and only accessible by your authorised team members."
+                  />
+                  <FAQItem 
+                    question="Can I create multiple agents?"
+                    answer="Yes, you can create multiple agents for different purposes. Start with one agent type and add more as your business needs grow. Each agent can be customised for specific tasks and integrations."
+                  />
+                  <FAQItem 
+                    question="Is my business data secure?"
+                    answer="Absolutely. We use enterprise-grade encryption, secure data centres, and follow strict privacy protocols. Your data is never shared with third parties and you maintain full control over your information."
+                  />
+                  <FAQItem 
+                    question="What if I need help during setup?"
+                    answer="Our support team is available to help you through the setup process. You can access live chat support, detailed guides, or schedule a personalised onboarding session with our team."
+                  />
                 </div>
               </div>
             </div>
@@ -1081,6 +1021,33 @@ export default function SetupPage() {
                       </Button>
                     )}
                   </div>
+                </div>
+              </div>
+              
+              {/* FAQ Section */}
+              <div className="mt-12 pt-8 border-t border-gray-200">
+                <h2 className="text-lg font-semibold mb-6 text-gray-900">Frequently Asked Questions</h2>
+                <div className="space-y-4">
+                  <FAQItem 
+                    question="How do loyalty points work?"
+                    answer="Customers earn points for purchases based on your configured points rules. They can redeem these points for rewards, discounts, or free items. You can set custom earning rates and redemption values to match your business model."
+                  />
+                  <FAQItem 
+                    question="What types of rewards can I create?"
+                    answer="You can create percentage discounts, fixed amount discounts, free items, bundles, recurring programs like coffee cards, and special promotional banners. Each reward type can be customised with specific conditions and expiry dates."
+                  />
+                  <FAQItem 
+                    question="How does the AI agent personalise rewards?"
+                    answer="Tap Agent analyses customer purchase history, preferences, and behaviour patterns to suggest personalised rewards and communications. It can automatically create targeted offers and send customised messages to increase engagement and retention."
+                  />
+                  <FAQItem 
+                    question="Can I track customer engagement and program performance?"
+                    answer="Yes, you get detailed analytics on customer activity, reward redemptions, points issued, and program performance. Track metrics like active customers, redemption rates, and popular rewards to optimise your loyalty strategy."
+                  />
+                  <FAQItem 
+                    question="How do I set up recurring programs like coffee cards?"
+                    answer="Use the 'Create Recurring Program' feature to set up programs where customers collect stamps or points towards a free reward. Configure the number of purchases required, reward type, and program duration to match your business needs."
+                  />
                 </div>
               </div>
             </div>

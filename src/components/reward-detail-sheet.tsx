@@ -639,6 +639,18 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
               <Eye className="h-4 w-4" />
               Visibility
             </button>
+            <button
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                activeTab === "debug"
+                  ? "text-gray-800 bg-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+              onClick={() => setActiveTab("debug")}
+            >
+              <Tag className="h-4 w-4" />
+              Debug
+            </button>
           </div>
         </div>
 
@@ -1219,6 +1231,107 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                     </CardContent>
                   </Card>
                 </div>
+              </TabsContent>
+
+              <TabsContent value="debug" className="mt-0 space-y-6">
+                <Card className="rounded-md shadow-sm">
+                  <CardContent className="p-0">
+                    <div className="p-4 border-b">
+                      <div className="flex items-center gap-2">
+                        <Tag className="h-4 w-4 text-gray-600" />
+                        <h3 className="text-sm font-medium">Debug Information</h3>
+                        <Badge className="bg-orange-50 text-orange-700 border-orange-200 rounded-sm">
+                          Raw Data
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Complete reward document structure for debugging purposes
+                      </p>
+                    </div>
+                    <div className="p-4">
+                      <div className="bg-gray-50 rounded-md border p-4 font-mono text-xs overflow-auto max-h-96">
+                        <pre className="whitespace-pre-wrap text-gray-800">
+                          {JSON.stringify(reward, null, 2)}
+                        </pre>
+                      </div>
+                      
+                      {/* Additional Debug Info */}
+                      <div className="mt-4 pt-4 border-t">
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">Quick Debug Stats</h4>
+                        <div className="grid grid-cols-2 gap-4 text-xs">
+                          <div>
+                            <span className="text-gray-500">Document ID:</span>
+                            <div className="font-mono bg-gray-100 px-2 py-1 rounded mt-1">{reward?.id || 'N/A'}</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Collection Path:</span>
+                            <div className="font-mono bg-gray-100 px-2 py-1 rounded mt-1">
+                              merchants/{user?.uid}/rewards/{reward?.id}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Object Keys Count:</span>
+                            <div className="font-mono bg-gray-100 px-2 py-1 rounded mt-1">
+                              {reward ? Object.keys(reward).length : 0}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Data Size (approx):</span>
+                            <div className="font-mono bg-gray-100 px-2 py-1 rounded mt-1">
+                              {reward ? `${JSON.stringify(reward).length} chars` : 'N/A'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Copy to Clipboard Button */}
+                      <div className="mt-4 pt-4 border-t flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="gap-2 rounded-md text-xs"
+                          onClick={() => {
+                            if (reward) {
+                              navigator.clipboard.writeText(JSON.stringify(reward, null, 2));
+                              showToast({
+                                title: "Copied!",
+                                description: "Reward JSON copied to clipboard",
+                              });
+                            }
+                          }}
+                        >
+                          <Copy className="h-3 w-3" />
+                          Copy JSON
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="gap-2 rounded-md text-xs"
+                          onClick={() => {
+                            if (reward) {
+                              const debugInfo = {
+                                documentId: reward.id,
+                                collectionPath: `merchants/${user?.uid}/rewards/${reward.id}`,
+                                keyCount: Object.keys(reward).length,
+                                dataSize: JSON.stringify(reward).length,
+                                timestamp: new Date().toISOString(),
+                                reward: reward
+                              };
+                              navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2));
+                              showToast({
+                                title: "Debug Info Copied!",
+                                description: "Complete debug information copied to clipboard",
+                              });
+                            }
+                          }}
+                        >
+                          <Tag className="h-3 w-3" />
+                          Copy Debug Info
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </TabsContent>
             </div>
           </ScrollArea>

@@ -1597,9 +1597,9 @@ export default function DashboardPage() {
         console.error('Error fetching active agents:', error)
       } finally {
         setAgentsLoading(false)
-      }
-    }
-
+          }
+        }
+        
     // Function to fetch integrations status
     const fetchIntegrations = async () => {
       if (!user?.uid) return
@@ -2540,124 +2540,52 @@ export default function DashboardPage() {
                   <h2 className="text-lg font-medium">Essential Setup</h2>
                   <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-md">1/4</span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Recurring Program */}
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors w-72">
-                    <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-                        <Gift className="h-4 w-4 text-blue-500" />
-                        <h3 className="text-sm font-semibold text-gray-900">Recurring Program</h3>
-              </div>
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
-                          <Clock className="h-3 w-3" />
-                          5 min
-                        </span>
-            </div>
-          </div>
-                    <p className="text-xs text-gray-600 mb-3 leading-relaxed">Set up automatic loyalty rewards for your customers.</p>
-                    
-                    {/* Program Types */}
-                    <div className="mb-4 space-y-2">
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <Coffee className="h-3 w-3" />
-                        <span>Coffee Program</span>
-                </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <Percent className="h-3 w-3" />
-                        <span>Recurring Voucher</span>
-              </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <ShoppingCart className="h-3 w-3" />
-                        <span>Transaction-Based</span>
-                </div>
-              </div>
-
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  className="w-full rounded-md mt-auto text-xs"
-                      asChild
-                >
-                      <Link href="/dashboard/rewards">Setup Now</Link>
-                </Button>
-          </div>
-
-                  {/* Individual Reward */}
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors w-72">
-                  <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <Star className="h-4 w-4 text-blue-500" />
-                        <h3 className="text-sm font-semibold text-gray-900">Individual Reward</h3>
-                      </div>
-                    <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
-                          <Clock className="h-3 w-3" />
-                          2 min
-                        </span>
+                  <button className="border-2 border-gray-200 rounded-md p-6 text-center transition-all hover:border-blue-300 bg-white">
+                    <h4 className="font-semibold text-gray-900 mb-1">Recurring Program</h4>
+                    <p className="text-xs text-gray-600 mb-4">Set up automatic loyalty rewards for your customers</p>
+                    <div className="mb-4">
+                      <p className="text-xs text-gray-400">Coffee • Voucher • Transaction-Based</p>
                     </div>
-                  </div>
-                    <p className="text-xs text-gray-600 mb-3 leading-relaxed">Create custom rewards for specific customers.</p>
-                    
-                    {/* Reward Types */}
-                    <div className="mb-4 space-y-2">
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <Percent className="h-3 w-3" />
-                        <span>Percentage Discounts</span>
-                    </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <DollarSign className="h-3 w-3" />
-                        <span>Fixed Amount Off</span>
-                  </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <Gift className="h-3 w-3" />
-                        <span>Free Items & Bundles</span>
-                      </div>
-                </div>
-                
                     <Button 
                       size="sm" 
                       variant="outline" 
-                      className="w-full rounded-md mt-auto text-xs"
+                      className="w-full rounded-md text-xs"
+                      asChild
+                    >
+                      <Link href="/dashboard/rewards">Setup Now</Link>
+                    </Button>
+                  </button>
+
+                  {/* Individual Reward */}
+                  <button className="border-2 border-gray-200 rounded-md p-6 text-center transition-all hover:border-blue-300 bg-white">
+                    <h4 className="font-semibold text-gray-900 mb-1">Individual Reward</h4>
+                    <p className="text-xs text-gray-600 mb-4">Create custom rewards for specific customers</p>
+                    <div className="mb-4">
+                      <p className="text-xs text-gray-400">Percentage • Fixed Amount • Free Items</p>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="w-full rounded-md text-xs"
                       onClick={() => setShowRewardDialog(true)}
                     >
                       Setup Now
                     </Button>
-                </div>
+                  </button>
                 
                   {/* Banner */}
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors w-72">
-                  <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <Eye className="h-4 w-4 text-blue-500" />
-                        <h3 className="text-sm font-semibold text-gray-900">Banner</h3>
-                      </div>
-                    <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
-                          <Clock className="h-3 w-3" />
-                          3 min
-                        </span>
+                  <button className="border-2 border-blue-200 rounded-md p-6 text-center transition-all hover:border-blue-300 bg-blue-50">
+                    <h4 className="font-semibold text-gray-900 mb-1">Banner</h4>
+                    <p className="text-xs text-gray-600 mb-4">Create eye-catching promotional banners</p>
+                    <div className="mb-4">
+                      <p className="text-xs text-gray-400">Offers • Promotions • Featured Products</p>
                     </div>
-                  </div>
-                    <p className="text-xs text-gray-600 mb-3 leading-relaxed">Create eye-catching promotional banners</p>
-                    <div className="space-y-1.5 mb-4">
-                      <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <Megaphone className="h-3 w-3" />
-                        <span>Special Offers & Events</span>
-                </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <Calendar className="h-3 w-3" />
-                        <span>Seasonal Promotions</span>
-              </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <Sparkles className="h-3 w-3" />
-                        <span>Featured Products</span>
-                    </div>
-                  </div>
                     <Button 
                       size="sm" 
                       variant="outline" 
-                      className="w-full rounded-md mt-auto text-xs text-green-600 border-green-200 hover:bg-green-50"
+                      className="w-full rounded-md text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
                       asChild
                     >
                       <Link href="/dashboard/banners" className="flex items-center gap-2">
@@ -2665,52 +2593,24 @@ export default function DashboardPage() {
                         Configured
                       </Link>
                     </Button>
-                </div>
+                  </button>
                 
                   {/* Intro Reward */}
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors w-72">
-                  <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <Sparkles className="h-4 w-4 text-blue-500" />
-                        <h3 className="text-sm font-semibold text-gray-900">Intro Reward</h3>
+                  <button className="border-2 border-gray-200 rounded-md p-6 text-center transition-all hover:border-blue-300 bg-white">
+                    <h4 className="font-semibold text-gray-900 mb-1">Intro Reward</h4>
+                    <p className="text-xs text-gray-600 mb-4">Welcome new customers with special rewards</p>
+                    <div className="mb-4">
+                      <p className="text-xs text-gray-400">$5 Vouchers • Free Items • Tap Funded</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
-                          <Clock className="h-3 w-3" />
-                          4 min
-                        </span>
-                    </div>
-                  </div>
-                    <p className="text-xs text-gray-600 mb-3 leading-relaxed">Welcome new customers with special rewards</p>
-                    <div className="space-y-1.5 mb-4">
-                      <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <DollarSign className="h-3 w-3" />
-                        <span>$5 Gift Vouchers</span>
-                </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <Coffee className="h-3 w-3" />
-                        <span>Free Items (up to $5)</span>
-                    </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        <Image 
-                          src="/taplogo.png" 
-                          alt="Tap Logo" 
-                          width={12} 
-                          height={12} 
-                          className="h-3 w-3 rounded-sm"
-                        />
-                        <span className="font-semibold text-blue-600">Funded by Tap Loyalty</span>
-                  </div>
-                </div>
                     <Button 
                       size="sm" 
                       variant="outline" 
-                      className="w-full rounded-md mt-auto text-xs"
+                      className="w-full rounded-md text-xs"
                       onClick={() => setIsIntroductoryRewardSheetOpen(true)}
                     >
                       Setup Now
                     </Button>
-              </div>
+                  </button>
                 </div>
           </div>
 
@@ -2751,25 +2651,18 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                       <table className="w-full">
-                        <thead className="bg-gray-50 border-b border-gray-200">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                          </tr>
-                        </thead>
                         <tbody className="divide-y divide-gray-200">
                     {recentActivity.slice(0, 5).map((activity, index) => (
                             <tr key={activity.id} className="hover:bg-gray-50">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
                                   <div className={`h-6 w-6 rounded-full ${
-                                    activity.type === "transaction" ? 'bg-green-100' : 'bg-purple-100'
+                                    activity.type === "transaction" ? 'bg-blue-100' : 'bg-blue-100'
                                   } flex items-center justify-center flex-shrink-0`}>
                           {activity.type === "transaction" ? (
-                                      <ShoppingCart className="h-3 w-3 text-green-600" />
+                                      <ShoppingCart className="h-3 w-3 text-blue-600" />
                           ) : (
-                                      <Gift className="h-3 w-3 text-purple-600" />
+                                      <Gift className="h-3 w-3 text-blue-600" />
                           )}
                         </div>
                                   <div className="min-w-0">
@@ -2779,10 +2672,10 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3">
-                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
                                   activity.type === "transaction" 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-purple-100 text-purple-800'
+                                    ? 'bg-gray-100 text-gray-800' 
+                                    : 'bg-gray-100 text-gray-800'
                                 }`}>
                                   {activity.type === "transaction" ? "Purchase" : "Redemption"}
                                 </span>
@@ -2795,7 +2688,7 @@ export default function DashboardPage() {
                                 </span>
                               </td>
                             </tr>
-                          ))}
+                    ))}
                         </tbody>
                       </table>
                 )}
@@ -2823,7 +2716,7 @@ export default function DashboardPage() {
                   <div className="overflow-x-auto">
                 {rewardsLoading ? (
                   <div className="flex items-center justify-center py-8">
-                        <div className="h-5 w-5 rounded-full border-2 border-green-200 border-t-green-600 animate-spin"></div>
+                        <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
                   </div>
                 ) : popularRewards.length === 0 ? (
                   <div className="py-8 text-center">
@@ -2835,20 +2728,13 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                       <table className="w-full">
-                        <thead className="bg-gray-50 border-b border-gray-200">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reward</th>
-                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Views</th>
-                          </tr>
-                        </thead>
                         <tbody className="divide-y divide-gray-200">
                     {popularRewards.slice(0, 5).map((reward, index) => (
                             <tr key={reward.id} className="hover:bg-gray-50">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                  <div className="h-6 w-6 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
-                                    <Star className="h-3 w-3 text-orange-600" />
+                                  <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                    <Star className="h-3 w-3 text-gray-600" />
                         </div>
                                   <div className="min-w-0">
                                     <p className="text-sm font-medium text-gray-900 truncate">{reward.name}</p>
@@ -2856,7 +2742,7 @@ export default function DashboardPage() {
                         </div>
                               </td>
                               <td className="px-4 py-3 text-center">
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-800">
                                   {reward.pointsCost} pts
                                 </span>
                               </td>
@@ -2864,7 +2750,7 @@ export default function DashboardPage() {
                                 <span className="text-sm font-semibold text-gray-900">{reward.views || 0}</span>
                               </td>
                             </tr>
-                          ))}
+                    ))}
                         </tbody>
                       </table>
                 )}
@@ -2873,7 +2759,7 @@ export default function DashboardPage() {
 
                 {/* Metrics */}
                 <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
-                  <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                  <div className="px-6 py-3.5 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
                       <h3 className="text-sm font-semibold text-gray-900">Metrics</h3>
                       {/* Metrics Tab Container */}
@@ -2907,12 +2793,6 @@ export default function DashboardPage() {
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full">
-                      <thead className="bg-gray-50 border-b border-gray-200">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Metric</th>
-                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
-                        </tr>
-                      </thead>
                       <tbody className="divide-y divide-gray-200">
                         {metricsTab === 'platform' ? (
                           <>
@@ -3163,9 +3043,9 @@ export default function DashboardPage() {
                     }
 
                     const integrationBoxes = connectedIntegrations.map(([key, integration]) => (
-                      <div key={key} className="bg-white border border-gray-200 rounded-md p-6 hover:shadow-sm transition-shadow">
+                      <div key={key} className="bg-gray-50 border border-gray-200 rounded-md p-6 hover:shadow-sm transition-shadow">
                         <div className="flex items-center justify-between mb-4">
-                          <div className="h-12 w-12 rounded-md bg-gray-100 flex items-center justify-center">
+                          <div className="h-12 w-12 rounded-md bg-white flex items-center justify-center">
                             {getIntegrationIcon(key)}
                           </div>
                           <div className="flex items-center gap-1">
@@ -3188,7 +3068,7 @@ export default function DashboardPage() {
                       <Button
                         key="add-integrations"
                         variant="outline"
-                        className="bg-white border border-gray-200 rounded-md p-6 h-auto flex flex-col items-center justify-center gap-3 hover:bg-gray-50 hover:border-gray-300 transition-colors min-h-[140px]"
+                        className="bg-gray-50 border border-gray-200 rounded-md p-6 h-auto flex flex-col items-center justify-center gap-3 hover:bg-gray-100 hover:border-gray-300 transition-colors min-h-[140px]"
                         asChild
                       >
                         <Link href="/dashboard/integrations">
@@ -3222,10 +3102,10 @@ export default function DashboardPage() {
                             </div>
                   ) : (
                     <>
-                      {activeAgents.map((agent, index) => (
-                        <div key={agent.id} className="bg-white border border-gray-200 rounded-md p-6 hover:shadow-sm transition-shadow">
+                                            {activeAgents.map((agent, index) => (
+                        <div key={agent.id} className="bg-gray-50 border border-gray-200 rounded-md p-6 hover:shadow-sm transition-shadow">
                           <div className="flex items-center justify-between mb-4">
-                            <div className="h-12 w-12 rounded-md bg-gray-100 flex items-center justify-center">
+                            <div className="h-12 w-12 rounded-md bg-white flex items-center justify-center">
                               <Bot className="h-8 w-8 text-gray-500" />
                           </div>
                             <div className="flex items-center gap-1">
@@ -3243,9 +3123,9 @@ export default function DashboardPage() {
                   </div>
                       ))}
                       
-                      <Button
+                                            <Button
                         variant="outline"
-                        className="bg-white border border-gray-200 rounded-md p-6 h-auto flex flex-col items-center justify-center gap-3 hover:bg-gray-50 hover:border-gray-300 transition-colors min-h-[140px]"
+                        className="bg-gray-50 border border-gray-200 rounded-md p-6 h-auto flex flex-col items-center justify-center gap-3 hover:bg-gray-100 hover:border-gray-300 transition-colors min-h-[140px]"
                         asChild
                       >
                         <Link href="/dashboard/agents">

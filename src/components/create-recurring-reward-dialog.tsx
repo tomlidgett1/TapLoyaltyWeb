@@ -351,6 +351,7 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
     setRemovingTransactionProgram(true);
     
     try {
+      // 1. Update merchant document to remove transaction program
       const merchantDocRef = doc(db, 'merchants', user.uid);
       const merchantSnapshot = await getDoc(merchantDocRef);
       
@@ -367,6 +368,43 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
           });
         }
       }
+      
+      // 2. Get all customers
+      const customersRef = collection(db, 'merchants', user.uid, 'customers');
+      const customersSnapshot = await getDocs(customersRef);
+      
+      // 3. Batch update to remove transaction program data from all customers
+      const batch = writeBatch(db);
+      
+      customersSnapshot.forEach((customerDoc) => {
+        // Remove transaction-related fields from each customer
+        const customerRef = doc(db, 'merchants', user.uid, 'customers', customerDoc.id);
+        batch.update(customerRef, {
+          transactionCount: deleteField()
+        });
+        
+        // Delete the transactionLoyalty collection for this customer
+        // Note: We can't delete a collection in a batch, so we'll handle this separately
+      });
+      
+      // Commit the batch update
+      await batch.commit();
+      
+      // 4. For each customer, delete their transactionLoyalty collection
+      // This needs to be done separately as Firestore doesn't support collection deletion in batches
+      const deletePromises = customersSnapshot.docs.map(async (customerDoc) => {
+        const transactionLoyaltyRef = collection(db, 'merchants', user.uid, 'customers', customerDoc.id, 'transactionLoyalty');
+        const transactionLoyaltySnapshot = await getDocs(transactionLoyaltyRef);
+        
+        const deleteBatch = writeBatch(db);
+        transactionLoyaltySnapshot.forEach((doc) => {
+          deleteBatch.delete(doc.ref);
+        });
+        
+        return deleteBatch.commit();
+      });
+      
+      await Promise.all(deletePromises);
       
       toast({
         title: "Success",

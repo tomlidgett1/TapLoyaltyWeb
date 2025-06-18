@@ -258,12 +258,49 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
     setRemovingVoucherProgram(true);
     
     try {
-      // Update merchant document to remove voucher program
+      // 1. Update merchant document to remove voucher program
       const merchantDocRef = doc(db, 'merchants', user.uid);
       await updateDoc(merchantDocRef, {
         voucherprogram: false,
         voucherPrograms: deleteField()
       });
+      
+      // 2. Get all customers
+      const customersRef = collection(db, 'merchants', user.uid, 'customers');
+      const customersSnapshot = await getDocs(customersRef);
+      
+      // 3. Batch update to remove voucher program data from all customers
+      const batch = writeBatch(db);
+      
+      customersSnapshot.forEach((customerDoc) => {
+        // Remove voucher-related fields from each customer
+        const customerRef = doc(db, 'merchants', user.uid, 'customers', customerDoc.id);
+        batch.update(customerRef, {
+          totalSpend: deleteField()
+        });
+        
+        // Delete the voucherLoyalty collection for this customer
+        // Note: We can't delete a collection in a batch, so we'll handle this separately
+      });
+      
+      // Commit the batch update
+      await batch.commit();
+      
+      // 4. For each customer, delete their voucherLoyalty collection
+      // This needs to be done separately as Firestore doesn't support collection deletion in batches
+      const deletePromises = customersSnapshot.docs.map(async (customerDoc) => {
+        const voucherLoyaltyRef = collection(db, 'merchants', user.uid, 'customers', customerDoc.id, 'voucherLoyalty');
+        const voucherLoyaltySnapshot = await getDocs(voucherLoyaltyRef);
+        
+        const deleteBatch = writeBatch(db);
+        voucherLoyaltySnapshot.forEach((doc) => {
+          deleteBatch.delete(doc.ref);
+        });
+        
+        return deleteBatch.commit();
+      });
+      
+      await Promise.all(deletePromises);
       
       toast({
         title: "Success",

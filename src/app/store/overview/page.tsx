@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import {
   Dialog,
   DialogContent,
@@ -121,6 +122,7 @@ interface Reward {
   description: string;
   type: string;
   programtype?: string;
+  programType?: string; // Add this field for the actual data
   category: "individual" | "customer-specific" | "program" | "agent";
   pointsCost: number;
   redemptionCount: number;
@@ -132,6 +134,7 @@ interface Reward {
   punchCount?: number;
   expiryDays?: number;
   customerIds?: string[];
+  customers?: string[]; // Add this field for the actual data
   rewardVisibility?: string;
   conditions?: any[];
   limitations?: any[];
@@ -147,6 +150,13 @@ interface Reward {
   redeemableCustomers: number;
   viewCount?: number;
   isAgentGenerated?: boolean;
+  // Additional fields for program rewards
+  uniqueCustomerIds?: string[];
+  uniqueCustomersCount?: number;
+  lastRedeemedAt?: any;
+  rewardType?: string;
+  voucherAmount?: number;
+  rewardTypeDetails?: any;
 }
 
 interface Banner {
@@ -985,6 +995,58 @@ const ProgramsTabContent = () => {
   )
 }
 
+// Component to display customer names list
+function CustomerNamesList({ customerIds }: { customerIds: string[] }) {
+  const [customerNames, setCustomerNames] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchCustomerNames() {
+      console.log('👥 CustomerNamesList: Fetching names for customerIds:', customerIds);
+      const names: Record<string, string> = {};
+      
+      for (const customerId of customerIds.slice(0, 5)) { // Limit to first 5
+        try {
+          const customerDoc = await getDoc(doc(db, 'customers', customerId));
+          if (customerDoc.exists()) {
+            const customerData = customerDoc.data();
+            names[customerId] = customerData.fullName || customerData.firstName || customerData.name || 'Unknown';
+          } else {
+            names[customerId] = 'Unknown';
+          }
+        } catch (error) {
+          console.error('Error fetching customer name:', error);
+          names[customerId] = 'Unknown';
+        }
+      }
+      
+      console.log('👥 CustomerNamesList: Fetched names:', names);
+      setCustomerNames(names);
+      setLoading(false);
+    }
+
+    fetchCustomerNames();
+  }, [customerIds]);
+
+  if (loading) {
+    console.log('👥 CustomerNamesList: Loading...');
+    return <span>Loading...</span>;
+  }
+
+  const displayNames = customerIds.slice(0, 3).map(id => customerNames[id] || 'Unknown');
+  const displayText = displayNames.join(', ');
+  const moreCount = customerIds.length > 3 ? customerIds.length - 3 : 0;
+
+  console.log('👥 CustomerNamesList: Rendering with displayText:', displayText);
+
+  return (
+    <span>
+      {displayText}
+      {moreCount > 0 && ` +${moreCount} more`}
+    </span>
+  );
+}
+
 // Full Rewards Tab Component
 const RewardsTabContent = () => {
   const router = useRouter()
@@ -992,7 +1054,7 @@ const RewardsTabContent = () => {
   const [rewardsData, setRewardsData] = useState<Reward[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [rewardCategory, setRewardCategory] = useState<"all" | "individual" | "customer-specific" | "programs" | "agent">("all")
-  const [sortField, setSortField] = useState<"rewardName" | "type" | "pointsCost" | "redemptionCount" | "redeemableCustomers" | "impressions" | "createdAt" | "lastRedeemed" | "isActive">("rewardName")
+  const [sortField, setSortField] = useState<"rewardName" | "type" | "programType" | "pointsCost" | "redemptionCount" | "redeemableCustomers" | "impressions" | "createdAt" | "lastRedeemed" | "isActive">("rewardName")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   const [loadingRewards, setLoadingRewards] = useState(true)
   const [showFilters, setShowFilters] = useState(false)
@@ -1012,6 +1074,65 @@ const RewardsTabContent = () => {
   const [isRewardDetailOpen, setIsRewardDetailOpen] = useState(false)
   const [rewardToDelete, setRewardToDelete] = useState<string | null>(null)
   const [expandedPrograms, setExpandedPrograms] = useState<Record<string, boolean>>({})
+  const [customerNames, setCustomerNames] = useState<Record<string, string>>({})
+
+    // Function to get customer name by ID from top-level customers collection
+  const getCustomerName = async (customerId: string): Promise<string> => {
+    if (customerNames[customerId]) {
+      return customerNames[customerId]
+    }
+    
+    try {
+      const customerRef = doc(db, 'customers', customerId)
+      const customerSnap = await getDoc(customerRef)
+      
+      if (customerSnap.exists()) {
+        const customerData = customerSnap.data()
+        const fullName = customerData.fullName || customerData.firstName || customerData.name || 'Unknown'
+        
+        // Cache the name
+        setCustomerNames(prev => ({
+          ...prev,
+          [customerId]: fullName
+        }))
+        
+        return fullName
+      }
+    } catch (error) {
+      console.error('Error fetching customer:', error)
+    }
+    
+    return 'Unknown Customer'
+  }
+
+  // Load customer names for program rewards
+  useEffect(() => {
+    const loadCustomerNames = async () => {
+      if (!user?.uid || rewardsData.length === 0) return
+      
+      const programRewards = rewardsData.filter(reward => 
+        reward.programType && (
+          reward.programType === "coffeeprogramnew" || 
+          reward.programType === "voucherprogramnew" || 
+          reward.programType === "transactionrewardsnew"
+        )
+      )
+      
+      const customerIds = new Set<string>()
+      programRewards.forEach(reward => {
+        if (reward.customers) {
+          reward.customers.forEach(customerId => customerIds.add(customerId))
+        }
+      })
+      
+      // Fetch customer names in batches
+      for (const customerId of customerIds) {
+        getCustomerName(customerId)
+      }
+    }
+    
+    loadCustomerNames()
+  }, [rewardsData, user?.uid])
 
   // Fetch rewards data
   useEffect(() => {
@@ -1029,6 +1150,21 @@ const RewardsTabContent = () => {
         querySnapshot.forEach(doc => {
           try {
             const data = doc.data()
+            
+            // Debug logging for customer data
+            if (data.programType && (
+              data.programType === "coffeeprogramnew" || 
+              data.programType === "voucherprogramnew" || 
+              data.programType === "transactionrewardsnew"
+            )) {
+              console.log('🔍 Found program reward:', {
+                id: doc.id,
+                rewardName: data.rewardName,
+                programType: data.programType,
+                customers: data.customers,
+                uniqueCustomerIds: data.uniqueCustomerIds
+              });
+            }
             
             let createdAt, updatedAt, lastRedeemed;
             try {
@@ -1048,6 +1184,7 @@ const RewardsTabContent = () => {
               description: data.description || '',
               type: data.type || 'gift',
               programtype: data.programtype || '',
+              programType: data.programType || '', // Include programType
               category: data.category || 'individual',
               pointsCost: data.pointsCost || 0,
               redemptionCount: data.redemptionCount || 0,
@@ -1059,7 +1196,9 @@ const RewardsTabContent = () => {
               impressions: data.impressions || 0,
               redeemableCustomers: data.redeemableCustomers || 0,
               hasActivePeriod: !!data.hasActivePeriod,
-              activePeriod: data.activePeriod || { startDate: '', endDate: '' }
+              activePeriod: data.activePeriod || { startDate: '', endDate: '' },
+              customers: data.customers || [], // Include customers array
+              uniqueCustomerIds: data.uniqueCustomerIds || [], // Include uniqueCustomerIds as fallback
             } as Reward);
           } catch (err) {
             console.error("Error processing reward document:", err, "Document ID:", doc.id);
@@ -1140,66 +1279,55 @@ const RewardsTabContent = () => {
   }
 
   const getFilteredRewards = () => {
-    let filtered = rewardsData.filter(reward => {
-      // Apply category filter
-      if (rewardCategory !== "all" && reward.category !== rewardCategory) {
-        return false
-      }
-      
-      // Apply search filter
-      if (searchQuery && !reward.rewardName.toLowerCase().includes(searchQuery.toLowerCase())) {
-        return false
-      }
-      
-      return true
-    })
+    console.log('🔍 getFilteredRewards called');
+    console.log('📊 rewardCategory:', rewardCategory);
+    console.log('🔍 searchQuery:', searchQuery);
+    console.log('📋 rewardsData length:', rewardsData.length);
     
-    // Apply additional filters
-    filtered = applyFilters(filtered)
-    
-    // Apply sorting
-    return filtered.sort((a, b) => {
-      let comparison = 0;
+    let filtered = [...rewardsData]
+    console.log('🔄 Starting with rewards:', filtered.length);
+
+    // Apply search filter
+    if (searchQuery) {
+      console.log('🔍 Applying search filter for:', searchQuery);
+      filtered = filtered.filter(reward => 
+        reward.rewardName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        reward.description.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+      console.log('🔍 After search filter:', filtered.length);
+    }
+
+    // Apply category filter
+    if (rewardCategory !== "all") {
+      console.log('🏷️ Applying category filter for:', rewardCategory);
+      console.log('🏷️ Sample reward programTypes:', rewardsData.slice(0, 5).map(r => ({ name: r.rewardName, category: r.category, programType: r.programType })));
       
-      switch (sortField) {
-        case "rewardName":
-          comparison = (a.rewardName || "").localeCompare(b.rewardName || "");
-          break;
-        case "type":
-          comparison = (a.type || "").localeCompare(b.type || "");
-          break;
-        case "pointsCost":
-          comparison = (a.pointsCost || 0) - (b.pointsCost || 0);
-          break;
-        case "redemptionCount":
-          comparison = (a.redemptionCount || 0) - (b.redemptionCount || 0);
-          break;
-        case "redeemableCustomers":
-          comparison = (a.redeemableCustomers || 0) - (b.redeemableCustomers || 0);
-          break;
-        case "impressions":
-          comparison = (a.impressions || 0) - (b.impressions || 0);
-          break;
-        case "createdAt":
-          const aTime = a.createdAt ? a.createdAt.getTime() : 0;
-          const bTime = b.createdAt ? b.createdAt.getTime() : 0;
-          comparison = aTime - bTime;
-          break;
-        case "lastRedeemed":
-          const aRedeemed = a.lastRedeemed ? a.lastRedeemed.getTime() : 0;
-          const bRedeemed = b.lastRedeemed ? b.lastRedeemed.getTime() : 0;
-          comparison = aRedeemed - bRedeemed;
-          break;
-        case "isActive":
-          comparison = (a.isActive ? 1 : 0) - (b.isActive ? 1 : 0);
-          break;
-        default:
-          comparison = 0;
-      }
-      
-      return sortDirection === "asc" ? comparison : -comparison;
-    });
-  };
+      filtered = filtered.filter(reward => {
+        if (rewardCategory === "programs") {
+          // Check for program types
+          const isProgram = reward.programType && (
+            reward.programType === "coffeeprogramnew" || 
+            reward.programType === "voucherprogramnew" || 
+            reward.programType === "transactionrewardsnew"
+          );
+          if (isProgram) {
+            console.log('✅ Program reward passed filter:', {
+              name: reward.rewardName,
+              programType: reward.programType,
+              customers: reward.customers,
+              hasCustomers: !!(reward.customers && reward.customers.length > 0)
+            });
+          }
+          return isProgram;
+        }
+        return reward.category === rewardCategory
+      })
+      console.log('🏷️ After category filter:', filtered.length);
+    }
+
+    console.log('✅ Final filtered rewards:', filtered.length);
+    return applyFilters(filtered)
+  }
 
   const toggleRewardStatus = async (rewardId: string, currentStatus: boolean) => {
     if (!user?.uid) return;
@@ -1493,9 +1621,12 @@ const RewardsTabContent = () => {
         </div>
         
         <TabsContent value="all" className="mt-0">
-          <Card className="rounded-md overflow-hidden">
-            <CardContent className="p-0">
-              <Table>
+          {rewardCategory === "programs" ? (
+            <ProgramRewardsTable />
+          ) : (
+            <Card className="rounded-md overflow-hidden">
+              <CardContent className="p-0">
+                <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[300px]">
@@ -1649,11 +1780,23 @@ const RewardsTabContent = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          {reward.programtype === "agent" ? (
+                          {reward.programType === "agent" ? (
                             <div className="font-medium">
                               <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-orange-500">
                                 Agent
                               </span>
+                            </div>
+                          ) : reward.programType ? (
+                            <div className={cn(
+                              "font-medium",
+                              reward.programType === "voucherprogramnew" && "text-purple-700",
+                              reward.programType === "coffeeprogramnew" && "text-amber-700",
+                              reward.programType === "transactionrewardsnew" && "text-blue-700"
+                            )}>
+                              {reward.programType === "coffeeprogramnew" ? "Coffee Program" :
+                               reward.programType === "voucherprogramnew" ? "Voucher Program" :
+                               reward.programType === "transactionrewardsnew" ? "Transaction Rewards" :
+                               reward.programType.charAt(0).toUpperCase() + reward.programType.slice(1)}
                             </div>
                           ) : (
                             <div className={cn(
@@ -1750,6 +1893,7 @@ const RewardsTabContent = () => {
               </Table>
             </CardContent>
           </Card>
+          )}
         </TabsContent>
 
         {/* Add other tab contents for individual, customer-specific, programs, agent */}
@@ -1901,17 +2045,7 @@ const RewardsTabContent = () => {
         </TabsContent>
 
         <TabsContent value="programs" className="mt-0">
-          <Card className="rounded-md overflow-hidden">
-            <CardContent className="p-0">
-              <div className="p-8 text-center">
-                <Award className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-medium mb-2">Program Rewards</h3>
-                                 <p className="text-muted-foreground mb-4">
-                   {getFilteredRewards().filter(r => r.category === "program").length} program rewards
-                 </p>
-              </div>
-            </CardContent>
-          </Card>
+          <ProgramRewardsTable />
         </TabsContent>
 
         <TabsContent value="agent" className="mt-0">
@@ -3605,6 +3739,451 @@ const ActivityTabContent = () => {
         </CardHeader>
         <CardContent>
           <p className="text-center py-8 text-muted-foreground">Click "Open Full Activity Page" to view detailed activity data with all functionality</p>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// Program Rewards Table Component
+const ProgramRewardsTable = () => {
+  console.log('🔍 ProgramRewardsTable component rendering')
+  
+  const router = useRouter()
+  const { user } = useAuth()
+  const [programRewards, setProgramRewards] = useState<(Reward & { customerName?: string })[]>([])
+  const [activePrograms, setActivePrograms] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [programRewardCounts, setProgramRewardCounts] = useState<Record<string, number>>({})
+  
+  console.log('🔍 ProgramRewardsTable state:', {
+    user: user?.uid,
+    programRewardsCount: programRewards.length,
+    activeProgramsCount: activePrograms.length,
+    loading
+  })
+
+    // Fetch program rewards and customer names
+  useEffect(() => {
+    const fetchProgramRewards = async () => {
+      if (!user?.uid) {
+        console.log('🔍 No user UID found')
+        return
+      }
+      
+      try {
+        setLoading(true)
+        console.log('🔍 Starting to fetch program rewards for merchant:', user.uid)
+        
+        const rewardsRef = collection(db, 'merchants', user.uid, 'rewards')
+        const rewardsQuery = query(rewardsRef, orderBy('createdAt', 'desc'))
+        const rewardsSnapshot = await getDocs(rewardsQuery)
+        
+        console.log('🔍 Total rewards found:', rewardsSnapshot.docs.length)
+        
+        const programRewardsData: (Reward & { customerName?: string })[] = []
+        
+        for (const rewardDoc of rewardsSnapshot.docs) {
+          const data = rewardDoc.data()
+          
+          console.log('🔍 Checking reward:', {
+            id: rewardDoc.id,
+            rewardName: data.rewardName,
+            programType: data.programType,
+            type: data.type,
+            category: data.category
+          })
+          
+          // Filter for program-related rewards
+          if (data.programType === "coffeeprogramnew" || 
+              data.programType === "voucherprogramnew" || 
+              data.programType === "transactionrewardsnew") {
+            
+            console.log('✅ Found program reward:', {
+              id: rewardDoc.id,
+              rewardName: data.rewardName,
+              programType: data.programType
+            })
+            
+            let customerNames: string[] = []
+            
+             // Get customer names from the customers array (from top-level customers collection)
+             const customerIds = data.customers || data.uniqueCustomerIds || []
+             if (customerIds.length > 0) {
+               for (const customerId of customerIds.slice(0, 5)) { // Limit to first 5 customers
+                 try {
+                   const customerRef = doc(db, 'customers', customerId)
+                   const customerSnapshot = await getDoc(customerRef)
+                   if (customerSnapshot.exists()) {
+                     const customerData = customerSnapshot.data() as any
+                     const fullName = customerData.fullName || customerData.firstName || customerData.name || 'Unknown'
+                     customerNames.push(fullName)
+                   }
+                 } catch (error) {
+                   console.error("Error fetching customer from top-level collection:", error)
+                 }
+               }
+             }
+            
+            const customerDisplayText = customerNames.length > 0 
+              ? customerNames.length > 3 
+                ? `${customerNames.slice(0, 3).join(', ')} +${customerNames.length - 3} more`
+                : customerNames.join(', ')
+              : 'No customers'
+            
+            programRewardsData.push({
+              id: rewardDoc.id,
+              rewardName: data.rewardName || 'Unnamed Reward',
+              description: data.description || '',
+              type: data.rewardType || data.type || 'gift',
+              programtype: data.programType || '',
+              category: 'program',
+              pointsCost: data.pointsCost || 0,
+              redemptionCount: data.redemptionCount || 0,
+              status: data.status || 'active',
+              createdAt: data.createdAt,
+              updatedAt: data.updatedAt || data.createdAt,
+              isActive: !!data.isActive,
+              lastRedeemed: data.lastRedeemedAt ? data.lastRedeemedAt.toDate() : null,
+              impressions: data.impressions || 0,
+              redeemableCustomers: data.uniqueCustomersCount || 0,
+              hasActivePeriod: false,
+              activePeriod: { startDate: '', endDate: '' },
+              customerName: customerDisplayText
+            } as Reward & { customerName: string })
+          }
+        }
+        
+        console.log('🔍 Final program rewards data:', {
+          totalProgramRewards: programRewardsData.length,
+          rewards: programRewardsData.map(r => ({
+            id: r.id,
+            rewardName: r.rewardName,
+            programType: r.programtype,
+            customerName: r.customerName
+          }))
+        })
+        
+        setProgramRewards(programRewardsData)
+        
+        // Count unredeemed rewards by program type
+        const counts = {
+          coffee: 0,
+          voucher: 0,
+          transaction: 0
+        }
+        
+        programRewardsData.forEach(reward => {
+          if (reward.redemptionCount === 0) {
+            if (reward.programtype === 'coffeeprogramnew') {
+              counts.coffee++
+            } else if (reward.programtype === 'voucherprogramnew') {
+              counts.voucher++
+            } else if (reward.programtype === 'transactionrewardsnew') {
+              counts.transaction++
+            }
+          }
+        })
+        
+        setProgramRewardCounts(counts)
+      } catch (error) {
+        console.error("❌ Error fetching program rewards:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchProgramRewards()
+  }, [user])
+
+  // Fetch active programs from merchant document
+  useEffect(() => {
+    const fetchActivePrograms = async () => {
+      if (!user?.uid) return
+
+      try {
+        const merchantRef = doc(db, 'merchants', user.uid)
+        const merchantSnapshot = await getDoc(merchantRef)
+        
+        if (merchantSnapshot.exists()) {
+          const merchantData = merchantSnapshot.data()
+          const programs: any[] = []
+          
+          // Check coffeePrograms array
+          if (merchantData.coffeePrograms && Array.isArray(merchantData.coffeePrograms)) {
+            merchantData.coffeePrograms.forEach((program: any, index: number) => {
+              programs.push({ ...program, type: 'coffee', originalIndex: index })
+            })
+          }
+          
+          // Check voucherPrograms array
+          if (merchantData.voucherPrograms && Array.isArray(merchantData.voucherPrograms)) {
+            merchantData.voucherPrograms.forEach((program: any, index: number) => {
+              programs.push({ ...program, type: 'voucher', originalIndex: index })
+            })
+          }
+          
+          // Check transactionRewards array
+          if (merchantData.transactionRewards && Array.isArray(merchantData.transactionRewards)) {
+            merchantData.transactionRewards.forEach((program: any, index: number) => {
+              programs.push({ ...program, type: 'transaction', originalIndex: index })
+            })
+          }
+          
+          console.log('🔍 Active programs found:', programs)
+          setActivePrograms(programs)
+        }
+      } catch (error) {
+        console.error("Error fetching active programs:", error)
+      }
+    }
+
+    fetchActivePrograms()
+  }, [user])
+
+  // Toggle program active status
+  const toggleProgramActive = async (programIndex: number, programType: 'coffee' | 'voucher' | 'transaction') => {
+    if (!user?.uid) return
+
+    try {
+      const merchantRef = doc(db, 'merchants', user.uid)
+      const merchantSnapshot = await getDoc(merchantRef)
+      
+      if (merchantSnapshot.exists()) {
+        const merchantData = merchantSnapshot.data()
+        let arrayName = ''
+        
+        if (programType === 'coffee') arrayName = 'coffeePrograms'
+        else if (programType === 'voucher') arrayName = 'voucherPrograms'
+        else if (programType === 'transaction') arrayName = 'transactionRewards'
+        
+        const programs = [...(merchantData[arrayName] || [])]
+        if (programs[programIndex]) {
+          programs[programIndex].active = !programs[programIndex].active
+          
+          await updateDoc(merchantRef, {
+            [arrayName]: programs
+          })
+          
+          // Update local state
+          setActivePrograms(prev => 
+            prev.map(program => 
+              program.type === programType && program.originalIndex === programIndex
+                ? { ...program, active: !program.active }
+                : program
+            )
+          )
+        }
+      }
+    } catch (error) {
+      console.error("Error toggling program status:", error)
+    }
+  }
+
+  // Get program type display name
+  const getProgramTypeDisplay = (programType: string) => {
+    switch (programType) {
+      case 'coffeeprogramnew':
+        return 'Coffee Program'
+      case 'voucherprogramnew':
+        return 'Voucher Program'
+      case 'transactionrewardsnew':
+        return 'Transaction Rewards'
+      default:
+        return programType
+    }
+  }
+
+  // Get program type icon (blue only)
+  const getProgramTypeIcon = (programType: string) => {
+    switch (programType) {
+      case 'coffeeprogramnew':
+        return <Coffee className="h-4 w-4 text-blue-600" />
+      case 'voucherprogramnew':
+        return <Percent className="h-4 w-4 text-blue-600" />
+      case 'transactionrewardsnew':
+        return <ShoppingBag className="h-4 w-4 text-blue-600" />
+      default:
+        return <Award className="h-4 w-4 text-blue-600" />
+    }
+  }
+
+  // Get program type icon for active programs display
+  const getActiveeProgramIcon = (type: string) => {
+    switch (type) {
+      case 'coffee':
+        return <Coffee className="h-4 w-4 text-blue-600" />
+      case 'voucher':
+        return <Percent className="h-4 w-4 text-blue-600" />
+      case 'transaction':
+        return <ShoppingBag className="h-4 w-4 text-blue-600" />
+      default:
+        return <Award className="h-4 w-4 text-blue-600" />
+    }
+  }
+
+  return (
+    <div>
+      {/* Programs Section */}
+      {activePrograms.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-lg font-medium mb-3">Programs</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {activePrograms.map((program, index) => {
+              const rewardCount = programRewardCounts[program.type] || 0
+              return (
+                <div key={index} className="bg-white border rounded-md p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      {getActiveeProgramIcon(program.type)}
+                      <span className="font-medium text-sm capitalize">{program.type} Program</span>
+                    </div>
+                    <Switch
+                      checked={program.active}
+                      onCheckedChange={() => toggleProgramActive(program.originalIndex, program.type)}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-600 mb-2">{program.name || 'Unnamed Program'}</p>
+                  <div className="flex items-center justify-between">
+                    <div className={`text-xs font-medium ${program.active ? 'text-green-600' : 'text-gray-500'}`}>
+                      {program.active ? 'Active' : 'Inactive'}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {rewardCount} unredeemed reward{rewardCount !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <Card className="rounded-md overflow-hidden">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[300px]">Reward Name</TableHead>
+                <TableHead className="text-center">Program Type</TableHead>
+                <TableHead className="text-center">Customer</TableHead>
+                <TableHead className="text-center">Redemptions</TableHead>
+                <TableHead className="text-center">Value</TableHead>
+                <TableHead className="text-center">Created</TableHead>
+                <TableHead className="text-center">Status</TableHead>
+                <TableHead className="w-[50px]"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="h-24 text-center">
+                    <div className="flex justify-center">
+                      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : programRewards.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="h-24 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                        <Award className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                      <h3 className="mt-4 text-lg font-medium">No program rewards found</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Program rewards will appear here when customers earn them
+                      </p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                programRewards.map((reward) => (
+                  <TableRow 
+                    key={reward.id}
+                    className="cursor-pointer hover:bg-gray-50"
+                    onClick={() => router.push(`/store/rewards/${reward.id}`)}
+                  >
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <div className="h-9 w-9 min-w-[36px] rounded-md bg-muted flex items-center justify-center">
+                          {getProgramTypeIcon(reward.programtype || '')}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate">{reward.rewardName}</div>
+                          <div className="text-xs text-muted-foreground line-clamp-1">
+                            {reward.description || 'No description'}
+                          </div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="font-medium text-gray-700">
+                        {getProgramTypeDisplay(reward.programtype || '')}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <Avatar className="size-6">
+                          <AvatarFallback className="bg-blue-100 text-blue-600 text-xs">
+                            {reward.customerName?.split(' ').map(n => n[0]).join('') || 'U'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="font-medium text-sm">{reward.customerName}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="font-medium text-green-700">
+                        {reward.redemptionCount || 0}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="font-medium text-blue-700">
+                        {reward.pointsCost > 0 ? `${reward.pointsCost} pts` : 'Free'}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {reward.createdAt ? formatDistanceToNow(reward.createdAt.toDate(), { addSuffix: true }) : "Unknown"}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className={cn(
+                        "font-medium",
+                        reward.isActive ? "text-green-700" : "text-red-700"
+                      )}>
+                        {reward.isActive ? "Active" : "Inactive"}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            className="h-8 w-8 p-0"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent 
+                          align="end"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <DropdownMenuItem onClick={() => router.push(`/store/rewards/${reward.id}`)}>
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => router.push(`/customers/id?customerId=${reward.customers?.[0] || reward.uniqueCustomerIds?.[0]}`)}>
+                            <User className="h-4 w-4 mr-2" />
+                            View Customer
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>

@@ -2544,7 +2544,7 @@ export default function DashboardPage() {
                   {/* Recurring Program */}
                   <button className="border-2 border-gray-200 rounded-md p-6 text-center transition-all hover:border-blue-300 bg-white">
                     <h4 className="font-semibold text-gray-900 mb-1">Recurring Program</h4>
-                    <p className="text-xs text-gray-600 mb-4">Set up automatic loyalty rewards for your customers</p>
+                    <p className="text-xs text-gray-600 mb-4">Create recurring loyalty programs</p>
                     <div className="mb-4">
                       <p className="text-xs text-gray-400">Coffee • Voucher • Transaction-Based</p>
                     </div>
@@ -2557,14 +2557,10 @@ export default function DashboardPage() {
                       <Link href="/dashboard/rewards">Setup Now</Link>
                     </Button>
                   </button>
-
                   {/* Individual Reward */}
                   <button className="border-2 border-gray-200 rounded-md p-6 text-center transition-all hover:border-blue-300 bg-white">
                     <h4 className="font-semibold text-gray-900 mb-1">Individual Reward</h4>
-                    <p className="text-xs text-gray-600 mb-4">Create custom rewards for specific customers</p>
-                    <div className="mb-4">
-                      <p className="text-xs text-gray-400">Percentage • Fixed Amount • Free Items</p>
-                    </div>
+                    <p className="text-xs text-gray-600 mb-4">Create custom rewards with percentage discounts, fixed amounts or free items</p>
                     <Button 
                       size="sm" 
                       variant="outline" 

@@ -1100,11 +1100,25 @@ const RewardsTabContent = () => {
     return 'Unknown Customer'
   }
 
-  // Load customer names for program rewards
+  // Load customer names and preload all eligible customers data
   useEffect(() => {
-    const loadCustomerNames = async () => {
+    const loadAllCustomerData = async () => {
       if (!user?.uid || rewardsData.length === 0) return
       
+      console.log('🚀 Preloading all eligible customers data for', rewardsData.length, 'rewards')
+      
+      // Load eligible customers for ALL rewards (not just program rewards)
+      const eligibleData: Record<string, Array<{id: string, fullName: string}>> = {}
+      
+      for (const reward of rewardsData) {
+        console.log('📋 Preloading eligible customers for reward:', reward.id, reward.rewardName)
+        const eligible = await getEligibleCustomers(reward.id)
+        eligibleData[reward.id] = eligible
+      }
+      
+      console.log('✅ Preloaded eligible customers for all rewards:', eligibleData)
+      
+      // Also load customer names for program rewards (existing functionality)
       const programRewards = rewardsData.filter(reward => 
         reward.programType && (
           reward.programType === "coffeeprogramnew" || 
@@ -1126,7 +1140,7 @@ const RewardsTabContent = () => {
       }
     }
     
-    loadCustomerNames()
+    loadAllCustomerData()
   }, [rewardsData, user?.uid])
 
   // Fetch rewards data
@@ -1416,19 +1430,138 @@ const RewardsTabContent = () => {
     }
   };
 
-  const getRedeemableCustomers = (reward: Reward): string[] => {
-    // Get customer IDs who can redeem this reward
-    const customerIds = reward.customerIds || reward.customers || reward.uniqueCustomerIds || []
+  const [eligibleCustomers, setEligibleCustomers] = useState<Record<string, Array<{id: string, fullName: string}>>>({})
+
+    const getEligibleCustomers = async (rewardId: string): Promise<Array<{id: string, fullName: string}>> => {
+    console.log('🔍 getEligibleCustomers called for rewardId:', rewardId)
+    console.log('👤 User UID:', user?.uid)
     
-    // Convert to customer names using the customerNames state
-    const redeemableCustomerNames: string[] = []
-    customerIds.forEach(customerId => {
-      const customerName = customerNames[customerId] || `Customer ${customerId.slice(0, 8)}`
-      redeemableCustomerNames.push(customerName)
-    })
+    if (!user?.uid) {
+      console.log('❌ No user UID found')
+      return []
+    }
     
-    return redeemableCustomerNames.length > 0 ? redeemableCustomerNames : ['No eligible customers']
-  };
+    // Check if we already have this data cached
+    if (eligibleCustomers[rewardId]) {
+      console.log('✅ Using cached data for reward:', rewardId, eligibleCustomers[rewardId])
+      return eligibleCustomers[rewardId]
+    }
+
+    try {
+      console.log('🏪 Fetching customers from merchants/', user.uid, '/customers')
+      
+      // Get all customers from merchant's customer collection
+      const merchantCustomersRef = collection(db, 'merchants', user.uid, 'customers')
+      const merchantCustomersSnapshot = await getDocs(merchantCustomersRef)
+      
+      console.log('👥 Found', merchantCustomersSnapshot.docs.length, 'merchant customers')
+      
+      const eligible: Array<{id: string, fullName: string}> = []
+      
+      // Check each customer to see if they can redeem this reward
+      for (const customerDoc of merchantCustomersSnapshot.docs) {
+        const customerId = customerDoc.id
+        const customerData = customerDoc.data()
+        
+        console.log('🔍 Checking customer:', customerId, 'Name:', customerData.fullName || customerData.firstName)
+        
+        try {
+          // Check the customer's rewards subcollection for this specific reward
+          const customerRewardRef = doc(db, 'customers', customerId, 'rewards', rewardId)
+          const customerRewardSnapshot = await getDoc(customerRewardRef)
+          
+          console.log('🎁 Customer reward path: customers/', customerId, '/rewards/', rewardId)
+          console.log('📄 Document exists:', customerRewardSnapshot.exists())
+          
+          if (customerRewardSnapshot.exists()) {
+            const rewardData = customerRewardSnapshot.data()
+            console.log('📊 Reward data:', rewardData)
+            
+            // Check if both visible and redeemable are true (handle various data types)
+            const isVisible = rewardData.visible === true || rewardData.visible === 'true' || rewardData.visible === 1
+            const isRedeemable = rewardData.redeemable === true || rewardData.redeemable === 'true' || rewardData.redeemable === 1
+            
+            console.log('👁️ isVisible:', isVisible, '(raw value:', rewardData.visible, ')')
+            console.log('🎯 isRedeemable:', isRedeemable, '(raw value:', rewardData.redeemable, ')')
+            
+            if (isVisible && isRedeemable) {
+              console.log('✅ Customer eligible:', customerId, customerData.fullName || customerData.firstName)
+              eligible.push({
+                id: customerId,
+                fullName: customerData.fullName || customerData.firstName || 'Unknown Customer'
+              })
+            } else {
+              console.log('❌ Customer not eligible:', customerId, 'visible:', rewardData.visible, 'redeemable:', rewardData.redeemable)
+            }
+          } else {
+            console.log('📭 No reward document found for customer:', customerId)
+          }
+        } catch (error) {
+          console.error(`❌ Error checking reward ${rewardId} for customer ${customerId}:`, error)
+        }
+      }
+      
+      console.log('🎯 Final eligible customers count:', eligible.length)
+      console.log('📋 Eligible customers:', eligible)
+      
+      // Cache the results
+      setEligibleCustomers(prev => ({
+        ...prev,
+        [rewardId]: eligible
+      }))
+      
+      return eligible
+    } catch (error) {
+      console.error('❌ Error fetching eligible customers:', error)
+      return []
+    }
+  }
+
+  const EligibleCustomersDropdown = ({ rewardId }: { rewardId: string }) => {
+    // Use preloaded data from eligibleCustomers state
+    const customers = eligibleCustomers[rewardId] || []
+    
+    console.log('🎨 EligibleCustomersDropdown rendered for rewardId:', rewardId, 'customers:', customers.length)
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="h-7 gap-2 rounded-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Users className="h-3 w-3" />
+            {customers.length}
+            <ChevronDown className="h-3 w-3" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="center" className="w-64">
+          <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
+            Eligible Customers
+          </div>
+          <DropdownMenuSeparator />
+          {customers.length === 0 ? (
+            <DropdownMenuItem className="text-sm cursor-default text-muted-foreground">
+              No eligible customers
+            </DropdownMenuItem>
+          ) : (
+            customers.map((customer) => (
+              <DropdownMenuItem 
+                key={customer.id}
+                className="text-sm cursor-default"
+                title={`Customer ID: ${customer.id}`}
+              >
+                <User className="h-3 w-3 mr-2" />
+                {customer.fullName}
+              </DropdownMenuItem>
+            ))
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  }
 
   return (
     <div>
@@ -1620,7 +1753,7 @@ const RewardsTabContent = () => {
                         onClick={() => handleSort("impressions")}
                         className="flex items-center gap-1 px-0 font-medium mx-auto"
                       >
-                        Impressions
+                        Views
                         {sortField === "impressions" && (
                           sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
                         )}
@@ -1748,35 +1881,7 @@ const RewardsTabContent = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                className="h-7 gap-2 rounded-md"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Users className="h-3 w-3" />
-                                {reward.redeemableCustomers || 0}
-                                <ChevronDown className="h-3 w-3" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="center" className="w-64">
-                              <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
-                                Eligible Customers
-                              </div>
-                              <DropdownMenuSeparator />
-                              {getRedeemableCustomers(reward).map((customerName, index) => (
-                                <DropdownMenuItem 
-                                  key={index}
-                                  className="text-sm cursor-default"
-                                >
-                                  <User className="h-3 w-3 mr-2" />
-                                  {customerName}
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <EligibleCustomersDropdown rewardId={reward.id} />
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="space-y-1">
@@ -1784,7 +1889,7 @@ const RewardsTabContent = () => {
                               {reward.impressions || 0}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {(reward as any).impressioncustomercount || 0} customers
+                              {(reward as any).impressioncustomercount || 0} {((reward as any).impressioncustomercount || 0) === 1 ? 'customer' : 'customers'}
                             </div>
                           </div>
                         </TableCell>
@@ -4223,7 +4328,7 @@ const ProgramRewardsTable = () => {
                           {reward.impressions || 0}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {(reward as any).impressioncustomercount || 0} customers
+                          {(reward as any).impressioncustomercount || 0} {((reward as any).impressioncustomercount || 0) === 1 ? 'customer' : 'customers'}
                         </div>
                       </div>
                     </TableCell>

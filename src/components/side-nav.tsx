@@ -839,7 +839,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
         } : {}}
         {...(isCollapsed ? { 'data-scrollbar-hidden': 'true' } : {})}
       >
-        <ul className="space-y-1">
+        <ul className="space-y-0.5">
           {navItems.map((item) => {
             const isActive = item.title === "Dashboard" 
               ? pathname === item.href // Only exact match for Dashboard
@@ -890,7 +890,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                     </CollapsibleTrigger>
                     {!isCollapsed && (
                       <CollapsibleContent>
-                        <ul className="mt-1 space-y-1 pl-6">
+                        <ul className="mt-0.5 space-y-0.5 pl-6">
                           {item.subItems.map((subItem) => {
                             const isSubActive = pathname === subItem.href || 
                               pathname.startsWith(`${subItem.href}/`)
@@ -900,7 +900,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                                 <Link
                                   href={subItem.href}
                                   className={cn(
-                                    "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition-colors h-8",
+                                    "group flex items-center gap-3 rounded-md px-3 py-1 text-sm font-medium transition-colors h-8",
                                     isSubActive 
                                       ? "bg-[#007AFF]/10 text-[#007AFF]" 
                                       : "text-gray-700 hover:bg-[#007AFF]/5"

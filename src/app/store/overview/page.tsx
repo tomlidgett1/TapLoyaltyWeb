@@ -1100,25 +1100,12 @@ const RewardsTabContent = () => {
     return 'Unknown Customer'
   }
 
-  // Load customer names and preload all eligible customers data
+  // Load customer names for program rewards only (no preloading of eligible customers)
   useEffect(() => {
-    const loadAllCustomerData = async () => {
+    const loadCustomerNames = async () => {
       if (!user?.uid || rewardsData.length === 0) return
       
-      console.log('🚀 Preloading all eligible customers data for', rewardsData.length, 'rewards')
-      
-      // Load eligible customers for ALL rewards (not just program rewards)
-      const eligibleData: Record<string, Array<{id: string, fullName: string}>> = {}
-      
-      for (const reward of rewardsData) {
-        console.log('📋 Preloading eligible customers for reward:', reward.id, reward.rewardName)
-        const eligible = await getEligibleCustomers(reward.id)
-        eligibleData[reward.id] = eligible
-      }
-      
-      console.log('✅ Preloaded eligible customers for all rewards:', eligibleData)
-      
-      // Also load customer names for program rewards (existing functionality)
+      // Only load customer names for program rewards (existing functionality)
       const programRewards = rewardsData.filter(reward => 
         reward.programType && (
           reward.programType === "coffeeprogramnew" || 
@@ -1140,7 +1127,7 @@ const RewardsTabContent = () => {
       }
     }
     
-    loadAllCustomerData()
+    loadCustomerNames()
   }, [rewardsData, user?.uid])
 
   // Fetch rewards data
@@ -1544,66 +1531,134 @@ const RewardsTabContent = () => {
   }
 
   const EligibleCustomersDropdown = ({ rewardId }: { rewardId: string }) => {
-    // Use preloaded data from eligibleCustomers state
-    const customers = eligibleCustomers[rewardId] || []
+    const [customers, setCustomers] = useState<Array<{
+      id: string, 
+      fullName: string,
+      currentCohort?: { name: string },
+      daysSinceLastVisit?: number,
+      lifetimeTransactionCount?: number
+    }>>([])
+    const [isOpen, setIsOpen] = useState(false)
+    const [loading, setLoading] = useState(false)
     
     console.log('🎨 EligibleCustomersDropdown rendered for rewardId:', rewardId, 'customers:', customers.length)
 
-    return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button 
-            variant="outline" 
-            size="sm"
-            className="h-7 gap-2 rounded-md"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Users className="h-3 w-3" />
-            {customers.length}
-            <ChevronDown className="h-3 w-3" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="center" className="w-80">
-          <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
-            Eligible Customers
-          </div>
-          <DropdownMenuSeparator />
-          {customers.length === 0 ? (
-            <DropdownMenuItem className="text-sm cursor-default text-muted-foreground">
-              No eligible customers
-            </DropdownMenuItem>
-          ) : (
-            customers.map((customer) => (
-              <DropdownMenuItem 
-                key={customer.id}
-                className="cursor-default p-3"
-                title={`Customer ID: ${customer.id}`}
-              >
-                <div className="flex items-start gap-3 w-full">
-                  <User className="h-4 w-4 mt-0.5 text-gray-500" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm truncate">
-                      {customer.fullName}
+    const loadCustomers = async () => {
+      if (customers.length > 0) {
+        console.log('✅ Already have customers, skipping load')
+        return // Already loaded
+      }
+      
+      console.log('🚀 Loading customers on demand for reward:', rewardId)
+      setLoading(true)
+      try {
+        const eligible = await getEligibleCustomers(rewardId)
+        console.log('📥 Got eligible customers:', eligible)
+        setCustomers(eligible)
+      } catch (error) {
+        console.error('❌ Error loading customers:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+          return (
+        <Popover open={isOpen} onOpenChange={(open) => {
+          setIsOpen(open)
+          if (open) {
+            loadCustomers()
+          }
+        }}>
+          <PopoverTrigger asChild>
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="h-7 gap-2 rounded-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Users className="h-3 w-3" />
+              {loading ? '...' : customers.length}
+              <ChevronDown className="h-3 w-3" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="center" className="w-80 p-0">
+            <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground border-b">
+              Eligible Customers
+            </div>
+            <div className="max-h-64 overflow-y-auto">
+              {loading ? (
+                <div className="px-3 py-4 flex items-center justify-center text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Loading customers...
+                </div>
+              ) : customers.length === 0 ? (
+                <div className="px-2 py-3 text-sm text-muted-foreground">
+                  No eligible customers
+                </div>
+              ) : (
+              customers.map((customer) => (
+                <div 
+                  key={customer.id}
+                  className="px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                  title={`Customer ID: ${customer.id}`}
+                >
+                  <div className="flex items-center justify-between gap-3 w-full">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <User className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                      <span className="font-medium text-sm truncate">
+                        {customer.fullName}
+                      </span>
                     </div>
-                    <div className="mt-1 space-y-1">
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 rounded-md text-xs px-1.5 py-0.5">
-                          {customer.currentCohort?.name || 'No Cohort'}
-                        </Badge>
-                        <span>•</span>
-                        <span>{customer.daysSinceLastVisit || 0} days ago</span>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {customer.lifetimeTransactionCount || 0} lifetime transactions
-                      </div>
+                    
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 rounded-md text-xs px-1.5 py-0.5">
+                              {customer.currentCohort?.name ? customer.currentCohort.name.charAt(0).toUpperCase() + customer.currentCohort.name.slice(1) : 'None'}
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Customer Cohort</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Clock className="h-3 w-3" />
+                              <span>{customer.daysSinceLastVisit || 0}d</span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Days since last visit</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Receipt className="h-3 w-3" />
+                              <span>{customer.lifetimeTransactionCount || 0}</span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Lifetime transactions</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                   </div>
                 </div>
-              </DropdownMenuItem>
-            ))
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+              ))
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
     )
   }
 

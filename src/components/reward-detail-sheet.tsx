@@ -93,6 +93,7 @@ interface RewardDetails {
   pointsCost: string | number
   redemptionCount: number
   status: string
+  isActive?: boolean
   startDate?: string
   endDate?: string
   createdAt: { seconds: number, nanoseconds: number } | string
@@ -539,7 +540,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
             </div>
             <div className="flex items-center gap-2">
               <Switch 
-                checked={reward.status === 'active'} 
+                checked={reward.isActive || false} 
                 onCheckedChange={async (checked) => {
                   console.log("Switch toggled, new value:", checked);
                   if (!user?.uid || !rewardId) {
@@ -548,14 +549,14 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                   }
                   try {
                     setIsToggling(true);
-                    console.log("Updating reward status to:", checked ? 'active' : 'inactive');
+                    console.log("Updating reward isActive to:", checked);
                     
-                    // Update the reward status in Firestore
+                    // Update the reward isActive in Firestore
                     const rewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
                     console.log("Updating merchant reward at path:", `merchants/${user.uid}/rewards/${rewardId}`);
                     
                     await updateDoc(rewardRef, {
-                      status: checked ? 'active' : 'inactive',
+                      isActive: checked,
                       updatedAt: new Date().toISOString()
                     });
                     
@@ -564,14 +565,14 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                     console.log("Updating global reward at path:", `rewards/${rewardId}`);
                     
                     await updateDoc(globalRewardRef, {
-                      status: checked ? 'active' : 'inactive',
+                      isActive: checked,
                       updatedAt: new Date().toISOString()
                     });
                     
                     // Update the local state
                     console.log("Updating local state");
                     setReward(prev => {
-                      const newState = prev ? {...prev, status: checked ? 'active' : 'inactive'} : null;
+                      const newState = prev ? {...prev, isActive: checked} : null;
                       console.log("New reward state:", newState);
                       return newState;
                     });
@@ -582,7 +583,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                     });
                     console.log("Toast shown");
                   } catch (error) {
-                    console.error("Error updating reward status:", error);
+                    console.error("Error updating reward isActive:", error);
                     showToast({
                       title: "Error",
                       description: "Failed to update reward status. Please try again.",
@@ -594,7 +595,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                   }
                 }}
                 disabled={isToggling}
-                className="data-[state=checked]:bg-green-500"
+                className="data-[state=checked]:bg-[#007AFF]"
               />
             </div>
           </div>
@@ -1226,13 +1227,13 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                   <Card className="rounded-md shadow-sm">
                     <CardContent className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-md bg-green-50 flex items-center justify-center">
-                          <CheckCircle className="h-4 w-4 text-green-600" />
+                        <div className="h-8 w-8 rounded-md bg-blue-50 flex items-center justify-center">
+                          <Eye className="h-4 w-4 text-blue-600" />
                         </div>
                         <div>
-                          <div className="text-xs text-gray-500">Visible to</div>
+                          <div className="text-xs text-gray-500">Can See</div>
                           <div className="font-medium">
-                            {customerVisibility.filter(c => c.isVisible).length} customers
+                            {customerVisibility.filter(c => c.visible).length} customers
                           </div>
                         </div>
                       </div>
@@ -1242,13 +1243,13 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                   <Card className="rounded-md shadow-sm">
                     <CardContent className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-md bg-red-50 flex items-center justify-center">
-                          <AlertCircle className="h-4 w-4 text-red-600" />
+                        <div className="h-8 w-8 rounded-md bg-green-50 flex items-center justify-center">
+                          <CheckCircle className="h-4 w-4 text-green-600" />
                         </div>
                         <div>
-                          <div className="text-xs text-gray-500">Hidden from</div>
+                          <div className="text-xs text-gray-500">Can Redeem</div>
                           <div className="font-medium">
-                            {customerVisibility.filter(c => !c.isVisible).length} customers
+                            {customerVisibility.filter(c => c.visible && c.redeemable).length} customers
                           </div>
                         </div>
                       </div>
@@ -1362,14 +1363,12 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
         </Tabs>
 
         <div className="border-t sticky bottom-0 bg-white p-4 flex justify-between">
-          <Button 
-            variant="outline" 
-            className="gap-2 rounded-md text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700" 
+          <button 
+            className="text-sm text-red-600 hover:text-red-700 hover:underline transition-colors" 
             onClick={() => setIsDeleteConfirmOpen(true)}
           >
-            <Trash className="h-4 w-4" />
-            Delete
-          </Button>
+            Delete reward
+          </button>
           <div className="flex gap-2">
             <Button 
               variant="outline"

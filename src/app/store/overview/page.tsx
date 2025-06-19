@@ -154,7 +154,6 @@ interface Reward {
   lastRedeemed?: Date | null;
   programName?: string;
   impressions: number;
-  redeemableCustomers: number;
   viewCount?: number;
   isAgentGenerated?: boolean;
   // Additional fields for program rewards
@@ -1055,13 +1054,101 @@ function CustomerNamesList({ customerIds }: { customerIds: string[] }) {
 }
 
 // Full Rewards Tab Component
+const VisibilityStats = ({ rewardId }: { rewardId: string }) => {
+  const { user } = useAuth()
+  const [visibilityData, setVisibilityData] = useState<{ canSee: number; canRedeem: number } | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchVisibilityStats() {
+      if (!user?.uid || !rewardId) return
+      
+      try {
+        setLoading(true)
+        
+        // Get all customers for this merchant
+        const customersRef = collection(db, 'merchants', user.uid, 'customers')
+        const customersSnapshot = await getDocs(customersRef)
+        
+        // For each customer, check their visibility status for this reward
+        const visibilityPromises = customersSnapshot.docs.map(async (customerDoc) => {
+          const customerId = customerDoc.id
+          
+          try {
+            // Check if this customer has visibility data for this reward
+            const customerRewardRef = doc(db, 'customers', customerId, 'rewards', rewardId)
+            const customerRewardDoc = await getDoc(customerRewardRef)
+            
+            let visible = false
+            let redeemable = false
+            
+            if (customerRewardDoc.exists()) {
+              const rewardData = customerRewardDoc.data()
+              visible = rewardData.visible || false
+              redeemable = rewardData.redeemable || false
+            }
+            
+            return { visible, redeemable }
+          } catch (error) {
+            console.error(`Error fetching visibility for customer ${customerId}:`, error)
+            return { visible: false, redeemable: false }
+          }
+        })
+        
+        const results = await Promise.all(visibilityPromises)
+        const canSee = results.filter(r => r.visible).length
+        const canRedeem = results.filter(r => r.visible && r.redeemable).length
+        
+        setVisibilityData({ canSee, canRedeem })
+      } catch (error) {
+        console.error("Error fetching visibility stats:", error)
+        setVisibilityData({ canSee: 0, canRedeem: 0 })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchVisibilityStats()
+  }, [rewardId, user?.uid])
+
+  if (loading) {
+    return (
+      <div className="animate-pulse">
+        <div className="h-4 bg-gray-200 rounded w-12 mx-auto mb-1"></div>
+        <div className="h-3 bg-gray-200 rounded w-16 mx-auto"></div>
+      </div>
+    )
+  }
+
+  if (!visibilityData) {
+    return (
+      <div className="text-xs text-gray-400">
+        Error loading
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-1 justify-center">
+        <Eye className="h-3 w-3 text-blue-600" />
+        <span className="font-medium text-blue-600 text-xs">{visibilityData.canSee}</span>
+      </div>
+      <div className="flex items-center gap-1 justify-center">
+        <CheckCircle className="h-3 w-3 text-green-600" />
+        <span className="font-medium text-green-600 text-xs">{visibilityData.canRedeem}</span>
+      </div>
+    </div>
+  )
+}
+
 const RewardsTabContent = () => {
   const router = useRouter()
   const { user } = useAuth()
   const [rewardsData, setRewardsData] = useState<Reward[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [rewardCategory, setRewardCategory] = useState<"all" | "individual" | "customer-specific" | "programs" | "agent">("all")
-  const [sortField, setSortField] = useState<"rewardName" | "type" | "programType" | "pointsCost" | "redemptionCount" | "redeemableCustomers" | "impressions" | "createdAt" | "lastRedeemed" | "isActive">("rewardName")
+  const [sortField, setSortField] = useState<"rewardName" | "type" | "programType" | "pointsCost" | "redemptionCount" | "impressions" | "createdAt" | "lastRedeemed" | "isActive">("rewardName")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   const [loadingRewards, setLoadingRewards] = useState(true)
   const [selectedRewardId, setSelectedRewardId] = useState<string | null>(null)
@@ -1190,7 +1277,7 @@ const RewardsTabContent = () => {
               lastRedeemed,
               isActive: !!data.isActive,
               impressions: data.impressions || 0,
-              redeemableCustomers: data.redeemableCustomers || 0,
+
               hasActivePeriod: !!data.hasActivePeriod,
               activePeriod: data.activePeriod || { startDate: '', endDate: '' },
               customers: data.customers || [], // Include customers array
@@ -1305,9 +1392,6 @@ const RewardsTabContent = () => {
           break;
         case "redemptionCount":
           comparison = (a.redemptionCount || 0) - (b.redemptionCount || 0);
-          break;
-        case "redeemableCustomers":
-          comparison = (a.redeemableCustomers || 0) - (b.redeemableCustomers || 0);
           break;
         case "impressions":
           comparison = (a.impressions || 0) - (b.impressions || 0);
@@ -1833,30 +1917,12 @@ const RewardsTabContent = () => {
                         )}
                       </Button>
                     </TableHead>
+
                     <TableHead className="text-center">
-                      <Button 
-                        variant="ghost" 
-                        onClick={() => handleSort("redeemableCustomers")}
-                        className="flex items-center gap-1 px-0 font-medium mx-auto"
-                      >
-                        Redeemable
-                        {sortField === "redeemableCustomers" && (
-                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                        )}
-                        <HelpCircle className="h-3 w-3 text-muted-foreground ml-1" />
-                      </Button>
-                    </TableHead>
-                    <TableHead className="text-center">
-                      <Button 
-                        variant="ghost" 
-                        onClick={() => handleSort("impressions")}
-                        className="flex items-center gap-1 px-0 font-medium mx-auto"
-                      >
-                        Views
-                        {sortField === "impressions" && (
-                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                        )}
-                      </Button>
+                      <div className="flex items-center gap-1 px-0 font-medium mx-auto">
+                        <Eye className="h-4 w-4" />
+                        Visibility
+                      </div>
                     </TableHead>
                     <TableHead className="text-center">
                       <Button 
@@ -1888,7 +1954,7 @@ const RewardsTabContent = () => {
                 <TableBody>
                   {loadingRewards ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="h-24 text-center">
+                      <TableCell colSpan={7} className="h-24 text-center">
                         <div className="flex justify-center">
                           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
                         </div>
@@ -1896,7 +1962,7 @@ const RewardsTabContent = () => {
                     </TableRow>
                   ) : getFilteredRewards().length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="h-24 text-center">
+                      <TableCell colSpan={7} className="h-24 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
                             <Gift className="h-6 w-6 text-muted-foreground" />
@@ -1979,18 +2045,9 @@ const RewardsTabContent = () => {
                             {reward.redemptionCount || 0}
                           </div>
                         </TableCell>
+
                         <TableCell className="text-center">
-                          <EligibleCustomersDropdown rewardId={reward.id} />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="space-y-1">
-                            <div className="font-medium" style={{ color: '#007AFF' }}>
-                              {reward.impressions || 0}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {(reward as any).impressioncustomercount || 0} {((reward as any).impressioncustomercount || 0) === 1 ? 'customer' : 'customers'}
-                            </div>
-                          </div>
+                          <VisibilityStats rewardId={reward.id} />
                         </TableCell>
                         <TableCell className="text-center">
                           {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
@@ -4582,7 +4639,7 @@ export default function StoreOverviewPage() {
           lastRedeemed: data.lastRedeemed ? data.lastRedeemed.toDate() : null,
           programName: data.programName,
           impressions: data.impressions || 0,
-          redeemableCustomers: data.redeemableCustomers || 0,
+  
           viewCount: data.viewCount || 0,
           isAgentGenerated: data.isAgentGenerated || false
         } as Reward

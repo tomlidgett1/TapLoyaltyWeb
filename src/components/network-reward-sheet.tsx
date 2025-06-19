@@ -368,28 +368,17 @@ export function NetworkRewardSheet({ open, onOpenChange }: NetworkRewardSheetPro
           <ScrollArea className="flex-1 px-6 py-4">
             <div className="space-y-4 pb-6">
               {currentStep === 1 && (
-                <div className="mt-0 space-y-4">
+                <div className={cn(
+                  "transition-all duration-500 ease-in-out",
+                  infoBoxesVisible ? "mt-0 space-y-4" : "-mt-4 space-y-4"
+                )}>
                   {/* Information Boxes with Hide Button */}
                   <div 
                     className={cn(
                       "relative overflow-hidden transition-all duration-500 ease-in-out",
-                      infoBoxesVisible ? "max-h-[200px] opacity-100" : "max-h-0 opacity-0"
+                      infoBoxesVisible ? "max-h-[200px] opacity-100 mb-0" : "max-h-0 opacity-0 -mb-4"
                     )}
                   >
-                    {/* Hide Button */}
-                    <div className="flex justify-end mb-2">
-                      <button
-                        onClick={() => setInfoBoxesVisible(!infoBoxesVisible)}
-                        className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
-                      >
-                        <ChevronUp className={cn(
-                          "h-3 w-3 transition-transform duration-300",
-                          !infoBoxesVisible && "rotate-180"
-                        )} />
-                        {infoBoxesVisible ? "Hide" : "Show"} info
-                      </button>
-                    </div>
-
                     {/* Full Width Carousel with Pagination */}
                     <div className="relative">
                       <div className="overflow-hidden rounded-md">
@@ -409,13 +398,28 @@ export function NetworkRewardSheet({ open, onOpenChange }: NetworkRewardSheetPro
                         >
                           {/* Slide 1: About Network Rewards */}
                           <div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-xs text-gray-700 w-full flex-shrink-0">
-                            <div className="flex items-start gap-2">
-                              <Users className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />
-                              <div>
-                                <p className="font-medium">About Network Rewards</p>
-                                <p>Network rewards attract customers who have points at other Tap Network merchants but haven't shopped with you before.</p>
-                                <p className="mt-1">These customers can use their existing points to redeem discounts at your store, bringing you <strong>new business</strong> while ensuring you still profit from each transaction.</p>
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <div className="flex items-start gap-2">
+                                <Users className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                                <div>
+                                  <p className="font-medium">About Network Rewards</p>
+                                </div>
                               </div>
+                              {/* Hide Button */}
+                              <button
+                                onClick={() => setInfoBoxesVisible(!infoBoxesVisible)}
+                                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors flex-shrink-0"
+                              >
+                                <ChevronUp className={cn(
+                                  "h-3 w-3 transition-transform duration-300",
+                                  !infoBoxesVisible && "rotate-180"
+                                )} />
+                                Hide
+                              </button>
+                            </div>
+                            <div className="pl-6">
+                              <p>Network rewards attract customers who have points at other Tap Network merchants but haven't shopped with you before.</p>
+                              <p className="mt-1">These customers can use their existing points to redeem discounts at your store, bringing you <strong>new business</strong> while ensuring you still profit from each transaction.</p>
                             </div>
                           </div>
 
@@ -458,9 +462,23 @@ export function NetworkRewardSheet({ open, onOpenChange }: NetworkRewardSheetPro
                     </div>
                   </div>
 
-                  <div className="space-y-3 pt-1">
+                  <div className={cn(
+                    "space-y-3 transition-all duration-500 ease-in-out", 
+                    infoBoxesVisible ? "pt-1" : "-mt-4"
+                  )}>
                     <div>
-                      <Label className="text-sm">Discount Type</Label>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm">Discount Type</Label>
+                        {!infoBoxesVisible && (
+                          <button
+                            onClick={() => setInfoBoxesVisible(true)}
+                            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                          >
+                            <ChevronUp className="h-3 w-3 rotate-180" />
+                            Show info
+                          </button>
+                        )}
+                      </div>
                       <div className="grid grid-cols-2 gap-3 mt-1.5">
                         <div
                           className={cn(

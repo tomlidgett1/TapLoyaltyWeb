@@ -27,6 +27,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -1241,7 +1248,7 @@ const RewardsTabContent = () => {
   const { user } = useAuth()
   const [rewardsData, setRewardsData] = useState<Reward[]>([])
   const [searchQuery, setSearchQuery] = useState("")
-  const [rewardCategory, setRewardCategory] = useState<"all" | "individual" | "customer-specific" | "programs" | "agent">("all")
+  const [rewardCategory, setRewardCategory] = useState<"all" | "individual" | "customer-specific" | "programs" | "agent" | "customer-search">("all")
   const [sortField, setSortField] = useState<"rewardName" | "type" | "programType" | "pointsCost" | "redemptionCount" | "impressions" | "createdAt" | "lastRedeemed" | "isActive">("rewardName")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   const [loadingRewards, setLoadingRewards] = useState(true)
@@ -1907,6 +1914,23 @@ const RewardsTabContent = () => {
                 Agent
               </span>
             </button>
+            
+            {/* Vertical Divider */}
+            <div className="h-4 w-px bg-gray-300 mx-1"></div>
+            
+            {/* Search by Customer Button */}
+            <button
+              onClick={() => setRewardCategory("customer-search")}
+              className={cn(
+                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                rewardCategory === "customer-search"
+                  ? "text-gray-800 bg-gray-200"
+                  : "text-gray-600 hover:bg-gray-200/70"
+              )}
+            >
+              <Search className="h-3 w-3" />
+              Search by Customer
+            </button>
           </div>
           
           <div className="flex items-center gap-2">
@@ -1957,6 +1981,8 @@ const RewardsTabContent = () => {
         <TabsContent value="all" className="mt-0">
           {rewardCategory === "programs" ? (
             <ProgramRewardsTable />
+          ) : rewardCategory === "customer-search" ? (
+            <CustomerSearchTabContent />
           ) : (
           <Card className="rounded-md overflow-hidden">
             <CardContent className="p-0">
@@ -2391,6 +2417,497 @@ const RewardsTabContent = () => {
     </div>
   );
 };
+
+// Customer Search Tab Component
+const CustomerSearchTabContent = () => {
+  const { user } = useAuth()
+  const [allCustomers, setAllCustomers] = useState<Array<{
+    id: string
+    name: string
+  }>>([])
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("")
+  const [selectedCustomerMetrics, setSelectedCustomerMetrics] = useState<{
+    currentCohort?: { name: string }
+    daysSinceLastVisit?: number
+    lastRedemptionDate?: any
+    lastTransactionDate?: any
+    lastStoreView?: any
+    lifetimeTransactionCount?: number
+    redemptionCount?: number
+    pointsBalance?: number
+  } | null>(null)
+  const [customerRewardsData, setCustomerRewardsData] = useState<Array<{
+    customerId: string
+    customerName: string
+    reward: Reward
+    isVisible: boolean
+    isRedeemable: boolean
+  }>>([])
+  const [loading, setLoading] = useState(true)
+  const [loadingRewards, setLoadingRewards] = useState(false)
+  const [sortField, setSortField] = useState<'customerName' | 'rewardName' | 'pointsCost' | 'isRedeemable'>('customerName')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+
+  useEffect(() => {
+    if (user?.uid) {
+      fetchAllCustomers()
+    }
+  }, [user?.uid])
+
+  useEffect(() => {
+    if (selectedCustomerId) {
+      fetchCustomerRewards(selectedCustomerId)
+      fetchCustomerMetrics(selectedCustomerId)
+    } else {
+      setCustomerRewardsData([])
+      setSelectedCustomerMetrics(null)
+    }
+  }, [selectedCustomerId])
+
+  const fetchAllCustomers = async () => {
+    if (!user?.uid) return
+    
+    setLoading(true)
+    try {
+      // Get all customers from merchants/merchantId/customers
+      const customersSnapshot = await getDocs(collection(db, `merchants/${user.uid}/customers`))
+      const customers = []
+
+      for (const customerDoc of customersSnapshot.docs) {
+        try {
+          // Get customer name from top level customers collection
+          const customerDetailDoc = await getDoc(doc(db, 'customers', customerDoc.id))
+          const customerData = customerDetailDoc.data()
+          const customerName = customerData?.fullName || customerData?.firstName || 'Unknown Customer'
+          
+          customers.push({
+            id: customerDoc.id,
+            name: customerName
+          })
+        } catch (error) {
+          console.error(`Error fetching customer ${customerDoc.id}:`, error)
+        }
+      }
+
+      // Sort customers by name
+      customers.sort((a, b) => a.name.localeCompare(b.name))
+      setAllCustomers(customers)
+    } catch (error) {
+      console.error('Error fetching customers:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchCustomerMetrics = async (customerId: string) => {
+    if (!user?.uid || !customerId) return
+    
+    try {
+      // Get customer metrics from merchants/merchantId/customers/customerId
+      const customerMetricsDoc = await getDoc(doc(db, `merchants/${user.uid}/customers`, customerId))
+      
+      if (customerMetricsDoc.exists()) {
+        const metricsData = customerMetricsDoc.data()
+        setSelectedCustomerMetrics({
+          currentCohort: metricsData.currentCohort,
+          daysSinceLastVisit: metricsData.daysSinceLastVisit,
+          lastRedemptionDate: metricsData.lastRedemptionDate,
+          lastTransactionDate: metricsData.lastTransactionDate,
+          lastStoreView: metricsData.lastStoreView,
+          lifetimeTransactionCount: metricsData.lifetimeTransactionCount,
+          redemptionCount: metricsData.redemptionCount,
+          pointsBalance: metricsData.pointsBalance
+        })
+      } else {
+        setSelectedCustomerMetrics(null)
+      }
+    } catch (error) {
+      console.error('Error fetching customer metrics:', error)
+      setSelectedCustomerMetrics(null)
+    }
+  }
+
+  const fetchCustomerRewards = async (customerId: string) => {
+    if (!user?.uid || !customerId) return
+    
+    setLoadingRewards(true)
+    try {
+      // Get all merchant rewards
+      const rewardsSnapshot = await getDocs(collection(db, `merchants/${user.uid}/rewards`))
+      const merchantRewards = rewardsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Reward[]
+
+      const customerRewardsArray: Array<{
+        customerId: string
+        customerName: string
+        reward: Reward
+        isVisible: boolean
+        isRedeemable: boolean
+      }> = []
+
+      // Get customer name
+      const customerDoc = await getDoc(doc(db, 'customers', customerId))
+      const customerData = customerDoc.data()
+      const customerName = customerData?.fullName || customerData?.firstName || 'Unknown Customer'
+
+      // Get customer's rewards where visible = true
+      const customerRewardsSnapshot = await getDocs(collection(db, `customers/${customerId}/rewards`))
+      
+      customerRewardsSnapshot.docs.forEach(rewardDoc => {
+        const customerRewardData = rewardDoc.data()
+        
+        if (customerRewardData.visible === true) {
+          // Find the corresponding merchant reward
+          const merchantReward = merchantRewards.find(r => r.id === rewardDoc.id)
+          
+          if (merchantReward) {
+            customerRewardsArray.push({
+              customerId,
+              customerName,
+              reward: merchantReward,
+              isVisible: true,
+              isRedeemable: customerRewardData.redeemable === true
+            })
+          }
+        }
+      })
+
+      setCustomerRewardsData(customerRewardsArray)
+    } catch (error) {
+      console.error('Error fetching customer rewards:', error)
+    } finally {
+      setLoadingRewards(false)
+    }
+  }
+
+  const fetchCustomerRewardsData = async () => {
+    if (!user?.uid) return
+    
+    setLoading(true)
+    try {
+      // Get all customers from merchants/merchantId/customers
+      const customersSnapshot = await getDocs(collection(db, `merchants/${user.uid}/customers`))
+      const customerIds = customersSnapshot.docs.map(doc => doc.id)
+      
+      // Get all merchant rewards
+      const rewardsSnapshot = await getDocs(collection(db, `merchants/${user.uid}/rewards`))
+      const merchantRewards = rewardsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Reward[]
+
+      const customerRewardsArray: Array<{
+        customerId: string
+        customerName: string
+        reward: Reward
+        isVisible: boolean
+        isRedeemable: boolean
+      }> = []
+
+      // For each customer, get their name and check their rewards
+      for (const customerId of customerIds) {
+        try {
+          // Get customer name from top level customers collection
+          const customerDoc = await getDoc(doc(db, 'customers', customerId))
+          const customerData = customerDoc.data()
+          const customerName = customerData?.fullName || customerData?.firstName || 'Unknown Customer'
+
+          // Get customer's rewards where visible = true
+          const customerRewardsSnapshot = await getDocs(collection(db, `customers/${customerId}/rewards`))
+          
+          customerRewardsSnapshot.docs.forEach(rewardDoc => {
+            const customerRewardData = rewardDoc.data()
+            
+            if (customerRewardData.visible === true) {
+              // Find the corresponding merchant reward
+              const merchantReward = merchantRewards.find(r => r.id === rewardDoc.id)
+              
+              if (merchantReward) {
+                customerRewardsArray.push({
+                  customerId,
+                  customerName,
+                  reward: merchantReward,
+                  isVisible: true,
+                  isRedeemable: customerRewardData.redeemable === true
+                })
+              }
+            }
+          })
+        } catch (error) {
+          console.error(`Error fetching data for customer ${customerId}:`, error)
+        }
+      }
+
+      setCustomerRewardsData(customerRewardsArray)
+    } catch (error) {
+      console.error('Error fetching customer rewards data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Sort data
+  const sortedData = useMemo(() => {
+    let result = [...customerRewardsData]
+
+    // Sort
+    result.sort((a, b) => {
+      let comparison = 0
+      switch (sortField) {
+        case 'customerName':
+          comparison = a.customerName.localeCompare(b.customerName)
+          break
+        case 'rewardName':
+          comparison = a.reward.rewardName.localeCompare(b.reward.rewardName)
+          break
+        case 'pointsCost':
+          comparison = (a.reward.pointsCost || 0) - (b.reward.pointsCost || 0)
+          break
+        case 'isRedeemable':
+          comparison = a.isRedeemable === b.isRedeemable ? 0 : a.isRedeemable ? -1 : 1
+          break
+      }
+      return sortDirection === 'desc' ? -comparison : comparison
+    })
+
+    return result
+  }, [customerRewardsData, sortField, sortDirection])
+
+  const handleSort = (field: typeof sortField) => {
+    if (field === sortField) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('asc')
+    }
+  }
+
+  const SortButton = ({ field, children }: { field: typeof sortField, children: React.ReactNode }) => (
+    <button
+      onClick={() => handleSort(field)}
+      className="flex items-center gap-1 hover:text-foreground"
+    >
+      {children}
+      {sortField === field && (
+        sortDirection === 'desc' ? 
+          <ChevronDown className="h-4 w-4" /> : 
+          <ChevronUp className="h-4 w-4" />
+      )}
+    </button>
+  )
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin mr-2" />
+        Loading customer data...
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-4">
+          <div className="relative min-w-[250px]">
+            <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
+              <SelectTrigger className="h-9 pl-10 rounded-md">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 pointer-events-none" />
+                <SelectValue placeholder="Select a customer..." />
+              </SelectTrigger>
+              <SelectContent>
+                {allCustomers.map((customer) => (
+                  <SelectItem key={customer.id} value={customer.id}>
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-gray-500" />
+                      {customer.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {loadingRewards && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading rewards...
+            </div>
+          )}
+        </div>
+        
+        {selectedCustomerId && (
+          <div className="text-sm text-muted-foreground">
+            {customerRewardsData.length} visible rewards for {allCustomers.find(c => c.id === selectedCustomerId)?.name}
+          </div>
+        )}
+      </div>
+
+      {selectedCustomerId && selectedCustomerMetrics && (
+        <Card className="mb-4 rounded-md">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <User className="h-4 w-4" />
+              {allCustomers.find(c => c.id === selectedCustomerId)?.name} - Metrics
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-4 md:grid-cols-8 gap-3 text-sm">
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium text-gray-600">Cohort</p>
+                <p className="font-semibold">
+                  {selectedCustomerMetrics.currentCohort?.name 
+                    ? selectedCustomerMetrics.currentCohort.name.charAt(0).toUpperCase() + selectedCustomerMetrics.currentCohort.name.slice(1)
+                    : 'N/A'}
+                </p>
+              </div>
+              
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium text-gray-600">Last Visit</p>
+                <p className="font-semibold">
+                  {selectedCustomerMetrics.daysSinceLastVisit !== undefined 
+                    ? `${selectedCustomerMetrics.daysSinceLastVisit}d`
+                    : 'N/A'}
+                </p>
+              </div>
+              
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium text-gray-600">Points</p>
+                <p className="font-semibold text-blue-600">
+                  {selectedCustomerMetrics.pointsBalance !== undefined 
+                    ? selectedCustomerMetrics.pointsBalance 
+                    : 'N/A'}
+                </p>
+              </div>
+              
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium text-gray-600">Transactions</p>
+                <p className="font-semibold">
+                  {selectedCustomerMetrics.lifetimeTransactionCount !== undefined 
+                    ? selectedCustomerMetrics.lifetimeTransactionCount 
+                    : 'N/A'}
+                </p>
+              </div>
+              
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium text-gray-600">Redemptions</p>
+                <p className="font-semibold">
+                  {selectedCustomerMetrics.redemptionCount !== undefined 
+                    ? selectedCustomerMetrics.redemptionCount 
+                    : 'N/A'}
+                </p>
+              </div>
+              
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium text-gray-600">Last Transaction</p>
+                <p className="text-xs font-medium">
+                  {selectedCustomerMetrics.lastTransactionDate 
+                    ? format(selectedCustomerMetrics.lastTransactionDate.toDate(), 'MMM d')
+                    : 'N/A'}
+                </p>
+              </div>
+              
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium text-gray-600">Last Redemption</p>
+                <p className="text-xs font-medium">
+                  {selectedCustomerMetrics.lastRedemptionDate 
+                    ? format(selectedCustomerMetrics.lastRedemptionDate.toDate(), 'MMM d')
+                    : 'N/A'}
+                </p>
+              </div>
+              
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium text-gray-600">Last Store View</p>
+                <p className="text-xs font-medium">
+                  {selectedCustomerMetrics.lastStoreView 
+                    ? format(selectedCustomerMetrics.lastStoreView.toDate(), 'MMM d')
+                    : 'N/A'}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!selectedCustomerId ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <User className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Select a Customer</h3>
+          <p>Choose a customer from the dropdown above to view their visible rewards.</p>
+        </div>
+      ) : customerRewardsData.length === 0 && !loadingRewards ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <Gift className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Visible Rewards</h3>
+          <p>This customer has no rewards marked as visible.</p>
+        </div>
+      ) : (
+        <div className="border border-gray-200 rounded-md overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50">
+                <TableHead className="font-semibold text-gray-700 w-[300px]">
+                  <SortButton field="rewardName">Preview</SortButton>
+                </TableHead>
+                <TableHead className="font-semibold text-gray-700">
+                  <SortButton field="customerName">Customer</SortButton>
+                </TableHead>
+                <TableHead className="font-semibold text-gray-700 text-center">
+                  <SortButton field="pointsCost">Points Cost</SortButton>
+                </TableHead>
+                <TableHead className="font-semibold text-gray-700 text-center">
+                  <SortButton field="isRedeemable">Status</SortButton>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sortedData.map((item, index) => (
+                <TableRow key={`${item.customerId}-${item.reward.id}-${index}`} className="hover:bg-gray-50">
+                  <TableCell className="p-3">
+                    <RewardPreviewCard reward={item.reward} />
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-gray-500" />
+                      {item.customerName}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {item.reward.pointsCost === 0 ? (
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 rounded-md">
+                        Free
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 rounded-md">
+                        <Star className="h-3 w-3 mr-1 fill-current" />
+                        {item.reward.pointsCost}
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {item.isRedeemable ? (
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 rounded-md">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Redeemable
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 rounded-md">
+                        <Clock className="h-3 w-3 mr-1" />
+                        Not Redeemable
+                      </Badge>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // Full Customers Tab Component
 const CustomersTabContent = () => {

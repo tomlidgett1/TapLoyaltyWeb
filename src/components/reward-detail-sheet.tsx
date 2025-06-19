@@ -1128,12 +1128,13 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                             <TableHead className="text-xs">Email</TableHead>
                             <TableHead className="text-xs">Redeemable</TableHead>
                             <TableHead className="text-xs">Visible</TableHead>
+                            <TableHead className="text-xs">Reason</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {visibilityLoading ? (
                             <TableRow>
-                              <TableCell colSpan={4} className="h-24 text-center">
+                              <TableCell colSpan={5} className="h-24 text-center">
                                 <div className="flex justify-center">
                                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
                                 </div>
@@ -1141,7 +1142,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                             </TableRow>
                           ) : customerVisibility.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={4} className="h-24 text-center">
+                              <TableCell colSpan={5} className="h-24 text-center">
                                 <div className="flex flex-col items-center justify-center py-6">
                                   <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
                                     <Users className="h-5 w-5 text-gray-400" />
@@ -1205,6 +1206,11 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                                   >
                                     {customer.visible ? 'true' : 'false'}
                                   </Badge>
+                                </TableCell>
+                                <TableCell className="text-xs py-2">
+                                  <span className="text-gray-600 truncate max-w-[120px]">
+                                    {customer.visibilityReason || 'No reason'}
+                                  </span>
                                 </TableCell>
                               </TableRow>
                             ))

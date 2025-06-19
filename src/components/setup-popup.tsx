@@ -3,6 +3,12 @@
 import { useState } from "react";
 import { X, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { v4 as uuidv4 } from "uuid";
+import { useAuth } from "@/contexts/auth-context";
+import { db } from "@/lib/firebase";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import Image from "next/image";
 
 interface SetupPopupProps {
   open: boolean;
@@ -10,8 +16,10 @@ interface SetupPopupProps {
 }
 
 export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
+  const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(-1); // Start at welcome screen
-  const [howTapWorksTab, setHowTapWorksTab] = useState("customers"); // For How Tap Works tabs
+  const [howTapWorksTab, setHowTapWorksTab] = useState<"customers" | "merchants">("customers"); // For How Tap Works tabs
+  const [showAutoTapInfo, setShowAutoTapInfo] = useState(false); // For AutoTap technology popup
   const [selectedAccountType, setSelectedAccountType] = useState<string | null>(null); // For account type selection
   const [showAccountDetails, setShowAccountDetails] = useState<string | null>(null); // For account type details popup
   const [isPopupClosing, setIsPopupClosing] = useState(false); // For smooth exit animation
@@ -23,6 +31,7 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
   const steps = [
     { id: "what-is-tap", label: "What is Tap Loyalty?", description: "Understanding the platform" },
     { id: "how-tap-works", label: "How Tap Works", description: "AutoTap™ technology explained" },
+    { id: "for-customers-merchants", label: "For Customers & Merchants", description: "Detailed benefits for each" },
     { id: "upload-logo", label: "Upload Company Logo", description: "Add your business branding" },
     { id: "account-type", label: "Account Type", description: "Choose your setup" },
     { id: "business-info", label: "Business Information", description: "Tell us about your business" },
@@ -88,43 +97,63 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
     fileInput?.click();
   };
 
-  const generateMerchantId = () => {
-    // Generate a temporary merchant ID - in production, this would come from your auth/user system
-    return `merchant_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  };
 
-  const uploadToGCS = async () => {
-    if (!uploadedLogo) {
-      alert('Please select a logo first');
+
+  const uploadToFirebaseStorage = async () => {
+    if (!uploadedLogo || !user?.uid) {
+      alert(!uploadedLogo ? 'Please select a logo first' : 'Authentication required');
       return;
     }
 
+    console.log('Starting upload with user:', user.uid);
     setIsUploading(true);
     
     try {
-      const merchantId = generateMerchantId();
-      const fileName = `logo.${uploadedLogo.name.split('.').pop()}`;
-      const filePath = `merchants/${merchantId}/${fileName}`;
-
-      // Create FormData for the upload
-      const formData = new FormData();
-      formData.append('file', uploadedLogo);
-      formData.append('bucket', 'tap-loyalty-fb6d0');
-      formData.append('path', filePath);
-
-      // Upload to your server endpoint that handles GCS upload
-      const response = await fetch('/api/upload-to-gcs', {
-        method: 'POST',
-        body: formData,
+      const logoId = uuidv4();
+      const storagePath = `merchants/${user.uid}/files/${logoId}`;
+      console.log('Upload path:', storagePath);
+      
+      // Upload to Firebase Storage using the same path as notes page (temporarily for testing)
+      const storageRef = ref(getStorage(), storagePath);
+      const uploadTask = uploadBytesResumable(storageRef, uploadedLogo, { 
+        contentType: uploadedLogo.type || 'application/octet-stream' 
       });
-
-      if (!response.ok) {
-        throw new Error('Upload failed');
-      }
-
-      const result = await response.json();
-      setUploadedUrl(result.url);
-      alert(`Logo uploaded successfully! Merchant ID: ${merchantId}`);
+      
+      await new Promise<void>((resolve, reject) => {
+        uploadTask.on('state_changed',
+          (snapshot) => {
+            // Handle progress if needed
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            console.log(`Upload progress: ${progress}%`);
+          },
+          (error) => {
+            console.error('Upload error:', error);
+            alert('Upload failed. Please try again.');
+            reject(error);
+          },
+          async () => {
+            try {
+              // Get download URL after successful upload
+              const downloadURL = await getDownloadURL(storageRef);
+              
+              // Save logo URL to Firestore in merchants/{merchantId} document
+              const merchantDocRef = doc(db, `merchants/${user.uid}`);
+              await setDoc(merchantDocRef, {
+                logoUrl: downloadURL,
+                logoUpdatedAt: serverTimestamp()
+              }, { merge: true }); // Use merge to update existing document or create new one
+              
+              setUploadedUrl(downloadURL);
+              alert(`Logo uploaded and saved successfully!`);
+              resolve();
+            } catch (e) {
+              console.error('Error saving logo URL to Firestore:', e);
+              alert('Upload completed but failed to save to database');
+              reject(e);
+            }
+          }
+        );
+      });
       
     } catch (error) {
       console.error('Upload error:', error);
@@ -271,163 +300,334 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
               </div>
             )}
             {currentStep === 1 && (
-              <div className="space-y-3">
-                <div className="text-center">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <div className="max-w-5xl mx-auto space-y-8">
+                {/* Header */}
+                <div className="text-center space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
                     How Tap Works
                   </h3>
-                  <p className="text-base text-gray-600 mb-3">
+                  <div className="space-y-3">
+                    <p className="text-base text-gray-600">
                     Our proprietary AutoTap™ technology makes loyalty effortless for everyone.
+                    </p>
+                    <p className="text-base">
+                      <span className="bg-gradient-to-r from-[#007AFF] to-[#0066CC] text-transparent bg-clip-text font-semibold text-lg">
+                        No Cards. No Email Addresses. No Sign Ups.
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                                 {/* Process Steps - Two Columns */}
+                 <div className="bg-white border border-gray-200 rounded-md p-6">
+                   <div className="max-w-4xl mx-auto">
+                     <div className="grid md:grid-cols-2 gap-8">
+                       {/* Left Column - Setup Process */}
+                       <div>
+                         <h4 className="font-semibold text-gray-900 text-base mb-4 text-center">Setup Process</h4>
+                         <div className="space-y-4">
+                           {/* Step 1 */}
+                           <div className="flex items-center gap-4">
+                             <div className="w-8 h-8 bg-[#007AFF] rounded-full flex items-center justify-center flex-shrink-0">
+                               <span className="text-white font-medium text-sm">1</span>
+                             </div>
+                             <div>
+                               <h5 className="font-medium text-gray-900 text-sm mb-1">Download App</h5>
+                               <p className="text-gray-600 text-sm">Customer downloads the Tap Loyalty iPhone app</p>
+                             </div>
+                           </div>
+
+                           {/* Step 2 */}
+                           <div className="flex items-center gap-4">
+                             <div className="w-8 h-8 bg-[#007AFF] rounded-full flex items-center justify-center flex-shrink-0">
+                               <span className="text-white font-medium text-sm">2</span>
+                             </div>
+                             <div>
+                               <h5 className="font-medium text-gray-900 text-sm mb-1">Connect Bank</h5>
+                               <p className="text-gray-600 text-sm">AutoTap™ securely connects using CDR - government accredited, bank-level security</p>
+                             </div>
+                           </div>
+                         </div>
+                       </div>
+
+                       {/* Right Column - How It Works */}
+                       <div>
+                         <h4 className="font-semibold text-gray-900 text-base mb-4 text-center">How It Works</h4>
+                         <div className="space-y-4">
+                           {/* Step 3 */}
+                           <div className="flex items-center gap-4">
+                             <div className="w-8 h-8 bg-[#007AFF] rounded-full flex items-center justify-center flex-shrink-0">
+                               <span className="text-white font-medium text-sm">3</span>
+                             </div>
+                             <div>
+                               <h5 className="font-medium text-gray-900 text-sm mb-1">Shop Normally</h5>
+                               <p className="text-gray-600 text-sm">Customer pays normally at your store (not using any app)</p>
+                             </div>
+                           </div>
+
+                           {/* Step 4 */}
+                           <div className="flex items-center gap-4">
+                             <div className="w-8 h-8 bg-[#007AFF] rounded-full flex items-center justify-center flex-shrink-0">
+                               <span className="text-white font-medium text-sm">4</span>
+                             </div>
+                             <div>
+                               <h5 className="font-medium text-gray-900 text-sm mb-1">AutoTap Matches</h5>
+                               <p className="text-gray-600 text-sm">Our matching algorithms determine if they shopped at your store</p>
+                             </div>
+                           </div>
+
+                           {/* Step 5 */}
+                           <div className="flex items-center gap-4">
+                             <div className="w-8 h-8 bg-[#007AFF] rounded-full flex items-center justify-center flex-shrink-0">
+                               <span className="text-white font-medium text-sm">5</span>
+                             </div>
+                             <div>
+                               <h5 className="font-medium text-gray-900 text-sm mb-1">Earn Points</h5>
+                               <p className="text-gray-600 text-sm">Customer automatically earns loyalty points</p>
+                             </div>
+                           </div>
+
+                           {/* Step 6 */}
+                           <div className="flex items-center gap-4">
+                             <div className="w-8 h-8 bg-[#007AFF] rounded-full flex items-center justify-center flex-shrink-0">
+                               <span className="text-white font-medium text-sm">6</span>
+                             </div>
+                             <div>
+                               <h5 className="font-medium text-gray-900 text-sm mb-1">Redeem Rewards</h5>
+                               <p className="text-gray-600 text-sm">Customer redeems rewards across the entire network</p>
+                             </div>
+                           </div>
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+
+                                 {/* What is AutoTap button */}
+                 <div className="text-center">
+                   <button
+                     onClick={() => setShowAutoTapInfo(true)}
+                     className="inline-flex items-center gap-1 px-4 py-2 text-[#007AFF] text-sm font-medium border border-[#007AFF] rounded-md hover:bg-[#007AFF] hover:text-white transition-colors"
+                   >
+                     What is AutoTap?
+                   </button>
+                 </div>
+
+                {/* AutoTap Technology Popup */}
+                {showAutoTapInfo && (
+                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowAutoTapInfo(false)}>
+                    <div className="bg-white rounded-md p-6 max-w-2xl mx-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-between mb-6">
+                        <h4 className="text-lg font-semibold text-gray-900">AutoTap™ Technology</h4>
+                        <button
+                          onClick={() => setShowAutoTapInfo(false)}
+                          className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-md hover:bg-gray-100"
+                        >
+                          <X size={20} />
+                        </button>
+                      </div>
+                      <p className="text-gray-600 text-center mb-8 leading-relaxed">
+                        Our technology uses Australia's Open Banking framework to securely detect your purchases and automatically assign rewards in real-time.
+                      </p>
+                      
+                      <div className="grid md:grid-cols-3 gap-4">
+                        <div className="text-center p-4 bg-blue-50 rounded-md">
+                          <h5 className="font-semibold text-gray-900 mb-2">CDR Approved</h5>
+                          <p className="text-sm text-gray-600">Government accredited and bank-level security compliance</p>
+                        </div>
+                        <div className="text-center p-4 bg-green-50 rounded-md">
+                          <h5 className="font-semibold text-gray-900 mb-2">Privacy-first</h5>
+                          <p className="text-sm text-gray-600">We never sell your data or access more than you consent to</p>
+                        </div>
+                        <div className="text-center p-4 bg-purple-50 rounded-md">
+                          <h5 className="font-semibold text-gray-900 mb-2">Matching Algorithms</h5>
+                          <p className="text-sm text-gray-600">Advanced algorithms detect purchases at participating merchants</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {currentStep === 2 && (
+              <div className="max-w-4xl mx-auto space-y-8">
+                {/* Header */}
+                <div className="text-center space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    For Customers & Merchants
+                  </h3>
+                  <p className="text-base text-gray-600">
+                    Understanding the benefits for both sides of the Tap Loyalty ecosystem
                   </p>
                 </div>
 
                 {/* Tabs */}
                 <div className="flex items-center justify-center">
-                  <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
-                    <button
-                      className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                        howTapWorksTab === "customers"
-                          ? "text-gray-800 bg-white shadow-sm"
-                          : "text-gray-600 hover:bg-gray-200/70"
-                      )}
-                      onClick={() => setHowTapWorksTab("customers")}
-                    >
-                      For Customers
-                    </button>
-                    <button
-                      className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                        howTapWorksTab === "merchants"
-                          ? "text-gray-800 bg-white shadow-sm"
-                          : "text-gray-600 hover:bg-gray-200/70"
-                      )}
-                      onClick={() => setHowTapWorksTab("merchants")}
-                    >
-                      For Merchants
-                    </button>
+                <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+                  <button
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                      howTapWorksTab === "customers"
+                        ? "text-gray-800 bg-white shadow-sm"
+                        : "text-gray-600 hover:bg-gray-200/70"
+                    )}
+                    onClick={() => setHowTapWorksTab("customers")}
+                  >
+                    For Customers
+                  </button>
+                  <button
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                      howTapWorksTab === "merchants"
+                        ? "text-gray-800 bg-white shadow-sm"
+                        : "text-gray-600 hover:bg-gray-200/70"
+                    )}
+                    onClick={() => setHowTapWorksTab("merchants")}
+                  >
+                    For Merchants
+                  </button>
                   </div>
                 </div>
 
                 {/* Tab Content */}
+                <div className="bg-gray-50 rounded-md p-8">
                 {howTapWorksTab === "customers" && (
-                  <div className="space-y-8">
-                    {/* Three-step process for customers */}
-                    <div className="grid md:grid-cols-3 gap-8">
-                      <div className="text-center">
-                        <div className="w-16 h-16 bg-[#007AFF] rounded-full flex items-center justify-center text-white font-bold text-xl mb-4 mx-auto">1</div>
-                        <h4 className="text-base font-semibold text-gray-900 mb-3">Download & Connect</h4>
-                        <p className="text-gray-600 mb-4">
-                          Download the Tap Loyalty app and securely connect your bank account using Australia's Open Banking framework for bank-level security.
-                        </p>
-                        <div className="bg-blue-50 rounded-md p-4">
-                          <p className="text-sm text-gray-700">
-                            <strong>One-time setup:</strong> Connect once and automatically join every participating merchant's program.
-                          </p>
+                    <div className="space-y-6">
+                      <h4 className="text-base font-semibold text-gray-900 text-center">Benefits for Customers</h4>
+                      <div className="grid md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mt-0.5">
+                              <Check size={14} className="text-white" />
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-gray-900">Effortless Earning</h5>
+                              <p className="text-sm text-gray-600">Automatically earn rewards at hundreds of merchants without carrying cards or scanning codes</p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mt-0.5">
+                              <Check size={14} className="text-white" />
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-gray-900">Network Benefits</h5>
+                              <p className="text-sm text-gray-600">Earn points at one merchant and redeem at any other participating business</p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mt-0.5">
+                              <Check size={14} className="text-white" />
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-gray-900">Never Miss Rewards</h5>
+                              <p className="text-sm text-gray-600">Even if you forget about the program, you'll still earn points automatically</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mt-0.5">
+                              <Check size={14} className="text-white" />
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-gray-900">Bank-level Security</h5>
+                              <p className="text-sm text-gray-600">Your data is protected by government-approved CDR frameworks</p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mt-0.5">
+                              <Check size={14} className="text-white" />
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-gray-900">One-time Setup</h5>
+                              <p className="text-sm text-gray-600">Connect once and automatically join every participating merchant's program</p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mt-0.5">
+                              <Check size={14} className="text-white" />
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-gray-900">Privacy Protected</h5>
+                              <p className="text-sm text-gray-600">We never sell your data or access more than you consent to</p>
+                            </div>
+                          </div>
                         </div>
                       </div>
+                    </div>
+                  )}
 
-                      <div className="text-center">
-                        <div className="w-16 h-16 bg-[#007AFF] rounded-full flex items-center justify-center text-white font-bold text-xl mb-4 mx-auto">2</div>
-                        <h4 className="text-base font-semibold text-gray-900 mb-3">Shop Normally</h4>
-                        <p className="text-gray-600 mb-4">
-                          Pay as usual at any participating merchant using your preferred payment method. No cards to remember, no QR codes to scan.
-                        </p>
-                        <div className="bg-gray-50 rounded-md p-4">
-                          <p className="text-sm text-gray-700">
-                            <strong>Zero friction:</strong> AutoTap™ automatically detects your purchases and assigns rewards in real-time.
-                          </p>
+                  {howTapWorksTab === "merchants" && (
+                    <div className="space-y-6">
+                      <h4 className="text-base font-semibold text-gray-900 text-center">Benefits for Merchants</h4>
+                      <div className="grid md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center mt-0.5">
+                              <Check size={14} className="text-white" />
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-gray-900">Zero Setup Required</h5>
+                              <p className="text-sm text-gray-600">No hardware installation, no staff training, no changes to your checkout process</p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center mt-0.5">
+                              <Check size={14} className="text-white" />
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-gray-900">Automatic Customer Engagement</h5>
+                              <p className="text-sm text-gray-600">Tap customers are automatically enrolled in your loyalty program when they shop</p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center mt-0.5">
+                              <Check size={14} className="text-white" />
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-gray-900">Network Effect</h5>
+                              <p className="text-sm text-gray-600">Benefit from customers who discover you through the Tap network</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center mt-0.5">
+                              <Check size={14} className="text-white" />
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-gray-900">AI-Powered Insights</h5>
+                              <p className="text-sm text-gray-600">Tap Agent creates personalised rewards for each customer every week</p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center mt-0.5">
+                              <Check size={14} className="text-white" />
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-gray-900">Powerful Dashboard</h5>
+                              <p className="text-sm text-gray-600">Track customer behaviour and send personalised offers to drive repeat business</p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center mt-0.5">
+                              <Check size={14} className="text-white" />
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-gray-900">Seamless Operations</h5>
+                              <p className="text-sm text-gray-600">Your checkout process remains exactly the same - no disruption to operations</p>
                         </div>
                       </div>
-
-                      <div className="text-center">
-                        <div className="w-16 h-16 bg-[#007AFF] rounded-full flex items-center justify-center text-white font-bold text-xl mb-4 mx-auto">3</div>
-                        <h4 className="text-base font-semibold text-gray-900 mb-3">Earn & Redeem</h4>
-                        <p className="text-gray-600 mb-4">
-                          Watch your rewards grow automatically across hundreds of merchants. Redeem points anywhere in the network and climb loyalty tiers for VIP perks.
-                        </p>
-                        <div className="bg-green-50 rounded-md p-4">
-                          <p className="text-sm text-gray-700">
-                            <strong>Never miss rewards:</strong> Even if you forget about the program, you'll still earn points automatically.
-                          </p>
                         </div>
                       </div>
+                    </div>
+                  )}
                     </div>
                   </div>
                 )}
 
-                {howTapWorksTab === "merchants" && (
-                  <div className="space-y-8">
-                    {/* Three-step process for merchants */}
-                    <div className="grid md:grid-cols-3 gap-8">
-                      <div className="text-center">
-                        <div className="w-16 h-16 bg-[#007AFF] rounded-full flex items-center justify-center text-white font-bold text-xl mb-4 mx-auto">1</div>
-                        <h4 className="text-base font-semibold text-gray-900 mb-3">Quick Setup</h4>
-                        <p className="text-gray-600 mb-4">
-                          Join Tap Loyalty with a simple online registration. No hardware installation, no staff training, no changes to your checkout process.
-                        </p>
-                        <div className="bg-blue-50 rounded-md p-4">
-                          <p className="text-sm text-gray-700">
-                            <strong>100% cloud-based:</strong> Start engaging customers immediately with our plug-and-play solution.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="text-center">
-                        <div className="w-16 h-16 bg-[#007AFF] rounded-full flex items-center justify-center text-white font-bold text-xl mb-4 mx-auto">2</div>
-                        <h4 className="text-base font-semibold text-gray-900 mb-3">Customers Shop</h4>
-                        <p className="text-gray-600 mb-4">
-                          When Tap Loyalty customers shop at your store, AutoTap™ technology automatically detects their transactions and assigns rewards without any action needed.
-                        </p>
-                        <div className="bg-gray-50 rounded-md p-4">
-                          <p className="text-sm text-gray-700">
-                            <strong>Seamless experience:</strong> Your checkout process remains exactly the same - no disruption to operations.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="text-center">
-                        <div className="w-16 h-16 bg-[#007AFF] rounded-full flex items-center justify-center text-white font-bold text-xl mb-4 mx-auto">3</div>
-                        <h4 className="text-base font-semibold text-gray-900 mb-3">Engage & Grow</h4>
-                        <p className="text-gray-600 mb-4">
-                          Use your powerful merchant dashboard to send personalised offers, track customer behaviour, and build stronger relationships that drive repeat business.
-                        </p>
-                        <div className="bg-green-50 rounded-md p-4">
-                          <p className="text-sm text-gray-700">
-                            <strong>AI-powered insights:</strong> Tap Agent creates personalised rewards for each customer every week.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Technology explanation */}
-                <div className="bg-white border-2 border-[#007AFF] rounded-md p-6">
-                  <h4 className="text-base font-semibold text-gray-900 mb-4">AutoTap™ Technology</h4>
-                  <p className="text-gray-600 mb-4">
-                    Our proprietary AutoTap technology uses Australia's Open Banking framework to securely access consented transaction data, 
-                    matching purchases at participating merchants in real-time to automatically assign rewards - no scanning required.
-                  </p>
-                  <div className="grid md:grid-cols-3 gap-4 mt-4">
-                    <div className="text-center p-4 bg-gray-50 rounded-md">
-                      <h5 className="font-medium text-gray-900 mb-2">Bank-level Security</h5>
-                      <p className="text-sm text-gray-600">Protected by CDR compliance and enterprise-grade encryption</p>
-                    </div>
-                    <div className="text-center p-4 bg-gray-50 rounded-md">
-                      <h5 className="font-medium text-gray-900 mb-2">Privacy-first</h5>
-                      <p className="text-sm text-gray-600">We never sell your data or access more than you consent to</p>
-                    </div>
-                    <div className="text-center p-4 bg-gray-50 rounded-md">
-                      <h5 className="font-medium text-gray-900 mb-2">Real-time Processing</h5>
-                      <p className="text-sm text-gray-600">Instant reward assignment as soon as you make a purchase</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {currentStep === 2 && (
+            {currentStep === 3 && (
               <div className="space-y-6 text-center">
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">
@@ -454,14 +654,21 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
                     onClick={triggerFileUpload}
                   >
                     <div className="space-y-4">
-                      {logoPreview ? (
-                        <div className="w-16 h-16 mx-auto rounded-md overflow-hidden">
-                          <img 
-                            src={logoPreview} 
-                            alt="Logo preview" 
-                            className="w-full h-full object-cover"
-                          />
+                                            {logoPreview ? (
+                        <div className="space-y-3">
+                          <div className="w-16 h-16 mx-auto rounded-md overflow-hidden">
+                            <img 
+                              src={logoPreview} 
+                              alt="Logo preview" 
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                      <div className="text-center">
+                            <p className="text-xs text-gray-500">
+                              Logo should be square for best results
+                          </p>
                         </div>
+                      </div>
                       ) : (
                         <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center mx-auto">
                           <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -473,7 +680,7 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
                         <p className="text-sm font-medium text-gray-900">
                           {uploadedLogo ? uploadedLogo.name : "Upload your logo"}
                         </p>
-                        <p className="text-xs text-gray-500">PNG, JPG or SVG up to 5MB</p>
+                        <p className="text-xs text-gray-500">Square logos work best • PNG, JPG or SVG up to 5MB</p>
                       </div>
                       <button 
                         type="button"
@@ -488,7 +695,7 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
                   <div className="mt-6 space-y-3">
                     {uploadedLogo && !uploadedUrl && (
                       <button
-                        onClick={uploadToGCS}
+                        onClick={uploadToFirebaseStorage}
                         disabled={isUploading}
                         className={cn(
                           "w-full px-4 py-2 rounded-md text-sm font-medium transition-colors",
@@ -505,7 +712,7 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
                       <div className="text-center">
                         <p className="text-sm text-green-600 font-medium">✓ Logo uploaded successfully!</p>
                         <p className="text-xs text-gray-500 mt-1">Stored in GCS bucket</p>
-                      </div>
+                    </div>
                     )}
                     
                     <div className="text-center">
@@ -518,7 +725,7 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
               </div>
             )}
 
-            {currentStep === 3 && (
+            {currentStep === 4 && (
               <div className="space-y-8">
                 <div className="text-center">
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">
@@ -529,64 +736,37 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
                   </p>
                 </div>
                 
-                <div className="max-w-2xl mx-auto">
-                  <div className="grid grid-cols-3 gap-4">
-                    {/* Tap Lite */}
+                <div className="max-w-lg mx-auto">
+                  <div className="grid grid-cols-2 gap-6">
+                    {/* Tap Standard */}
                     <button
-                      onClick={() => setSelectedAccountType("lite")}
+                      onClick={() => setSelectedAccountType("standard")}
                       className={cn(
                         "p-6 rounded-md border-2 text-center transition-all hover:border-[#007AFF]",
-                        selectedAccountType === "lite"
+                        selectedAccountType === "standard"
                           ? "border-[#007AFF] bg-blue-50"
                           : "border-gray-200 hover:bg-gray-50"
                       )}
                     >
                       <div className="space-y-3">
-                        <div className="w-12 h-12 bg-gray-100 rounded-md mx-auto flex items-center justify-center">
-                          <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
+                        <div className="w-12 h-12 bg-gray-100 rounded-md mx-auto overflow-hidden">
+                          <Image 
+                            src="/taplogo.png" 
+                            alt="Tap Standard" 
+                            width={96}
+                            height={96}
+                            className="w-full h-full object-contain"
+                            quality={100}
+                            unoptimized={true}
+                          />
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-gray-900">Tap Lite</p>
-                          <p className="text-xs text-gray-500 mt-1">Get seen. Get spend.</p>
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowAccountDetails("lite");
-                            }}
-                            className="text-xs text-[#007AFF] hover:text-[#0066CC] mt-2 transition-colors"
-                          >
-                            Learn more
-                          </button>
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* Tap Pro */}
-                    <button
-                      onClick={() => setSelectedAccountType("pro")}
-                      className={cn(
-                        "p-6 rounded-md border-2 text-center transition-all hover:border-[#007AFF]",
-                        selectedAccountType === "pro"
-                          ? "border-[#007AFF] bg-blue-50"
-                          : "border-gray-200 hover:bg-gray-50"
-                      )}
-                    >
-                      <div className="space-y-3">
-                        <div className="w-12 h-12 bg-gray-100 rounded-md mx-auto flex items-center justify-center">
-                          <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">Tap Pro</p>
+                          <p className="text-sm font-semibold text-gray-900">Tap Standard</p>
                           <p className="text-xs text-gray-500 mt-1">Your rules, your points.</p>
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
-                              setShowAccountDetails("pro");
+                              setShowAccountDetails("standard");
                             }}
                             className="text-xs text-[#007AFF] hover:text-[#0066CC] mt-2 transition-colors"
                           >
@@ -607,10 +787,16 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
                       )}
                     >
                       <div className="space-y-3">
-                        <div className="w-12 h-12 bg-gray-100 rounded-md mx-auto flex items-center justify-center">
-                          <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
+                        <div className="w-12 h-12 bg-gray-100 rounded-md mx-auto overflow-hidden">
+                          <Image 
+                            src="/tappro.png" 
+                            alt="Tap Network" 
+                            width={96}
+                            height={96}
+                            className="w-full h-full object-contain"
+                            quality={100}
+                            unoptimized={true}
+                          />
                         </div>
                         <div>
                           <p className="text-sm font-semibold text-gray-900">Tap Network</p>
@@ -632,10 +818,14 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
 
                 {/* Bottom Image */}
                 <div className="absolute bottom-0 left-0 right-0 flex justify-center pointer-events-none">
-                  <img 
+                  <Image 
                     src="/new.png" 
                     alt="Decorative bottom image" 
+                    width={400}
+                    height={300}
                     className="w-2/3 max-w-md h-auto object-contain"
+                    quality={95}
+                    priority={false}
                   />
                 </div>
 
@@ -661,8 +851,7 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
                     >
                       <div className="flex items-center justify-between mb-4">
                         <h4 className="text-lg font-semibold text-gray-900">
-                          {showAccountDetails === "lite" && "Tap Lite"}
-                          {showAccountDetails === "pro" && "Tap Pro"}
+                          {showAccountDetails === "standard" && "Tap Standard"}
                           {showAccountDetails === "network" && "Tap Network"}
                         </h4>
                         <button
@@ -673,28 +862,7 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
                         </button>
                       </div>
 
-                      {showAccountDetails === "lite" && (
-                        <div className="space-y-4">
-                          <p className="text-sm text-gray-600">
-                            <strong>Perfect for:</strong> Merchants who want immediate exposure without program complexity.
-                          </p>
-                          <div>
-                            <h5 className="text-sm font-medium text-gray-900 mb-2">What you get:</h5>
-                            <ul className="text-sm text-gray-600 space-y-1">
-                              <li>• Accept Universal TapPoints from any merchant</li>
-                              <li>• Purchase ad slots and boosted placement</li>
-                              <li>• AI-generated smart offers for your business</li>
-                              <li>• No loyalty program setup required</li>
-                            </ul>
-                          </div>
-                          <div>
-                            <h5 className="text-sm font-medium text-gray-900 mb-2">Pricing:</h5>
-                            <p className="text-sm text-gray-600">Pay-per-conversion or CPC advertising fees</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {showAccountDetails === "pro" && (
+                      {showAccountDetails === "standard" && (
                         <div className="space-y-4">
                           <p className="text-sm text-gray-600">
                             <strong>Perfect for:</strong> Established brands who want full control over their loyalty ecosystem.
@@ -741,7 +909,7 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
               </div>
             )}
 
-            {currentStep === 4 && (
+            {currentStep === 5 && (
               <div className="space-y-6">
                 <div className="text-center">
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">
@@ -749,26 +917,6 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
                   </h3>
                   <p className="text-gray-600 mb-6">
                     Tell us about your business so we can personalise your experience.
-                  </p>
-                </div>
-                
-                {/* Placeholder for content */}
-                <div className="bg-gray-50 rounded-md p-6 border-2 border-dashed border-gray-200">
-                  <p className="text-gray-500 text-center">
-                    Step 5 content will be designed here
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {currentStep === 5 && (
-              <div className="space-y-6">
-                <div className="text-center">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                    Rewards Setup
-                  </h3>
-                  <p className="text-gray-600 mb-6">
-                    Configure your first rewards to start engaging customers.
                   </p>
                 </div>
                 
@@ -785,6 +933,26 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
               <div className="space-y-6">
                 <div className="text-center">
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">
+                    Rewards Setup
+                  </h3>
+                  <p className="text-gray-600 mb-6">
+                    Configure your first rewards to start engaging customers.
+                  </p>
+                </div>
+                
+                {/* Placeholder for content */}
+                <div className="bg-gray-50 rounded-md p-6 border-2 border-dashed border-gray-200">
+                  <p className="text-gray-500 text-center">
+                    Step 7 content will be designed here
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 7 && (
+              <div className="space-y-6">
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-4">
                     Setup Complete!
                   </h3>
                   <p className="text-gray-600 mb-6">
@@ -795,7 +963,7 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
                 {/* Placeholder for content */}
                 <div className="bg-gray-50 rounded-md p-6 border-2 border-dashed border-gray-200">
                   <p className="text-gray-500 text-center">
-                    Step 7 content will be designed here
+                    Step 8 content will be designed here
                   </p>
                 </div>
               </div>

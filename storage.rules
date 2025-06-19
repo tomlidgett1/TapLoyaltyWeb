@@ -1,0 +1,20 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Allow authenticated users to read and write to their own merchant directory
+    match /merchants/{merchantId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == merchantId;
+    }
+    
+    // Specific rule for logo uploads
+    match /merchants/{merchantId}/logo/{logoId} {
+      allow read, write: if request.auth != null && request.auth.uid == merchantId;
+    }
+    
+    // Allow read access for merchant files
+    match /merchants/{merchantId}/files/{fileId} {
+      allow read, write: if request.auth != null && request.auth.uid == merchantId;
+    }
+  }
+} 

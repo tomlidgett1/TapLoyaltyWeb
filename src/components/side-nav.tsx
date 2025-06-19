@@ -61,6 +61,7 @@ import { CreatePointsRuleSheet } from "@/components/create-points-rule-sheet"
 import { IntroductoryRewardSheet } from "@/components/introductory-reward-sheet"
 import { Badge } from "@/components/ui/badge"
 import { SetupPopup } from "@/components/setup-popup"
+import { NetworkRewardSheet } from "@/components/network-reward-sheet"
 
 // Get auth instance
 const auth = getAuth();
@@ -297,6 +298,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   const [introRewardOpen, setIntroRewardOpen] = useState(false)
   const [pendingInboxCount, setPendingInboxCount] = useState(0)
   const [setupPopupOpen, setSetupPopupOpen] = useState(false)
+  const [networkRewardOpen, setNetworkRewardOpen] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isInternalChange, setIsInternalChange] = useState(true)
   const [createMenuOpen, setCreateMenuOpen] = useState(false)
@@ -358,7 +360,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   useEffect(() => {
     // Reset the dropdown states when sheets are opened or closed
     setCreateMenuOpen(false)
-  }, [createSheetOpen, createRewardSheetOpen, createRecurringOpen, createBannerOpen, broadcastDialogOpen, createRuleOpen, introRewardOpen, setupPopupOpen])
+  }, [createSheetOpen, createRewardSheetOpen, createRecurringOpen, createBannerOpen, broadcastDialogOpen, createRuleOpen, introRewardOpen, setupPopupOpen, networkRewardOpen])
 
   // Notify parent component when collapse state changes (only for internal changes)
   useEffect(() => {
@@ -650,6 +652,16 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                 <button
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
                   onClick={() => {
+                    setNetworkRewardOpen(true);
+                    setCreateMenuOpen(false);
+                  }}
+                >
+                  <ZapIcon className="h-4 w-4 mr-2" />
+                  Network Reward
+                </button>
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
+                  onClick={() => {
                     setCreateRecurringOpen(true);
                     setCreateMenuOpen(false);
                   }}
@@ -753,6 +765,16 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                 >
                   <Gift className="h-4 w-4 mr-2" />
                   New Reward
+                </button>
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
+                  onClick={() => {
+                    setNetworkRewardOpen(true);
+                    setCreateMenuOpen(false);
+                  }}
+                >
+                  <ZapIcon className="h-4 w-4 mr-2" />
+                  Network Reward
                 </button>
                 <button
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
@@ -1248,6 +1270,9 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
 
       {/* SetupPopup component */}
       <SetupPopup open={setupPopupOpen} onOpenChange={setSetupPopupOpen} />
+
+      {/* NetworkRewardSheet component */}
+      <NetworkRewardSheet open={networkRewardOpen} onOpenChange={setNetworkRewardOpen} />
     </div>
   )
 }

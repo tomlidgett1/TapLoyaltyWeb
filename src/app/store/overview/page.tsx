@@ -83,6 +83,9 @@ import {
   Coffee,
   Ticket,
   Award,
+  Star,
+  CreditCard,
+  Globe,
   Plus,
   Filter,
   MoreHorizontal,
@@ -1054,6 +1057,97 @@ function CustomerNamesList({ customerIds }: { customerIds: string[] }) {
 }
 
 // Full Rewards Tab Component
+const RewardPreviewCard = ({ reward }: { reward: Reward }) => {
+  // Check if this is a network reward
+  if ((reward as any).isNetworkReward) {
+    return (
+      <div className="bg-white border border-gray-200 rounded-xl shadow-lg px-3 py-2 w-72">
+        <div className="flex items-start justify-between">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-medium text-gray-900 truncate" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+              {reward.rewardName}
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+              {reward.description}
+            </p>
+            <div className="flex items-center gap-1 mt-1 flex-nowrap">
+              <span className="text-xs text-gray-700 whitespace-nowrap" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                ${(reward as any).discountValue || '10'} Off
+              </span>
+              <span className="text-xs text-gray-400">•</span>
+              <span className="text-xs text-gray-500 whitespace-nowrap" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                Min. spend: ${(reward as any).minimumSpend || '50'}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center justify-center bg-gray-100 text-gray-700 rounded-lg px-2 py-1 ml-3">
+            <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+              {(reward as any).networkPointsCost || reward.pointsCost || '100'}
+            </span>
+            <Globe className="w-3 h-3 ml-1" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Regular reward preview
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl shadow-lg px-3 py-2 w-72">
+      <div className="flex items-start justify-between">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-medium text-gray-900 truncate" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+            {reward.rewardName}
+          </h3>
+          <p className="text-xs text-gray-500 mt-0.5" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+            {reward.description}
+          </p>
+        </div>
+        <div 
+          className={cn(
+            "flex items-center justify-center rounded-md px-2 py-1 ml-3",
+            reward.programType === 'coffeeprogramnew'
+              ? "text-white"
+              : (reward.programType === 'voucher' || reward.programType === 'voucherprogramnew')
+                ? "bg-orange-400 text-white"
+                : (reward.pointsCost === 0) 
+                  ? "bg-green-500 text-white" 
+                  : "bg-blue-500 text-white"
+          )}
+          style={reward.programType === 'coffeeprogramnew' ? { backgroundColor: '#895129' } : {}}
+        >
+          {reward.programType === 'coffeeprogramnew' ? (
+            <>
+              <Coffee className="w-3 h-3 mr-1 fill-white" />
+              <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                Free Coffee
+              </span>
+            </>
+          ) : (reward.programType === 'voucher' || reward.programType === 'voucherprogramnew') ? (
+            <>
+              <CreditCard className="w-3 h-3 mr-1" />
+              <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                ${(reward as any).voucherAmount || '0'} voucher
+              </span>
+            </>
+          ) : (reward.pointsCost === 0) ? (
+            <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+              Free
+            </span>
+          ) : (
+            <>
+              <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                {reward.pointsCost}
+              </span>
+              <Star className="w-3 h-3 ml-1 fill-white" />
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const VisibilityStats = ({ rewardId }: { rewardId: string }) => {
   const { user } = useAuth()
   const [visibilityData, setVisibilityData] = useState<{ canSee: number; canRedeem: number } | null>(null)
@@ -1869,13 +1963,13 @@ const RewardsTabContent = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[300px]">
+                    <TableHead className="w-[320px]">
                       <Button 
                         variant="ghost" 
                         onClick={() => handleSort("rewardName")}
                         className="flex items-center gap-1 px-0 font-medium"
                       >
-                        Reward Name
+                        Preview
                         {sortField === "rewardName" && (
                           sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
                         )}
@@ -1990,28 +2084,8 @@ const RewardsTabContent = () => {
                         className="cursor-pointer hover:bg-gray-50"
                         onClick={() => handleViewReward(reward.id)}
                       >
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <div className="h-9 w-9 min-w-[36px] rounded-md bg-muted flex items-center justify-center">
-                              {reward.category === "program" 
-                                ? <Award className="h-5 w-5 text-blue-600" />
-                                : getRewardTypeIcon(reward.type)}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="truncate flex items-center gap-1">
-                                {reward.rewardName}
-                                {Array.isArray(reward.conditions) && 
-                                  reward.conditions.find(c => c.type === 'maximumTransactions')?.value === 0 && (
-                                  <Badge variant="outline" className="ml-1 py-0 h-4 text-[10px] px-1.5 bg-gray-50 text-gray-700 border-gray-200 rounded-md">
-                                    New Customers
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="text-xs text-muted-foreground line-clamp-1">
-                                {reward.description}
-                              </div>
-                            </div>
-                          </div>
+                        <TableCell className="font-medium py-2 px-4">
+                          <RewardPreviewCard reward={reward} />
                         </TableCell>
                         <TableCell className="text-center">
                           {reward.programType === "agent" ? (
@@ -4366,7 +4440,7 @@ const ProgramRewardsTable = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[300px]">Reward Name</TableHead>
+                <TableHead className="w-[320px]">Preview</TableHead>
                 <TableHead className="text-center">Program Type</TableHead>
                 <TableHead className="text-center">Customer</TableHead>
                 <TableHead className="text-center">Value</TableHead>
@@ -4407,18 +4481,8 @@ const ProgramRewardsTable = () => {
                     className="cursor-pointer hover:bg-gray-50"
                     onClick={() => handleRewardClick(reward.id)}
                   >
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <div className="h-9 w-9 min-w-[36px] rounded-md bg-muted flex items-center justify-center">
-                          {getProgramTypeIcon(reward.programtype || '')}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="truncate">{reward.rewardName}</div>
-                          <div className="text-xs text-muted-foreground line-clamp-1">
-                            {reward.description || 'No description'}
-                          </div>
-                        </div>
-                      </div>
+                    <TableCell className="font-medium py-2 px-4">
+                      <RewardPreviewCard reward={reward} />
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="font-medium text-gray-700">

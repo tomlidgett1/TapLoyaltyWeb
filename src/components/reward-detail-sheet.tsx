@@ -22,7 +22,7 @@ import { CreateRewardDialog } from "@/components/create-reward-dialog"
 
 import { 
   ArrowLeft, Calendar, Clock, Gift, Tag, Users, Zap, 
-  ChevronRight, BarChart, Award, CheckCircle, AlertCircle, Edit, Eye, Copy, Trash
+  ChevronRight, BarChart, Award, CheckCircle, AlertCircle, Edit, Eye, Copy, Trash, Star, CreditCard, Coffee, Globe
 } from "lucide-react"
 import { formatDate } from '@/lib/date-utils'
 import { cn } from "@/lib/utils"
@@ -669,22 +669,79 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
           <ScrollArea className="h-[calc(100vh-8rem)]">
             <div className="px-6 py-6">
               <TabsContent value="overview" className="mt-0 space-y-6">
-                {/* Hero Section */}
-                <div className="bg-white rounded-md border shadow-sm p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        {reward.customers && reward.customers.length > 0 && (
-                          <Badge className="bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200 rounded-sm">
-                            Customer Specific
-                          </Badge>
+                                {/* App Preview Card */}
+                <div className="flex-shrink-0 w-fit">
+                  <div className="text-xs text-gray-500 mb-2 font-medium">Preview</div>
+                  <div className="bg-white border border-gray-200 rounded-xl shadow-lg px-3 py-2 w-80">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-medium text-gray-900 truncate" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                          {reward.rewardName}
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-0.5" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                          {reward.description}
+                        </p>
+                        {(reward as any).isNetworkReward && (
+                          <div className="flex items-center gap-1 mt-1 flex-nowrap">
+                            <span className="text-xs text-gray-700 whitespace-nowrap" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                              ${(reward as any).discountValue || '10'} Off
+                            </span>
+                            <span className="text-xs text-gray-400">•</span>
+                            <span className="text-xs text-gray-500 whitespace-nowrap" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                              Min. spend: ${(reward as any).minimumSpend || '50'}
+                            </span>
+                          </div>
                         )}
                       </div>
-                      <p className="text-gray-500 text-sm">{reward.description}</p>
-                    </div>
-                    <div className="bg-primary/5 px-4 py-2 rounded-md text-center">
-                      <div className="text-xl font-bold text-primary">{reward.pointsCost}</div>
-                      <div className="text-xs text-gray-500">points</div>
+                      <div 
+                        className={cn(
+                          "flex items-center justify-center rounded-md px-2 py-1 ml-3",
+                          (reward as any).isNetworkReward
+                            ? "bg-gray-100 text-gray-700 rounded-lg"
+                            : (reward as any).programType === 'coffeeprogramnew'
+                              ? "text-white"
+                              : ((reward as any).programType === 'voucher' || (reward as any).programType === 'voucherprogramnew')
+                                ? "bg-orange-400 text-white"
+                                : (reward.pointsCost === 0 || reward.pointsCost === '0') 
+                                  ? "bg-green-500 text-white" 
+                                  : "bg-blue-500 text-white"
+                        )}
+                        style={(reward as any).programType === 'coffeeprogramnew' && !(reward as any).isNetworkReward ? { backgroundColor: '#895129' } : {}}
+                      >
+                        {(reward as any).isNetworkReward ? (
+                          <>
+                            <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                              {(reward as any).networkPointsCost || reward.pointsCost || '100'}
+                            </span>
+                            <Globe className="w-3 h-3 ml-1" />
+                          </>
+                        ) : (reward as any).programType === 'coffeeprogramnew' ? (
+                          <>
+                            <Coffee className="w-3 h-3 mr-1 fill-white" />
+                            <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                              Free Coffee
+                            </span>
+                          </>
+                        ) : ((reward as any).programType === 'voucher' || (reward as any).programType === 'voucherprogramnew') ? (
+                          <>
+                            <CreditCard className="w-3 h-3 mr-1" />
+                            <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                              ${(reward as any).voucherAmount || '0'} voucher
+                            </span>
+                          </>
+                        ) : (reward.pointsCost === 0 || reward.pointsCost === '0') ? (
+                          <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                            Free
+                          </span>
+                        ) : (
+                          <>
+                            <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                              {reward.pointsCost}
+                            </span>
+                            <Star className="w-3 h-3 ml-1 fill-white" />
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

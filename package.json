@@ -11,6 +11,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",
     "@fontsource/inter": "^5.1.1",
+    "@google-cloud/storage": "^7.16.0",
     "@hookform/resolvers": "^4.1.2",
     "@icons-pack/react-simple-icons": "^12.8.0",
     "@mailchimp/mailchimp_marketing": "^3.0.80",
@@ -62,7 +63,7 @@
     "date-fns": "^3.6.0",
     "firebase": "^11.3.1",
     "firebase-admin": "^13.1.0",
-    "formidable": "^3.5.2",
+    "formidable": "^3.5.4",
     "framer-motion": "^11.18.2",
     "jotai": "^2.12.5",
     "jspdf": "^3.0.0",

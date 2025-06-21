@@ -73,9 +73,189 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
   const [isEditingName, setIsEditingName] = useState(false)
   const [rewards, setRewards] = useState<ProgramReward[]>([])
   const [expandedReward, setExpandedReward] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'setup' | 'how-it-works' | 'data-example'>('setup')
+  const [activeTab, setActiveTab] = useState<'setup' | 'templates' | 'how-it-works' | 'data-example'>('setup')
   const [validationErrors, setValidationErrors] = useState<Record<string, string[]>>({})
   const [isSaving, setIsSaving] = useState(false)
+  const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null)
+  const [selectedIndustry, setSelectedIndustry] = useState<'food' | 'entertainment' | 'retail'>('food')
+
+  // Template data organized by industry
+  const templatesByIndustry = {
+    food: [
+      {
+        id: 'cafe',
+        name: 'Coffee Shop',
+        description: 'Perfect for cafes',
+        programName: 'Coffee Loyalty Program',
+        pin: '2468',
+        rewards: [
+          {
+            id: 'reward-1',
+            name: '10% Off First Purchase',
+            description: 'Welcome discount for new customers',
+            type: 'discount' as const,
+            value: 10,
+            discountType: 'percentage' as const,
+            pointsCost: 0,
+            conditions: [{ id: 'c1', type: 'transaction_count' as const, value: 1, description: 'After 1 transaction' }],
+            limitations: [],
+            order: 0
+          },
+          {
+            id: 'reward-2',
+            name: 'Free Coffee',
+            description: 'Complimentary regular coffee',
+            type: 'free_item' as const,
+            value: 0,
+            freeItemName: 'Regular Coffee',
+            pointsCost: 0,
+            conditions: [{ id: 'c2', type: 'transaction_count' as const, value: 5, description: 'After 5 transactions' }],
+            limitations: [],
+            order: 1
+          },
+          {
+            id: 'reward-3',
+            name: 'Buy 2 Get 1 Free Pastry',
+            description: 'Buy two pastries, get one free',
+            type: 'buy_x_get_y' as const,
+            value: 0,
+            buyQuantity: 2,
+            getQuantity: 1,
+            buyItemName: 'Pastry',
+            getItemName: 'Pastry',
+            getDiscountType: 'free' as const,
+            pointsCost: 0,
+            conditions: [{ id: 'c3', type: 'transaction_count' as const, value: 10, description: 'After 10 transactions' }],
+            limitations: [],
+            order: 2
+          }
+        ]
+      },
+      {
+        id: 'restaurant',
+        name: 'Restaurant',
+        description: 'For dining establishments',
+        programName: 'Diner Rewards Program',
+        pin: '3579',
+        rewards: [
+          {
+            id: 'reward-1',
+            name: 'Free Appetizer',
+            description: 'Complimentary starter',
+            type: 'free_item' as const,
+            value: 0,
+            freeItemName: 'Appetizer',
+            pointsCost: 0,
+            conditions: [{ id: 'c1', type: 'spend_amount' as const, value: 75, description: 'After spending $75' }],
+            limitations: [],
+            order: 0
+          }
+        ]
+      }
+    ],
+    entertainment: [
+      {
+        id: 'pub',
+        name: 'Pub & Bar',
+        description: 'Great for pubs and bars',
+        programName: 'Pub Loyalty Program',
+        pin: '1357',
+        rewards: [
+          {
+            id: 'reward-1',
+            name: '15% Off Food',
+            description: 'Discount on all food items',
+            type: 'discount' as const,
+            value: 15,
+            discountType: 'percentage' as const,
+            pointsCost: 0,
+            conditions: [{ id: 'c1', type: 'spend_amount' as const, value: 50, description: 'After spending $50' }],
+            limitations: [],
+            order: 0
+          },
+          {
+            id: 'reward-2',
+            name: 'Free Appetiser',
+            description: 'Complimentary starter',
+            type: 'free_item' as const,
+            value: 0,
+            freeItemName: 'House Appetiser',
+            pointsCost: 0,
+            conditions: [{ id: 'c2', type: 'visit_count' as const, value: 8, description: 'After 8 visits' }],
+            limitations: [],
+            order: 1
+          }
+        ]
+      }
+    ],
+    retail: [
+      {
+        id: 'retail',
+        name: 'Retail Store',
+        description: 'Ideal for retail stores',
+        programName: 'VIP Customer Program',
+        pin: '9876',
+        rewards: [
+          {
+            id: 'reward-1',
+            name: '$5 Off Purchase',
+            description: 'Dollar discount on any purchase',
+            type: 'discount' as const,
+            value: 5,
+            discountType: 'dollar' as const,
+            pointsCost: 0,
+            conditions: [{ id: 'c1', type: 'transaction_count' as const, value: 3, description: 'After 3 transactions' }],
+            limitations: [],
+            order: 0
+          },
+          {
+            id: 'reward-2',
+            name: '20% Off Next Purchase',
+            description: 'Percentage discount',
+            type: 'discount' as const,
+            value: 20,
+            discountType: 'percentage' as const,
+            pointsCost: 0,
+            conditions: [{ id: 'c2', type: 'spend_amount' as const, value: 100, description: 'After spending $100' }],
+            limitations: [],
+            order: 1
+          }
+        ]
+      },
+      {
+        id: 'boutique',
+        name: 'Boutique',
+        description: 'For fashion & specialty stores',
+        programName: 'Style Rewards',
+        pin: '4680',
+        rewards: [
+          {
+            id: 'reward-1',
+            name: '25% Off',
+            description: 'Premium discount',
+            type: 'discount' as const,
+            value: 25,
+            discountType: 'percentage' as const,
+            pointsCost: 0,
+            conditions: [{ id: 'c1', type: 'spend_amount' as const, value: 150, description: 'After spending $150' }],
+            limitations: [],
+            order: 0
+          }
+        ]
+      }
+    ]
+  }
+
+  type TemplateType = typeof templatesByIndustry.food[0]
+  
+  const applyTemplate = (template: TemplateType) => {
+    setProgramName(template.programName)
+    setProgramPin(template.pin)
+    setRewards(template.rewards as ProgramReward[])
+    setActiveTab('setup')
+    // Validate after applying template
+    setTimeout(() => validateSequentialConditions(), 0)
+  }
 
   const addReward = () => {
     const newReward: ProgramReward = {
@@ -168,8 +348,6 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
     })
   }
 
-
-
   const removeCondition = (rewardId: string, conditionId: string) => {
     const reward = rewards.find(r => r.id === rewardId)
     if (reward) {
@@ -178,8 +356,6 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
       })
     }
   }
-
-
 
   const getRewardIcon = (type: string) => {
     switch (type) {
@@ -208,8 +384,6 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
         return condition.description
     }
   }
-
-
 
   const getMinimumValueForCondition = (rewardId: string, conditionType: 'transaction_count' | 'spend_amount' | 'visit_count'): number => {
     const currentReward = rewards.find(r => r.id === rewardId)
@@ -256,7 +430,7 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
       })
       return
     }
-
+    
     if (rewards.length === 0) {
       toast({
         title: "No Rewards",
@@ -429,6 +603,17 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
                 </button>
                 <button
                   className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    activeTab === 'templates'
+                      ? "text-gray-800 bg-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-200/70"
+                  }`}
+                  onClick={() => setActiveTab('templates')}
+                >
+                  <Star className="h-3 w-3" />
+                  Templates
+                </button>
+                <button
+                  className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
                     activeTab === 'how-it-works'
                       ? "text-gray-800 bg-white shadow-sm"
                       : "text-gray-600 hover:bg-gray-200/70"
@@ -584,13 +769,13 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
 
                             <div className="grid grid-cols-2 gap-4">
                               <div className="col-span-2">
-                                <Label className="text-xs text-gray-600">Description</Label>
-                                <Textarea
-                                  value={reward.description}
-                                  onChange={(e) => updateReward(reward.id, { description: e.target.value })}
-                                  className="mt-1 text-sm min-h-[60px]"
-                                  placeholder="Describe this reward..."
-                                />
+                              <Label className="text-xs text-gray-600">Description</Label>
+                              <Textarea
+                                value={reward.description}
+                                onChange={(e) => updateReward(reward.id, { description: e.target.value })}
+                                className="mt-1 text-sm min-h-[60px]"
+                                placeholder="Describe this reward..."
+                              />
                               </div>
                               <div className="col-span-1">
                                 <Label className="text-xs text-gray-600">Points Cost</Label>
@@ -652,18 +837,18 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
 
                             {reward.type === 'buy_x_get_y' && (
                               <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <Label className="text-xs text-gray-600">Buy Quantity</Label>
-                                    <Input
-                                      type="number"
-                                      value={reward.buyQuantity || 1}
-                                      onChange={(e) => updateReward(reward.id, { buyQuantity: parseInt(e.target.value) || 1 })}
-                                      className="mt-1 h-8 text-sm"
-                                      min="1"
-                                    />
-                                  </div>
-                                  <div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <Label className="text-xs text-gray-600">Buy Quantity</Label>
+                                  <Input
+                                    type="number"
+                                    value={reward.buyQuantity || 1}
+                                    onChange={(e) => updateReward(reward.id, { buyQuantity: parseInt(e.target.value) || 1 })}
+                                    className="mt-1 h-8 text-sm"
+                                    min="1"
+                                  />
+                                </div>
+                                <div>
                                     <Label className="text-xs text-gray-600">Buy Item Name</Label>
                                     <Input
                                       value={reward.buyItemName || ''}
@@ -676,13 +861,13 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
                                 <div className="grid grid-cols-2 gap-4">
                                   <div>
                                     <Label className="text-xs text-gray-600">Get Quantity</Label>
-                                    <Input
-                                      type="number"
-                                      value={reward.getQuantity || 1}
-                                      onChange={(e) => updateReward(reward.id, { getQuantity: parseInt(e.target.value) || 1 })}
-                                      className="mt-1 h-8 text-sm"
-                                      min="1"
-                                    />
+                                  <Input
+                                    type="number"
+                                    value={reward.getQuantity || 1}
+                                    onChange={(e) => updateReward(reward.id, { getQuantity: parseInt(e.target.value) || 1 })}
+                                    className="mt-1 h-8 text-sm"
+                                    min="1"
+                                  />
                                   </div>
                                   <div>
                                     <Label className="text-xs text-gray-600">Get Item Name</Label>
@@ -844,12 +1029,12 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
 
                             {/* Limitations - Fixed to customerLimit only */}
                             <div>
-                              <Label className="text-xs text-gray-600">Limitations</Label>
+                                <Label className="text-xs text-gray-600">Limitations</Label>
                               <div className="mt-2 p-2 bg-gray-50 rounded-md border border-gray-200">
                                 <span className="text-xs text-gray-700">
                                   Customer Limit: Each customer can earn this reward only once
-                                </span>
-                              </div>
+                                      </span>
+                                    </div>
                             </div>
                           </div>
                         </motion.div>
@@ -921,9 +1106,9 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
                                         {(reward.pointsCost && reward.pointsCost > 0) && <span className="text-xs text-gray-400">•</span>}
                                       </>
                                     )}
-                                    <span className="text-xs text-gray-500 whitespace-nowrap" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                                      <span className="text-xs text-gray-500 whitespace-nowrap" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
                                       One per customer
-                                    </span>
+                                      </span>
                                     {(reward.pointsCost && reward.pointsCost > 0) && (
                                       <>
                                         <span className="text-xs text-gray-400">•</span>
@@ -997,88 +1182,258 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
                 </div>
               </div>
             </div>
-            ) : activeTab === 'how-it-works' ? (
-              /* How This Works Tab Content */
-              <div className="p-6 overflow-y-auto custom-scrollbar">
-                <div className="max-w-4xl mx-auto">
-                  <div className="space-y-6">
+            ) : activeTab === 'templates' ? (
+              /* Templates Tab Content */
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                className="h-full overflow-y-auto custom-scrollbar"
+              >
+                <div className="p-6">
+                  <div className="max-w-6xl mx-auto">
+                    <div className="space-y-6">
+                    {/* Industry Tabs - Top Left */}
+                    <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+                      <button
+                        className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                          selectedIndustry === 'food'
+                            ? "text-gray-800 bg-white shadow-sm"
+                            : "text-gray-600 hover:bg-gray-200/70"
+                        }`}
+                        onClick={() => setSelectedIndustry('food')}
+                      >
+                        <Coffee className="h-3 w-3" />
+                        Food & Beverage
+                      </button>
+                      <button
+                        className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                          selectedIndustry === 'entertainment'
+                            ? "text-gray-800 bg-white shadow-sm"
+                            : "text-gray-600 hover:bg-gray-200/70"
+                        }`}
+                        onClick={() => setSelectedIndustry('entertainment')}
+                      >
+                        <ShoppingBag className="h-3 w-3" />
+                        Entertainment
+                      </button>
+                      <button
+                        className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                          selectedIndustry === 'retail'
+                            ? "text-gray-800 bg-white shadow-sm"
+                            : "text-gray-600 hover:bg-gray-200/70"
+                        }`}
+                        onClick={() => setSelectedIndustry('retail')}
+                      >
+                        <Award className="h-3 w-3" />
+                        Retail
+                      </button>
+                    </div>
+
+                    {/* Template Grid - 4 per row */}
+                    <div className="grid grid-cols-4 gap-4">
+                      {templatesByIndustry[selectedIndustry].map((template) => {
+                        const isExpanded = expandedTemplate === template.id
+                        return (
+                          <motion.div 
+                            key={template.id} 
+                            className="bg-white border border-gray-200 rounded-md overflow-hidden hover:border-blue-300 transition-all duration-200"
+                            whileHover={{ y: -2 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            {/* Card Header */}
+                            <div 
+                              className="p-4 cursor-pointer"
+                              onClick={() => setExpandedTemplate(expandedTemplate === template.id ? null : template.id)}
+                            >
+                              <div className="text-center space-y-3">
+                                <div>
+                                  <h3 className="font-medium text-gray-900 text-sm mb-1">{template.name}</h3>
+                                  <p className="text-xs text-gray-600">{template.description}</p>
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {template.rewards.length} rewards • PIN: {template.pin}
+                                </div>
+                                <div className="flex items-center justify-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      applyTemplate(template as any)
+                                    }}
+                                    className="h-7 px-3 text-xs"
+                                    style={{ 
+                                      borderColor: '#007AFF',
+                                      color: '#007AFF'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.backgroundColor = '#007AFF'
+                                      e.currentTarget.style.color = 'white'
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.backgroundColor = 'transparent'
+                                      e.currentTarget.style.color = '#007AFF'
+                                    }}
+                                  >
+                                    Use Template
+                                  </Button>
+                                  <motion.div
+                                    animate={{ rotate: expandedTemplate === template.id ? 180 : 0 }}
+                                    transition={{ duration: 0.2 }}
+                                  >
+                                    <ChevronDown className="h-4 w-4 text-gray-400" />
+                                  </motion.div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Expandable Reward Details */}
+                            <AnimatePresence>
+                              {expandedTemplate === template.id && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: 'auto', opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.3, ease: "easeOut" }}
+                                  className="border-t border-gray-100 bg-gray-50"
+                                >
+                                  <div className="p-4 space-y-3">
+                                    <h4 className="text-xs font-medium text-gray-700 mb-2">Reward Structure</h4>
+                                    <div className="space-y-2">
+                                      {template.rewards.map((reward: any, index: number) => (
+                                        <motion.div 
+                                          key={reward.id}
+                                          initial={{ opacity: 0, y: 10 }}
+                                          animate={{ opacity: 1, y: 0 }}
+                                          transition={{ delay: index * 0.1, duration: 0.2 }}
+                                          className="bg-white rounded-md p-2 border border-gray-200"
+                                        >
+                                          <div className="flex items-start gap-2">
+                                            <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                              <span className="text-xs font-medium text-blue-700">{index + 1}</span>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                              <div className="text-xs font-medium text-gray-900 mb-1">{reward.name}</div>
+                                              <div className="text-xs text-gray-600 mb-1">{reward.description}</div>
+                                              <div className="text-xs text-gray-500">
+                                                {reward.conditions[0]?.description || 'No conditions'}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </motion.div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </motion.div>
+                        )
+                      })}
+                    </div>
+
                     <div className="text-center">
-                      <h2 className="text-xl font-semibold text-gray-900 mb-2">How Manual Programs Work</h2>
-                      <p className="text-gray-600">Create sequential reward programs that guide customers through a journey</p>
+                      <p className="text-xs text-gray-500">Templates can be customised in the Set Up tab after selection</p>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {/* Step 1 */}
+                  </div>
+                </div>
+              </div>
+                </motion.div>
+            ) : activeTab === 'how-it-works' ? (
+                            /* How This Works Tab Content */
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                className="h-full overflow-y-auto custom-scrollbar"
+              >
+                <div className="p-6">
+                  <div className="max-w-6xl mx-auto">
+                    <div className="space-y-6">
                       <div className="text-center">
-                        <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#007AFF20' }}>
-                          <span className="text-lg font-semibold" style={{ color: '#007AFF' }}>1</span>
-                        </div>
-                        <h3 className="font-medium text-gray-900 mb-2">Set Conditions</h3>
-                        <p className="text-sm text-gray-600">Define when customers become eligible for each reward based on transactions, spending, or visits.</p>
+                        <h2 className="text-xl font-semibold text-gray-900 mb-2">How Manual Programs Work</h2>
+                        <p className="text-gray-600">Create sequential reward programs that guide customers through a journey</p>
                       </div>
 
-                      {/* Step 2 */}
-                      <div className="text-center">
-                        <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#007AFF20' }}>
-                          <span className="text-lg font-semibold" style={{ color: '#007AFF' }}>2</span>
-                        </div>
-                        <h3 className="font-medium text-gray-900 mb-2">Configure Rewards</h3>
-                        <p className="text-sm text-gray-600">Choose from discounts, free items, buy-X-get-Y offers, or vouchers with custom values.</p>
-                      </div>
-
-                      {/* Step 3 */}
-                      <div className="text-center">
-                        <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#007AFF20' }}>
-                          <span className="text-lg font-semibold" style={{ color: '#007AFF' }}>3</span>
-                        </div>
-                        <h3 className="font-medium text-gray-900 mb-2">Set Limitations</h3>
-                        <p className="text-sm text-gray-600">Control how often rewards can be used - one-time, daily, weekly, or monthly limits.</p>
-                      </div>
-                    </div>
-
-                    <div className="bg-gray-50 rounded-lg p-6">
-                      <h3 className="font-medium text-gray-900 mb-3">Example Program Flow</h3>
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                            <span className="text-xs font-medium text-green-700">1</span>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Step 1 */}
+                        <div className="text-center">
+                          <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#007AFF20' }}>
+                            <span className="text-lg font-semibold" style={{ color: '#007AFF' }}>1</span>
                           </div>
-                          <span className="text-sm text-gray-700">After 1 transaction → 10% off next purchase</span>
+                          <h3 className="font-medium text-gray-900 mb-2">Set Conditions</h3>
+                          <p className="text-sm text-gray-600">Define when customers become eligible for each reward based on transactions, spending, or visits.</p>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                            <span className="text-xs font-medium text-green-700">2</span>
+
+                        {/* Step 2 */}
+                        <div className="text-center">
+                          <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#007AFF20' }}>
+                            <span className="text-lg font-semibold" style={{ color: '#007AFF' }}>2</span>
                           </div>
-                          <span className="text-sm text-gray-700">After 3 transactions → Free coffee</span>
+                          <h3 className="font-medium text-gray-900 mb-2">Configure Rewards</h3>
+                          <p className="text-sm text-gray-600">Choose from discounts, free items, buy-X-get-Y offers, or vouchers with custom values.</p>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                            <span className="text-xs font-medium text-green-700">3</span>
+
+                        {/* Step 3 */}
+                        <div className="text-center">
+                          <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#007AFF20' }}>
+                            <span className="text-lg font-semibold" style={{ color: '#007AFF' }}>3</span>
                           </div>
-                          <span className="text-sm text-gray-700">After spending $50 → $10 voucher</span>
+                          <h3 className="font-medium text-gray-900 mb-2">Set Limitations</h3>
+                          <p className="text-sm text-gray-600">Control how often rewards can be used - one-time, daily, weekly, or monthly limits.</p>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="bg-blue-50 rounded-lg p-4" style={{ backgroundColor: '#007AFF10' }}>
-                      <div className="flex items-start gap-3">
-                        <div className="w-5 h-5 rounded-full flex items-center justify-center mt-0.5" style={{ backgroundColor: '#007AFF' }}>
-                          <span className="text-xs text-white font-bold">!</span>
+                      <div className="bg-gray-50 rounded-lg p-6">
+                        <h3 className="font-medium text-gray-900 mb-3">Example Program Flow</h3>
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                              <span className="text-xs font-medium text-green-700">1</span>
+                            </div>
+                            <span className="text-sm text-gray-700">After 1 transaction → 10% off next purchase</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                              <span className="text-xs font-medium text-green-700">2</span>
+                            </div>
+                            <span className="text-sm text-gray-700">After 3 transactions → Free coffee</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                              <span className="text-xs font-medium text-green-700">3</span>
+                            </div>
+                            <span className="text-sm text-gray-700">After spending $50 → $10 voucher</span>
+                          </div>
                         </div>
-                        <div>
-                          <h4 className="font-medium text-gray-900 mb-1">Pro Tip</h4>
-                          <p className="text-sm text-gray-700">Start with simple conditions and gradually add complexity. Monitor the preview panel to see how rewards will appear to customers.</p>
+                      </div>
+
+                      <div className="bg-blue-50 rounded-lg p-4" style={{ backgroundColor: '#007AFF10' }}>
+                        <div className="flex items-start gap-3">
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center mt-0.5" style={{ backgroundColor: '#007AFF' }}>
+                            <span className="text-xs text-white font-bold">!</span>
+                          </div>
+                          <div>
+                            <h4 className="font-medium text-gray-900 mb-1">Pro Tip</h4>
+                            <p className="text-sm text-gray-700">Start with simple conditions and gradually add complexity. Monitor the preview panel to see how rewards will appear to customers.</p>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             ) : (
               /* Data Example Tab Content */
-              <div className="h-full overflow-y-auto custom-scrollbar">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                className="h-full overflow-y-auto custom-scrollbar"
+              >
                 <div className="p-6">
-                  <div className="max-w-4xl mx-auto">
+                  <div className="max-w-6xl mx-auto">
                   <div className="space-y-6">
                     <div className="text-center">
                       <h2 className="text-xl font-semibold text-gray-900 mb-2">Firestore Data Structure</h2>
@@ -1223,12 +1578,12 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
                             <li>• Reward IDs and condition/limitation IDs are auto-generated</li>
                           </ul>
                         </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
+              </motion.div>
             )}
           </div>
 

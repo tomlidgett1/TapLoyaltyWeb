@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, query, getDocs, orderBy, limit, where, doc, getDoc, Timestamp } from "firebase/firestore"
+import { collection, query, getDocs, orderBy, limit, where, doc, getDoc, Timestamp, serverTimestamp } from "firebase/firestore"
 import { format, formatDistanceToNow } from "date-fns"
 import Link from "next/link"
 import { useCustomers } from "@/hooks/use-customers"
@@ -215,6 +215,20 @@ interface PointsRule {
   status: string;
   createdAt: any;
   triggeredCount?: number;
+}
+
+interface CustomProgram {
+  id: string;
+  name: string;
+  description?: string;
+  pin: string;
+  type: 'manual';
+  status: 'active' | 'inactive';
+  isActive?: boolean;
+  rewards: any[];
+  createdAt: any;
+  updatedAt: any;
+  totalRewards: number;
 }
 
 interface Message {
@@ -541,9 +555,11 @@ const ProgramsTabContent = () => {
   const router = useRouter()
   const { user } = useAuth()
   const [activePrograms, setActivePrograms] = useState<any[]>([])
+  const [customPrograms, setCustomPrograms] = useState<CustomProgram[]>([])
   const [loading, setLoading] = useState(true)
   const [programRewardCounts, setProgramRewardCounts] = useState<Record<string, number>>({})
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [editingProgram, setEditingProgram] = useState<CustomProgram | null>(null)
   
   // Fetch active programs from merchant document
   useEffect(() => {
@@ -590,6 +606,43 @@ const ProgramsTabContent = () => {
     }
 
     fetchActivePrograms()
+  }, [user])
+
+  // Fetch custom programs from customprograms collection
+  useEffect(() => {
+    const fetchCustomPrograms = async () => {
+      if (!user?.uid) return
+
+      try {
+        const customProgramsRef = collection(db, 'merchants', user.uid, 'customprograms')
+        const customProgramsQuery = query(customProgramsRef, orderBy('createdAt', 'desc'))
+        const customProgramsSnapshot = await getDocs(customProgramsQuery)
+        
+        const programs: CustomProgram[] = []
+        customProgramsSnapshot.docs.forEach(doc => {
+          const data = doc.data()
+          programs.push({
+            id: doc.id,
+            name: data.name,
+            description: data.description,
+            pin: data.pin,
+            type: data.type,
+            status: data.status,
+            isActive: data.status === 'active',
+            rewards: data.rewards || [],
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            totalRewards: data.totalRewards || data.rewards?.length || 0
+          })
+        })
+        
+        setCustomPrograms(programs)
+      } catch (error) {
+        console.error("Error fetching custom programs:", error)
+      }
+    }
+
+    fetchCustomPrograms()
   }, [user])
 
   // Fetch program reward counts
@@ -666,6 +719,34 @@ const ProgramsTabContent = () => {
     }
   }
 
+  const toggleCustomProgramActive = async (programId: string) => {
+    if (!user?.uid) return
+
+    try {
+      const programRef = doc(db, 'merchants', user.uid, 'customprograms', programId)
+      const programSnapshot = await getDoc(programRef)
+      
+      if (programSnapshot.exists()) {
+        const currentStatus = programSnapshot.data().status
+        const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
+        
+        await updateDoc(programRef, {
+          status: newStatus,
+          updatedAt: serverTimestamp()
+        })
+        
+        // Update local state
+        setCustomPrograms(prev => prev.map(program => 
+          program.id === programId
+            ? { ...program, status: newStatus, isActive: newStatus === 'active' }
+            : program
+        ))
+      }
+    } catch (error) {
+      console.error("Error toggling custom program status:", error)
+    }
+  }
+
   const handleEditProgram = (programType: 'coffee' | 'voucher' | 'transaction') => {
     router.push(`/programs?type=${programType}`)
   }
@@ -684,6 +765,12 @@ const ProgramsTabContent = () => {
   }
 
   const handleCreateManualProgram = () => {
+    setEditingProgram(null)
+    setShowCreateDialog(true)
+  }
+
+  const handleEditCustomProgram = (program: CustomProgram) => {
+    setEditingProgram(program)
     setShowCreateDialog(true)
   }
 
@@ -1167,61 +1254,138 @@ const ProgramsTabContent = () => {
         <div className="flex justify-center py-12">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
           </div>
-      ) : activePrograms.length > 0 ? (
-        <div>
-          <h3 className="text-md font-medium mb-4">Active Programs</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {activePrograms.map((program, index) => {
-              const rewardCount = programRewardCounts[program.type] || 0
-              return (
-                <div key={index} className="bg-gray-50 border border-gray-200 rounded-md p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      {getProgramTypeIcon(program.type)}
-                      <span className="font-medium text-sm capitalize">
-                        {program.type === 'coffee' ? 'Coffee Program' : 
-                         program.type === 'voucher' ? 'Recurring Voucher' : 
-                         'Transaction Program'}
-                      </span>
-      </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleEditProgram(program.type)}
-                        className="p-1 text-gray-400 hover:text-gray-600 transition-colors duration-200"
-                      >
-                        <Settings className="h-4 w-4" />
-                      </button>
-                      <Switch
-                        checked={program.active}
-                        onCheckedChange={() => toggleProgramActive(program.originalIndex, program.type)}
-                      />
-          </div>
-                  </div>
-                  <p className="text-xs text-gray-600 mb-2">{program.name || 'Unnamed Program'}</p>
-                  <div className="flex items-center justify-between">
-                    <div className={`text-xs font-medium ${program.active ? 'text-green-600' : 'text-gray-500'}`}>
-                      {program.active ? 'Active' : 'Inactive'}
+      ) : (activePrograms.length > 0 || customPrograms.length > 0) ? (
+        <div className="space-y-6">
+          {/* Built-in Programs */}
+          {activePrograms.length > 0 && (
+            <div>
+              <h3 className="text-md font-medium mb-4">Built-in Programs</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {activePrograms.map((program, index) => {
+                  const rewardCount = programRewardCounts[program.type] || 0
+                  return (
+                    <div key={index} className="bg-gray-50 border border-gray-200 rounded-md p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          {getProgramTypeIcon(program.type)}
+                          <span className="font-medium text-sm capitalize">
+                            {program.type === 'coffee' ? 'Coffee Program' : 
+                             program.type === 'voucher' ? 'Recurring Voucher' : 
+                             'Transaction Program'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleEditProgram(program.type)}
+                            className="p-1 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                          >
+                            <Settings className="h-4 w-4" />
+                          </button>
+                          <Switch
+                            checked={program.active}
+                            onCheckedChange={() => toggleProgramActive(program.originalIndex, program.type)}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-600 mb-2">{program.name || 'Unnamed Program'}</p>
+                      <div className="flex items-center justify-between">
+                        <div className={`text-xs font-medium ${program.active ? 'text-green-600' : 'text-gray-500'}`}>
+                          {program.active ? 'Active' : 'Inactive'}
+                        </div>
+                        {rewardCount > 0 && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center gap-1 text-gray-500 cursor-help">
+                                  <Award className="h-3 w-3" />
+                                  <span className="text-xs font-medium">{rewardCount}</span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                <p className="text-xs">Unredeemed rewards available for customers</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
                     </div>
-                    {rewardCount > 0 && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="flex items-center gap-1 text-gray-500 cursor-help">
-                              <Award className="h-3 w-3" />
-                              <span className="text-xs font-medium">{rewardCount}</span>
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent side="top">
-                            <p className="text-xs">Unredeemed rewards available for customers</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-          </div>
-        </div>
-              )
-            })}
-      </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Custom Manual Programs */}
+          {customPrograms.length > 0 && (
+            <div>
+              <h3 className="text-md font-medium mb-4">Custom Manual Programs</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {customPrograms.map((program) => (
+                  <div 
+                    key={program.id} 
+                    className="bg-white border border-gray-200 rounded-md p-4 shadow-sm cursor-pointer hover:border-blue-300 hover:shadow-md transition-all duration-200"
+                    onClick={() => handleEditCustomProgram(program)}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Award className="h-4 w-4 text-blue-600" />
+                        <span className="font-medium text-sm">{program.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={program.isActive}
+                          onCheckedChange={(checked) => {
+                            toggleCustomProgramActive(program.id)
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {program.description && (
+                        <div>
+                          <p className="text-xs text-gray-600">{program.description}</p>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <div className={`text-xs font-medium ${program.isActive ? 'text-green-600' : 'text-gray-500'}`}>
+                          {program.isActive ? 'Active' : 'Inactive'}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center gap-1 text-gray-500 cursor-help">
+                                  <Award className="h-3 w-3" />
+                                  <span className="text-xs font-medium">{program.totalRewards}</span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                <p className="text-xs">Total rewards in program</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center gap-1 text-gray-500 cursor-help">
+                                  <CreditCard className="h-3 w-3" />
+                                  <span className="text-xs font-medium">{program.pin}</span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                <p className="text-xs">Program PIN</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="text-center py-12">
@@ -1242,10 +1406,50 @@ const ProgramsTabContent = () => {
         </div>
       )}
       
-      {/* Create Manual Program Dialog */}
+      {/* Create/Edit Manual Program Dialog */}
       <CreateManualProgramDialog 
-        open={showCreateDialog} 
-        onOpenChange={setShowCreateDialog} 
+        open={showCreateDialog}
+        editingProgram={editingProgram}
+        onOpenChange={(open) => {
+          setShowCreateDialog(open)
+          if (!open) {
+            setEditingProgram(null)
+          }
+          // Refresh custom programs when dialog closes
+          if (!open) {
+            const fetchCustomPrograms = async () => {
+              if (!user?.uid) return
+              try {
+                const customProgramsRef = collection(db, 'merchants', user.uid, 'customprograms')
+                const customProgramsQuery = query(customProgramsRef, orderBy('createdAt', 'desc'))
+                const customProgramsSnapshot = await getDocs(customProgramsQuery)
+                
+                const programs: CustomProgram[] = []
+                customProgramsSnapshot.docs.forEach(doc => {
+                  const data = doc.data()
+                  programs.push({
+                    id: doc.id,
+                    name: data.name,
+                    description: data.description,
+                    pin: data.pin,
+                    type: data.type,
+                    status: data.status,
+                    isActive: data.status === 'active',
+                    rewards: data.rewards || [],
+                    createdAt: data.createdAt,
+                    updatedAt: data.updatedAt,
+                    totalRewards: data.totalRewards || data.rewards?.length || 0
+                  })
+                })
+                
+                setCustomPrograms(programs)
+              } catch (error) {
+                console.error("Error refreshing custom programs:", error)
+              }
+            }
+            fetchCustomPrograms()
+          }
+        }} 
       />
     </div>
   )

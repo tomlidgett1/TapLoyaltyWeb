@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Plus, Settings, Trash2, DollarSign, ShoppingBag, Coffee, ChevronDown, Eye, CreditCard, Star, Award, Database } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -19,11 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
+// import { Badge } from "@/components/ui/badge" // Unused import
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
-import { doc, setDoc, serverTimestamp } from "firebase/firestore"
+import { doc, setDoc, serverTimestamp, deleteDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 
 interface Condition {
@@ -64,11 +64,19 @@ interface ProgramReward {
 interface CreateManualProgramDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  editingProgram?: {
+    id: string
+    name: string
+    description?: string
+    pin: string
+    rewards: any[]
+  } | null
 }
 
-export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualProgramDialogProps) {
+export function CreateManualProgramDialog({ open, onOpenChange, editingProgram }: CreateManualProgramDialogProps) {
   const { user } = useAuth()
   const [programName, setProgramName] = useState("My Custom Program")
+  const [programDescription, setProgramDescription] = useState("")
   const [programPin, setProgramPin] = useState("")
   const [isEditingName, setIsEditingName] = useState(false)
   const [rewards, setRewards] = useState<ProgramReward[]>([])
@@ -76,8 +84,28 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
   const [activeTab, setActiveTab] = useState<'setup' | 'templates' | 'how-it-works' | 'data-example'>('setup')
   const [validationErrors, setValidationErrors] = useState<Record<string, string[]>>({})
   const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null)
   const [selectedIndustry, setSelectedIndustry] = useState<'food' | 'entertainment' | 'retail'>('food')
+
+  // Initialize form when editing a program
+  useEffect(() => {
+    if (editingProgram) {
+      setProgramName(editingProgram.name)
+      setProgramDescription(editingProgram.description || "")
+      setProgramPin(editingProgram.pin)
+      setRewards(editingProgram.rewards as ProgramReward[] || [])
+      setActiveTab('setup')
+    } else {
+      // Reset form for new program
+      setProgramName("My Custom Program")
+      setProgramDescription("")
+      setProgramPin("")
+      setRewards([])
+      setActiveTab('setup')
+    }
+  }, [editingProgram, open])
 
   // Template data organized by industry
   const templatesByIndustry = {
@@ -250,6 +278,7 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
   
   const applyTemplate = (template: TemplateType) => {
     setProgramName(template.programName)
+    setProgramDescription(template.description)
     setProgramPin(template.pin)
     setRewards(template.rewards as ProgramReward[])
     setActiveTab('setup')
@@ -440,6 +469,24 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
       return
     }
 
+    if (!programName.trim() || programName === "My Custom Program") {
+      toast({
+        title: "Program Name Required",
+        description: "Please enter a unique program name.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!programDescription.trim()) {
+      toast({
+        title: "Description Required", 
+        description: "Please enter a program description.",
+        variant: "destructive"
+      })
+      return
+    }
+
     if (!programPin.trim()) {
       toast({
         title: "PIN Required",
@@ -453,7 +500,8 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
 
     try {
       const merchantId = user.uid
-      const programId = `program_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      const programId = editingProgram?.id || `program_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      const isEditing = !!editingProgram
       
       // Helper function to remove undefined values
       const cleanObject = (obj: any): any => {
@@ -476,6 +524,7 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
       // Prepare the program data
       const programData = cleanObject({
         name: programName,
+        description: programDescription,
         pin: programPin,
         type: 'manual',
         status: 'active',
@@ -526,11 +575,11 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
       await setDoc(programRef, programData)
 
       toast({
-        title: "Program Saved Successfully",
-        description: `"${programName}" has been saved to your merchant account.`
+        title: isEditing ? "Program Updated Successfully" : "Program Saved Successfully",
+        description: `"${programName}" has been ${isEditing ? 'updated' : 'saved to your merchant account'}.`
       })
 
-      onOpenChange(false)
+    onOpenChange(false)
     } catch (error) {
       console.error('Error saving program:', error)
       toast({
@@ -540,6 +589,42 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
       })
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!user?.uid || !editingProgram?.id) {
+      toast({
+        title: "Error",
+        description: "Cannot delete program - missing information.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setIsDeleting(true)
+
+    try {
+      const merchantId = user.uid
+      const programRef = doc(db, `merchants/${merchantId}/customprograms/${editingProgram.id}`)
+      await deleteDoc(programRef)
+
+      toast({
+        title: "Program Deleted",
+        description: `"${programName}" has been permanently deleted.`
+      })
+
+      onOpenChange(false)
+    } catch (error) {
+      console.error('Error deleting program:', error)
+      toast({
+        title: "Delete Error",
+        description: "Failed to delete the program. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteConfirm(false)
     }
   }
 
@@ -645,6 +730,32 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
                 {/* Left Panel - Program Builder */}
                 <div className="col-span-2 overflow-y-auto custom-scrollbar px-6 py-4 border-r border-gray-100">
                 <div className="space-y-4">
+              {/* Program Description */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium text-gray-700">Program Description</Label>
+                  <span className={`text-xs ${programDescription.length > 38 ? 'text-red-500' : 'text-gray-500'}`}>
+                    {programDescription.length}/38
+                  </span>
+                </div>
+                <Textarea
+                  value={programDescription}
+                  onChange={(e) => {
+                    if (e.target.value.length <= 38) {
+                      const value = e.target.value
+                      // Capitalize first letter if there's content
+                      const capitalizedValue = value.length > 0 
+                        ? value.charAt(0).toUpperCase() + value.slice(1)
+                        : value
+                      setProgramDescription(capitalizedValue)
+                    }
+                  }}
+                  className="text-sm min-h-[60px]"
+                  placeholder="Describe what this loyalty program offers to customers..."
+                  maxLength={38}
+                />
+              </div>
+
               {/* Program PIN */}
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border border-gray-200">
                 <Label className="text-sm font-medium text-gray-700 min-w-0">Program PIN:</Label>
@@ -1076,6 +1187,20 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
                     App Preview
                   </h3>
                   
+                  {/* Program Info Preview */}
+                  {(programName !== "My Custom Program" || programDescription) && (
+                    <div className="mb-4 p-3 bg-white rounded-lg border border-gray-200">
+                      <h4 className="text-sm font-medium text-gray-900 mb-1" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                        {programName}
+                      </h4>
+                      {programDescription && (
+                        <p className="text-xs text-gray-600" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                          {programDescription}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  
                   {/* Phone Frame */}
                   <div className="bg-gray-100 rounded-lg p-4">
                     <div className="space-y-3">
@@ -1233,7 +1358,7 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
                     {/* Template Grid - 4 per row */}
                     <div className="grid grid-cols-4 gap-4">
                       {templatesByIndustry[selectedIndustry].map((template) => {
-                        const isExpanded = expandedTemplate === template.id
+                        // const isExpanded = expandedTemplate === template.id // Unused variable
                         return (
                           <motion.div 
                             key={template.id} 
@@ -1341,7 +1466,7 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
               </div>
                 </motion.div>
             ) : activeTab === 'how-it-works' ? (
-                            /* How This Works Tab Content */
+              /* How This Works Tab Content */
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -1350,79 +1475,79 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
               >
                 <div className="p-6">
                   <div className="max-w-6xl mx-auto">
-                    <div className="space-y-6">
+                  <div className="space-y-6">
+                    <div className="text-center">
+                      <h2 className="text-xl font-semibold text-gray-900 mb-2">How Manual Programs Work</h2>
+                      <p className="text-gray-600">Create sequential reward programs that guide customers through a journey</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {/* Step 1 */}
                       <div className="text-center">
-                        <h2 className="text-xl font-semibold text-gray-900 mb-2">How Manual Programs Work</h2>
-                        <p className="text-gray-600">Create sequential reward programs that guide customers through a journey</p>
+                        <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#007AFF20' }}>
+                          <span className="text-lg font-semibold" style={{ color: '#007AFF' }}>1</span>
+                        </div>
+                        <h3 className="font-medium text-gray-900 mb-2">Set Conditions</h3>
+                        <p className="text-sm text-gray-600">Define when customers become eligible for each reward based on transactions, spending, or visits.</p>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Step 1 */}
-                        <div className="text-center">
-                          <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#007AFF20' }}>
-                            <span className="text-lg font-semibold" style={{ color: '#007AFF' }}>1</span>
-                          </div>
-                          <h3 className="font-medium text-gray-900 mb-2">Set Conditions</h3>
-                          <p className="text-sm text-gray-600">Define when customers become eligible for each reward based on transactions, spending, or visits.</p>
+                      {/* Step 2 */}
+                      <div className="text-center">
+                        <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#007AFF20' }}>
+                          <span className="text-lg font-semibold" style={{ color: '#007AFF' }}>2</span>
                         </div>
-
-                        {/* Step 2 */}
-                        <div className="text-center">
-                          <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#007AFF20' }}>
-                            <span className="text-lg font-semibold" style={{ color: '#007AFF' }}>2</span>
-                          </div>
-                          <h3 className="font-medium text-gray-900 mb-2">Configure Rewards</h3>
-                          <p className="text-sm text-gray-600">Choose from discounts, free items, buy-X-get-Y offers, or vouchers with custom values.</p>
-                        </div>
-
-                        {/* Step 3 */}
-                        <div className="text-center">
-                          <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#007AFF20' }}>
-                            <span className="text-lg font-semibold" style={{ color: '#007AFF' }}>3</span>
-                          </div>
-                          <h3 className="font-medium text-gray-900 mb-2">Set Limitations</h3>
-                          <p className="text-sm text-gray-600">Control how often rewards can be used - one-time, daily, weekly, or monthly limits.</p>
-                        </div>
+                        <h3 className="font-medium text-gray-900 mb-2">Configure Rewards</h3>
+                        <p className="text-sm text-gray-600">Choose from discounts, free items, buy-X-get-Y offers, or vouchers with custom values.</p>
                       </div>
 
-                      <div className="bg-gray-50 rounded-lg p-6">
-                        <h3 className="font-medium text-gray-900 mb-3">Example Program Flow</h3>
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                              <span className="text-xs font-medium text-green-700">1</span>
-                            </div>
-                            <span className="text-sm text-gray-700">After 1 transaction → 10% off next purchase</span>
+                      {/* Step 3 */}
+                      <div className="text-center">
+                        <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#007AFF20' }}>
+                          <span className="text-lg font-semibold" style={{ color: '#007AFF' }}>3</span>
+                        </div>
+                        <h3 className="font-medium text-gray-900 mb-2">Set Limitations</h3>
+                        <p className="text-sm text-gray-600">Control how often rewards can be used - one-time, daily, weekly, or monthly limits.</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-6">
+                      <h3 className="font-medium text-gray-900 mb-3">Example Program Flow</h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                            <span className="text-xs font-medium text-green-700">1</span>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                              <span className="text-xs font-medium text-green-700">2</span>
-                            </div>
-                            <span className="text-sm text-gray-700">After 3 transactions → Free coffee</span>
+                          <span className="text-sm text-gray-700">After 1 transaction → 10% off next purchase</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                            <span className="text-xs font-medium text-green-700">2</span>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                              <span className="text-xs font-medium text-green-700">3</span>
-                            </div>
-                            <span className="text-sm text-gray-700">After spending $50 → $10 voucher</span>
+                          <span className="text-sm text-gray-700">After 3 transactions → Free coffee</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                            <span className="text-xs font-medium text-green-700">3</span>
                           </div>
+                          <span className="text-sm text-gray-700">After spending $50 → $10 voucher</span>
                         </div>
                       </div>
+                    </div>
 
-                      <div className="bg-blue-50 rounded-lg p-4" style={{ backgroundColor: '#007AFF10' }}>
-                        <div className="flex items-start gap-3">
-                          <div className="w-5 h-5 rounded-full flex items-center justify-center mt-0.5" style={{ backgroundColor: '#007AFF' }}>
-                            <span className="text-xs text-white font-bold">!</span>
-                          </div>
-                          <div>
-                            <h4 className="font-medium text-gray-900 mb-1">Pro Tip</h4>
-                            <p className="text-sm text-gray-700">Start with simple conditions and gradually add complexity. Monitor the preview panel to see how rewards will appear to customers.</p>
-                          </div>
+                    <div className="bg-blue-50 rounded-lg p-4" style={{ backgroundColor: '#007AFF10' }}>
+                      <div className="flex items-start gap-3">
+                        <div className="w-5 h-5 rounded-full flex items-center justify-center mt-0.5" style={{ backgroundColor: '#007AFF' }}>
+                          <span className="text-xs text-white font-bold">!</span>
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-gray-900 mb-1">Pro Tip</h4>
+                          <p className="text-sm text-gray-700">Start with simple conditions and gradually add complexity. Monitor the preview panel to see how rewards will appear to customers.</p>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
+              </div>
               </motion.div>
             ) : (
               /* Data Example Tab Content */
@@ -1540,8 +1665,8 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
                       <div className="bg-green-50 rounded-lg p-4">
                         <h4 className="font-medium text-green-900 mb-2">Condition Types (Saved Format)</h4>
                         <div className="space-y-2 text-sm">
-                          <div><span className="font-mono bg-green-100 px-2 py-0.5 rounded">visitNumber</span> - Number of transactions/visits (field: "number")</div>
-                          <div><span className="font-mono bg-green-100 px-2 py-0.5 rounded">minimumSpend</span> - Minimum spend amount (field: "amount")</div>
+                          <div><span className="font-mono bg-green-100 px-2 py-0.5 rounded">visitNumber</span> - Number of transactions/visits (field: &quot;number&quot;)</div>
+                          <div><span className="font-mono bg-green-100 px-2 py-0.5 rounded">minimumSpend</span> - Minimum spend amount (field: &quot;amount&quot;)</div>
                           <div className="text-xs text-green-700 mt-1">Note: transaction_count/visit_count → visitNumber, spend_amount → minimumSpend</div>
                         </div>
                       </div>
@@ -1578,18 +1703,34 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
                             <li>• Reward IDs and condition/limitation IDs are auto-generated</li>
                           </ul>
                         </div>
-                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
+              </div>
               </motion.div>
             )}
           </div>
 
           {/* Footer - Fixed at bottom */}
           <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 bg-white">
-            <div className="flex items-center justify-end gap-3">
+            <div className="flex items-center justify-between">
+              {/* Left side - Delete button (only when editing) */}
+              <div>
+                {editingProgram && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? 'Deleting...' : 'Delete Program'}
+                  </Button>
+                )}
+              </div>
+
+              {/* Right side - Cancel and Save buttons */}
+              <div className="flex items-center gap-3">
               <Button
                 variant="ghost"
                 onClick={() => onOpenChange(false)}
@@ -1609,11 +1750,40 @@ export function CreateManualProgramDialog({ open, onOpenChange }: CreateManualPr
                 onMouseLeave={(e) => {
                   e.currentTarget.style.backgroundColor = '#007AFF'
                 }}
-                disabled={rewards.length === 0 || isSaving}
+                  disabled={rewards.length === 0 || isSaving}
               >
-                {isSaving ? 'Saving...' : 'Create Program'}
+                  {isSaving ? 'Saving...' : editingProgram ? 'Update Program' : 'Create Program'}
               </Button>
             </div>
+            </div>
+
+            {/* Delete Confirmation Dialog */}
+            {showDeleteConfirm && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style={{ zIndex: 9999 }}>
+                <div className="bg-white rounded-lg p-6 max-w-md mx-4 shadow-lg border border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Program</h3>
+                  <p className="text-gray-600 mb-4">
+                    Are you sure you want to delete "{programName}"? This action cannot be undone.
+                  </p>
+                  <div className="flex items-center justify-end gap-3">
+                    <Button
+                      variant="ghost"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="text-gray-600 hover:text-gray-800"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleDelete}
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? 'Deleting...' : 'Delete'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </motion.div>
       </DialogContent>

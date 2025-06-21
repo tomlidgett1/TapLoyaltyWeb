@@ -23,10 +23,10 @@ export const metadata: Metadata = {
   description: "Customer loyalty platform for businesses",
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: 'any' },
-      { url: '/icon.png', type: 'image/png' }
+      { url: '/taplogo.png', type: 'image/png' },
+      { url: '/favicon.ico', sizes: 'any' }
     ],
-    apple: { url: '/apple-icon.png', type: 'image/png' }
+    apple: { url: '/taplogo.png', type: 'image/png' }
   }
 };
 

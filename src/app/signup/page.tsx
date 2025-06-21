@@ -18,7 +18,7 @@ import Image from "next/image"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { collection, query, where, getDocs } from "firebase/firestore"
+import { collection, query, where, getDocs, getDoc } from "firebase/firestore"
 import Script from "next/script"
 import { PageTransition } from "@/components/page-transition"
 
@@ -81,7 +81,7 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
-  const totalSteps = 6
+  const totalSteps = 7
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   
   // Step 1: Basic Auth
@@ -89,7 +89,138 @@ export default function SignupPage() {
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   
-  // Step 2: Business Details
+  // Step 2: Template Selection (NEW)
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("")
+  const [availableTemplates, setAvailableTemplates] = useState<Array<{value: string, label: string, description: string}>>([])
+  const [loadingTemplates, setLoadingTemplates] = useState(false)
+  
+  // Load available templates
+  useEffect(() => {
+    const loadTemplates = async () => {
+      setLoadingTemplates(true)
+      try {
+        // Fetch templates from Firestore
+        const templatesRef = collection(db, 'templatemerchant')
+        const templatesSnapshot = await getDocs(templatesRef)
+        
+        const templates = templatesSnapshot.docs.map(doc => {
+          const data = doc.data()
+          console.log('Template data:', doc.id, data) // Debug log
+          
+          // Handle both old structure (name) and new structure (merchantName)
+          const displayName = data.merchantName || data.name || `${data.businessType || 'Unknown'} Template`
+          const businessType = data.businessType || 'Unknown'
+          const address = data.location?.address || `${data.address?.street || ''} ${data.address?.suburb || ''}`.trim() || ''
+          
+          return {
+            value: doc.id,
+            label: displayName,
+            description: businessType,
+            address: address,
+            data: data
+          }
+        })
+        
+        // Add "Start from Scratch" option
+        templates.push({
+          value: "custom",
+          label: "Start from Scratch",
+          description: "Build your own custom setup",
+          address: "",
+          data: null
+        })
+        
+        setAvailableTemplates(templates)
+      } catch (error) {
+        console.error("Error loading templates:", error)
+        // Set default templates if Firestore fails
+        setAvailableTemplates([
+          { value: "custom", label: "Start from Scratch", description: "Build your own custom setup", address: "" }
+        ])
+      } finally {
+        setLoadingTemplates(false)
+      }
+    }
+    
+    loadTemplates()
+  }, [])
+  
+  // Apply template data when template is selected
+  const applyTemplate = async (templateId: string) => {
+    if (templateId === "custom") return // Skip for custom
+    
+    try {
+      const templateDoc = await getDoc(doc(db, 'templatemerchant', templateId))
+      if (templateDoc.exists()) {
+        const templateData = templateDoc.data()
+        
+        // Apply business details
+        if (templateData.businessType) setBusinessType(templateData.businessType)
+        if (templateData.merchantName) {
+          setTradingName(templateData.merchantName)
+          setLegalBusinessName(templateData.merchantName) // Use same for legal name
+        }
+        if (templateData.businessPhone) setBusinessPhone(templateData.businessPhone)
+        
+        // Apply address information
+        if (templateData.address) {
+          if (templateData.address.street) setStreet(templateData.address.street)
+          if (templateData.address.suburb) setSuburb(templateData.address.suburb)
+          if (templateData.address.state) setState(templateData.address.state)
+          if (templateData.address.postcode) setPostcode(templateData.address.postcode)
+        }
+        
+        // Apply operating hours - handle both formats
+        if (templateData.operatingHours) {
+          const convertedHours = {}
+          Object.keys(templateData.operatingHours).forEach(day => {
+            const dayData = templateData.operatingHours[day]
+            convertedHours[day] = {
+              isOpen: dayData.isOpen,
+              openTime: dayData.open || dayData.openTime || "09:00",
+              closeTime: dayData.close || dayData.closeTime || "17:00"
+            }
+          })
+          setOperatingHours(convertedHours)
+        }
+        
+        // Apply business systems
+        if (templateData.pointOfSale) setPointOfSale(templateData.pointOfSale)
+        if (templateData.paymentProvider) setPaymentProvider(templateData.paymentProvider)
+        
+        // Apply representative details if available
+        if (templateData.representative) {
+          if (templateData.representative.name) setRepName(templateData.representative.name)
+          if (templateData.representative.phone) setRepPhone(templateData.representative.phone)
+        }
+        
+        // Set business email to a template-based email if not provided
+        if (templateData.merchantName && !businessEmail) {
+          const emailDomain = templateData.website ? 
+            templateData.website.replace(/https?:\/\//, '').replace(/^www\./, '') : 
+            `${templateData.merchantName.toLowerCase().replace(/\s+/g, '')}.com.au`
+          setBusinessEmail(`info@${emailDomain}`)
+        }
+        
+        // Store complete template data for later use
+        setTemplateData(templateData)
+        
+        toast({
+          title: "Template Applied!",
+          description: `${templateData.merchantName || templateData.name || 'Template'} has been applied to your account.`,
+        })
+      }
+    } catch (error) {
+      console.error("Error applying template:", error)
+      toast({
+        title: "Error",
+        description: "Failed to apply template. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
+  
+  // Step 3: Business Details (was Step 2)
   const [legalBusinessName, setLegalBusinessName] = useState("")
   const [tradingName, setTradingName] = useState("")
   const [businessEmail, setBusinessEmail] = useState("")
@@ -97,13 +228,13 @@ export default function SignupPage() {
   const [businessType, setBusinessType] = useState("cafe")
   const [logoFile, setLogoFile] = useState<File | null>(null)
   
-  // Step 3: Address
+  // Step 4: Address (was Step 3)
   const [street, setStreet] = useState("")
   const [suburb, setSuburb] = useState("")
   const [state, setState] = useState("NSW")
   const [postcode, setPostcode] = useState("")
   
-  // Step 4: Operating Hours
+  // Step 5: Operating Hours (was Step 4)
   const [operatingHours, setOperatingHours] = useState<OperatingHours>(() => {
     const defaultHours: OperatingHours = {}
     daysOfWeek.forEach(day => {
@@ -116,15 +247,18 @@ export default function SignupPage() {
     return defaultHours
   })
   
-  // Step 5: Representative Details
+  // Step 6: Representative Details (was Step 5)
   const [repName, setRepName] = useState("")
   const [repPhone, setRepPhone] = useState("")
   const [repEmail, setRepEmail] = useState("")
   
-  // Step 6: Business Verification & Systems
+  // Step 7: Business Verification & Systems (was Step 6)
   const [abn, setAbn] = useState("")
   const [pointOfSale, setPointOfSale] = useState("lightspeed")
   const [paymentProvider, setPaymentProvider] = useState("square")
+  
+  // Template data storage for complete address and location
+  const [templateData, setTemplateData] = useState<any>(null)
   
   const updateOperatingHours = (day: string, field: string, value: any) => {
     setOperatingHours(prev => ({
@@ -154,7 +288,11 @@ export default function SignupPage() {
         if (password !== confirmPassword) errors.push("Passwords do not match")
         break
         
-      case 2: // Business Details
+      case 2: // Template Selection
+        if (!selectedTemplate) errors.push("Template is required")
+        break
+        
+      case 3: // Business Details
         if (!legalBusinessName) errors.push("Legal business name is required")
         if (!tradingName) errors.push("Trading name is required")
         if (!businessEmail) errors.push("Business email is required")
@@ -162,7 +300,7 @@ export default function SignupPage() {
         if (!businessPhone) errors.push("Business phone is required")
         break
         
-      case 3:
+      case 4:
         if (!street) errors.push("Street address is required")
         if (!suburb) errors.push("Suburb is required")
         if (!state) errors.push("State is required")
@@ -170,7 +308,7 @@ export default function SignupPage() {
         if (postcode && (postcode.length !== 4 || !/^\d+$/.test(postcode))) errors.push("Postcode must be 4 digits")
         break
         
-      case 4: // Operating Hours
+      case 5: // Operating Hours
         // Basic validation for operating hours
         for (const day of daysOfWeek) {
           const dayLower = day.toLowerCase()
@@ -181,14 +319,12 @@ export default function SignupPage() {
         }
         break
         
-      case 5: // Representative
+      case 6: // Representative
         if (!repName) errors.push("Representative name is required")
         if (!repPhone) errors.push("Contact phone is required")
-        if (!repEmail) errors.push("Contact email is required")
-        if (repEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(repEmail)) errors.push("Invalid contact email format")
         break
         
-      case 6: // ABN & Verification
+      case 7: // ABN & Verification
         if (!abn) errors.push("ABN is required")
         if (abn && (abn.length !== 11 || !/^\d+$/.test(abn))) errors.push("ABN must be 11 digits")
         break
@@ -299,20 +435,49 @@ export default function SignupPage() {
         
         // Business details
         legalBusinessName,
-        tradingName,
+        merchantName: tradingName, // Save trading name as merchantName
         businessEmail,
         businessPhone,
         businessType,
         logoUrl,
         
-        // Address
+        // Template reference
+        ...(selectedTemplate && selectedTemplate !== "custom" && { merchantId: selectedTemplate }),
+        
+        // Address - enhanced with template data
         address: {
           street,
           suburb,
           state,
           postcode,
-          coordinates: new GeoPoint(0, 0) // Will be updated with actual coordinates later
+          // Include additional address fields from template if available
+          ...(templateData?.address && {
+            country: templateData.address.country || "Australia",
+            countryCode: templateData.address.countryCode || "AU",
+            isoCountryCode: templateData.address.isoCountryCode || "AU",
+            subAdministrativeArea: templateData.address.subAdministrativeArea,
+            subLocality: templateData.address.subLocality
+          }),
+          coordinates: templateData?.location?.coordinates ? 
+            new GeoPoint(templateData.location.coordinates.latitude, templateData.location.coordinates.longitude) :
+            new GeoPoint(0, 0)
         },
+        
+        // Location data from template
+        ...(templateData?.location && {
+          location: {
+            address: templateData.location.address,
+            displayAddress: templateData.location.displayAddress,
+            coordinates: {
+              latitude: templateData.location.coordinates.latitude,
+              longitude: templateData.location.coordinates.longitude
+            },
+            ...(templateData.location.areaOfInterest && { areaOfInterest: templateData.location.areaOfInterest }),
+            ...(templateData.location.inlandWater && { inlandWater: templateData.location.inlandWater }),
+            ...(templateData.location.ocean && { ocean: templateData.location.ocean }),
+            ...(templateData.location.timeZone && { timeZone: templateData.location.timeZone })
+          }
+        }),
         
         // Operating hours
         operatingHours,
@@ -321,7 +486,7 @@ export default function SignupPage() {
         representative: {
           name: repName,
           phone: repPhone,
-          email: repEmail
+          email: businessEmail // Use business email as fallback
         },
         
         // Business verification
@@ -329,16 +494,20 @@ export default function SignupPage() {
         pointOfSale,
         paymentProvider,
         
+        // Additional template fields
+        ...(templateData?.website && { website: templateData.website }),
+        ...(templateData?.posCategory && { posCategory: templateData.posCategory }),
+        
         // System fields
         createdAt: new Date(),
         updatedAt: new Date(),
         isActive: true,
         isVerified: false,
         
-        // Loyalty program settings
+        // Loyalty program settings - use template settings if available
         loyaltyProgram: {
-          pointsPerDollar: 1,
-          welcomeBonus: 100,
+          pointsPerDollar: templateData?.loyaltySettings?.pointsPerDollar || 1,
+          welcomeBonus: templateData?.loyaltySettings?.welcomeBonus || 100,
           isActive: true
         }
       }
@@ -382,11 +551,12 @@ export default function SignupPage() {
   const getStepTitle = () => {
     switch (currentStep) {
       case 1: return "Create your account"
-      case 2: return "Tell us about your business"
-      case 3: return "Where are you located?"
-      case 4: return "When are you open?"
-      case 5: return "Who should we contact?"
-      case 6: return "Let's verify your business"
+      case 2: return "Choose a template"
+      case 3: return "Tell us about your business"
+      case 4: return "Where are you located?"
+      case 5: return "When are you open?"
+      case 6: return "Who should we contact?"
+      case 7: return "Let's verify your business"
       default: return "Create Account"
     }
   }
@@ -394,11 +564,12 @@ export default function SignupPage() {
   const getStepDescription = () => {
     switch (currentStep) {
       case 1: return "Start by creating your secure account"
-      case 2: return "Help us understand your business better"
-      case 3: return "We need your business address for customer matching"
-      case 4: return "Set your operating hours for customer visibility"
-      case 5: return "Primary contact for your loyalty program"
-      case 6: return "Final details to get you started"
+      case 2: return "Choose a template to get started quickly"
+      case 3: return "Help us understand your business better"
+      case 4: return "We need your business address for customer matching"
+      case 5: return "Set your operating hours for customer visibility"
+      case 6: return "Primary contact for your loyalty program"
+      case 7: return "Final details to get you started"
       default: return ""
     }
   }
@@ -458,7 +629,47 @@ export default function SignupPage() {
           </div>
         )
         
-      case 2:
+              case 2:
+         return (
+           <div className="space-y-6">
+             <div className="space-y-2">
+               <Label htmlFor="template">Select Template</Label>
+               {loadingTemplates ? (
+                 <div className="flex items-center justify-center py-4">
+                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                   <span className="text-sm text-muted-foreground">Loading templates...</span>
+                 </div>
+               ) : (
+                 <Select 
+                   value={selectedTemplate} 
+                   onValueChange={(value) => {
+                     setSelectedTemplate(value)
+                     applyTemplate(value)
+                   }}
+                 >
+                   <SelectTrigger className="rounded-md">
+                     <SelectValue placeholder="Choose a template to get started" />
+                   </SelectTrigger>
+                   <SelectContent>
+                     {availableTemplates.map(template => (
+                       <SelectItem key={template.value} value={template.value}>
+                         <div className="flex flex-col items-start">
+                           <span className="font-medium">{template.label}</span>
+                           <div className="flex gap-2 text-xs text-muted-foreground">
+                             <span>{template.description}</span>
+                             {template.address && <span>• {template.address}</span>}
+                           </div>
+                         </div>
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
+               )}
+             </div>
+           </div>
+         )
+        
+      case 3:
         return (
           <div className="space-y-4">
             <div className="space-y-2">
@@ -519,7 +730,17 @@ export default function SignupPage() {
                   <SelectValue placeholder="Select business type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {businessTypes.map(type => (
+                  {/* Get unique business types from available templates */}
+                  {Array.from(new Set(availableTemplates
+                    .filter(t => t.value !== "custom" && t.description)
+                    .map(t => t.description)))
+                    .map(type => (
+                      <SelectItem key={type} value={type}>
+                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                      </SelectItem>
+                    ))}
+                  {/* Fallback to default business types if no templates */}
+                  {availableTemplates.length <= 1 && businessTypes.map(type => (
                     <SelectItem key={type.value} value={type.value}>
                       {type.label}
                     </SelectItem>
@@ -549,7 +770,7 @@ export default function SignupPage() {
           </div>
         )
         
-      case 3:
+      case 4:
         return (
           <div className="space-y-4">
             <div className="space-y-2">
@@ -608,7 +829,7 @@ export default function SignupPage() {
           </div>
         )
         
-      case 4:
+      case 5:
         return (
           <div className="space-y-4">
             <p className="text-sm text-gray-600 mb-4">
@@ -656,7 +877,7 @@ export default function SignupPage() {
           </div>
         )
         
-      case 5:
+      case 6:
         return (
           <div className="space-y-4">
             <p className="text-sm text-gray-600 mb-4">
@@ -675,36 +896,21 @@ export default function SignupPage() {
               />
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="repPhone">Contact Phone</Label>
-                <Input
-                  id="repPhone"
-                  placeholder="0412 345 678"
-                  value={repPhone}
-                  onChange={(e) => setRepPhone(e.target.value)}
-                  required
-                  className="rounded-md"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="repEmail">Contact Email</Label>
-                <Input
-                  id="repEmail"
-                  type="email"
-                  placeholder="john@business.com"
-                  value={repEmail}
-                  onChange={(e) => setRepEmail(e.target.value)}
-                  required
-                  className="rounded-md"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="repPhone">Contact Phone</Label>
+              <Input
+                id="repPhone"
+                placeholder="0412 345 678"
+                value={repPhone}
+                onChange={(e) => setRepPhone(e.target.value)}
+                required
+                className="rounded-md"
+              />
             </div>
           </div>
         )
         
-      case 6:
+      case 7:
         return (
           <div className="space-y-4">
             <div className="space-y-2">
@@ -770,7 +976,7 @@ export default function SignupPage() {
           {/* Left side - Hero section */}
           <div className="relative hidden lg:flex lg:col-span-2 bg-gray-100 flex-col justify-between px-16 py-16">
             {/* Main content */}
-            <div className="flex flex-col justify-center flex-1">
+            <div className="flex flex-col flex-1 pt-8">
               <div className="max-w-md">
                 {/* Tap Loyalty title */}
                 <h1 className="text-2xl font-bold mb-6">
@@ -837,21 +1043,21 @@ export default function SignupPage() {
             </div>
 
             {/* Form section */}
-            <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
-              <div className="w-full max-w-lg">
+            <div className="flex-1 p-6 lg:p-12">
+              <div className="w-full max-w-lg mx-auto pt-8">
                 {/* Progress indicator */}
                 <div className="mb-8">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-sm font-medium text-gray-500">Step {currentStep} of {totalSteps}</span>
-                    <div className="flex items-center space-x-1">
-                      {Array.from({ length: totalSteps }).map((_, i) => (
+                  <div className="flex justify-center mb-4">
+                    <div className="w-2/3">
+                      <div className="flex items-center justify-center mb-2">
+                        <span className="text-sm text-gray-500">{Math.round((currentStep / totalSteps) * 100)}% Complete</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
                         <div 
-                          key={i} 
-                          className={`h-2 w-8 rounded-full transition-colors ${
-                            i < currentStep ? 'bg-[#007AFF]' : i === currentStep - 1 ? 'bg-[#007AFF]' : 'bg-gray-200'
-                          }`}
-                        />
-                      ))}
+                          className="bg-[#007AFF] h-2 rounded-full transition-all duration-300" 
+                          style={{ width: `${(currentStep / totalSteps) * 100}%` }}
+                        ></div>
+                      </div>
                     </div>
                   </div>
                   

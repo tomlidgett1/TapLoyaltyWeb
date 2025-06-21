@@ -673,7 +673,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                 <div className="flex-shrink-0 w-fit">
                   <div className="text-xs text-gray-500 mb-2 font-medium">Preview</div>
                   <div className="bg-white border border-gray-200 rounded-xl shadow-lg px-3 py-2 w-80">
-                    <div className="flex items-start justify-between">
+                  <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <h3 className="text-sm font-medium text-gray-900 truncate" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
                           {reward.rewardName}
@@ -741,7 +741,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                             <Star className="w-3 h-3 ml-1 fill-white" />
                           </>
                         )}
-                      </div>
+                    </div>
                     </div>
                   </div>
                 </div>

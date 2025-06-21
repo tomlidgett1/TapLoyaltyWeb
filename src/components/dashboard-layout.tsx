@@ -2177,7 +2177,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-9 gap-2 text-gray-600 hover:text-gray-900 hover:bg-transparent font-normal px-2"
+                            className="h-9 gap-2 text-gray-600 hover:text-blue-600 hover:bg-transparent font-normal px-2"
                             disabled={isSavingQuickNote || audioProcessing || recording || showQuickNoteInput}
                           >
                             {isSavingQuickNote ? (
@@ -2329,7 +2329,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      className="h-9 gap-2 text-gray-600 hover:text-gray-900 hover:bg-transparent font-normal px-2"
+                      className="h-9 gap-2 text-gray-600 hover:text-blue-600 hover:bg-transparent font-normal px-2"
                       asChild
                     >
                       <Link href="/setup">
@@ -2341,94 +2341,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      className="h-9 gap-2 text-gray-600 hover:text-gray-900 hover:bg-transparent font-normal px-2"
+                      className="h-9 gap-2 text-gray-600 hover:text-blue-600 hover:bg-transparent font-normal px-2"
                       onClick={() => setShowIntegrationsPanel(true)}
                     >
                       Integrations
                     </Button>
                   </div>
                   
-                  {/* Search button with popup */}
-                  <div className="relative">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setShowSearchPopup(!showSearchPopup)
-                        // Focus the input after a short delay to ensure it's rendered
-                        setTimeout(() => {
-                          if (searchInputRef.current) {
-                            searchInputRef.current.focus()
-                          }
-                        }, 100)
-                      }}
-                      className="relative"
-                    >
-                      <Search className="h-5 w-5" />
-                    </Button>
-                    
-                    {/* Search popup */}
-                    {showSearchPopup && (
-                      <div 
-                        ref={searchPopupRef}
-                        className="absolute top-full right-0 mt-2 w-96 bg-white shadow-lg rounded-md border border-gray-200 overflow-hidden z-50"
-                      >
-                        <div className="p-3">
-                          <form onSubmit={(e) => {
-                            e.preventDefault()
-                            if (searchQuery.trim()) {
-                              handleSearch(searchQuery)
-                              setShowSearchPopup(false)
-                            }
-                          }}>
-                            <div className="relative">
-                              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                                <Search className="h-4 w-4 text-gray-400" />
-                              </div>
-                              <Input
-                                ref={searchInputRef}
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="h-10 pl-10 pr-4 w-full rounded-md border border-gray-300 bg-white text-sm"
-                                placeholder="Ask something..."
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault()
-                                    if (searchQuery.trim()) {
-                                      handleSearch(searchQuery)
-                                      setShowSearchPopup(false)
-                                    }
-                                  } else if (e.key === 'Escape') {
-                                    setShowSearchPopup(false)
-                                    setSearchQuery('')
-                                  }
-                                }}
-                              />
-                            </div>
-                          </form>
-                          
-                          {/* Search suggestions */}
-                          <div className="mt-3 space-y-1">
-                            <div className="text-xs font-medium text-gray-500 mb-2">Quick searches:</div>
-                            {searchPlaceholders.slice(0, 4).map((placeholder, index) => (
-                              <button
-                                key={index}
-                                className="w-full text-left px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-50 rounded-md transition-colors"
-                                onClick={() => {
-                                  setSearchQuery(placeholder)
-                                  handleSearch(placeholder)
-                                  setShowSearchPopup(false)
-                                }}
-                              >
-                                {placeholder}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+
                   
                   {/* Notifications button moved to be before chat button */}
                   <DropdownMenu>

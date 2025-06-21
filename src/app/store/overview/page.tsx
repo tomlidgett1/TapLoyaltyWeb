@@ -54,6 +54,7 @@ import { RewardDetailSheet } from "@/components/reward-detail-sheet"
 import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banner-preview"
 import { BannerScheduler } from "@/components/banner-scheduler"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
+import { CreateManualProgramDialog } from "@/components/create-manual-program-dialog"
 import { cn } from "@/lib/utils"
 import { updateDoc, deleteDoc } from "firebase/firestore"
 
@@ -326,6 +327,113 @@ interface CombinedActivity {
   originalData: Transaction | Redemption
 }
 
+interface DetailedCustomer {
+  id: string
+  fullName?: string
+  firstName?: string
+  lastName?: string
+  email?: string
+  phone?: string
+  profilePictureUrl?: string
+  // Transaction metrics
+  averageTransactionsPerWeek?: number
+  avgBasketValueMerchant?: number
+  avg_txn_value?: number
+  lifetimeTransactionCount?: number
+  totalLifetimeSpend?: number
+  highestTransactionAmount?: number
+  min_txn_value?: number
+  max_txn_value?: number
+  firstTransactionDate?: any
+  lastTransactionDate?: any
+  firstTransactionId?: string
+  lastTransactionId?: string
+  transactionRewardCount?: number
+  // Engagement metrics
+  totalStoreViews?: number
+  viewsLast7Days?: number
+  viewsLast30Days?: number
+  viewsLast90Days?: number
+  visitCount30dMerchant?: number
+  lastStoreView?: any
+  cohortViewCount?: number
+  daysSinceLastVisit?: number
+  daysSinceFirstPurchase?: number
+  daysSinceLastRedemption?: number
+  // Rewards & points
+  pointsBalance?: number
+  redemptionCount?: number
+  rewardRedemptionRate?: number
+  lastRedemptionDate?: any
+  hasRedeemed?: boolean
+  coffeeEligibleCount?: number
+  // Cohort information
+  currentCohort?: {
+    daysInCohort?: number
+    name?: string
+    since?: any
+  }
+  cohortHistory?: Array<{
+    days?: number
+    name?: string
+    since?: any
+  }>
+  cohorts?: string[]
+  // Strategy information
+  currentStrategy?: {
+    basedOn?: {
+      averageSpend?: number
+      cohort?: string
+    }
+    cohortHistory?: {
+      cyclesBetweenActiveAndDormant?: number
+      isRepeatChurner?: boolean
+      percentageTimeActive?: number
+      previousCohort?: string
+      timeInPreviousCohort?: number
+    }
+    daysInCohort?: number
+    daysSinceLast?: number
+    daysSinceLastRedemption?: number
+    hasRedeemed?: boolean
+    redemptionCount?: number
+    segments?: string[]
+    totalSpend?: number
+    totalStoreViews?: number
+    transactionCount?: number
+    viewCount?: number
+    viewsLast30Days?: number
+    viewsLast7Days?: number
+    viewsLast90Days?: number
+    details?: {
+      goal?: string
+      maxValue?: string
+      message?: string
+      rewardApproach?: string
+      urgency?: string
+    }
+    determinedAt?: any
+    justification?: string
+    type?: string
+  }
+  // Preferences & settings
+  emailOptIn?: boolean
+  pushOptIn?: boolean
+  preferredChannel?: any
+  membershipTier?: string
+  favouriteItemMerchant?: any
+  segments?: string[]
+  // System fields
+  customerId?: string
+  merchantId?: string
+  merchantName?: string
+  metricsUpdatedAt?: any
+  createdAt?: any
+  updatedAt?: any
+  // Additional fields that might exist
+  [key: string]: any
+}
+
 // Add a gradient text component for Tap Agent branding
 const GradientText = ({ children }: { children: React.ReactNode }) => {
   return (
@@ -431,9 +539,155 @@ const ProgramCard = ({
 
 const ProgramsTabContent = () => {
   const router = useRouter()
-  const [activeProgramTab, setActiveProgramTab] = useState("coffee")
+  const { user } = useAuth()
+  const [activePrograms, setActivePrograms] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [programRewardCounts, setProgramRewardCounts] = useState<Record<string, number>>({})
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
   
-  // Sample data for top customers
+  // Fetch active programs from merchant document
+  useEffect(() => {
+    const fetchActivePrograms = async () => {
+      if (!user?.uid) return
+
+      try {
+        setLoading(true)
+        const merchantRef = doc(db, 'merchants', user.uid)
+        const merchantSnapshot = await getDoc(merchantRef)
+        
+        if (merchantSnapshot.exists()) {
+          const merchantData = merchantSnapshot.data()
+          const programs: any[] = []
+          
+          // Check coffeePrograms array
+          if (merchantData.coffeePrograms && Array.isArray(merchantData.coffeePrograms)) {
+            merchantData.coffeePrograms.forEach((program: any, index: number) => {
+              programs.push({ ...program, type: 'coffee', originalIndex: index })
+            })
+          }
+          
+          // Check voucherPrograms array
+          if (merchantData.voucherPrograms && Array.isArray(merchantData.voucherPrograms)) {
+            merchantData.voucherPrograms.forEach((program: any, index: number) => {
+              programs.push({ ...program, type: 'voucher', originalIndex: index })
+            })
+          }
+          
+          // Check transactionRewards array
+          if (merchantData.transactionRewards && Array.isArray(merchantData.transactionRewards)) {
+            merchantData.transactionRewards.forEach((program: any, index: number) => {
+              programs.push({ ...program, type: 'transaction', originalIndex: index })
+            })
+          }
+          
+          setActivePrograms(programs)
+        }
+      } catch (error) {
+        console.error("Error fetching active programs:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchActivePrograms()
+  }, [user])
+
+  // Fetch program reward counts
+  useEffect(() => {
+    const fetchProgramRewardCounts = async () => {
+      if (!user?.uid) return
+
+      try {
+        const rewardsRef = collection(db, 'merchants', user.uid, 'rewards')
+        const rewardsQuery = query(rewardsRef, orderBy('createdAt', 'desc'))
+        const rewardsSnapshot = await getDocs(rewardsQuery)
+        
+        const counts = {
+          coffee: 0,
+          voucher: 0,
+          transaction: 0
+        }
+        
+        rewardsSnapshot.docs.forEach(doc => {
+          const data = doc.data()
+          if (data.redemptionCount === 0) {
+            if (data.programType === 'coffeeprogramnew') {
+              counts.coffee++
+            } else if (data.programType === 'voucherprogramnew') {
+              counts.voucher++
+            } else if (data.programType === 'transactionrewardsnew') {
+              counts.transaction++
+            }
+          }
+        })
+        
+        setProgramRewardCounts(counts)
+      } catch (error) {
+        console.error("Error fetching program reward counts:", error)
+      }
+    }
+
+    fetchProgramRewardCounts()
+  }, [user])
+
+  const toggleProgramActive = async (programIndex: number, programType: 'coffee' | 'voucher' | 'transaction') => {
+    if (!user?.uid) return
+
+    try {
+      const merchantRef = doc(db, 'merchants', user.uid)
+      const merchantSnapshot = await getDoc(merchantRef)
+      
+      if (merchantSnapshot.exists()) {
+        const merchantData = merchantSnapshot.data()
+        
+        let fieldName = ''
+        if (programType === 'coffee') fieldName = 'coffeePrograms'
+        else if (programType === 'voucher') fieldName = 'voucherPrograms'
+        else if (programType === 'transaction') fieldName = 'transactionRewards'
+        
+        const programs = merchantData[fieldName] || []
+        if (programs[programIndex]) {
+          programs[programIndex].active = !programs[programIndex].active
+          
+          await updateDoc(merchantRef, {
+            [fieldName]: programs
+          })
+          
+          // Update local state
+          setActivePrograms(prev => prev.map(program => 
+            program.type === programType && program.originalIndex === programIndex
+              ? { ...program, active: !program.active }
+              : program
+          ))
+        }
+      }
+    } catch (error) {
+      console.error("Error toggling program status:", error)
+    }
+  }
+
+  const handleEditProgram = (programType: 'coffee' | 'voucher' | 'transaction') => {
+    router.push(`/programs?type=${programType}`)
+  }
+
+  const getProgramTypeIcon = (programType: string) => {
+    switch (programType) {
+      case 'coffee':
+        return <Coffee className="h-4 w-4 text-amber-600" />
+      case 'voucher':
+        return <Percent className="h-4 w-4 text-green-600" />
+      case 'transaction':
+        return <ShoppingBag className="h-4 w-4 text-blue-600" />
+      default:
+        return <Award className="h-4 w-4 text-gray-600" />
+    }
+  }
+
+  const handleCreateManualProgram = () => {
+    setShowCreateDialog(true)
+  }
+
+  // Sample data for top customers - keeping for compatibility
   const getTopCustomers = (programType: string) => {
     const coffeeCustomers = [
       {
@@ -893,120 +1147,106 @@ const ProgramsTabContent = () => {
 
   return (
     <div className="space-y-6">
-      {/* Small Tabs */}
-      <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
-        <button
-          onClick={() => setActiveProgramTab("coffee")}
-          className={cn(
-            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
-            activeProgramTab === "coffee"
-              ? "text-gray-800 bg-white shadow-sm"
-              : "text-gray-600 hover:bg-gray-200/70"
-          )}
-        >
-          <Coffee className="h-3 w-3" />
-          Coffee Program
-        </button>
-        <button
-          onClick={() => setActiveProgramTab("voucher")}
-          className={cn(
-            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
-            activeProgramTab === "voucher"
-              ? "text-gray-800 bg-white shadow-sm"
-              : "text-gray-600 hover:bg-gray-200/70"
-          )}
-        >
-          <Percent className="h-3 w-3" />
-          Recurring Voucher
-        </button>
-        <button
-          onClick={() => setActiveProgramTab("transaction")}
-          className={cn(
-            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
-            activeProgramTab === "transaction"
-              ? "text-gray-800 bg-white shadow-sm"
-              : "text-gray-600 hover:bg-gray-200/70"
-          )}
-        >
-          <ShoppingBag className="h-3 w-3" />
-          Transaction Program
-        </button>
+      {/* Header with Create Button */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-medium text-gray-900">Programs</h2>
+          <p className="text-sm text-gray-600">Manage your loyalty and rewards programs</p>
         </div>
-
-      {/* Tables Row - 2/3 + 1/3 Layout */}
-      <div className="grid grid-cols-12 gap-6">
-        {/* Left - Transactions Table (2/3) */}
-        <div className="col-span-8">
-          <div className="flex items-start justify-between mb-4">
-            <h3 className="text-lg font-medium text-gray-900">Recent Transactions</h3>
         <Button 
-              size="sm" 
-              variant="outline"
-              className="rounded-md text-xs px-3 py-1 h-7"
-              onClick={() => router.push('/programs')}
+          onClick={handleCreateManualProgram}
+          className="rounded-md"
         >
-              View All
-              <ChevronRight size={14} className="ml-1 opacity-70" />
+          <Plus className="h-4 w-4 mr-2" />
+          Create Manual Program
         </Button>
       </div>
 
-          {/* Table Container */}
-          <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
-            <TableProvider columns={transactionsColumns} data={getRecentTransactions(activeProgramTab)}>
-              <KiboTableHeader>
-                {({ headerGroup }) => (
-                  <TableHeaderGroup key={headerGroup.id} headerGroup={headerGroup}>
-                    {({ header }) => <KiboTableHead key={header.id} header={header} />}
-                  </TableHeaderGroup>
-                )}
-              </KiboTableHeader>
-              <KiboTableBody>
-                {({ row }) => (
-                  <KiboTableRow key={row.id} row={row}>
-                    {({ cell }) => <KiboTableCell key={cell.id} cell={cell} />}
-                  </KiboTableRow>
-                )}
-              </KiboTableBody>
-            </TableProvider>
+      {/* Active Programs Grid */}
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
           </div>
+      ) : activePrograms.length > 0 ? (
+        <div>
+          <h3 className="text-md font-medium mb-4">Active Programs</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {activePrograms.map((program, index) => {
+              const rewardCount = programRewardCounts[program.type] || 0
+              return (
+                <div key={index} className="bg-gray-50 border border-gray-200 rounded-md p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      {getProgramTypeIcon(program.type)}
+                      <span className="font-medium text-sm capitalize">
+                        {program.type === 'coffee' ? 'Coffee Program' : 
+                         program.type === 'voucher' ? 'Recurring Voucher' : 
+                         'Transaction Program'}
+                      </span>
       </div>
-
-        {/* Right - Top Customers Table (1/3) */}
-        <div className="col-span-4">
-          <div className="flex items-start justify-between mb-4">
-            <h3 className="text-lg font-medium text-gray-900">Top Customers</h3>
-            <Button 
-              size="sm" 
-              variant="outline"
-              className="rounded-md text-xs px-3 py-1 h-7"
-              onClick={() => router.push('/customers')}
-            >
-              View All
-              <ChevronRight size={14} className="ml-1 opacity-70" />
-            </Button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleEditProgram(program.type)}
+                        className="p-1 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                      >
+                        <Settings className="h-4 w-4" />
+                      </button>
+                      <Switch
+                        checked={program.active}
+                        onCheckedChange={() => toggleProgramActive(program.originalIndex, program.type)}
+                      />
           </div>
-          
-          {/* Table Container */}
-          <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
-            <TableProvider columns={topCustomersColumns} data={getTopCustomers(activeProgramTab)}>
-              <KiboTableHeader>
-                {({ headerGroup }) => (
-                  <TableHeaderGroup key={headerGroup.id} headerGroup={headerGroup}>
-                    {({ header }) => <KiboTableHead key={header.id} header={header} />}
-                  </TableHeaderGroup>
-                )}
-              </KiboTableHeader>
-              <KiboTableBody>
-                {({ row }) => (
-                  <KiboTableRow key={row.id} row={row}>
-                    {({ cell }) => <KiboTableCell key={cell.id} cell={cell} />}
-                  </KiboTableRow>
-                )}
-              </KiboTableBody>
-            </TableProvider>
+                  </div>
+                  <p className="text-xs text-gray-600 mb-2">{program.name || 'Unnamed Program'}</p>
+                  <div className="flex items-center justify-between">
+                    <div className={`text-xs font-medium ${program.active ? 'text-green-600' : 'text-gray-500'}`}>
+                      {program.active ? 'Active' : 'Inactive'}
+                    </div>
+                    {rewardCount > 0 && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-1 text-gray-500 cursor-help">
+                              <Award className="h-3 w-3" />
+                              <span className="text-xs font-medium">{rewardCount}</span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            <p className="text-xs">Unredeemed rewards available for customers</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
           </div>
         </div>
+              )
+            })}
       </div>
+        </div>
+      ) : (
+        <div className="text-center py-12">
+          <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+            <Award className="h-6 w-6 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Programs Found</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            You haven't configured any loyalty programs yet. Create your first program to get started.
+          </p>
+          <Button 
+            onClick={handleCreateManualProgram}
+            className="rounded-md"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create Your First Program
+          </Button>
+        </div>
+      )}
+      
+      {/* Create Manual Program Dialog */}
+      <CreateManualProgramDialog 
+        open={showCreateDialog} 
+        onOpenChange={setShowCreateDialog} 
+      />
     </div>
   )
 }
@@ -2909,6 +3149,817 @@ const CustomerSearchTabContent = () => {
   )
 }
 
+// Advanced Customers View Component
+const AdvancedCustomersView = () => {
+  const { user } = useAuth()
+  const [detailedCustomers, setDetailedCustomers] = useState<DetailedCustomer[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState("")
+  const [sortField, setSortField] = useState<keyof DetailedCustomer>('fullName')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+
+  useEffect(() => {
+    fetchDetailedCustomers()
+  }, [user])
+
+  const fetchDetailedCustomers = async () => {
+    if (!user?.uid) return
+    
+    setLoading(true)
+    try {
+      const customersRef = collection(db, 'merchants', user.uid, 'customers')
+      const snapshot = await getDocs(customersRef)
+      
+      const customers: DetailedCustomer[] = []
+      const allFields = new Set<string>()
+      
+      // First, get all customer data from merchant's customers collection
+      snapshot.forEach((doc) => {
+        const data = doc.data()
+        
+        // Log all available fields for debugging
+        Object.keys(data).forEach(key => allFields.add(key))
+        
+        customers.push({
+          id: doc.id,
+          ...data
+        } as DetailedCustomer)
+      })
+      
+      // Now fetch profile pictures from top-level customers collection
+      const customersWithProfilePics = await Promise.all(
+        customers.map(async (customer) => {
+          try {
+            // Use the customer's ID to fetch from top-level customers collection
+            const customerDocRef = doc(db, 'customers', customer.id)
+            const customerDoc = await getDoc(customerDocRef)
+            
+            if (customerDoc.exists()) {
+              const customerData = customerDoc.data()
+              return {
+                ...customer,
+                profilePictureUrl: customerData.profilePictureUrl || null
+              }
+            }
+            
+            return customer
+          } catch (error) {
+            console.error(`Error fetching profile picture for customer ${customer.id}:`, error)
+            return customer
+          }
+        })
+      )
+      
+      // Log all available fields to console for debugging
+      console.log('Available customer fields:', Array.from(allFields).sort())
+      
+      setDetailedCustomers(customersWithProfilePics)
+    } catch (error) {
+      console.error('Error fetching detailed customers:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Filter and sort customers
+  const filteredCustomers = useMemo(() => {
+    let result = [...detailedCustomers]
+
+    // Search filter
+    if (search) {
+      const searchLower = search.toLowerCase()
+      result = result.filter(customer => 
+        customer.fullName?.toLowerCase().includes(searchLower) ||
+        customer.membershipTier?.toLowerCase().includes(searchLower) ||
+        customer.currentCohort?.name?.toLowerCase().includes(searchLower)
+      )
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      let comparison = 0
+      const aValue = a[sortField]
+      const bValue = b[sortField]
+      
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        comparison = bValue - aValue
+      } else if (typeof aValue === 'string' && typeof bValue === 'string') {
+        comparison = aValue.localeCompare(bValue)
+      } else if (aValue && bValue && typeof aValue === 'object' && 'toDate' in aValue) {
+        // Handle Firestore timestamps
+        const aDate = aValue.toDate ? aValue.toDate() : new Date(aValue)
+        const bDate = bValue.toDate ? bValue.toDate() : new Date(bValue)
+        comparison = bDate.getTime() - aDate.getTime()
+      }
+      
+      return sortDirection === 'desc' ? comparison : -comparison
+    })
+
+    return result
+  }, [detailedCustomers, search, sortField, sortDirection])
+
+  const handleSort = (field: keyof DetailedCustomer) => {
+    if (field === sortField) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('desc')
+    }
+  }
+
+  const formatValue = (value: any, type: 'currency' | 'number' | 'percentage' | 'date' | 'text' = 'text') => {
+    if (value === null || value === undefined) return 'N/A'
+    
+    switch (type) {
+      case 'currency':
+        return `$${Number(value).toFixed(2)}`
+      case 'number':
+        return Number(value).toLocaleString()
+      case 'percentage':
+        return `${Number(value).toFixed(1)}%`
+      case 'date':
+        try {
+          const date = value.toDate ? value.toDate() : new Date(value)
+          return formatDistanceToNow(date, { addSuffix: true })
+        } catch {
+          return 'Invalid date'
+        }
+      default:
+        return String(value)
+    }
+  }
+
+  const getCohortBadge = (cohortName: string) => {
+    const cohortColors: Record<string, string> = {
+      active: "bg-green-50 text-green-700 border-green-200",
+      engaged: "bg-blue-50 text-blue-700 border-blue-200",
+      "at-risk": "bg-amber-50 text-amber-700 border-amber-200",
+      dormant: "bg-gray-50 text-gray-700 border-gray-200",
+      churned: "bg-red-50 text-red-700 border-red-200",
+      new: "bg-purple-50 text-purple-700 border-purple-200",
+      vip: "bg-yellow-50 text-yellow-700 border-yellow-200"
+    }
+    
+    return (
+      <Badge 
+        variant="outline" 
+        className={cn("rounded-md capitalize", cohortColors[cohortName] || "bg-gray-50 text-gray-700 border-gray-200")}
+      >
+        {cohortName}
+      </Badge>
+    )
+  }
+
+  return (
+    <div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input 
+              type="search" 
+              placeholder="Search customers..." 
+              className="pl-9 h-9 w-[250px] rounded-md"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="h-9 gap-2 rounded-md"
+            onClick={fetchDetailedCustomers}
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-48">
+          <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : filteredCustomers.length === 0 ? (
+        <div className="border border-gray-200 rounded-md bg-white p-8">
+          <div className="flex flex-col items-center justify-center text-center">
+            <Users className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium">No detailed customer data found</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Customer analytics data will appear here once available
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="border border-gray-200 rounded-md bg-white overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  {/* Customer Info - Sticky Column */}
+                  <th className="sticky left-0 z-10 bg-gray-50 px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[140px] border-r border-gray-200">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('fullName')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            Customer
+                            {sortField === 'fullName' && (
+                              sortDirection === 'desc' ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronUp className="h-3 w-3" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Customer name and ID</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+                  
+                  {/* Cohort */}
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('currentCohort')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            Cohort
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Current customer cohort classification</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  {/* Transaction Metrics */}
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[70px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('averageTransactionsPerWeek')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            Avg/Wk
+                            {sortField === 'averageTransactionsPerWeek' && (
+                              sortDirection === 'desc' ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronUp className="h-3 w-3" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Average transactions per week</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[70px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('avg_txn_value')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            Avg Val
+                            {sortField === 'avg_txn_value' && (
+                              sortDirection === 'desc' ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronUp className="h-3 w-3" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Average transaction value</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('totalLifetimeSpend')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            LTV
+                            {sortField === 'totalLifetimeSpend' && (
+                              sortDirection === 'desc' ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronUp className="h-3 w-3" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Lifetime total spend</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('lifetimeTransactionCount')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            Txns
+                            {sortField === 'lifetimeTransactionCount' && (
+                              sortDirection === 'desc' ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronUp className="h-3 w-3" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Total transaction count</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[70px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('min_txn_value')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            Min
+                            {sortField === 'min_txn_value' && (
+                              sortDirection === 'desc' ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronUp className="h-3 w-3" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Minimum transaction value</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[70px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('max_txn_value')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            Max
+                            {sortField === 'max_txn_value' && (
+                              sortDirection === 'desc' ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronUp className="h-3 w-3" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Maximum transaction value</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  {/* Engagement Metrics */}
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('totalStoreViews')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            Views
+                            {sortField === 'totalStoreViews' && (
+                              sortDirection === 'desc' ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronUp className="h-3 w-3" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Total store views</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[50px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('viewsLast7Days')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            7d
+                            {sortField === 'viewsLast7Days' && (
+                              sortDirection === 'desc' ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronUp className="h-3 w-3" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Views in last 7 days</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[50px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('viewsLast30Days')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            30d
+                            {sortField === 'viewsLast30Days' && (
+                              sortDirection === 'desc' ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronUp className="h-3 w-3" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Views in last 30 days</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[50px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('viewsLast90Days')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            90d
+                            {sortField === 'viewsLast90Days' && (
+                              sortDirection === 'desc' ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronUp className="h-3 w-3" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Views in last 90 days</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('daysSinceLastVisit')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            Last
+                            {sortField === 'daysSinceLastVisit' && (
+                              sortDirection === 'desc' ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronUp className="h-3 w-3" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Days since last visit</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  {/* Points & Rewards */}
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('pointsBalance')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            Points
+                            {sortField === 'pointsBalance' && (
+                              sortDirection === 'desc' ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronUp className="h-3 w-3" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Current points balance</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('redemptionCount')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            Redeem
+                            {sortField === 'redemptionCount' && (
+                              sortDirection === 'desc' ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronUp className="h-3 w-3" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Total redemptions</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('rewardRedemptionRate')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            Rate
+                            {sortField === 'rewardRedemptionRate' && (
+                              sortDirection === 'desc' ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronUp className="h-3 w-3" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Redemption rate percentage</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  {/* Customer Preferences */}
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[50px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('membershipTier')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            Tier
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Membership tier</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[50px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('emailOptIn')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            Email
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Email opt-in status</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[50px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('pushOptIn')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            Push
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Push notification opt-in status</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  {/* Dates */}
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('firstTransactionDate')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            First
+                            {sortField === 'firstTransactionDate' && (
+                              sortDirection === 'desc' ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronUp className="h-3 w-3" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>First transaction date</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleSort('lastTransactionDate')}
+                            className="flex items-center gap-1 hover:text-gray-700"
+                          >
+                            Latest
+                            {sortField === 'lastTransactionDate' && (
+                              sortDirection === 'desc' ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronUp className="h-3 w-3" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Last transaction date</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredCustomers.map((customer) => (
+                  <tr key={customer.id} className="group hover:bg-gray-50">
+                    {/* Customer Info - Sticky Column */}
+                    <td className="sticky left-0 z-10 bg-white group-hover:bg-gray-50 px-2 py-2 whitespace-nowrap border-r border-gray-200">
+                      <div className="flex items-center">
+                        <div className="h-6 w-6 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center text-xs font-medium text-gray-600">
+                          {customer.profilePictureUrl ? (
+                            <img 
+                              src={customer.profilePictureUrl} 
+                              alt={customer.fullName || 'Customer'} 
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                // If image fails to load, show fallback
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                                target.nextElementSibling?.classList.remove('hidden');
+                              }}
+                            />
+                          ) : null}
+                          <span className={customer.profilePictureUrl ? 'hidden' : ''}>
+                            {customer.fullName?.charAt(0) || '?'}
+                          </span>
+                        </div>
+                        <div className="ml-2">
+                          <div className="text-xs font-medium text-gray-900">
+                            {customer.fullName || 'Unknown'}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {customer.id.substring(0, 6)}...
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    
+                    {/* Cohort */}
+                    <td className="px-2 py-2 whitespace-nowrap">
+                      <Badge variant="outline" className={cn("text-xs rounded-md capitalize", 
+                        customer.currentCohort?.name === 'active' && "bg-green-50 text-green-700 border-green-200",
+                        customer.currentCohort?.name === 'engaged' && "bg-blue-50 text-blue-700 border-blue-200",
+                        customer.currentCohort?.name === 'at-risk' && "bg-amber-50 text-amber-700 border-amber-200",
+                        customer.currentCohort?.name === 'dormant' && "bg-gray-50 text-gray-700 border-gray-200",
+                        customer.currentCohort?.name === 'churned' && "bg-red-50 text-red-700 border-red-200",
+                        (!customer.currentCohort?.name || customer.currentCohort?.name === 'unknown') && "bg-gray-50 text-gray-700 border-gray-200"
+                      )}>
+                        {customer.currentCohort?.name || 'Unknown'}
+                      </Badge>
+                    </td>
+
+                    {/* Transaction Metrics */}
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-900">
+                      {formatValue(customer.averageTransactionsPerWeek, 'number')}
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-900">
+                      {formatValue(customer.avg_txn_value, 'currency')}
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-900 font-medium">
+                      {formatValue(customer.totalLifetimeSpend, 'currency')}
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-900">
+                      {formatValue(customer.lifetimeTransactionCount, 'number')}
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-900">
+                      {formatValue(customer.min_txn_value, 'currency')}
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-900">
+                      {formatValue(customer.max_txn_value, 'currency')}
+                    </td>
+
+                    {/* Engagement Metrics */}
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-900">
+                      {formatValue(customer.totalStoreViews, 'number')}
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-900">
+                      {formatValue(customer.viewsLast7Days, 'number')}
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-900">
+                      {formatValue(customer.viewsLast30Days, 'number')}
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-900">
+                      {formatValue(customer.viewsLast90Days, 'number')}
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-900">
+                      {customer.daysSinceLastVisit ? `${customer.daysSinceLastVisit}d` : 'N/A'}
+                    </td>
+
+                    {/* Points & Rewards */}
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-900 font-medium">
+                      {formatValue(customer.pointsBalance, 'number')}
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-900">
+                      {formatValue(customer.redemptionCount, 'number')}
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-900">
+                      {customer.rewardRedemptionRate ? formatValue(customer.rewardRedemptionRate * 100, 'percentage') : 'N/A'}
+                    </td>
+
+                    {/* Customer Preferences */}
+                    <td className="px-2 py-2 whitespace-nowrap">
+                      <Badge variant="outline" className="text-xs rounded-md capitalize">
+                        {customer.membershipTier || 'None'}
+                      </Badge>
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs">
+                      {customer.emailOptIn === true ? '✓' : customer.emailOptIn === false ? '✗' : 'N/A'}
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs">
+                      {customer.pushOptIn === true ? '✓' : customer.pushOptIn === false ? '✗' : 'N/A'}
+                    </td>
+
+                    {/* Dates */}
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-500">
+                      {customer.firstTransactionDate ? formatValue(customer.firstTransactionDate, 'date') : 'N/A'}
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-500">
+                      {customer.lastTransactionDate ? formatValue(customer.lastTransactionDate, 'date') : 'N/A'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Full Customers Tab Component
 const CustomersTabContent = () => {
   const router = useRouter()
@@ -2917,6 +3968,7 @@ const CustomersTabContent = () => {
   const [sortField, setSortField] = useState<'fullName' | 'lastTransactionDate' | 'totalLifetimeSpend' | 'redemptionCount' | 'pointsBalance' | 'lifetimeTransactionCount'>('lastTransactionDate')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [cohort, setCohort] = useState<'all' | 'active' | 'engaged' | 'at-risk' | 'dormant' | 'new' | 'loyal' | 'vip'>('all')
+  const [customerView, setCustomerView] = useState<'standard' | 'advanced'>('standard')
 
   // Filter and sort customers
   const filteredCustomers = useMemo(() => {
@@ -3054,10 +4106,13 @@ const CustomersTabContent = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
         <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
           <button
-            onClick={() => setCohort("all")}
+            onClick={() => {
+              setCohort("all")
+              setCustomerView('standard')
+            }}
             className={cn(
               "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
-              cohort === "all"
+              cohort === "all" && customerView === "standard"
                 ? "text-gray-800 bg-white shadow-sm"
                 : "text-gray-600 hover:bg-gray-200/70"
             )}
@@ -3066,10 +4121,13 @@ const CustomersTabContent = () => {
             All Customers
           </button>
           <button
-            onClick={() => setCohort("active")}
+            onClick={() => {
+              setCohort("active")
+              setCustomerView('standard')
+            }}
             className={cn(
               "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
-              cohort === "active"
+              cohort === "active" && customerView === "standard"
                 ? "text-gray-800 bg-white shadow-sm"
                 : "text-gray-600 hover:bg-gray-200/70"
             )}
@@ -3078,10 +4136,13 @@ const CustomersTabContent = () => {
             Active
           </button>
           <button
-            onClick={() => setCohort("at-risk")}
+            onClick={() => {
+              setCohort("at-risk")
+              setCustomerView('standard')
+            }}
             className={cn(
               "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
-              cohort === "at-risk"
+              cohort === "at-risk" && customerView === "standard"
                 ? "text-gray-800 bg-white shadow-sm"
                 : "text-gray-600 hover:bg-gray-200/70"
             )}
@@ -3090,16 +4151,34 @@ const CustomersTabContent = () => {
             At Risk
           </button>
           <button
-            onClick={() => setCohort("dormant")}
+            onClick={() => {
+              setCohort("dormant")
+              setCustomerView('standard')
+            }}
             className={cn(
               "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
-              cohort === "dormant"
+              cohort === "dormant" && customerView === "standard"
                 ? "text-gray-800 bg-white shadow-sm"
                 : "text-gray-600 hover:bg-gray-200/70"
             )}
           >
             <XCircle className="h-3 w-3" />
             Dormant
+          </button>
+          
+          <div className="h-4 w-px bg-gray-300 mx-1"></div>
+          
+          <button
+            onClick={() => setCustomerView('advanced')}
+            className={cn(
+              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+              customerView === "advanced"
+                ? "text-gray-800 bg-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-200/70"
+            )}
+          >
+            <BarChart3 className="h-3 w-3" />
+            Advanced View
           </button>
         </div>
         
@@ -3326,6 +4405,8 @@ const CustomersTabContent = () => {
         </div>
       </div>
       
+      {/* Standard Customer Table - Only show in standard view */}
+      {customerView === 'standard' && (
       <Card className="rounded-md overflow-hidden">
         <CardContent className="p-0">
           <Table>
@@ -3477,6 +4558,10 @@ const CustomersTabContent = () => {
           </Table>
         </CardContent>
       </Card>
+      )}
+      
+      {/* Conditional content based on view mode */}
+      {customerView === 'advanced' && <AdvancedCustomersView />}
     </div>
   );
 };

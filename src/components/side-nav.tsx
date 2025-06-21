@@ -33,9 +33,10 @@ import {
   Circle,
   Crown,
   Star,
+  Globe,
   Zap as ZapIcon
 } from "lucide-react"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,7 +53,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { TapAiButton } from "@/components/tap-ai-button"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/use-toast"
-import { collection, getDocs, query, where, limit, onSnapshot } from "firebase/firestore"
+import { collection, getDocs, query, where, limit, onSnapshot, updateDoc } from "firebase/firestore"
 import { CreateSheet } from "@/components/create-sheet"
 import { CreateRewardSheet } from "@/components/create-reward-sheet"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
@@ -97,35 +98,7 @@ const scrollbarStyles =
     scrollbar-width: none !important;
   }
   
-  /* Avatar image styles */
-  .merchant-avatar-container {
-    width: 100%;
-    height: 100%;
-    position: relative;
-    border-radius: 50%;
-    overflow: hidden;
-  }
-  
-  .merchant-avatar-image {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    position: relative;
-    z-index: 2;
-  }
-  
-  .avatar-fallback {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    font-weight: 500;
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 1;
-  }
+
 `;
 
 // Define types for nav items structure before the navItems array
@@ -243,6 +216,7 @@ interface MerchantData {
   companyName?: string;
   displayName?: string;
   email?: string;
+  isNetworkStore?: boolean;
   [key: string]: any;
 }
 
@@ -453,6 +427,11 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
           }
           
           setMerchantData(data)
+          
+          // Set merchant status from database
+          if (data.status) {
+            setMerchantStatus(data.status as 'active' | 'inactive')
+          }
         } else {
           console.log("No merchant document found")
         }
@@ -547,6 +526,31 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
         description: "Failed to log out. Please try again.",
         variant: "destructive"
       })
+    }
+  }
+
+  const updateMerchantStatus = async (newStatus: 'active' | 'inactive') => {
+    if (!user?.uid) return;
+
+    try {
+      const merchantRef = doc(db, 'merchants', user.uid);
+      await updateDoc(merchantRef, {
+        status: newStatus
+      });
+      
+      setMerchantStatus(newStatus);
+      
+      toast({
+        title: "Status Updated",
+        description: `Store status changed to ${newStatus === 'active' ? 'Live' : 'Offline'}`,
+      });
+    } catch (error) {
+      console.error("Error updating merchant status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update status. Please try again.",
+        variant: "destructive"
+      });
     }
   }
 
@@ -1018,30 +1022,30 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
             <div className="flex justify-center">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full relative">
-                    <Avatar className="h-8 w-8">
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-md relative">
+                    <div className="h-8 w-8 rounded-md overflow-hidden">
                       {merchantData?.logoUrl && !logoError ? (
-                        <div className="merchant-avatar-container">
+                        <div className="w-full h-full relative">
                           <img 
                             src={merchantData.logoUrl} 
                             alt={merchantName} 
-                            className="merchant-avatar-image"
+                            className="w-full h-full object-cover"
                             onError={() => setLogoError(true)}
                             onLoad={() => setLogoLoading(false)}
                             style={{ opacity: logoLoading ? 0 : 1, transition: 'opacity 0.2s ease-in-out' }}
                           />
                           {logoLoading && (
-                            <AvatarFallback className="bg-primary text-white text-xs avatar-fallback">
+                            <div className="absolute inset-0 bg-primary text-white text-xs flex items-center justify-center">
                               {initials}
-                            </AvatarFallback>
+                            </div>
                           )}
                         </div>
                       ) : (
-                        <AvatarFallback className="bg-primary text-white text-xs avatar-fallback">
+                        <div className="w-full h-full bg-primary text-white text-xs flex items-center justify-center">
                           {initials}
-                        </AvatarFallback>
+                        </div>
                       )}
-                    </Avatar>
+                    </div>
                     {/* Status indicator for collapsed view */}
                     <div className="absolute -bottom-0.5 -right-0.5">
                       {merchantStatus === 'active' ? (
@@ -1090,29 +1094,29 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
               {/* Top row: Avatar, Name, Email, and Menu */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3 overflow-hidden min-w-0 max-w-[80%]">
-                  <Avatar className="h-8 w-8 flex-shrink-0">
+                  <div className="h-8 w-8 rounded-md overflow-hidden flex-shrink-0">
                     {merchantData?.logoUrl && !logoError ? (
-                      <div className="merchant-avatar-container">
+                      <div className="w-full h-full relative">
                         <img 
                           src={merchantData.logoUrl} 
                           alt={merchantName} 
-                          className="merchant-avatar-image"
+                          className="w-full h-full object-cover"
                           onError={() => setLogoError(true)}
                           onLoad={() => setLogoLoading(false)}
                           style={{ opacity: logoLoading ? 0 : 1, transition: 'opacity 0.2s ease-in-out' }}
                         />
                         {logoLoading && (
-                          <AvatarFallback className="bg-primary text-white text-xs avatar-fallback">
+                          <div className="absolute inset-0 bg-primary text-white text-xs flex items-center justify-center">
                             {initials}
-                          </AvatarFallback>
+                          </div>
                         )}
                       </div>
                     ) : (
-                      <AvatarFallback className="bg-primary text-white text-xs avatar-fallback">
+                      <div className="w-full h-full bg-primary text-white text-xs flex items-center justify-center">
                         {initials}
-                      </AvatarFallback>
+                      </div>
                     )}
-                  </Avatar>
+                  </div>
                   <div className="overflow-hidden">
                     <p className="text-sm font-medium truncate">{merchantName}</p>
                     <p className="text-xs text-muted-foreground truncate">{merchantEmail}</p>
@@ -1183,11 +1187,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                     {merchantStatus === 'active' && (
                       <button 
                         className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out flex items-center justify-end"
-                        onClick={() => {
-                          // Add deactivation logic here
-                          setMerchantStatus('inactive');
-                          console.log('Deactivate clicked');
-                        }}
+                        onClick={() => updateMerchantStatus('inactive')}
                       >
                         <span className="bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-md border border-red-200 hover:bg-red-200 transition-colors whitespace-nowrap">
                           Deactivate
@@ -1198,11 +1198,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                     {merchantStatus === 'inactive' && (
                       <button 
                         className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out flex items-center justify-end"
-                        onClick={() => {
-                          // Add activation logic here
-                          setMerchantStatus('active');
-                          console.log('Activate clicked');
-                        }}
+                        onClick={() => updateMerchantStatus('active')}
                       >
                         <span className="bg-green-100 text-green-700 text-xs font-medium px-2 py-0.5 rounded-md border border-green-200 hover:bg-green-200 transition-colors whitespace-nowrap">
                           Activate
@@ -1218,16 +1214,16 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                   <div className="relative">
                     {/* Default plan display */}
                     <div className="flex items-center gap-1.5 group-hover:opacity-0 transition-opacity duration-500 ease-out">
-                      {merchantPlan === 'light' && <Circle className="h-3 w-3 text-gray-500" />}
-                      {merchantPlan === 'advanced' && <Star className="h-3 w-3 text-blue-500" />}
-                      {merchantPlan === 'pro' && <Crown className="h-3 w-3 text-purple-500" />}
+                      {merchantData?.isNetworkStore ? (
+                        <Globe className="h-3 w-3 text-blue-500" />
+                      ) : (
+                        <Circle className="h-3 w-3 text-gray-500" />
+                      )}
                       <span className={cn(
-                        "text-xs font-medium capitalize",
-                        merchantPlan === 'light' && "text-gray-700",
-                        merchantPlan === 'advanced' && "text-blue-700",
-                        merchantPlan === 'pro' && "text-purple-700"
+                        "text-xs font-medium",
+                        merchantData?.isNetworkStore ? "text-blue-700" : "text-gray-700"
                       )}>
-                        Tap {merchantPlan}
+                        {merchantData?.isNetworkStore ? "Tap Network" : "Tap Standard"}
                       </span>
                     </div>
                     

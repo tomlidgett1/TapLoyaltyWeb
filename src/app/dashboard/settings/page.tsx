@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
 import { 
@@ -30,22 +31,23 @@ import {
   Gift,
   BarChart,
   FileText,
-  Image,
+  Image as ImageIcon,
   Download,
   Brain,
   Badge as BadgeIcon,
-  ShoppingBag
+  ShoppingBag,
+  Calendar
 } from "lucide-react"
-import { doc, getDoc, updateDoc } from "firebase/firestore"
+import { doc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { toast } from "@/components/ui/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { storage } from "@/lib/firebase"
-import { firebase } from "@/lib/firebase"
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
+import { v4 as uuidv4 } from "uuid"
 import { PageTransition } from "@/components/page-transition"
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
+import { MapLocationPicker } from "@/components/map-location-picker"
 
 const SettingsPage: React.FC = () => {
   const router = useRouter()
@@ -70,6 +72,26 @@ const SettingsPage: React.FC = () => {
   const [suburb, setSuburb] = useState("")
   const [state, setState] = useState("NSW")
   const [postcode, setPostcode] = useState("")
+  const [latitude, setLatitude] = useState<number | undefined>()
+  const [longitude, setLongitude] = useState<number | undefined>()
+  const [formattedAddress, setFormattedAddress] = useState("")
+  
+  // Location coordinates structure
+  const [location, setLocation] = useState<{
+    address?: string;
+    coordinates?: {
+      latitude?: number;
+      longitude?: number;
+    };
+    displayAddress?: string;
+  }>({
+    address: "",
+    coordinates: {
+      latitude: undefined,
+      longitude: undefined
+    },
+    displayAddress: ""
+  })
   
   // Other existing states
   const [businessName, setBusinessName] = useState("My Business")
@@ -201,7 +223,7 @@ const SettingsPage: React.FC = () => {
           // Set business details
           setLegalBusinessName(data.legalName || "")
           setTradingName(data.tradingName || "")
-          setBusinessEmail(data.businessEmail || "")
+          setBusinessEmail(data.businessEmail || user.email || "")
           setBusinessType(data.businessType || "cafe")
           setLogoUrl(data.logoUrl || "")
           
@@ -211,6 +233,26 @@ const SettingsPage: React.FC = () => {
             setSuburb(data.address.suburb || "")
             setState(data.address.state || "NSW")
             setPostcode(data.address.postcode || "")
+            setLatitude(data.address.latitude)
+            setLongitude(data.address.longitude)
+            setFormattedAddress(data.address.formattedAddress || "")
+          }
+          
+          // Set location coordinates
+          if (data.location && data.location.coordinates) {
+            setLocation({
+              address: data.location.address || `${street}, ${suburb}`,
+              coordinates: {
+                latitude: data.location.coordinates.latitude,
+                longitude: data.location.coordinates.longitude
+              },
+              displayAddress: data.location.displayAddress || data.address?.formattedAddress || ""
+            })
+            
+            // Also set the individual state variables for backward compatibility
+            setLatitude(data.location.coordinates.latitude)
+            setLongitude(data.location.coordinates.longitude)
+            setFormattedAddress(data.location.displayAddress || "")
           }
           
           // Set representative details
@@ -231,6 +273,14 @@ const SettingsPage: React.FC = () => {
           setPointOfSale(data.pointOfSale || "lightspeed")
           setPaymentProvider(data.paymentProvider || "square")
           setStoreActive(data.status === "active")
+          
+          // Set bank account details for refunds
+          if (data.refundAccount) {
+            setRefundAbn(data.refundAccount.abn || data.abn || "")
+            setBsbNumber(data.refundAccount.bsb || "")
+            setAccountNumber(data.refundAccount.accountNumber || "")
+            setAccountName(data.refundAccount.accountName || "")
+          }
           
           // Set notifications
           if (data.notifications) {
@@ -263,25 +313,40 @@ const SettingsPage: React.FC = () => {
     fetchMerchantData()
   }, [user])
   
-  const handleLogoChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: "Invalid File Type",
+          description: "Please select an image file (PNG, JPG, or SVG)",
+          variant: "destructive"
+        });
+        return;
+      }
       
+      // Validate file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "File Too Large",
+          description: "File size must be less than 5MB",
+          variant: "destructive"
+        });
+        return;
+      }
+
       // Set the file to state
       setLogoFile(file);
       
-      // Create a mock URL for development
-      const mockUrl = URL.createObjectURL(file);
-      setMockLogoUrl(mockUrl);
+      // Create preview URL for immediate display
+      const previewUrl = URL.createObjectURL(file);
+      setLogoUrl(previewUrl);
       
-      // Show a toast to indicate the file is ready
       toast({
         title: "Logo Selected",
-        description: `${file.name} is ready for preview`,
+        description: "Click Save Changes to upload your new logo",
       });
-      
-      // Update the logo URL for immediate display
-      setLogoUrl(mockUrl);
     }
   };
   
@@ -334,36 +399,69 @@ const SettingsPage: React.FC = () => {
     }
   }
   
-  // Modify the upload function to include additional CORS headers
-  const uploadWithCorsHeaders = async (file, path) => {
+  // Function to upload files to Firebase Storage
+  const uploadFileToStorage = async (file: File, fileType: string): Promise<string | null> => {
+    if (!file || !user?.uid) {
+      toast({
+        title: "Upload Error",
+        description: !file ? "No file selected" : "Authentication required",
+        variant: "destructive"
+      });
+      return null;
+    }
+    
     try {
-      // Create a reference with a unique name
-      const fileRef = ref(storage, path);
+      const fileId = uuidv4();
+      const storagePath = `merchants/${user.uid}/files/${fileId}`;
+      console.log(`Uploading ${fileType} to: ${storagePath}`);
       
-      // Set metadata with CORS headers
-      const metadata = {
-        contentType: file.type,
-        customMetadata: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Content-Disposition, Content-Length'
-        }
-      };
+      // Upload to Firebase Storage
+      const storage = getStorage();
+      const storageRef = ref(storage, storagePath);
+      const uploadTask = uploadBytesResumable(storageRef, file, { 
+        contentType: file.type || 'application/octet-stream' 
+      });
       
-      // Upload the file with metadata
-      const uploadResult = await uploadBytes(fileRef, file, metadata);
-      
-      // Get the download URL
-      const downloadUrl = await getDownloadURL(uploadResult.ref);
-      
-      return downloadUrl;
+      // Return a promise that resolves with the download URL
+      return await new Promise<string | null>((resolve, reject) => {
+        uploadTask.on('state_changed',
+          (snapshot) => {
+            // Handle progress if needed
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            console.log(`Upload progress: ${progress}%`);
+          },
+          (error) => {
+            console.error('Upload error:', error);
+            toast({
+              title: "Upload Failed",
+              description: "Please try again later.",
+              variant: "destructive"
+            });
+            reject(null);
+          },
+          async () => {
+            try {
+              // Get download URL after successful upload
+              const downloadURL = await getDownloadURL(storageRef);
+              resolve(downloadURL);
+            } catch (e) {
+              console.error('Error getting download URL:', e);
+              reject(null);
+            }
+          }
+        );
+      });
     } catch (error) {
-      console.error("Upload error:", error);
-      throw error;
+      console.error('Upload error:', error);
+      toast({
+        title: "Upload Failed",
+        description: "Please try again later.",
+        variant: "destructive"
+      });
+      return null;
     }
   };
   
-  // Then use this function in handleSave
   const handleSave = async () => {
     if (!user?.uid) {
       console.error("Error: No user ID available");
@@ -383,15 +481,17 @@ const SettingsPage: React.FC = () => {
       let newLogoUrl = logoUrl;
       if (logoFile) {
         try {
-          const fileName = `merchants/${user.uid}/logo/${Date.now()}-${logoFile.name}`;
-          newLogoUrl = await uploadWithCorsHeaders(logoFile, fileName);
-          setLogoUrl(newLogoUrl);
-          setLogoFile(null);
-          
-          toast({
-            title: "Logo Uploaded",
-            description: "Your business logo has been updated.",
-          });
+          const uploadedLogoUrl = await uploadFileToStorage(logoFile, "logo");
+          if (uploadedLogoUrl) {
+            newLogoUrl = uploadedLogoUrl;
+            setLogoUrl(uploadedLogoUrl);
+            setLogoFile(null);
+            
+            toast({
+              title: "Logo Uploaded",
+              description: "Your business logo has been updated.",
+            });
+          }
         } catch (error) {
           console.error("Error uploading logo:", error);
           toast({
@@ -402,31 +502,52 @@ const SettingsPage: React.FC = () => {
         }
       }
       
-      // Handle document upload
+      // Handle ABN verification document upload
+      let newAbnVerificationUrl = abnVerificationUrl;
+      if (abnVerificationFile) {
+        try {
+          const uploadedVerificationUrl = await uploadFileToStorage(abnVerificationFile, "verification");
+          if (uploadedVerificationUrl) {
+            newAbnVerificationUrl = uploadedVerificationUrl;
+            setAbnVerificationUrl(uploadedVerificationUrl);
+            setAbnVerificationFile(null);
+            
+            toast({
+              title: "Verification Document Uploaded",
+              description: "Your ABN verification document has been uploaded successfully.",
+            });
+          }
+        } catch (error) {
+          console.error("Error uploading ABN verification:", error);
+          toast({
+            title: "Upload Failed",
+            description: "Failed to upload verification document. Please try again.",
+            variant: "destructive"
+          });
+        }
+      }
+      
+      // Handle other document upload
       if (documentFile) {
         try {
-          console.log("Uploading document to Firebase Storage");
-          const timestamp = Date.now();
-          const fileName = `merchants/${user.uid}/documents/${timestamp}-${documentFile.name}`;
-          const documentUrl = await uploadWithCorsHeaders(documentFile, fileName);
-          
-          console.log("Document uploaded successfully:", documentUrl);
-          
-          // Add to documents array
-          const newDocument = {
-            name: documentFile.name,
-            url: documentUrl,
-            path: fileName,
-            uploadedAt: new Date()
-          };
-          
-          setDocuments(prev => [...prev, newDocument]);
-          setDocumentFile(null);
-          
-          toast({
-            title: "Document Uploaded",
-            description: "Your document has been uploaded successfully.",
-          });
+          const documentUrl = await uploadFileToStorage(documentFile, "document");
+          if (documentUrl) {
+            // Add to documents array
+            const newDocument = {
+              name: documentFile.name,
+              url: documentUrl,
+              path: `merchants/${user.uid}/files/${documentFile.name}`,
+              uploadedAt: new Date()
+            };
+            
+            setDocuments(prev => [...prev, newDocument]);
+            setDocumentFile(null);
+            
+            toast({
+              title: "Document Uploaded",
+              description: "Your document has been uploaded successfully.",
+            });
+          }
         } catch (error) {
           console.error("Error uploading document:", error);
           toast({
@@ -451,6 +572,14 @@ const SettingsPage: React.FC = () => {
           state,
           postcode
         },
+        location: {
+          address: `${street}, ${suburb}`,
+          coordinates: {
+            latitude,
+            longitude
+          },
+          displayAddress: formattedAddress
+        },
         representative: {
           name: repName,
           phone: repPhone,
@@ -458,13 +587,21 @@ const SettingsPage: React.FC = () => {
         },
         operatingHours,
         abn,
-        abnVerificationUrl,
+        abnVerificationUrl: newAbnVerificationUrl,
         pointOfSale,
         paymentProvider,
         status: storeActive ? "active" : "inactive",
         notifications,
         businessInsights,
-        updatedAt: new Date(),
+        // Bank account details for refunds
+        refundAccount: {
+          abn: refundAbn || abn,
+          bsb: bsbNumber,
+          accountNumber: accountNumber,
+          accountName: accountName,
+          updatedAt: serverTimestamp()
+        },
+        updatedAt: serverTimestamp(),
         documents: documents.map(doc => ({
           name: doc.name,
           path: doc.path,
@@ -494,6 +631,63 @@ const SettingsPage: React.FC = () => {
 
   const [profileSection, setProfileSection] = useState('business')
   const [notificationSection, setNotificationSection] = useState('channels')
+  const [billingSection, setBillingSection] = useState('refunds')
+  
+  // Bank account details for refunds
+  const [refundAbn, setRefundAbn] = useState("")
+  const [bsbNumber, setBsbNumber] = useState("")
+  const [accountNumber, setAccountNumber] = useState("")
+  const [accountName, setAccountName] = useState("")
+  
+  // Tap funded rewards sheet
+  const [showTapRewardsSheet, setShowTapRewardsSheet] = useState(false)
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    // Use June 2025 as the current month
+    return "2025-06"
+  })
+  const [tapRewards, setTapRewards] = useState<Array<{
+    id: string;
+    customerId: string;
+    merchantId: string;
+    pointsUsed: number;
+    redemptionDate: Date;
+    redemptionId: string;
+    rewardId: string;
+    rewardName: string;
+    rewardTypeDetails: string;
+    status: string;
+    type: string;
+    refundAmount: number;
+  }>>([])
+  const [isLoadingRewards, setIsLoadingRewards] = useState(false)
+  const [totalRefundAmount, setTotalRefundAmount] = useState(0)
+  
+  // Generate the last 6 months (current month + 5 previous months)
+  const months = (() => {
+    const result = [];
+    const currentDate = new Date(2025, 5, 1); // June 2025 (months are 0-indexed)
+    
+    for (let i = 0; i < 6; i++) {
+      const date = new Date(currentDate);
+      date.setMonth(date.getMonth() - i);
+      
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1; // Convert to 1-indexed
+      const monthValue = `${year}-${month.toString().padStart(2, '0')}`;
+      
+      const monthNames = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+      ];
+      
+      result.push({
+        value: monthValue,
+        label: `${monthNames[date.getMonth()]} ${year}`
+      });
+    }
+    
+    return result;
+  })()
 
   // Function to update notification settings
   const updateNotification = (key, value) => {
@@ -503,7 +697,7 @@ const SettingsPage: React.FC = () => {
     }))
   }
 
-  // Modify the document file handler to use a mock upload in development
+  // Handle document file selection
   const handleDocumentFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -511,26 +705,14 @@ const SettingsPage: React.FC = () => {
       // Set the file to state
       setDocumentFile(file);
       
-      // Create a mock URL for development
-      const mockUrl = URL.createObjectURL(file);
-      setMockDocumentUrl(mockUrl);
-      
       // Show a toast to indicate the file is ready
       toast({
         title: "File Selected",
-        description: `${file.name} is ready for preview`,
+        description: `${file.name} is ready to upload`,
       });
       
-      // Add to documents array for immediate display
-      setDocuments(prev => [
-        ...prev, 
-        {
-          name: file.name,
-          url: mockUrl,
-          path: `merchants/${merchantId}/documents/${Date.now()}-${file.name}`,
-          uploadedAt: new Date()
-        }
-      ]);
+      // Note: We don't immediately add to documents array anymore
+      // The file will be uploaded when the user clicks Save
     }
   };
 
@@ -576,6 +758,114 @@ const SettingsPage: React.FC = () => {
       [key]: value
     }));
   };
+  
+  // Function to format date for display
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-AU', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+  
+  // Function to fetch Tap-funded rewards
+  const fetchTapFundedRewards = async (month: string) => {
+    if (!user?.uid) return;
+    
+    setIsLoadingRewards(true);
+    setTapRewards([]);
+    setTotalRefundAmount(0);
+    
+    try {
+      // Parse year and month from selected month (format: YYYY-MM)
+      const [year, monthNum] = month.split('-').map(Number);
+      
+      // Create start and end dates for the selected month
+      const startDate = new Date(year, monthNum - 1, 1);
+      const endDate = new Date(year, monthNum, 0, 23, 59, 59, 999); // Last day of month
+      
+      // Query Firestore for redemptions in the specified month with type "tapfunded"
+      const redemptionsRef = collection(db, `merchants/${user.uid}/redemptions`);
+      const q = query(
+        redemptionsRef,
+        where('type', '==', 'tapfunded'),
+        where('redemptionDate', '>=', startDate),
+        where('redemptionDate', '<=', endDate)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        setIsLoadingRewards(false);
+        return;
+      }
+      
+      const rewards: Array<{
+        id: string;
+        customerId: string;
+        merchantId: string;
+        pointsUsed: number;
+        redemptionDate: Date;
+        redemptionId: string;
+        rewardId: string;
+        rewardName: string;
+        rewardTypeDetails: string;
+        status: string;
+        type: string;
+        refundAmount: number;
+      }> = [];
+      
+      let total = 0;
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        
+        // Calculate refund amount (this would typically come from the server)
+        // For now, we'll use a placeholder value of $5 per reward
+        const refundAmount = 5.00;
+        
+        const reward = {
+          id: doc.id,
+          customerId: data.customerId || '',
+          merchantId: data.merchantId || user.uid,
+          pointsUsed: data.pointsUsed || 0,
+          redemptionDate: data.redemptionDate?.toDate() || new Date(),
+          redemptionId: data.redemptionId || doc.id,
+          rewardId: data.rewardId || '',
+          rewardName: data.rewardName || 'Unnamed Reward',
+          rewardTypeDetails: data.rewardTypeDetails || '',
+          status: data.status || 'successful',
+          type: data.type || 'tapfunded',
+          refundAmount: refundAmount
+        };
+        
+        rewards.push(reward);
+        total += refundAmount;
+      });
+      
+      // Sort by date (newest first)
+      rewards.sort((a, b) => b.redemptionDate.getTime() - a.redemptionDate.getTime());
+      
+      setTapRewards(rewards);
+      setTotalRefundAmount(total);
+    } catch (error) {
+      console.error('Error fetching tap-funded rewards:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load rewards. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingRewards(false);
+    }
+  };
+
+  // Effect to load tap funded rewards when the sheet opens or month changes
+  useEffect(() => {
+    if (showTapRewardsSheet) {
+      fetchTapFundedRewards(selectedMonth);
+    }
+  }, [showTapRewardsSheet, selectedMonth, user?.uid]);
 
   if (dataLoading) {
     return (
@@ -593,43 +883,63 @@ const SettingsPage: React.FC = () => {
         <Tabs defaultValue="profile" className="space-y-6">
           {/* Tab Container with Store Status */}
           <div className="flex justify-between items-center">
+            {/* Main Tab Container */}
             <TabsList className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit h-auto">
-            <TabsTrigger 
-              value="profile" 
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors data-[state=active]:text-gray-800 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:bg-gray-200/70"
-            >
-              <User size={15} />
-              Profile
-            </TabsTrigger>
-            <TabsTrigger 
-              value="notifications" 
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors data-[state=active]:text-gray-800 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:bg-gray-200/70"
-            >
-              <Bell size={15} />
-              Notifications
-            </TabsTrigger>
-            <TabsTrigger 
-              value="billing" 
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors data-[state=active]:text-gray-800 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:bg-gray-200/70"
-            >
-              <CreditCard size={15} />
-              Billing
-            </TabsTrigger>
-            <TabsTrigger 
-              value="team" 
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors data-[state=active]:text-gray-800 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:bg-gray-200/70"
-            >
-              <Users size={15} />
-              Team
-            </TabsTrigger>
-            <TabsTrigger 
-              value="store" 
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors data-[state=active]:text-gray-800 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:bg-gray-200/70"
-            >
-              <Store size={15} />
-              Store
-            </TabsTrigger>
-
+              <TabsTrigger 
+                value="profile" 
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  "data-[state=active]:text-gray-800 data-[state=active]:bg-white data-[state=active]:shadow-sm",
+                  "data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:bg-gray-200/70"
+                )}
+              >
+                <User size={15} />
+                Profile
+              </TabsTrigger>
+              <TabsTrigger 
+                value="notifications" 
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  "data-[state=active]:text-gray-800 data-[state=active]:bg-white data-[state=active]:shadow-sm",
+                  "data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:bg-gray-200/70"
+                )}
+              >
+                <Bell size={15} />
+                Notifications
+              </TabsTrigger>
+              <TabsTrigger 
+                value="billing" 
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  "data-[state=active]:text-gray-800 data-[state=active]:bg-white data-[state=active]:shadow-sm",
+                  "data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:bg-gray-200/70"
+                )}
+              >
+                <CreditCard size={15} />
+                Billing
+              </TabsTrigger>
+              <TabsTrigger 
+                value="team" 
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  "data-[state=active]:text-gray-800 data-[state=active]:bg-white data-[state=active]:shadow-sm",
+                  "data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:bg-gray-200/70"
+                )}
+              >
+                <Users size={15} />
+                Team
+              </TabsTrigger>
+              <TabsTrigger 
+                value="store" 
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  "data-[state=active]:text-gray-800 data-[state=active]:bg-white data-[state=active]:shadow-sm",
+                  "data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:bg-gray-200/70"
+                )}
+              >
+                <Store size={15} />
+                Store
+              </TabsTrigger>
             </TabsList>
           </div>
           
@@ -639,46 +949,70 @@ const SettingsPage: React.FC = () => {
               <div className="md:col-span-1">
                 <Card className="overflow-hidden rounded-md">
                   <div className="p-4 border-b flex flex-col items-center">
-                    <div className="w-24 h-24 rounded-full overflow-hidden border mb-3">
+                    <div 
+                      className="w-24 h-24 rounded-full overflow-hidden border mb-3 relative group cursor-pointer"
+                      onClick={() => document.getElementById('logo-upload')?.click()}
+                    >
                       {logoUrl ? (
-                        <img 
-                          src={logoUrl} 
-                          alt={tradingName || "Business Logo"} 
-                          className="w-full h-full object-cover"
-                        />
+                        <>
+                          <img 
+                            src={logoUrl} 
+                            alt={tradingName || "Business Logo"} 
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Upload className="h-6 w-6 text-white" />
+                          </div>
+                        </>
                       ) : (
                         <div className="w-full h-full bg-gray-100 flex items-center justify-center">
                           <Store className="h-8 w-8 text-gray-400" />
+                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Upload className="h-6 w-6 text-white" />
+                          </div>
                         </div>
                       )}
+                      <input
+                        id="logo-upload"
+                        type="file"
+                        className="hidden"
+                        onChange={handleLogoChange}
+                        accept="image/*"
+                      />
                     </div>
                     <h3 className="font-medium text-sm">{tradingName || legalBusinessName || "Your Business"}</h3>
                     <p className="text-xs text-muted-foreground mt-1">{businessEmail || "No email set"}</p>
+                    {logoFile && (
+                      <div className="mt-2 flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-md text-xs">
+                        <ImageIcon className="h-3 w-3 text-blue-600" />
+                        <span className="text-blue-700 font-medium">{logoFile.name}</span>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="p-2">
                     {[
                       { id: 'business', label: 'Business Information', icon: <Store className="h-4 w-4" /> },
-                      { id: 'address', label: 'Business Address', icon: <MapPin className="h-4 w-4" /> },
+                      { id: 'address', label: 'Business Location', icon: <MapPin className="h-4 w-4" /> },
                       { id: 'merchant', label: 'Merchant ID', icon: <Key className="h-4 w-4" /> }
                     ].map(item => (
                       <button
                         key={item.id}
                         onClick={() => setProfileSection(item.id)}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-md text-left transition-colors ${
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left transition-colors ${
                           profileSection === item.id 
                             ? 'bg-blue-50 text-blue-700' 
-                            : 'hover:bg-gray-100'
+                            : 'hover:bg-gray-50'
                         }`}
                       >
-                        <div className={`p-1.5 rounded-md ${
+                        <div className={`flex items-center justify-center w-6 h-6 ${
                           profileSection === item.id 
-                            ? 'bg-blue-100 text-blue-700' 
-                            : 'bg-gray-100 text-gray-500'
+                            ? 'text-blue-700' 
+                            : 'text-gray-500'
                         }`}>
                           {item.icon}
                         </div>
-                        <span className="font-medium text-sm">{item.label}</span>
+                        <span className={`text-sm ${profileSection === item.id ? 'font-medium' : 'font-normal'}`}>{item.label}</span>
                       </button>
                     ))}
                   </div>
@@ -691,12 +1025,12 @@ const SettingsPage: React.FC = () => {
                   <CardHeader>
                     <CardTitle>
                       {profileSection === 'business' && "Business Information"}
-                      {profileSection === 'address' && "Business Address"}
+                      {profileSection === 'address' && "Business Location"}
                       {profileSection === 'merchant' && "Merchant ID"}
                     </CardTitle>
                     <CardDescription>
                       {profileSection === 'business' && "Update your business details"}
-                      {profileSection === 'address' && "Set your business location"}
+                      {profileSection === 'address' && "Set your business location on the map"}
                       {profileSection === 'merchant' && "Your unique merchant identifier"}
                     </CardDescription>
                   </CardHeader>
@@ -714,6 +1048,9 @@ const SettingsPage: React.FC = () => {
                               onChange={(e) => setLegalBusinessName(e.target.value)}
                               placeholder="Legal name as registered"
                             />
+                            <p className="text-xs text-muted-foreground">
+                              Must match your ABN registration
+                            </p>
                           </div>
                           
                           <div className="space-y-2">
@@ -724,18 +1061,27 @@ const SettingsPage: React.FC = () => {
                               onChange={(e) => setTradingName(e.target.value)}
                               placeholder="Name customers know you by"
                             />
+                            <p className="text-xs text-muted-foreground">
+                              This is the name displayed to customers in the Tap app
+                            </p>
                           </div>
                         </div>
                         
                         <div className="space-y-2">
-                          <Label htmlFor="businessEmail">Business Email</Label>
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="businessEmail">Primary Email</Label>
+                          </div>
                           <Input
                             id="businessEmail"
                             type="email"
                             value={businessEmail}
-                            onChange={(e) => setBusinessEmail(e.target.value)}
-                            placeholder="contact@yourbusiness.com"
+                            readOnly
+                            disabled
+                            className="bg-gray-50"
                           />
+                          <p className="text-xs text-muted-foreground">
+                            This is your primary account email and cannot be changed
+                          </p>
                         </div>
                         
                         <div className="space-y-2">
@@ -753,58 +1099,177 @@ const SettingsPage: React.FC = () => {
                             ))}
                           </select>
                         </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="abn">Australian Business Number (ABN)</Label>
+                          <Input
+                            id="abn"
+                            value={abn}
+                            onChange={(e) => setAbn(e.target.value)}
+                            placeholder="e.g. 12 345 678 901"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            We use your ABN to match consumer transactions with your merchant account
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>ABN Verification Document</Label>
+                          <div className="border rounded-md p-4 bg-gray-50">
+                            {abnVerificationUrl ? (
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <FileText className="h-4 w-4 text-blue-600" />
+                                    <div>
+                                      <span className="text-sm font-medium">Verification document uploaded</span>
+                                      {abnVerificationFile ? (
+                                        <p className="text-xs text-muted-foreground mt-0.5">{abnVerificationFile.name}</p>
+                                      ) : (
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                          {abnVerificationUrl.split('/').pop()?.split('-').slice(1).join('-') || 'Verification document'}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <a 
+                                    href={abnVerificationUrl} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-blue-600 hover:underline"
+                                  >
+                                    View
+                                  </a>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  Upload a new document to replace the existing one
+                                </p>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground mb-2">
+                                Please upload a document that verifies your business name matches the ABN (e.g. ABN registration, business registration certificate)
+                              </p>
+                            )}
+                            
+                            <div className="mt-2">
+                              <input
+                                id="abn-verification"
+                                type="file"
+                                className="hidden"
+                                onChange={handleAbnFileChange}
+                                accept=".pdf,.jpg,.jpeg,.png"
+                              />
+                              <div className="flex items-center gap-2">
+                                <Button 
+                                  type="button" 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => document.getElementById('abn-verification')?.click()}
+                                >
+                                  <Upload className="h-4 w-4 mr-2" />
+                                  {abnVerificationUrl ? 'Replace Document' : 'Upload Document'}
+                                </Button>
+                                {abnVerificationFile && (
+                                  <div className="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-md">
+                                    <FileText className="h-3 w-3 text-blue-600" />
+                                    <span className="text-xs text-blue-700 font-medium">
+                                      {abnVerificationFile.name}
+                                    </span>
+                                    <span className="text-xs text-blue-500">
+                                      ({(abnVerificationFile.size / 1024).toFixed(1)} KB)
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+
                       </div>
                     )}
                     
-                    {/* Business Address Section */}
+                    {/* Business Location Section */}
                     {profileSection === 'address' && (
                       <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="street">Street Address</Label>
-                          <Input 
-                            id="street"
-                            value={street}
-                            onChange={(e) => setStreet(e.target.value)}
-                            placeholder="123 Main Street"
-                          />
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label htmlFor="suburb">Suburb</Label>
-                          <Input 
-                            id="suburb"
-                            value={suburb}
-                            onChange={(e) => setSuburb(e.target.value)}
-                            placeholder="Suburb"
-                          />
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="state">State</Label>
-                            <select 
-                              id="state"
-                              value={state}
-                              onChange={(e) => setState(e.target.value)}
-                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {australianStates.map(state => (
-                                <option key={state.value} value={state.value}>
-                                  {state.label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Search for your business address or click on the map to set your exact location
+                          </p>
                           
-                          <div className="space-y-2">
-                            <Label htmlFor="postcode">Postcode</Label>
-                            <Input 
-                              id="postcode"
-                              value={postcode}
-                              onChange={(e) => setPostcode(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                              placeholder="0000"
-                            />
-                          </div>
+                          {location.address && location.coordinates && (
+                            <div className="mb-6 p-4 bg-blue-50 border border-blue-100 rounded-md">
+                              <h4 className="text-sm font-medium text-blue-800 mb-2">Selected Location</h4>
+                              <div className="flex items-start gap-2">
+                                <MapPin className="h-4 w-4 mt-0.5 text-blue-600" />
+                                <div>
+                                  <p className="text-sm font-medium">{location.displayAddress}</p>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    Coordinates: {location.coordinates.latitude?.toFixed(6)}, {location.coordinates.longitude?.toFixed(6)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          
+                          <MapLocationPicker
+                            initialAddress={formattedAddress || `${street}, ${suburb}, ${state}, ${postcode}, Australia`}
+                            initialLatitude={latitude}
+                            initialLongitude={longitude}
+                            onLocationChange={(locationData) => {
+                              // Update individual state variables for backward compatibility
+                              setLatitude(locationData.latitude);
+                              setLongitude(locationData.longitude);
+                              setFormattedAddress(locationData.formattedAddress || locationData.address);
+                              
+                              // Extract just street and suburb for the address field
+                              const addressParts = locationData.address.split(',');
+                              const simpleAddress = addressParts.length >= 2 
+                                ? `${addressParts[0].trim()}, ${addressParts[1].trim()}`
+                                : locationData.address;
+                              
+                              // Update the location object with the required structure
+                              setLocation({
+                                address: simpleAddress,
+                                coordinates: {
+                                  latitude: locationData.latitude,
+                                  longitude: locationData.longitude
+                                },
+                                displayAddress: locationData.formattedAddress || locationData.address
+                              });
+                              
+                              // Try to extract address components for hidden form fields
+                              // We still need to update these for backward compatibility
+                              const addressComponentParts = locationData.address.split(',');
+                              
+                              // Extract street (first part)
+                              const streetPart = addressComponentParts[0]?.trim() || "";
+                              setStreet(streetPart);
+                              
+                              // Extract suburb (second part)
+                              const suburbPart = addressComponentParts[1]?.trim() || "";
+                              setSuburb(suburbPart);
+                              
+                              // Try to extract state and postcode from the full address
+                              const fullAddressParts = (locationData.formattedAddress || locationData.address).split(',');
+                              if (fullAddressParts.length >= 3) {
+                                // Last part might contain state and postcode
+                                const lastPart = fullAddressParts[fullAddressParts.length - 1].trim();
+                                
+                                // Try to extract postcode (usually 4 digits)
+                                const postcodeMatch = lastPart.match(/\b\d{4}\b/);
+                                if (postcodeMatch) {
+                                  setPostcode(postcodeMatch[0]);
+                                }
+                                
+                                // Try to extract state (usually 2-3 letters like VIC, NSW)
+                                const stateMatch = lastPart.match(/\b(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\b/i);
+                                if (stateMatch) {
+                                  setState(stateMatch[0].toUpperCase());
+                                }
+                              }
+                            }}
+                          />
                         </div>
                       </div>
                     )}
@@ -841,15 +1306,7 @@ const SettingsPage: React.FC = () => {
                           </p>
                         </div>
                         
-                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-md">
-                          <h4 className="text-sm font-medium text-blue-800 mb-2">API Documentation</h4>
-                          <p className="text-xs text-blue-700 mb-3">
-                            Learn how to integrate your systems with our API to automate loyalty points and rewards.
-                          </p>
-                          <Button variant="outline" size="sm" className="text-blue-700 border-blue-300">
-                            View API Docs
-                          </Button>
-                        </div>
+
                       </div>
                     )}
                     
@@ -885,20 +1342,20 @@ const SettingsPage: React.FC = () => {
                       <button
                         key={item.id}
                         onClick={() => setNotificationSection(item.id)}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-md text-left transition-colors ${
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left transition-colors ${
                           notificationSection === item.id 
                             ? 'bg-blue-50 text-blue-700' 
-                            : 'hover:bg-gray-100'
+                            : 'hover:bg-gray-50'
                         }`}
                       >
-                        <div className={`p-1.5 rounded-md ${
+                        <div className={`flex items-center justify-center w-6 h-6 ${
                           notificationSection === item.id 
-                            ? 'bg-blue-100 text-blue-700' 
-                            : 'bg-gray-100 text-gray-500'
+                            ? 'text-blue-700' 
+                            : 'text-gray-500'
                         }`}>
                           {item.icon}
                         </div>
-                        <span className="font-medium text-sm">{item.label}</span>
+                        <span className={`text-sm ${notificationSection === item.id ? 'font-medium' : 'font-normal'}`}>{item.label}</span>
                       </button>
                     ))}
                   </div>
@@ -1226,7 +1683,300 @@ const SettingsPage: React.FC = () => {
           </TabsContent>
           
           <TabsContent value="billing" className="space-y-6">
-            {/* Billing content remains the same */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              {/* Left Submenu */}
+              <div className="md:col-span-1">
+                <Card className="overflow-hidden rounded-md">
+                  <div className="p-2">
+                    {[
+                      { id: 'payment', label: 'Payment Details', icon: <CreditCard className="h-4 w-4" /> },
+                      { id: 'refunds', label: 'Refund Account', icon: <ShoppingBag className="h-4 w-4" /> },
+                      { id: 'history', label: 'Billing History', icon: <FileText className="h-4 w-4" /> }
+                    ].map(item => (
+                      <button
+                        key={item.id}
+                        onClick={() => setBillingSection(item.id)}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left transition-colors ${
+                          billingSection === item.id 
+                            ? 'bg-blue-50 text-blue-700' 
+                            : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className={`flex items-center justify-center w-6 h-6 ${
+                          billingSection === item.id 
+                            ? 'text-blue-700' 
+                            : 'text-gray-500'
+                        }`}>
+                          {item.icon}
+                        </div>
+                        <span className={`text-sm ${billingSection === item.id ? 'font-medium' : 'font-normal'}`}>{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </Card>
+              </div>
+              
+              {/* Right Content Area */}
+              <div className="md:col-span-3">
+                <Card className="rounded-md">
+                  <CardHeader>
+                    <CardTitle>
+                      {billingSection === 'payment' && "Payment Details"}
+                      {billingSection === 'refunds' && "Refund Account"}
+                      {billingSection === 'history' && "Billing History"}
+                    </CardTitle>
+                    <CardDescription>
+                      {billingSection === 'payment' && "Manage your subscription and payment methods"}
+                      {billingSection === 'refunds' && "Bank details for Tap Loyalty funded rewards refunds"}
+                      {billingSection === 'history' && "View your past invoices and payments"}
+                    </CardDescription>
+                  </CardHeader>
+                  
+                  <CardContent className="space-y-6">
+                    {/* Payment Details Section */}
+                    {billingSection === 'payment' && (
+                      <div className="space-y-4">
+                        <div className="bg-muted/30 p-4 rounded-md">
+                          <h3 className="text-sm font-medium mb-2">Current Plan</h3>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-medium">Tap Standard</p>
+                              <p className="text-xs text-muted-foreground">$49/month</p>
+                            </div>
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              Active
+                            </Badge>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <h3 className="text-sm font-medium">Payment Method</h3>
+                          <div className="border rounded-md p-3 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="bg-gray-100 p-1.5 rounded">
+                                <CreditCard className="h-4 w-4 text-gray-600" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium">Visa ending in 4242</p>
+                                <p className="text-xs text-muted-foreground">Expires 12/25</p>
+                              </div>
+                            </div>
+                            <Button variant="outline" size="sm">Update</Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Refund Account Section */}
+                    {billingSection === 'refunds' && (
+                      <div className="space-y-4">
+                        <div className="bg-blue-50 border border-blue-100 rounded-md p-4 text-sm text-blue-800">
+                          <div className="flex items-start gap-2">
+                            <div className="mt-0.5">
+                              <ShieldCheck className="h-4 w-4 text-blue-600" />
+                            </div>
+                            <div>
+                              <p>Enter your bank details below to receive refunds for Tap Loyalty funded rewards.</p>
+                              <p className="mt-1">Refunds are processed at the end of each month for all eligible redemptions.</p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="businessABN">ABN (Australian Business Number)</Label>
+                            <Input
+                              id="businessABN"
+                              value={refundAbn || abn}
+                              onChange={(e) => setRefundAbn(e.target.value)}
+                              placeholder="e.g. 12 345 678 901"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Must match your registered business ABN
+                            </p>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="bsbNumber">BSB Number</Label>
+                              <Input
+                                id="bsbNumber"
+                                value={bsbNumber}
+                                onChange={(e) => setBsbNumber(e.target.value)}
+                                placeholder="e.g. 123-456"
+                                maxLength={7}
+                              />
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label htmlFor="accountNumber">Account Number</Label>
+                              <Input
+                                id="accountNumber"
+                                value={accountNumber}
+                                onChange={(e) => setAccountNumber(e.target.value)}
+                                placeholder="e.g. 12345678"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Label htmlFor="accountName">Account Name</Label>
+                            <Input
+                              id="accountName"
+                              value={accountName}
+                              onChange={(e) => setAccountName(e.target.value)}
+                              placeholder="e.g. Business Name Pty Ltd"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Enter the exact name as it appears on your bank account
+                            </p>
+                          </div>
+                          
+                          <div className="flex items-center justify-between pt-4">
+                            <Button 
+                              variant="outline" 
+                              onClick={() => setShowTapRewardsSheet(true)}
+                              className="flex items-center gap-2"
+                            >
+                              <BadgeIcon className="h-4 w-4" />
+                              View Tap Funded Rewards
+                            </Button>
+                            
+                            <Button 
+                              className="gap-2" 
+                              onClick={handleSave}
+                              disabled={loading}
+                            >
+                              <Save className="h-4 w-4" />
+                              {loading ? "Saving..." : "Save Details"}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Billing History Section */}
+                    {billingSection === 'history' && (
+                      <div className="space-y-4">
+                        <div className="rounded-md border">
+                          <div className="grid grid-cols-5 p-3 bg-muted/30 text-sm font-medium">
+                            <div className="col-span-2">Invoice</div>
+                            <div>Date</div>
+                            <div>Amount</div>
+                            <div className="text-right">Status</div>
+                          </div>
+                          
+                          <div className="divide-y">
+                            {[
+                              { id: 'INV-001', date: '01 Jun 2023', amount: '$49.00', status: 'Paid' },
+                              { id: 'INV-002', date: '01 Jul 2023', amount: '$49.00', status: 'Paid' },
+                              { id: 'INV-003', date: '01 Aug 2023', amount: '$49.00', status: 'Paid' }
+                            ].map(invoice => (
+                              <div key={invoice.id} className="grid grid-cols-5 p-3 text-sm">
+                                <div className="col-span-2 font-medium">{invoice.id}</div>
+                                <div>{invoice.date}</div>
+                                <div>{invoice.amount}</div>
+                                <div className="text-right">
+                                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                    {invoice.status}
+                                  </Badge>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+            
+            {/* Tap Funded Rewards Sheet */}
+            <Sheet open={showTapRewardsSheet} onOpenChange={setShowTapRewardsSheet}>
+              <SheetContent className="sm:max-w-md w-full">
+                <SheetHeader>
+                  <SheetTitle>Tap Funded Rewards</SheetTitle>
+                  <SheetDescription>
+                    Rewards eligible for refund from Tap Loyalty
+                  </SheetDescription>
+                </SheetHeader>
+                
+                <div className="py-6 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="month-select">Select Month</Label>
+                    <select
+                      id="month-select"
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(e.target.value)}
+                      className="flex h-9 w-[180px] rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      {months.map(month => (
+                        <option key={month.value} value={month.value}>
+                          {month.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  {isLoadingRewards ? (
+                    <div className="py-8 text-center text-sm text-muted-foreground">
+                      Loading rewards...
+                    </div>
+                  ) : tapRewards.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="rounded-md border">
+                                                 <div className="grid grid-cols-12 p-3 bg-muted/30 text-xs font-medium">
+                           <div className="col-span-4">Reward</div>
+                           <div className="col-span-3">Customer ID</div>
+                           <div className="col-span-3">Date</div>
+                           <div className="col-span-2 text-right">Amount</div>
+                         </div>
+                         
+                         <div className="divide-y max-h-[400px] overflow-y-auto">
+                           {tapRewards.map(reward => (
+                             <div key={reward.id} className="grid grid-cols-12 p-3 text-xs">
+                               <div className="col-span-4 font-medium">{reward.rewardName}</div>
+                               <div className="col-span-3 truncate" title={reward.customerId}>
+                                 {reward.customerId.substring(0, 8)}...
+                               </div>
+                               <div className="col-span-3">{formatDate(reward.redemptionDate)}</div>
+                               <div className="col-span-2 text-right font-medium">
+                                 ${reward.refundAmount.toFixed(2)}
+                               </div>
+                             </div>
+                           ))}
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between p-3 bg-blue-50 rounded-md">
+                        <div className="text-sm font-medium">Total Refund Amount</div>
+                        <div className="text-lg font-bold text-blue-700">
+                          ${totalRefundAmount.toFixed(2)}
+                        </div>
+                      </div>
+                      
+                      <div className="text-xs text-muted-foreground">
+                        Refunds are processed automatically at the end of each month to your registered bank account.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="py-8 text-center">
+                      <BadgeIcon className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-sm text-muted-foreground">
+                        No Tap funded rewards found for this month
+                      </p>
+                    </div>
+                  )}
+                </div>
+                
+                <SheetFooter>
+                  <Button variant="outline" onClick={() => setShowTapRewardsSheet(false)}>
+                    Close
+                  </Button>
+                </SheetFooter>
+              </SheetContent>
+            </Sheet>
           </TabsContent>
           
           <TabsContent value="team">

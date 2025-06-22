@@ -1201,15 +1201,14 @@ export function CreateManualProgramDialog({ open, onOpenChange, editingProgram }
                     </div>
                   )}
                   
-                  {/* Phone Frame */}
-                  <div className="bg-gray-100 rounded-lg p-4">
-                    <div className="space-y-3">
-                      {rewards.length === 0 ? (
-                        <div className="text-center py-8 text-gray-500 text-sm">
-                          Add rewards to see preview
-                        </div>
-                      ) : (
-                        rewards.map((reward) => (
+                  {/* Card Previews */}
+                  <div className="space-y-3">
+                    {rewards.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500 text-sm">
+                        Add rewards to see preview
+                      </div>
+                    ) : (
+                      rewards.map((reward) => (
                           <div key={reward.id} className="bg-white border border-gray-200 rounded-xl shadow-lg px-3 py-2">
                             <div className="flex items-start justify-between">
                               <div className="flex-1 min-w-0">
@@ -1300,13 +1299,12 @@ export function CreateManualProgramDialog({ open, onOpenChange, editingProgram }
                               </div>
                             </div>
                           </div>
-                        ))
+                                                ))
                       )}
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
             ) : activeTab === 'templates' ? (
               /* Templates Tab Content */
               <motion.div 

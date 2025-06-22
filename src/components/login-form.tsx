@@ -35,6 +35,8 @@ export function LoginForm({
 }: React.ComponentPropsWithoutRef<"div">) {
   const { signIn } = useAuth()
   const { toast } = useToast()
+  const searchParams = useSearchParams()
+  const redirectPath = searchParams?.get('from') || '/dashboard'
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
@@ -48,7 +50,7 @@ export function LoginForm({
 
     try {
       console.log('Attempting to sign in...')
-      await signIn(email, password)
+      await signIn(email, password, redirectPath)
       
       toast({
         title: "Success",

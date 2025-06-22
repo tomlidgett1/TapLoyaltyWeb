@@ -17,7 +17,7 @@ import { httpsCallable } from "firebase/functions"
 interface AuthContextType {
   user: User | null
   loading: boolean
-  signIn: (email: string, password: string) => Promise<void>
+  signIn: (email: string, password: string, redirectPath?: string) => Promise<void>
   signUp: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
 }
@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, [auth.currentUser, loading]);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string, redirectPath: string = '/dashboard') => {
     try {
       await setPersistence(auth, browserLocalPersistence)
       const result = await signInWithEmailAndPassword(auth, email, password)
@@ -78,8 +78,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Continue with login flow even if the function call fails
       }
       
-      // Force a hard navigation
-      window.location.href = '/dashboard'
+      // Force a hard navigation to the redirect path or dashboard
+      window.location.href = redirectPath
     } catch (error) {
       console.error("Error signing in:", error)
       throw error

@@ -1234,21 +1234,6 @@ const ProgramsTabContent = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header with Create Button */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-medium text-gray-900">Programs</h2>
-          <p className="text-sm text-gray-600">Manage your loyalty and rewards programs</p>
-        </div>
-        <Button 
-          onClick={handleCreateManualProgram}
-          className="rounded-md"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Create Manual Program
-        </Button>
-      </div>
-
       {/* Active Programs Grid */}
       {loading ? (
         <div className="flex justify-center py-12">
@@ -1259,7 +1244,16 @@ const ProgramsTabContent = () => {
           {/* Built-in Programs */}
           {activePrograms.length > 0 && (
             <div>
-              <h3 className="text-md font-medium mb-4">Built-in Programs</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-md font-medium">Built-in Programs</h3>
+                <Button 
+                  onClick={handleCreateManualProgram}
+                  className="rounded-md"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Manual Program
+                </Button>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {activePrograms.map((program, index) => {
                   const rewardCount = programRewardCounts[program.type] || 0
@@ -1318,7 +1312,20 @@ const ProgramsTabContent = () => {
           {/* Custom Manual Programs */}
           {customPrograms.length > 0 && (
             <div>
-              <h3 className="text-md font-medium mb-4">Custom Manual Programs</h3>
+              {activePrograms.length > 0 ? (
+                <h3 className="text-md font-medium mb-4">Custom Manual Programs</h3>
+              ) : (
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-md font-medium">Custom Manual Programs</h3>
+                  <Button 
+                    onClick={handleCreateManualProgram}
+                    className="rounded-md"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Manual Program
+                  </Button>
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {customPrograms.map((program) => (
                   <div 

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
 import { 
@@ -36,10 +37,13 @@ import {
   Brain,
   Badge as BadgeIcon,
   ShoppingBag,
-  Calendar
+  Calendar,
+  Clock,
+  AlertCircle
 } from "lucide-react"
 import { doc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+import { db, auth } from "@/lib/firebase"
+import { signInWithEmailAndPassword, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth"
 import { toast } from "@/components/ui/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
@@ -148,6 +152,18 @@ const SettingsPage: React.FC = () => {
   const [pointOfSale, setPointOfSale] = useState("lightspeed")
   const [paymentProvider, setPaymentProvider] = useState("square")
   const [storeActive, setStoreActive] = useState(true)
+  
+  // ABN verification state
+  const [showAbnVerificationDialog, setShowAbnVerificationDialog] = useState(false)
+  const [verificationPassword, setVerificationPassword] = useState("")
+  const [passwordError, setPasswordError] = useState("")
+  const [verifyingPassword, setVerifyingPassword] = useState(false)
+  const [newAbn, setNewAbn] = useState("")
+  
+  // ABN verification status
+  const [abnVerificationStatus, setAbnVerificationStatus] = useState<"pending" | "in_review" | "approved" | "rejected" | "verified" | "">("")
+  const [abnRejectionReason, setAbnRejectionReason] = useState("")
+  const [abnVerificationDate, setAbnVerificationDate] = useState<any>(null)
   
   // Point of sale systems
   const pointOfSaleSystems = [
@@ -274,9 +290,21 @@ const SettingsPage: React.FC = () => {
           setPaymentProvider(data.paymentProvider || "square")
           setStoreActive(data.status === "active")
           
+          // Set ABN verification status
+          if (data.abnstatus === "verified") {
+            setAbnVerificationStatus("verified")
+            setAbnVerificationDate(data.abnVerificationDate || null)
+            setAbnRejectionReason("")
+          } else if (data.abnVerification) {
+            setAbnVerificationStatus(data.abnVerification.status || "pending")
+            setAbnRejectionReason(data.abnVerification.rejectionReason || "")
+            setAbnVerificationDate(data.abnVerification.verificationDate || null)
+          } else {
+            setAbnVerificationStatus(abnVerificationUrl ? "pending" : "")
+          }
+          
           // Set bank account details for refunds
           if (data.refundAccount) {
-            setRefundAbn(data.refundAccount.abn || data.abn || "")
             setBsbNumber(data.refundAccount.bsb || "")
             setAccountNumber(data.refundAccount.accountNumber || "")
             setAccountName(data.refundAccount.accountName || "")
@@ -335,7 +363,7 @@ const SettingsPage: React.FC = () => {
         });
         return;
       }
-
+      
       // Set the file to state
       setLogoFile(file);
       
@@ -350,7 +378,7 @@ const SettingsPage: React.FC = () => {
     }
   };
   
-  const updateOperatingHours = (day, field, value) => {
+  const updateOperatingHours = (day: string, field: string, value: any) => {
     setOperatingHours(prev => ({
       ...prev,
       [day.toLowerCase()]: {
@@ -360,9 +388,89 @@ const SettingsPage: React.FC = () => {
     }))
   }
   
-  const handleAbnFileChange = (e) => {
+  const handleAbnFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setAbnVerificationFile(e.target.files[0])
+    }
+  }
+  
+  // Function to update ABN with password verification
+  const updateAbnWithVerification = async () => {
+    if (!user?.uid || !user?.email || !verificationPassword) {
+      setPasswordError("Please enter your password");
+      return;
+    }
+    
+    if (!newAbn.trim()) {
+      setPasswordError("Please enter a valid ABN");
+      return;
+    }
+    
+    setVerifyingPassword(true);
+    setPasswordError("");
+    
+    try {
+      // Attempt to reauthenticate the user
+      let authenticated = false;
+      
+      if (auth.currentUser) {
+        try {
+          const credential = EmailAuthProvider.credential(user.email, verificationPassword);
+          await reauthenticateWithCredential(auth.currentUser, credential);
+          authenticated = true;
+        } catch (authError) {
+          console.error("Reauthentication failed:", authError);
+          setPasswordError("Incorrect password. Please try again.");
+          setVerifyingPassword(false);
+          return;
+        }
+      } else {
+        try {
+          // If no current user in auth, try to sign in
+          await signInWithEmailAndPassword(auth, user.email, verificationPassword);
+          authenticated = true;
+        } catch (authError) {
+          console.error("Sign in failed:", authError);
+          setPasswordError("Incorrect password. Please try again.");
+          setVerifyingPassword(false);
+          return;
+        }
+      }
+      
+      if (authenticated) {
+        // Update Firestore with the new ABN
+        const merchantRef = doc(db, 'merchants', user.uid);
+        
+        try {
+          // Update ABN in Firestore
+          await updateDoc(merchantRef, {
+            abn: newAbn,
+            updatedAt: serverTimestamp()
+          });
+          
+          // Update local state
+          setAbn(newAbn);
+          setShowAbnVerificationDialog(false);
+          setVerificationPassword("");
+          
+          toast({
+            title: "ABN Updated",
+            description: "Your ABN has been successfully updated and saved to your account",
+          });
+        } catch (firestoreError) {
+          console.error("Firestore update failed:", firestoreError);
+          toast({
+            title: "Update Failed",
+            description: "There was an error saving your ABN. Please try again.",
+            variant: "destructive"
+          });
+        }
+      }
+    } catch (error) {
+      console.error("ABN update process failed:", error);
+      setPasswordError("An unexpected error occurred. Please try again.");
+    } finally {
+      setVerifyingPassword(false);
     }
   }
   
@@ -485,12 +593,12 @@ const SettingsPage: React.FC = () => {
           if (uploadedLogoUrl) {
             newLogoUrl = uploadedLogoUrl;
             setLogoUrl(uploadedLogoUrl);
-            setLogoFile(null);
-            
-            toast({
-              title: "Logo Uploaded",
-              description: "Your business logo has been updated.",
-            });
+          setLogoFile(null);
+          
+          toast({
+            title: "Logo Uploaded",
+            description: "Your business logo has been updated.",
+          });
           }
         } catch (error) {
           console.error("Error uploading logo:", error);
@@ -504,6 +612,8 @@ const SettingsPage: React.FC = () => {
       
       // Handle ABN verification document upload
       let newAbnVerificationUrl = abnVerificationUrl;
+      let documentUploaded = false;
+      
       if (abnVerificationFile) {
         try {
           const uploadedVerificationUrl = await uploadFileToStorage(abnVerificationFile, "verification");
@@ -511,6 +621,10 @@ const SettingsPage: React.FC = () => {
             newAbnVerificationUrl = uploadedVerificationUrl;
             setAbnVerificationUrl(uploadedVerificationUrl);
             setAbnVerificationFile(null);
+            documentUploaded = true;
+            
+            // Set verification status to pending when a new document is uploaded
+            setAbnVerificationStatus("pending");
             
             toast({
               title: "Verification Document Uploaded",
@@ -532,21 +646,21 @@ const SettingsPage: React.FC = () => {
         try {
           const documentUrl = await uploadFileToStorage(documentFile, "document");
           if (documentUrl) {
-            // Add to documents array
-            const newDocument = {
-              name: documentFile.name,
-              url: documentUrl,
+          // Add to documents array
+          const newDocument = {
+            name: documentFile.name,
+            url: documentUrl,
               path: `merchants/${user.uid}/files/${documentFile.name}`,
-              uploadedAt: new Date()
-            };
-            
-            setDocuments(prev => [...prev, newDocument]);
-            setDocumentFile(null);
-            
-            toast({
-              title: "Document Uploaded",
-              description: "Your document has been uploaded successfully.",
-            });
+            uploadedAt: new Date()
+          };
+          
+          setDocuments(prev => [...prev, newDocument]);
+          setDocumentFile(null);
+          
+          toast({
+            title: "Document Uploaded",
+            description: "Your document has been uploaded successfully.",
+          });
           }
         } catch (error) {
           console.error("Error uploading document:", error);
@@ -591,11 +705,16 @@ const SettingsPage: React.FC = () => {
         pointOfSale,
         paymentProvider,
         status: storeActive ? "active" : "inactive",
+        abnVerification: {
+          status: abnVerificationStatus,
+          rejectionReason: abnRejectionReason,
+          verificationDate: abnVerificationDate,
+          lastUpdated: serverTimestamp()
+        },
         notifications,
         businessInsights,
         // Bank account details for refunds
         refundAccount: {
-          abn: refundAbn || abn,
           bsb: bsbNumber,
           accountNumber: accountNumber,
           accountName: accountName,
@@ -634,7 +753,6 @@ const SettingsPage: React.FC = () => {
   const [billingSection, setBillingSection] = useState('refunds')
   
   // Bank account details for refunds
-  const [refundAbn, setRefundAbn] = useState("")
   const [bsbNumber, setBsbNumber] = useState("")
   const [accountNumber, setAccountNumber] = useState("")
   const [accountName, setAccountName] = useState("")
@@ -690,7 +808,7 @@ const SettingsPage: React.FC = () => {
   })()
 
   // Function to update notification settings
-  const updateNotification = (key, value) => {
+  const updateNotification = (key: string, value: boolean) => {
     setNotifications(prev => ({
       ...prev,
       [key]: value
@@ -698,7 +816,7 @@ const SettingsPage: React.FC = () => {
   }
 
   // Handle document file selection
-  const handleDocumentFileChange = (e) => {
+  const handleDocumentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       
@@ -752,7 +870,7 @@ const SettingsPage: React.FC = () => {
   });
 
   // Function to update business insights
-  const updateBusinessInsight = (key, value) => {
+  const updateBusinessInsight = (key: string, value: string) => {
     setBusinessInsights(prev => ({
       ...prev,
       [key]: value
@@ -885,61 +1003,61 @@ const SettingsPage: React.FC = () => {
           <div className="flex justify-between items-center">
             {/* Main Tab Container */}
             <TabsList className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit h-auto">
-              <TabsTrigger 
-                value="profile" 
+            <TabsTrigger 
+              value="profile" 
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                   "data-[state=active]:text-gray-800 data-[state=active]:bg-white data-[state=active]:shadow-sm",
                   "data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:bg-gray-200/70"
                 )}
-              >
-                <User size={15} />
-                Profile
-              </TabsTrigger>
-              <TabsTrigger 
-                value="notifications" 
+            >
+              <User size={15} />
+              Profile
+            </TabsTrigger>
+            <TabsTrigger 
+              value="notifications" 
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                   "data-[state=active]:text-gray-800 data-[state=active]:bg-white data-[state=active]:shadow-sm",
                   "data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:bg-gray-200/70"
                 )}
-              >
-                <Bell size={15} />
-                Notifications
-              </TabsTrigger>
-              <TabsTrigger 
-                value="billing" 
+            >
+              <Bell size={15} />
+              Notifications
+            </TabsTrigger>
+            <TabsTrigger 
+              value="billing" 
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                   "data-[state=active]:text-gray-800 data-[state=active]:bg-white data-[state=active]:shadow-sm",
                   "data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:bg-gray-200/70"
                 )}
-              >
-                <CreditCard size={15} />
-                Billing
-              </TabsTrigger>
-              <TabsTrigger 
-                value="team" 
+            >
+              <CreditCard size={15} />
+              Billing
+            </TabsTrigger>
+            <TabsTrigger 
+              value="team" 
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                   "data-[state=active]:text-gray-800 data-[state=active]:bg-white data-[state=active]:shadow-sm",
                   "data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:bg-gray-200/70"
                 )}
-              >
-                <Users size={15} />
-                Team
-              </TabsTrigger>
-              <TabsTrigger 
-                value="store" 
+            >
+              <Users size={15} />
+              Team
+            </TabsTrigger>
+            <TabsTrigger 
+              value="store" 
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                   "data-[state=active]:text-gray-800 data-[state=active]:bg-white data-[state=active]:shadow-sm",
                   "data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:bg-gray-200/70"
                 )}
-              >
-                <Store size={15} />
-                Store
-              </TabsTrigger>
+            >
+              <Store size={15} />
+              Store
+            </TabsTrigger>
             </TabsList>
           </div>
           
@@ -955,11 +1073,11 @@ const SettingsPage: React.FC = () => {
                     >
                       {logoUrl ? (
                         <>
-                          <img 
-                            src={logoUrl} 
-                            alt={tradingName || "Business Logo"} 
-                            className="w-full h-full object-cover"
-                          />
+                        <img 
+                          src={logoUrl} 
+                          alt={tradingName || "Business Logo"} 
+                          className="w-full h-full object-cover"
+                        />
                           <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <Upload className="h-6 w-6 text-white" />
                           </div>
@@ -1099,19 +1217,122 @@ const SettingsPage: React.FC = () => {
                             ))}
                           </select>
                         </div>
-                        
+                    
                         <div className="space-y-2">
                           <Label htmlFor="abn">Australian Business Number (ABN)</Label>
-                          <Input
-                            id="abn"
-                            value={abn}
-                            onChange={(e) => setAbn(e.target.value)}
-                            placeholder="e.g. 12 345 678 901"
-                          />
+                          <div className="relative">
+                          <Input 
+                              id="abn"
+                              value={abn}
+                              readOnly
+                              placeholder="e.g. 12 345 678 901"
+                              className="bg-gray-50"
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="absolute right-1 top-1 h-7"
+                              onClick={() => {
+                                setNewAbn(abn);
+                                setShowAbnVerificationDialog(true);
+                              }}
+                            >
+                              Change
+                            </Button>
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <ShieldCheck className="h-3.5 w-3.5 text-gray-500" />
+                            <p className="text-xs text-gray-600">
+                              Password verification required to change ABN
+                            </p>
+                          </div>
                           <p className="text-xs text-muted-foreground">
                             We use your ABN to match consumer transactions with your merchant account
                           </p>
                         </div>
+                        
+                        {/* ABN Verification Dialog */}
+                        <Dialog open={showAbnVerificationDialog} onOpenChange={setShowAbnVerificationDialog}>
+                          <DialogContent className="sm:max-w-md">
+                            <DialogHeader>
+                              <DialogTitle>Change ABN</DialogTitle>
+                              <DialogDescription>
+                                Password verification is required to change your ABN as it's critical for transaction matching.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                                <Label htmlFor="currentAbn">Current ABN</Label>
+                          <Input 
+                                  id="currentAbn"
+                                  value={abn}
+                                  readOnly
+                                  className="bg-gray-50"
+                          />
+                        </div>
+                        
+                          <div className="space-y-2">
+                                <Label htmlFor="newAbn">New ABN</Label>
+                                <Input
+                                  id="newAbn"
+                                  value={newAbn}
+                                  onChange={(e) => setNewAbn(e.target.value)}
+                                  placeholder="e.g. 12 345 678 901"
+                                />
+                          </div>
+                          
+                          <div className="space-y-2">
+                                <Label htmlFor="password">
+                                  Password
+                                </Label>
+                            <Input 
+                                  id="password"
+                                  type="password"
+                                  value={verificationPassword}
+                                  onChange={(e) => setVerificationPassword(e.target.value)}
+                                  placeholder="Enter your password"
+                            />
+                          </div>
+                              
+                              {passwordError && (
+                                <div className="text-sm text-red-500">
+                                  {passwordError}
+                        </div>
+                              )}
+                              
+                              <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
+                                <div className="flex items-start gap-2">
+                                  <ShieldAlert className="h-4 w-4 text-gray-500 mt-0.5" />
+                                  <div className="text-sm text-gray-600">
+                                    <p className="text-gray-700">Changing your ABN affects how transactions are matched to your account. Incorrect ABN details may result in missed rewards and payments.</p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <DialogFooter className="sm:justify-between">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                  setShowAbnVerificationDialog(false);
+                                  setVerificationPassword("");
+                                  setPasswordError("");
+                                  setNewAbn(abn);
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                              <Button 
+                                type="button"
+                                onClick={updateAbnWithVerification}
+                                disabled={verificationPassword.length < 6 || verifyingPassword || !newAbn.trim()}
+                              >
+                                {verifyingPassword ? "Verifying..." : "Update ABN"}
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
                         
                         <div className="space-y-2">
                           <Label>ABN Verification Document</Label>
@@ -1182,6 +1403,95 @@ const SettingsPage: React.FC = () => {
                                 )}
                               </div>
                             </div>
+                          </div>
+                        </div>
+                        
+                        {/* ABN Verification Status Section */}
+                        <div className="space-y-2">
+                          <Label>ABN Verification Status</Label>
+                          <div className="border rounded-md overflow-hidden">
+                            <div className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  {abnVerificationStatus === "approved" || abnVerificationStatus === "verified" ? (
+                                    <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
+                                      <ShieldCheck className="h-4 w-4 text-green-600" />
+                                    </div>
+                                  ) : abnVerificationStatus === "rejected" ? (
+                                    <div className="h-8 w-8 rounded-full bg-red-100 flex items-center justify-center">
+                                      <ShieldAlert className="h-4 w-4 text-red-600" />
+                                    </div>
+                                  ) : abnVerificationUrl ? (
+                                    <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                      <Clock className="h-4 w-4 text-blue-600" />
+                                    </div>
+                                  ) : (
+                                    <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
+                                      <AlertCircle className="h-4 w-4 text-gray-500" />
+                                    </div>
+                                  )}
+                                  <div>
+                                    <h4 className="text-sm font-medium">
+                                      {(abnVerificationStatus === "approved" || abnVerificationStatus === "verified") && "ABN Verified"}
+                                      {abnVerificationStatus === "rejected" && "Verification Failed"}
+                                      {abnVerificationUrl && !["approved", "verified", "rejected"].includes(abnVerificationStatus) && "In Review"}
+                                      {!abnVerificationUrl && "No Document Uploaded"}
+                                    </h4>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      {(abnVerificationStatus === "approved" || abnVerificationStatus === "verified") && "Your ABN has been verified by Tap Loyalty"}
+                                      {abnVerificationStatus === "rejected" && "Your ABN verification was rejected. Please check the reason below."}
+                                      {abnVerificationUrl && !["approved", "verified", "rejected"].includes(abnVerificationStatus) && "Your ABN is currently being reviewed by Tap Loyalty"}
+                                      {!abnVerificationUrl && "Please upload a verification document to begin the verification process"}
+                                    </p>
+                                  </div>
+                                </div>
+                                
+                                <Badge 
+                                  className={cn(
+                                    "capitalize px-2 py-0.5",
+                                    (abnVerificationStatus === "approved" || abnVerificationStatus === "verified") && "bg-green-100 text-green-800 hover:bg-green-100",
+                                    abnVerificationStatus === "rejected" && "bg-red-100 text-red-800 hover:bg-red-100",
+                                    abnVerificationUrl && !["approved", "verified", "rejected"].includes(abnVerificationStatus) && "bg-blue-100 text-blue-800 hover:bg-blue-100",
+                                    !abnVerificationUrl && "bg-gray-100 text-gray-800 hover:bg-gray-100"
+                                  )}
+                                >
+                                  {(abnVerificationStatus === "approved" || abnVerificationStatus === "verified") && "Verified"}
+                                  {abnVerificationStatus === "rejected" && "Rejected"}
+                                  {abnVerificationUrl && !["approved", "verified", "rejected"].includes(abnVerificationStatus) && "In Review"}
+                                  {!abnVerificationUrl && "No Document"}
+                                </Badge>
+                              </div>
+                              
+                              {abnVerificationStatus === "rejected" && abnRejectionReason && (
+                                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
+                                  <div className="flex items-start gap-2">
+                                    <AlertCircle className="h-4 w-4 text-red-500 mt-0.5" />
+                                    <div>
+                                      <h5 className="text-xs font-medium text-red-800">Reason for Rejection</h5>
+                                      <p className="text-xs text-red-700 mt-1">{abnRejectionReason}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {abnVerificationStatus === "approved" && abnVerificationDate && (
+                                <div className="mt-3 text-xs text-muted-foreground">
+                                  Verified on {formatDate(abnVerificationDate.toDate())}
+                                </div>
+                              )}
+                            </div>
+                            
+                            {abnVerificationStatus === "rejected" && (
+                              <div className="border-t p-3 bg-gray-50 flex justify-end">
+                                <Button 
+                                  type="button" 
+                                  size="sm"
+                                  onClick={() => document.getElementById('abn-verification')?.click()}
+                                >
+                                  Upload New Document
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         </div>
                         
@@ -1783,19 +2093,6 @@ const SettingsPage: React.FC = () => {
                         </div>
                         
                         <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="businessABN">ABN (Australian Business Number)</Label>
-                            <Input
-                              id="businessABN"
-                              value={refundAbn || abn}
-                              onChange={(e) => setRefundAbn(e.target.value)}
-                              placeholder="e.g. 12 345 678 901"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Must match your registered business ABN
-                            </p>
-                          </div>
-                          
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <Label htmlFor="bsbNumber">BSB Number</Label>

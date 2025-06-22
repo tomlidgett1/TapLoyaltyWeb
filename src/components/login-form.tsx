@@ -19,6 +19,7 @@ import { FirebaseError } from 'firebase/app'
 import { useToast } from "@/components/ui/use-toast"
 import { sendPasswordResetEmail } from "firebase/auth"
 import { auth } from "@/lib/firebase"
+import { LoadingPage } from "@/components/loading-page"
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,7 @@ export function LoginForm({
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
+  const [showLoadingPage, setShowLoadingPage] = useState(false)
   const [resetEmail, setResetEmail] = useState("")
   const [resetLoading, setResetLoading] = useState(false)
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
@@ -50,13 +52,12 @@ export function LoginForm({
 
     try {
       console.log('Attempting to sign in...')
+      setShowLoadingPage(true) // Show loading page immediately after submit
       await signIn(email, password, redirectPath)
       
-      toast({
-        title: "Success",
-        description: "Logged in successfully",
-      })
+      // No need for toast as we're showing loading page and redirecting
     } catch (error) {
+      setShowLoadingPage(false) // Hide loading page on error
       console.error('Sign in error:', error)
       
       if (error instanceof FirebaseError) {
@@ -132,14 +133,30 @@ export function LoginForm({
     }
   }
 
+    // Show full-screen loading page when logging in
+  if (showLoadingPage) {
+    return (
+      <div className="fixed inset-0 bg-gray-50 flex flex-col items-center justify-center z-50">
+        <div className="flex flex-col items-center gap-5">
+          <img 
+            src="/taplogo.png" 
+            alt="Tap Loyalty" 
+            className="w-16 h-16 rounded-md" 
+          />
+          <div className="animate-spin rounded-full h-6 w-6 border-2 border-[#007AFF] border-t-transparent" />
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <div className={cn("w-full", className)} {...props}>
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm font-medium text-gray-700">
-              Email address
-            </Label>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+                Email address
+              </Label>
                 <Input
                   id="email"
                   type="email"

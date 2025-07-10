@@ -225,11 +225,26 @@ interface FunctionConfig {
   code: string;
 }
 
+interface Reward {
+  id: string;
+  rewardName?: string;
+  rewardId?: string;
+  merchantId?: string;
+  createdAt?: string;
+  collection: 'global' | 'merchant' | 'customer';
+  collectionPath: string;
+  customerId?: string;
+  merchantName?: string;
+  customerName?: string;
+  [key: string]: any;
+}
+
 export default function AdminMerchants() {
   const router = useRouter();
-  const [currentView, setCurrentView] = useState<'merchants' | 'customers' | 'functions'>('merchants');
+  const [currentView, setCurrentView] = useState<'merchants' | 'customers' | 'functions' | 'rewards'>('merchants');
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [rewards, setRewards] = useState<Reward[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [editingMerchant, setEditingMerchant] = useState<Merchant | null>(null);
@@ -507,11 +522,29 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
     code: ""
   });
 
+  // Rewards state
+  const [selectedRewards, setSelectedRewards] = useState<string[]>([]);
+  const [isDeleteRewardDialogOpen, setIsDeleteRewardDialogOpen] = useState(false);
+  const [isDeleteAllRewardsDialogOpen, setIsDeleteAllRewardsDialogOpen] = useState(false);
+  const [rewardToDelete, setRewardToDelete] = useState<Reward | null>(null);
+  const [rewardSortConfig, setRewardSortConfig] = useState<{
+    key: string;
+    direction: 'ascending' | 'descending';
+  } | null>(null);
+  const [rewardFilters, setRewardFilters] = useState({
+    collection: 'all', // 'all', 'global', 'merchant', 'customer'
+    visible: 'all', // 'all', 'true', 'false'
+    redeemable: 'all', // 'all', 'true', 'false'
+  });
+  const [maxRewardsToShow, setMaxRewardsToShow] = useState(1000);
+
   useEffect(() => {
     if (currentView === 'merchants') {
       fetchMerchants();
-    } else {
+    } else if (currentView === 'customers') {
       fetchCustomers();
+    } else if (currentView === 'rewards') {
+      fetchRewards();
     }
   }, [currentView]);
 
@@ -617,6 +650,166 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
       toast({
         title: "Error",
         description: "Failed to fetch customers",
+        variant: "destructive"
+      });
+      setLoading(false);
+    }
+  };
+
+  const fetchRewards = async () => {
+    try {
+      setLoading(true);
+      const allRewards: Reward[] = [];
+      
+      // 1. Fetch global rewards from top-level rewards collection
+      try {
+        const globalRewardsCollection = collection(db, "rewards");
+        const globalRewardsSnapshot = await getDocs(globalRewardsCollection);
+        
+        globalRewardsSnapshot.docs.forEach(doc => {
+          const rewardData = doc.data();
+          
+          // Handle Firestore Timestamp objects
+          let createdAtString = '';
+          if (rewardData.createdAt) {
+            if (rewardData.createdAt.toDate) {
+              // It's a Firestore Timestamp
+              createdAtString = rewardData.createdAt.toDate().toISOString();
+            } else if (typeof rewardData.createdAt === 'string') {
+              createdAtString = rewardData.createdAt;
+            } else {
+              createdAtString = new Date(rewardData.createdAt).toISOString();
+            }
+          }
+          
+          allRewards.push({
+            id: doc.id,
+            rewardName: rewardData.rewardName || rewardData.title || rewardData.name || `Reward ${doc.id.slice(-6)}`,
+            rewardId: rewardData.rewardId || doc.id,
+            merchantId: rewardData.merchantId,
+            createdAt: createdAtString,
+            collection: 'global',
+            collectionPath: `rewards/${doc.id}`,
+            visible: rewardData.visible,
+            redeemable: rewardData.redeemable,
+            reason: rewardData.reason,
+            ...rewardData
+          });
+        });
+      } catch (globalError) {
+        console.error("Error fetching global rewards:", globalError);
+      }
+      
+      // 2. Fetch merchant-specific rewards
+      try {
+        const merchantsCollection = collection(db, "merchants");
+        const merchantsSnapshot = await getDocs(merchantsCollection);
+        
+        for (const merchantDoc of merchantsSnapshot.docs) {
+          const merchantData = merchantDoc.data();
+          
+          try {
+            const merchantRewardsCollection = collection(db, `merchants/${merchantDoc.id}/rewards`);
+            const merchantRewardsSnapshot = await getDocs(merchantRewardsCollection);
+            
+            merchantRewardsSnapshot.docs.forEach(doc => {
+              const rewardData = doc.data();
+              
+              // Handle Firestore Timestamp objects
+              let createdAtString = '';
+              if (rewardData.createdAt) {
+                if (rewardData.createdAt.toDate) {
+                  // It's a Firestore Timestamp
+                  createdAtString = rewardData.createdAt.toDate().toISOString();
+                } else if (typeof rewardData.createdAt === 'string') {
+                  createdAtString = rewardData.createdAt;
+                } else {
+                  createdAtString = new Date(rewardData.createdAt).toISOString();
+                }
+              }
+              
+              allRewards.push({
+                id: `${merchantDoc.id}-${doc.id}`,
+                rewardName: rewardData.rewardName || rewardData.title || rewardData.name || `Reward ${doc.id.slice(-6)}`,
+                rewardId: rewardData.rewardId || doc.id,
+                merchantId: merchantDoc.id,
+                merchantName: merchantData.merchantName || merchantData.tradingName,
+                createdAt: createdAtString,
+                collection: 'merchant',
+                collectionPath: `merchants/${merchantDoc.id}/rewards/${doc.id}`,
+                visible: rewardData.visible,
+                redeemable: rewardData.redeemable,
+                reason: rewardData.reason,
+                ...rewardData
+              });
+            });
+          } catch (merchantRewardError) {
+            console.error(`Error fetching rewards for merchant ${merchantDoc.id}:`, merchantRewardError);
+          }
+        }
+      } catch (merchantError) {
+        console.error("Error fetching merchant rewards:", merchantError);
+      }
+      
+      // 3. Fetch customer-specific rewards
+      try {
+        const customersCollection = collection(db, "customers");
+        const customersSnapshot = await getDocs(customersCollection);
+        
+        for (const customerDoc of customersSnapshot.docs) {
+          const customerData = customerDoc.data();
+          
+          try {
+            const customerRewardsCollection = collection(db, `customers/${customerDoc.id}/rewards`);
+            const customerRewardsSnapshot = await getDocs(customerRewardsCollection);
+            
+            customerRewardsSnapshot.docs.forEach(doc => {
+              const rewardData = doc.data();
+              
+              // Handle Firestore Timestamp objects
+              let createdAtString = '';
+              if (rewardData.createdAt) {
+                if (rewardData.createdAt.toDate) {
+                  // It's a Firestore Timestamp
+                  createdAtString = rewardData.createdAt.toDate().toISOString();
+                } else if (typeof rewardData.createdAt === 'string') {
+                  createdAtString = rewardData.createdAt;
+                } else {
+                  createdAtString = new Date(rewardData.createdAt).toISOString();
+                }
+              }
+              
+              allRewards.push({
+                id: `${customerDoc.id}-${doc.id}`,
+                rewardName: rewardData.rewardName || rewardData.title || rewardData.name || `Reward ${doc.id.slice(-6)}`,
+                rewardId: rewardData.rewardId || doc.id,
+                merchantId: rewardData.merchantId,
+                customerId: customerDoc.id,
+                customerName: customerData.fullName || `${customerData.firstName || ''} ${customerData.lastName || ''}`.trim(),
+                createdAt: createdAtString,
+                collection: 'customer',
+                collectionPath: `customers/${customerDoc.id}/rewards/${doc.id}`,
+                visible: rewardData.visible,
+                redeemable: rewardData.redeemable,
+                reason: rewardData.reason,
+                ...rewardData
+              });
+            });
+          } catch (customerRewardError) {
+            console.error(`Error fetching rewards for customer ${customerDoc.id}:`, customerRewardError);
+          }
+        }
+      } catch (customerError) {
+        console.error("Error fetching customer rewards:", customerError);
+      }
+      
+      setRewards(allRewards);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error fetching rewards:", error);
+      toast({
+        title: "Error",
+        description: `Failed to fetch rewards: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive"
       });
       setLoading(false);
@@ -1185,6 +1378,170 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
     });
   };
 
+  // Reward management functions
+  const handleDeleteReward = (reward: Reward) => {
+    setRewardToDelete(reward);
+    setIsDeleteRewardDialogOpen(true);
+  };
+
+  const handleConfirmDeleteReward = async () => {
+    if (!rewardToDelete) return;
+    
+    try {
+      // Create document reference from the collection path
+      const pathParts = rewardToDelete.collectionPath.split('/');
+      const docRef = doc(db, pathParts[0], pathParts[1], pathParts[2], pathParts[3]);
+      await deleteDoc(docRef);
+      
+      setRewards(rewards.filter(r => r.id !== rewardToDelete.id));
+      
+      toast({
+        title: "Success",
+        description: "Reward deleted successfully",
+      });
+      
+      setIsDeleteRewardDialogOpen(false);
+      setRewardToDelete(null);
+    } catch (error) {
+      console.error("Error deleting reward:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete reward",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteAllRewards = async () => {
+    try {
+      setLoading(true);
+      
+      // Delete all rewards in batches to avoid hitting Firestore limits
+      const deletePromises = rewards.map(reward => {
+        const pathParts = reward.collectionPath.split('/');
+        // Handle different path lengths for different collection types
+        const docRef = pathParts.length === 2 
+          ? doc(db, pathParts[0], pathParts[1])
+          : doc(db, pathParts[0], pathParts[1], pathParts[2], pathParts[3]);
+        return deleteDoc(docRef);
+      });
+      
+      await Promise.all(deletePromises);
+      
+      setRewards([]);
+      setSelectedRewards([]);
+      
+      toast({
+        title: "Success",
+        description: `Deleted ${rewards.length} rewards successfully`,
+      });
+      
+      setIsDeleteAllRewardsDialogOpen(false);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error deleting all rewards:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete all rewards",
+        variant: "destructive"
+      });
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteSelectedRewards = async () => {
+    if (selectedRewards.length === 0) return;
+    
+    try {
+      setLoading(true);
+      
+      const rewardsToDelete = rewards.filter(r => selectedRewards.includes(r.id));
+      const deletePromises = rewardsToDelete.map(reward => {
+        const pathParts = reward.collectionPath.split('/');
+        // Handle different path lengths for different collection types
+        const docRef = pathParts.length === 2 
+          ? doc(db, pathParts[0], pathParts[1])
+          : doc(db, pathParts[0], pathParts[1], pathParts[2], pathParts[3]);
+        return deleteDoc(docRef);
+      });
+      
+      await Promise.all(deletePromises);
+      
+      setRewards(rewards.filter(r => !selectedRewards.includes(r.id)));
+      setSelectedRewards([]);
+      
+      toast({
+        title: "Success",
+        description: `Deleted ${rewardsToDelete.length} rewards successfully`,
+      });
+      
+      setLoading(false);
+    } catch (error) {
+      console.error("Error deleting selected rewards:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete selected rewards",
+        variant: "destructive"
+      });
+      setLoading(false);
+    }
+  };
+
+  // Reward sorting functions
+  const handleRewardSort = (key: string) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    
+    if (rewardSortConfig && rewardSortConfig.key === key) {
+      direction = rewardSortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+    }
+    
+    setRewardSortConfig({ key, direction });
+  };
+
+  const getSortedRewards = (rewardsToSort: Reward[]) => {
+    if (!rewardSortConfig) return rewardsToSort;
+    
+    return [...rewardsToSort].sort((a, b) => {
+      let aValue: any = a[rewardSortConfig.key as keyof Reward] || '';
+      let bValue: any = b[rewardSortConfig.key as keyof Reward] || '';
+      
+      // Handle date sorting
+      if (rewardSortConfig.key === 'createdAt') {
+        aValue = new Date(aValue || 0);
+        bValue = new Date(bValue || 0);
+        return rewardSortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
+      }
+      
+      // Handle numeric vs string comparisons
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return rewardSortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
+      }
+      
+      // Convert to string for comparison
+      aValue = String(aValue).toLowerCase();
+      bValue = String(bValue).toLowerCase();
+      
+      if (aValue < bValue) {
+        return rewardSortConfig.direction === 'ascending' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return rewardSortConfig.direction === 'ascending' ? 1 : -1;
+      }
+      return 0;
+    });
+  };
+
+  const renderRewardSortIcon = (columnKey: string) => {
+    if (rewardSortConfig?.key !== columnKey) {
+      return <ChevronDown className="h-4 w-4 ml-1 opacity-50" />;
+    }
+    return rewardSortConfig.direction === 'ascending' ? (
+      <ArrowUp className="h-4 w-4 ml-1" />
+    ) : (
+      <ArrowDown className="h-4 w-4 ml-1" />
+    );
+  };
+
   // Function to safely get regex match results
   const safeRegexMatch = (regex: RegExp, text: string, defaultValue: string): string => {
     const match = text.match(regex);
@@ -1211,12 +1568,13 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
         <Tabs 
           defaultValue="merchants" 
           className="mb-8" 
-          onValueChange={(value) => setCurrentView(value as 'merchants' | 'customers' | 'functions')}
+          onValueChange={(value) => setCurrentView(value as 'merchants' | 'customers' | 'functions' | 'rewards')}
         >
-          <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsList className="grid w-full max-w-lg grid-cols-4">
             <TabsTrigger value="merchants">Merchants</TabsTrigger>
             <TabsTrigger value="customers">Customers</TabsTrigger>
             <TabsTrigger value="functions">Functions</TabsTrigger>
+            <TabsTrigger value="rewards">Rewards</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -1828,7 +2186,439 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
             )}
           </div>
         )}
+
+        {/* Rewards Tab View */}
+        {currentView === 'rewards' && (
+          <div className="bg-white p-6 rounded-lg shadow mb-8">
+            <div className="space-y-4 mb-6">
+              <div className="flex justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="relative w-72">
+                    <Input 
+                      placeholder="Search rewards..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                      />
+                    </svg>
+                  </div>
+                  {selectedRewards.length > 0 && (
+                    <Button 
+                      variant="destructive" 
+                      size="sm"
+                      onClick={handleDeleteSelectedRewards}
+                    >
+                      <Trash className="h-4 w-4 mr-2" />
+                      Delete Selected ({selectedRewards.length})
+                    </Button>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setIsDeleteAllRewardsDialogOpen(true)}
+                    disabled={rewards.length === 0}
+                  >
+                    <Trash className="h-4 w-4 mr-2" />
+                    Delete All
+                  </Button>
+                  <Button onClick={() => fetchRewards()}>
+                    Refresh
+                  </Button>
+                </div>
+              </div>
+
+              {/* Filters and Stats */}
+              <div className="flex items-center justify-between bg-gray-50 p-4 rounded-md">
+                <div className="flex items-center gap-4">
+                  <div className="text-sm text-gray-600">
+                    Showing {Math.min(maxRewardsToShow, rewards.length)} of {rewards.length} total rewards
+                  </div>
+                  
+                  <Select value={rewardFilters.collection} onValueChange={(value) => setRewardFilters({...rewardFilters, collection: value})}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="Collection" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Collections</SelectItem>
+                      <SelectItem value="global">Global</SelectItem>
+                      <SelectItem value="merchant">Merchant</SelectItem>
+                      <SelectItem value="customer">Customer</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={rewardFilters.visible} onValueChange={(value) => setRewardFilters({...rewardFilters, visible: value})}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue placeholder="Visible" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="true">Visible</SelectItem>
+                      <SelectItem value="false">Hidden</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={rewardFilters.redeemable} onValueChange={(value) => setRewardFilters({...rewardFilters, redeemable: value})}>
+                    <SelectTrigger className="w-36">
+                      <SelectValue placeholder="Redeemable" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="true">Redeemable</SelectItem>
+                      <SelectItem value="false">Not Redeemable</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="maxRewards" className="text-sm">Show max:</Label>
+                  <Select value={maxRewardsToShow.toString()} onValueChange={(value) => setMaxRewardsToShow(parseInt(value))}>
+                    <SelectTrigger className="w-24">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="100">100</SelectItem>
+                      <SelectItem value="500">500</SelectItem>
+                      <SelectItem value="1000">1000</SelectItem>
+                      <SelectItem value="5000">5000</SelectItem>
+                      <SelectItem value="10000">10000</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[50px]">
+                        <Checkbox
+                          checked={selectedRewards.length === rewards.length && rewards.length > 0}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedRewards(rewards.map(r => r.id));
+                            } else {
+                              setSelectedRewards([]);
+                            }
+                          }}
+                        />
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleRewardSort('rewardName')}
+                      >
+                        <div className="flex items-center">
+                          Reward Name
+                          {renderRewardSortIcon('rewardName')}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleRewardSort('rewardId')}
+                      >
+                        <div className="flex items-center">
+                          Reward ID
+                          {renderRewardSortIcon('rewardId')}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleRewardSort('merchantId')}
+                      >
+                        <div className="flex items-center">
+                          Merchant
+                          {renderRewardSortIcon('merchantId')}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleRewardSort('collection')}
+                      >
+                        <div className="flex items-center">
+                          Collection
+                          {renderRewardSortIcon('collection')}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleRewardSort('visible')}
+                      >
+                        <div className="flex items-center">
+                          Visible
+                          {renderRewardSortIcon('visible')}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleRewardSort('redeemable')}
+                      >
+                        <div className="flex items-center">
+                          Redeemable
+                          {renderRewardSortIcon('redeemable')}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleRewardSort('createdAt')}
+                      >
+                        <div className="flex items-center">
+                          Created At
+                          {renderRewardSortIcon('createdAt')}
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rewards.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                          {searchTerm ? "No rewards match your search" : "No rewards found"}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      getSortedRewards(rewards.filter(reward => {
+                        // Apply search filter
+                        const searchLower = searchTerm.toLowerCase();
+                        const matchesSearch = (
+                          (reward.rewardName || '').toLowerCase().includes(searchLower) ||
+                          (reward.rewardId || '').toLowerCase().includes(searchLower) ||
+                          (reward.merchantId || '').toLowerCase().includes(searchLower) ||
+                          (reward.merchantName || '').toLowerCase().includes(searchLower) ||
+                          (reward.customerName || '').toLowerCase().includes(searchLower) ||
+                          reward.collection.toLowerCase().includes(searchLower) ||
+                          (reward.reason || '').toLowerCase().includes(searchLower)
+                        );
+
+                        // Apply collection filter
+                        const matchesCollection = rewardFilters.collection === 'all' || 
+                          reward.collection === rewardFilters.collection;
+
+                        // Apply visibility filter
+                        const matchesVisible = rewardFilters.visible === 'all' || 
+                          (rewardFilters.visible === 'true' && reward.visible === true) ||
+                          (rewardFilters.visible === 'false' && reward.visible === false);
+
+                        // Apply redeemable filter
+                        const matchesRedeemable = rewardFilters.redeemable === 'all' || 
+                          (rewardFilters.redeemable === 'true' && reward.redeemable === true) ||
+                          (rewardFilters.redeemable === 'false' && reward.redeemable === false);
+
+                        return matchesSearch && matchesCollection && matchesVisible && matchesRedeemable;
+                      }).slice(0, maxRewardsToShow)).map((reward) => (
+                        <TableRow key={reward.id}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedRewards.includes(reward.id)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedRewards([...selectedRewards, reward.id]);
+                                } else {
+                                  setSelectedRewards(selectedRewards.filter(id => id !== reward.id));
+                                }
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {reward.rewardName || '—'}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {reward.rewardId || '—'}
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{reward.merchantName || reward.merchantId || '—'}</div>
+                              {reward.customerId && (
+                                <div className="text-sm text-gray-500">
+                                  Customer: {reward.customerName || reward.customerId}
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge 
+                              variant={reward.collection === 'global' ? 'default' : 
+                                     reward.collection === 'merchant' ? 'secondary' : 'outline'}
+                            >
+                              {reward.collection}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge 
+                              variant={reward.visible ? 'default' : 'secondary'}
+                            >
+                              {reward.visible ? 'Yes' : 'No'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge 
+                              variant={reward.redeemable ? 'default' : 'secondary'}
+                            >
+                              {reward.redeemable ? 'Yes' : 'No'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {reward.createdAt ? new Date(reward.createdAt).toLocaleDateString() : '—'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => {
+                                  console.log('Reward details:', reward);
+                                  toast({
+                                    title: "Reward Details",
+                                    description: `${reward.rewardName} - ${reward.reason || 'No reason provided'}`,
+                                  });
+                                }}>
+                                  View Details
+                                </DropdownMenuItem>
+                                {reward.reason && (
+                                  <DropdownMenuItem onClick={() => {
+                                    toast({
+                                      title: "Reward Reason",
+                                      description: reward.reason,
+                                    });
+                                  }}>
+                                    Show Reason
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem 
+                                  onClick={() => handleDeleteReward(reward)}
+                                  className="text-red-600 focus:text-red-600"
+                                >
+                                  <Trash className="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(reward.collectionPath);
+                                    toast({
+                                      title: "Copied",
+                                      description: "Collection path copied to clipboard",
+                                    });
+                                  }}
+                                >
+                                  Copy Path
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Delete Reward Dialog */}
+      <Dialog open={isDeleteRewardDialogOpen} onOpenChange={setIsDeleteRewardDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Reward</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this reward? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {rewardToDelete && (
+            <div className="py-4">
+              <p className="text-sm text-gray-500 mb-2">
+                <strong>Reward:</strong> {rewardToDelete.rewardName || rewardToDelete.rewardId}
+              </p>
+              <p className="text-sm text-gray-500 mb-2">
+                <strong>Collection:</strong> {rewardToDelete.collection}
+              </p>
+              <p className="text-sm text-gray-500">
+                <strong>Path:</strong> {rewardToDelete.collectionPath}
+              </p>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteRewardDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDeleteReward}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete All Rewards Dialog */}
+      <Dialog open={isDeleteAllRewardsDialogOpen} onOpenChange={setIsDeleteAllRewardsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete All Rewards</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete all {rewards.length} rewards? This action cannot be undone and will remove rewards from all collections (global, merchant, and customer).
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <div className="bg-red-50 border border-red-200 rounded-md p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <XCircle className="h-5 w-5 text-red-400" />
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800">
+                    Warning: This will permanently delete all rewards
+                  </h3>
+                  <div className="mt-2 text-sm text-red-700">
+                    <p>This action will delete:</p>
+                    <ul className="list-disc list-inside mt-1">
+                      <li>{rewards.filter(r => r.collection === 'global').length} global rewards</li>
+                      <li>{rewards.filter(r => r.collection === 'merchant').length} merchant rewards</li>
+                      <li>{rewards.filter(r => r.collection === 'customer').length} customer rewards</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteAllRewardsDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteAllRewards}>
+              Delete All Rewards
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Merchant Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>

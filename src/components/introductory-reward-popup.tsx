@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetOverlay } from "@/components/ui/sheet"
+import { Dialog, DialogPortal } from "@/components/ui/dialog"
+import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,22 +10,18 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, addDoc, doc, setDoc, getDoc, query, where, getDocs, deleteDoc } from "firebase/firestore"
+import { collection, addDoc, doc, setDoc, getDoc, query, where, getDocs } from "firebase/firestore"
 import { useRouter } from "next/navigation"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Gift, Sparkles, Coffee, DollarSign, ShoppingBag, Info, CheckCircle, ArrowRight, Edit, Trash, AlertCircle, ExternalLink, Plus, ChevronDown, ChevronRight } from "lucide-react"
+import { Gift, Sparkles, Coffee, DollarSign, ShoppingBag, Info, CheckCircle, ArrowRight, Edit, Trash, AlertCircle, ExternalLink, Plus, ChevronDown, ChevronRight, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import Image from "next/image"
-import { httpsCallable } from "firebase/functions"
-import { functions } from "@/lib/firebase"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { format } from "date-fns"
 
-interface IntroductoryRewardSheetProps {
+interface IntroductoryRewardPopupProps {
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -51,10 +48,9 @@ interface ExistingReward {
 
 const MAX_INTRODUCTORY_REWARDS = 3;
 
-export function IntroductoryRewardSheet({ open, onOpenChange }: IntroductoryRewardSheetProps) {
+export function IntroductoryRewardPopup({ open, onOpenChange }: IntroductoryRewardPopupProps) {
   const [currentStep, setCurrentStep] = useState(1)
   const [rewardType, setRewardType] = useState<"voucher" | "freeItem">("voucher")
-  const [instantClose, setInstantClose] = useState(false)
   const [formData, setFormData] = useState({
     rewardName: "",
     description: "",
@@ -71,17 +67,6 @@ export function IntroductoryRewardSheet({ open, onOpenChange }: IntroductoryRewa
   const { toast } = useToast()
   const { user } = useAuth()
   const router = useRouter()
-
-  // Reset instantClose when sheet is closed
-  useEffect(() => {
-    if (!open && instantClose) {
-      const timer = setTimeout(() => {
-        setInstantClose(false);
-      }, 300);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [open, instantClose]);
 
   // Check existing introductory rewards
   useEffect(() => {
@@ -300,7 +285,6 @@ export function IntroductoryRewardSheet({ open, onOpenChange }: IntroductoryRewa
 
   // Function to view reward details
   const handleViewReward = (rewardId: string) => {
-    setInstantClose(true);
     onOpenChange(false);
     router.push(`/store/${rewardId}`);
   }
@@ -449,7 +433,7 @@ export function IntroductoryRewardSheet({ open, onOpenChange }: IntroductoryRewa
   // Render the existing rewards view
   const renderExistingRewards = () => {
     return (
-      <div className="flex-1 overflow-auto p-5">
+      <div className="flex-1 overflow-y-auto p-5 min-h-0">
         <div className="bg-blue-50 border border-blue-100 rounded-md p-3 text-xs text-blue-800 mb-4">
           <div className="flex items-start gap-2">
             <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
@@ -612,338 +596,415 @@ export function IntroductoryRewardSheet({ open, onOpenChange }: IntroductoryRewa
             </Button>
           </div>
         )}
-        
-        <div className="mt-4 flex justify-center">
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} className="text-xs h-8">
-            Close
-          </Button>
+      </div>
+    );
+  }
+
+  // Render create form with left panel navigation
+  const renderCreateForm = () => {
+    return (
+      <div className="flex h-full">
+        {/* Left Panel */}
+        <div className="w-80 border-r bg-gray-50 flex flex-col h-full">
+          <div className="p-6 border-b flex-shrink-0">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">
+              <span className="text-blue-500">Create</span> Introductory Reward
+            </h2>
+            <p className="text-sm text-gray-600">
+              Special reward for new customers
+            </p>
+            
+            <div className="flex items-center space-x-1 mt-4">
+              {[1, 2].map((step) => (
+                <button
+                  key={step}
+                  type="button"
+                  onClick={() => handleStepChange(step)}
+                  className={`h-2 w-16 rounded-md transition-all ${
+                    step === currentStep 
+                      ? "bg-blue-600" 
+                      : step < currentStep 
+                      ? "bg-blue-300" 
+                      : "bg-gray-200"
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+          
+          {/* Steps navigation */}
+          <div className="flex-1 p-6 overflow-y-auto min-h-0">
+            <nav className="space-y-2">
+              {[
+                { step: 1, title: "Create Reward", desc: "Set up reward details" },
+                { step: 2, title: "Review & Submit", desc: "Confirm and create" }
+              ].map((item) => (
+                <button
+                  key={item.step}
+                  onClick={() => handleStepChange(item.step)}
+                  className={`w-full text-left p-3 rounded-md transition-colors ${
+                    currentStep === item.step
+                      ? "bg-blue-100 text-blue-900 border border-blue-200"
+                      : item.step < currentStep
+                      ? "bg-white text-gray-700 hover:bg-gray-50"
+                      : "bg-white text-gray-400 cursor-not-allowed"
+                  }`}
+                  disabled={item.step > currentStep + 1}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                      currentStep === item.step
+                        ? "bg-blue-600 text-white"
+                        : item.step < currentStep
+                        ? "bg-green-500 text-white"
+                        : "bg-gray-200 text-gray-400"
+                    }`}>
+                      {item.step < currentStep ? "✓" : item.step}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{item.title}</p>
+                      <p className="text-xs text-gray-500">{item.desc}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </nav>
+          </div>
+        </div>
+
+        {/* Right Panel - Content */}
+        <div className="flex-1 flex flex-col h-full">
+          <div className="flex-1 overflow-y-auto p-6 min-h-0">
+            {currentStep === 1 && (
+              <div className="mt-0 space-y-4">
+                <div className="bg-blue-50 border border-blue-100 rounded-md p-3 text-xs text-blue-800 space-y-1">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">About Introductory Rewards ({existingRewards.length}/{MAX_INTRODUCTORY_REWARDS})</p>
+                      <p>Create up to {MAX_INTRODUCTORY_REWARDS} special rewards funded by Tap Loyalty (up to $5 value each) to attract new customers.</p>
+                      <p className="mt-1">Each new customer can redeem <strong>only one</strong> introductory reward across the entire platform, so make yours compelling!</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-1">
+                  <div>
+                    <Label className="text-sm">Reward Type</Label>
+                    <div className="grid grid-cols-2 gap-3 mt-1.5">
+                      <div
+                        className={cn(
+                          "border rounded-md p-3 cursor-pointer transition-all",
+                          rewardType === "voucher" 
+                            ? "border-blue-500 bg-blue-50" 
+                            : "border-gray-200 hover:border-gray-300"
+                        )}
+                        onClick={() => setRewardType("voucher")}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={cn(
+                            "h-6 w-6 rounded-full flex items-center justify-center",
+                            rewardType === "voucher" ? "bg-blue-500 text-white" : "bg-gray-100"
+                          )}>
+                            <DollarSign className="h-3 w-3" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">Gift Voucher</p>
+                            <p className="text-xs text-gray-500">$5 credit toward purchase</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div
+                        className={cn(
+                          "border rounded-md p-3 cursor-pointer transition-all",
+                          rewardType === "freeItem" 
+                            ? "border-blue-500 bg-blue-50" 
+                            : "border-gray-200 hover:border-gray-300"
+                        )}
+                        onClick={() => setRewardType("freeItem")}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={cn(
+                            "h-6 w-6 rounded-full flex items-center justify-center",
+                            rewardType === "freeItem" ? "bg-blue-500 text-white" : "bg-gray-100"
+                          )}>
+                            <Coffee className="h-3 w-3" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">Free Item</p>
+                            <p className="text-xs text-gray-500">Item up to $5 value</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="rewardName" className="text-sm">Reward Name</Label>
+                    <Input
+                      id="rewardName"
+                      placeholder={rewardType === "voucher" ? "e.g., Welcome $5 Voucher" : "e.g., Free Coffee for New Customers"}
+                      value={formData.rewardName}
+                      onChange={(e) => setFormData({...formData, rewardName: e.target.value})}
+                      className="h-9"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="description" className="text-sm">Description</Label>
+                    <Textarea
+                      id="description"
+                      placeholder={rewardType === "voucher" 
+                        ? "e.g., Enjoy $5 off your first purchase as a welcome gift from us!" 
+                        : "e.g., Welcome to our store! Enjoy a free coffee on your first visit."}
+                      value={formData.description}
+                      onChange={(e) => setFormData({...formData, description: e.target.value})}
+                      className="min-h-[70px] text-sm"
+                    />
+                  </div>
+
+                  {rewardType === "freeItem" && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="itemName" className="text-sm">Free Item Name</Label>
+                      <Input
+                        id="itemName"
+                        placeholder="e.g., Regular Coffee, Pastry, etc."
+                        value={formData.itemName}
+                        onChange={(e) => setFormData({...formData, itemName: e.target.value})}
+                        className="h-9"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Item must be valued at $5 or less</p>
+                    </div>
+                  )}
+
+                  {rewardType === "voucher" && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="voucherAmount" className="text-sm">Voucher Amount</Label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                          <span className="text-gray-500">$</span>
+                        </div>
+                        <Input
+                          id="voucherAmount"
+                          type="text"
+                          className="pl-7 bg-gray-50 h-9"
+                          value="5.00"
+                          disabled
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Fixed value: $5.00 (funded by Tap Loyalty)</p>
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="pin" className="text-sm">Redemption PIN</Label>
+                    <Input
+                      id="pin"
+                      type="text"
+                      maxLength={4}
+                      placeholder="4-digit PIN"
+                      value={formData.pin}
+                      onChange={(e) => {
+                        // Only allow digits
+                        const value = e.target.value.replace(/\D/g, '');
+                        setFormData({...formData, pin: value});
+                      }}
+                      className="h-9"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter a 4-digit PIN that will be required when redeeming this reward
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 2 && (
+              <div className="mt-0 space-y-4">
+                <div className="bg-blue-50 border border-blue-100 rounded-md p-3 text-xs text-blue-800">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">How Introductory Rewards Work</p>
+                      <ul className="list-disc pl-4 space-y-1 mt-1">
+                        <li>This reward is <strong>funded by Tap Loyalty</strong> (up to $5 value)</li>
+                        <li>It will be prominently featured to new customers on the platform</li>
+                        <li>Each customer can redeem only one introductory reward across all merchants</li>
+                        <li>You'll be reimbursed for the reward value when it's redeemed</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border rounded-md overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 border-b">
+                    <h3 className="font-medium text-sm">Reward Preview</h3>
+                  </div>
+                  <div className="p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <p className="font-medium text-sm">{formData.rewardName}</p>
+                        <p className="text-gray-600 text-xs">{formData.description}</p>
+                      </div>
+                      <div className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium">
+                        Introductory
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                        {rewardType === "voucher" ? (
+                          <DollarSign className="h-3 w-3 text-blue-600" />
+                        ) : (
+                          <Coffee className="h-3 w-3 text-blue-600" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 leading-none">
+                          {rewardType === "voucher" ? "Gift Voucher" : "Free Item"}
+                        </p>
+                        <p className="text-sm font-medium leading-tight">
+                          {rewardType === "voucher" 
+                            ? `$${formData.voucherAmount} credit` 
+                            : formData.itemName}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                        <Sparkles className="h-3 w-3 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 leading-none">Cost to Customer</p>
+                        <p className="text-sm font-medium leading-tight">Free (0 points)</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="h-6 w-6 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
+                        <CheckCircle className="h-3 w-3 text-purple-600" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 leading-none">Eligibility</p>
+                        <p className="text-sm font-medium leading-tight">First-time customers only</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Action Bar */}
+          <div className="border-t border-gray-200 p-4 md:p-6 bg-gray-50 flex-shrink-0">
+            <div className="flex justify-between items-center w-full">
+              {currentStep === 1 ? (
+                <>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowCreateForm(false)}
+                    size="sm"
+                    className="text-xs h-8"
+                  >
+                    Back to List
+                  </Button>
+                  <Button 
+                    onClick={() => handleStepChange(2)}
+                    className="bg-[#007AFF] hover:bg-[#0071E3] text-white text-xs h-8"
+                    size="sm"
+                  >
+                    Continue
+                    <ArrowRight className="ml-1 h-3 w-3" />
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => handleStepChange(1)}
+                    size="sm"
+                    className="text-xs h-8"
+                  >
+                    Back
+                  </Button>
+                  <Button 
+                    onClick={handleSubmit}
+                    disabled={isSubmitting}
+                    className="bg-[#007AFF] hover:bg-[#0071E3] text-white text-xs h-8"
+                    size="sm"
+                  >
+                    {isSubmitting ? (
+                      <>Creating Reward...</>
+                    ) : (
+                      <>Create Introductory Reward</>
+                    )}
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Render create form
-  const renderCreateForm = () => {
-    return (
-      <Tabs value={`step${currentStep}`} className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-none px-6 pt-3">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="step1" className="text-xs py-1.5">
-              1. Create Reward
-            </TabsTrigger>
-            <TabsTrigger value="step2" className="text-xs py-1.5">
-              2. Review & Submit
-            </TabsTrigger>
-          </TabsList>
-        </div>
-
-        <ScrollArea className="flex-1 px-6 py-4">
-          <div className="space-y-4 pb-6">
-            <TabsContent value="step1" className="mt-0 space-y-4">
-              <div className="bg-blue-50 border border-blue-100 rounded-md p-3 text-xs text-blue-800 space-y-1">
-                <div className="flex items-start gap-2">
-                  <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="font-medium">About Introductory Rewards ({existingRewards.length}/{MAX_INTRODUCTORY_REWARDS})</p>
-                    <p>Create up to {MAX_INTRODUCTORY_REWARDS} special rewards funded by Tap Loyalty (up to $5 value each) to attract new customers.</p>
-                    <p className="mt-1">Each new customer can redeem <strong>only one</strong> introductory reward across the entire platform, so make yours compelling!</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3 pt-1">
-                <div>
-                  <Label className="text-sm">Reward Type</Label>
-                  <div className="grid grid-cols-2 gap-3 mt-1.5">
-                    <div
-                      className={cn(
-                        "border rounded-md p-3 cursor-pointer transition-all",
-                        rewardType === "voucher" 
-                          ? "border-blue-500 bg-blue-50" 
-                          : "border-gray-200 hover:border-gray-300"
-                      )}
-                      onClick={() => setRewardType("voucher")}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className={cn(
-                          "h-6 w-6 rounded-full flex items-center justify-center",
-                          rewardType === "voucher" ? "bg-blue-500 text-white" : "bg-gray-100"
-                        )}>
-                          <DollarSign className="h-3 w-3" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-sm">Gift Voucher</p>
-                          <p className="text-xs text-gray-500">$5 credit toward purchase</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div
-                      className={cn(
-                        "border rounded-md p-3 cursor-pointer transition-all",
-                        rewardType === "freeItem" 
-                          ? "border-blue-500 bg-blue-50" 
-                          : "border-gray-200 hover:border-gray-300"
-                      )}
-                      onClick={() => setRewardType("freeItem")}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className={cn(
-                          "h-6 w-6 rounded-full flex items-center justify-center",
-                          rewardType === "freeItem" ? "bg-blue-500 text-white" : "bg-gray-100"
-                        )}>
-                          <Coffee className="h-3 w-3" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-sm">Free Item</p>
-                          <p className="text-xs text-gray-500">Item up to $5 value</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="rewardName" className="text-sm">Reward Name</Label>
-                  <Input
-                    id="rewardName"
-                    placeholder={rewardType === "voucher" ? "e.g., Welcome $5 Voucher" : "e.g., Free Coffee for New Customers"}
-                    value={formData.rewardName}
-                    onChange={(e) => setFormData({...formData, rewardName: e.target.value})}
-                    className="h-9"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="description" className="text-sm">Description</Label>
-                  <Textarea
-                    id="description"
-                    placeholder={rewardType === "voucher" 
-                      ? "e.g., Enjoy $5 off your first purchase as a welcome gift from us!" 
-                      : "e.g., Welcome to our store! Enjoy a free coffee on your first visit."}
-                    value={formData.description}
-                    onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    className="min-h-[70px] text-sm"
-                  />
-                </div>
-
-                {rewardType === "freeItem" && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="itemName" className="text-sm">Free Item Name</Label>
-                    <Input
-                      id="itemName"
-                      placeholder="e.g., Regular Coffee, Pastry, etc."
-                      value={formData.itemName}
-                      onChange={(e) => setFormData({...formData, itemName: e.target.value})}
-                      className="h-9"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Item must be valued at $5 or less</p>
-                  </div>
-                )}
-
-                {rewardType === "voucher" && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="voucherAmount" className="text-sm">Voucher Amount</Label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                        <span className="text-gray-500">$</span>
-                      </div>
-                      <Input
-                        id="voucherAmount"
-                        type="text"
-                        className="pl-7 bg-gray-50 h-9"
-                        value="5.00"
-                        disabled
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">Fixed value: $5.00 (funded by Tap Loyalty)</p>
-                  </div>
-                )}
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="pin" className="text-sm">Redemption PIN</Label>
-                  <Input
-                    id="pin"
-                    type="text"
-                    maxLength={4}
-                    placeholder="4-digit PIN"
-                    value={formData.pin}
-                    onChange={(e) => {
-                      // Only allow digits
-                      const value = e.target.value.replace(/\D/g, '');
-                      setFormData({...formData, pin: value});
-                    }}
-                    className="h-9"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Enter a 4-digit PIN that will be required when redeeming this reward
-                  </p>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="step2" className="mt-0 space-y-4">
-              <div className="bg-blue-50 border border-blue-100 rounded-md p-3 text-xs text-blue-800">
-                <div className="flex items-start gap-2">
-                  <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="font-medium">How Introductory Rewards Work</p>
-                    <ul className="list-disc pl-4 space-y-1 mt-1">
-                      <li>This reward is <strong>funded by Tap Loyalty</strong> (up to $5 value)</li>
-                      <li>It will be prominently featured to new customers on the platform</li>
-                      <li>Each customer can redeem only one introductory reward across all merchants</li>
-                      <li>You'll be reimbursed for the reward value when it's redeemed</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              <div className="border rounded-md overflow-hidden">
-                <div className="bg-gray-50 px-3 py-2 border-b">
-                  <h3 className="font-medium text-sm">Reward Preview</h3>
-                </div>
-                <div className="p-3 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <p className="font-medium text-sm">{formData.rewardName}</p>
-                      <p className="text-gray-600 text-xs">{formData.description}</p>
-                    </div>
-                    <div className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium">
-                      Introductory
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-1">
-                    <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                      {rewardType === "voucher" ? (
-                        <DollarSign className="h-3 w-3 text-blue-600" />
-                      ) : (
-                        <Coffee className="h-3 w-3 text-blue-600" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 leading-none">
-                        {rewardType === "voucher" ? "Gift Voucher" : "Free Item"}
-                      </p>
-                      <p className="text-sm font-medium leading-tight">
-                        {rewardType === "voucher" 
-                          ? `$${formData.voucherAmount} credit` 
-                          : formData.itemName}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                      <Sparkles className="h-3 w-3 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 leading-none">Cost to Customer</p>
-                      <p className="text-sm font-medium leading-tight">Free (0 points)</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
-                      <CheckCircle className="h-3 w-3 text-purple-600" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 leading-none">Eligibility</p>
-                      <p className="text-sm font-medium leading-tight">First-time customers only</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </TabsContent>
-          </div>
-        </ScrollArea>
-        
-        <div className="flex-none px-6 py-3 border-t">
-          <div className="flex justify-between items-center w-full">
-            {currentStep === 1 ? (
-              <>
-                <Button 
-                  variant="outline" 
-                  onClick={() => setShowCreateForm(false)}
-                  size="sm"
-                  className="text-xs h-8"
-                >
-                  Back to List
-                </Button>
-                <Button 
-                  onClick={() => handleStepChange(2)}
-                  className="bg-[#007AFF] hover:bg-[#0071E3] text-white text-xs h-8"
-                  size="sm"
-                >
-                  Continue
-                  <ArrowRight className="ml-1 h-3 w-3" />
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button 
-                  variant="outline" 
-                  onClick={() => handleStepChange(1)}
-                  size="sm"
-                  className="text-xs h-8"
-                >
-                  Back
-                </Button>
-                <Button 
-                  onClick={handleSubmit}
-                  disabled={isSubmitting}
-                  className="bg-[#007AFF] hover:bg-[#0071E3] text-white text-xs h-8"
-                  size="sm"
-                >
-                  {isSubmitting ? (
-                    <>Creating Reward...</>
-                  ) : (
-                    <>Create Introductory Reward</>
-                  )}
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </Tabs>
-    );
-  }
-
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetOverlay className="bg-black/30" />
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-md md:max-w-xl lg:max-w-2xl p-0 overflow-hidden flex flex-col"
-        data-instant-close={instantClose ? "true" : "false"}
-      >
-        <div className="flex-none px-6 py-3 border-b">
-          <SheetHeader className="mb-1">
-            <SheetTitle className="text-xl">
-              <span className="text-blue-500">
-                {showCreateForm ? "Create" : "Manage"}
-              </span> Introductory Rewards
-            </SheetTitle>
-            <SheetDescription className="text-sm">
-              {showCreateForm 
-                ? "Create a special reward for new customers (funded by Tap Loyalty)"
-                : `Manage your introductory rewards (${existingRewards.length}/${MAX_INTRODUCTORY_REWARDS})`}
-            </SheetDescription>
-          </SheetHeader>
-        </div>
+    <Dialog 
+      open={open} 
+      onOpenChange={(open) => {
+        if (!open) {
+          // Reset form when closing
+          setFormData({
+            rewardName: "",
+            description: "",
+            itemName: "",
+            voucherAmount: "5.00",
+            itemValue: "5.00",
+            pin: ""
+          })
+          setCurrentStep(1)
+          setShowCreateForm(false)
+          setRewardType("voucher")
+        }
+        onOpenChange(open)
+      }}
+    >
+      <DialogPortal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-50 w-full max-w-5xl h-[90vh] translate-x-[-50%] translate-y-[-50%] border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg overflow-hidden">
+          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground z-10">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+          
+          {!showCreateForm ? (
+            <div className="flex flex-col h-full">
+              <div className="flex-shrink-0 px-6 py-3 border-b">
+                <h2 className="text-xl font-semibold text-gray-900 mb-1">
+                  <span className="text-blue-500">Manage</span> Introductory Rewards
+                </h2>
+                <p className="text-sm text-gray-600">
+                  Manage your introductory rewards ({existingRewards.length}/{MAX_INTRODUCTORY_REWARDS})
+                </p>
+              </div>
 
-        {isLoading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="flex flex-col items-center gap-2">
-              <div className="animate-spin h-6 w-6 border-3 border-blue-200 rounded-full border-t-blue-600"></div>
-              <p className="text-xs text-gray-500">Loading...</p>
+              {isLoading ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="animate-spin h-6 w-6 border-3 border-blue-200 rounded-full border-t-blue-600"></div>
+                    <p className="text-xs text-gray-500">Loading...</p>
+                  </div>
+                </div>
+              ) : (
+                renderExistingRewards()
+              )}
             </div>
-          </div>
-        ) : showCreateForm ? (
-          renderCreateForm()
-        ) : (
-          renderExistingRewards()
-        )}
-      </SheetContent>
-    </Sheet>
+          ) : (
+            renderCreateForm()
+          )}
+        </DialogPrimitive.Content>
+      </DialogPortal>
+    </Dialog>
   )
 } 

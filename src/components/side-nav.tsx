@@ -56,6 +56,7 @@ import { toast } from "@/components/ui/use-toast"
 import { collection, getDocs, query, where, limit, onSnapshot, updateDoc } from "firebase/firestore"
 import { CreateSheet } from "@/components/create-sheet"
 import { CreateRewardSheet } from "@/components/create-reward-sheet"
+import { CreateRewardPopup } from "@/components/create-reward-popup"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
 import { SendBroadcastSheet } from "@/components/send-broadcast-sheet"
 import { CreatePointsRuleSheet } from "@/components/create-points-rule-sheet"
@@ -63,6 +64,10 @@ import { IntroductoryRewardSheet } from "@/components/introductory-reward-sheet"
 import { Badge } from "@/components/ui/badge"
 import { SetupPopup } from "@/components/setup-popup"
 import { NetworkRewardSheet } from "@/components/network-reward-sheet"
+import { NetworkRewardPopup } from "@/components/network-reward-popup"
+import { SendBroadcastPopup } from "@/components/send-broadcast-popup"
+import { CreatePointsRulePopup } from "@/components/create-points-rule-popup"
+import { IntroductoryRewardPopup } from "@/components/introductory-reward-popup"
 
 // Get auth instance
 const auth = getAuth();
@@ -133,35 +138,8 @@ const navItems: NavItem[] = [
   },
   {
     title: "Tap Loyalty",
-    href: "/store",
-    icon: Store,
-    subItems: [
-      {
-        title: "Overview",
-        href: "/store/overview",
-        icon: BarChart
-      },
-      {
-        title: "Customers",
-        href: "/customers",
-        icon: Users
-      },
-      {
-        title: "Rewards",
-        href: "/store/rewards",
-        icon: Gift
-      },
-      {
-        title: "Activity",
-        href: "/store/activity",
-        icon: Clock
-      },
-      {
-        title: "Messages",
-        href: "/store/messages",
-        icon: MessageSquare
-      }
-    ]
+    href: "/store/overview",
+    icon: Store
   },
   {
     title: "Plan",
@@ -265,6 +243,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   })
   const [createSheetOpen, setCreateSheetOpen] = useState(false)
   const [createRewardSheetOpen, setCreateRewardSheetOpen] = useState(false)
+  const [createRewardPopupOpen, setCreateRewardPopupOpen] = useState(false)
   const [createRecurringOpen, setCreateRecurringOpen] = useState(false)
   const [createBannerOpen, setCreateBannerOpen] = useState(false)
   const [broadcastDialogOpen, setBroadcastDialogOpen] = useState(false)
@@ -273,6 +252,10 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   const [pendingInboxCount, setPendingInboxCount] = useState(0)
   const [setupPopupOpen, setSetupPopupOpen] = useState(false)
   const [networkRewardOpen, setNetworkRewardOpen] = useState(false)
+  const [networkRewardPopupOpen, setNetworkRewardPopupOpen] = useState(false)
+  const [sendBroadcastPopupOpen, setSendBroadcastPopupOpen] = useState(false)
+  const [createPointsRulePopupOpen, setCreatePointsRulePopupOpen] = useState(false)
+  const [introductoryRewardPopupOpen, setIntroductoryRewardPopupOpen] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isInternalChange, setIsInternalChange] = useState(true)
   const [createMenuOpen, setCreateMenuOpen] = useState(false)
@@ -334,7 +317,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   useEffect(() => {
     // Reset the dropdown states when sheets are opened or closed
     setCreateMenuOpen(false)
-  }, [createSheetOpen, createRewardSheetOpen, createRecurringOpen, createBannerOpen, broadcastDialogOpen, createRuleOpen, introRewardOpen, setupPopupOpen, networkRewardOpen])
+  }, [createSheetOpen, createRewardSheetOpen, createRewardPopupOpen, createRecurringOpen, createBannerOpen, broadcastDialogOpen, createRuleOpen, introRewardOpen, setupPopupOpen, networkRewardOpen, networkRewardPopupOpen, sendBroadcastPopupOpen, createPointsRulePopupOpen, introductoryRewardPopupOpen])
 
   // Notify parent component when collapse state changes (only for internal changes)
   useEffect(() => {
@@ -656,6 +639,16 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                 <button
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
                   onClick={() => {
+                    setCreateRewardPopupOpen(true);
+                    setCreateMenuOpen(false);
+                  }}
+                >
+                  <Gift className="h-4 w-4 mr-2" />
+                  Create Reward New
+                </button>
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
+                  onClick={() => {
                     setNetworkRewardOpen(true);
                     setCreateMenuOpen(false);
                   }}
@@ -773,7 +766,17 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                 <button
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
                   onClick={() => {
-                    setNetworkRewardOpen(true);
+                    setCreateRewardPopupOpen(true);
+                    setCreateMenuOpen(false);
+                  }}
+                >
+                  <Gift className="h-4 w-4 mr-2" />
+                  Create Reward New
+                </button>
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
+                  onClick={() => {
+                    setNetworkRewardPopupOpen(true);
                     setCreateMenuOpen(false);
                   }}
                 >
@@ -803,7 +806,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                 <button
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
                   onClick={() => {
-                    setBroadcastDialogOpen(true);
+                    setSendBroadcastPopupOpen(true);
                     setCreateMenuOpen(false);
                   }}
                 >
@@ -813,7 +816,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                 <button
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
                   onClick={() => {
-                    setCreateRuleOpen(true);
+                    setCreatePointsRulePopupOpen(true);
                     setCreateMenuOpen(false);
                   }}
                 >
@@ -823,7 +826,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                 <button
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
                   onClick={() => {
-                    setIntroRewardOpen(true);
+                    setIntroductoryRewardPopupOpen(true);
                     setCreateMenuOpen(false);
                   }}
                 >
@@ -1252,6 +1255,9 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       {/* CreateRewardSheet component */}
       <CreateRewardSheet open={createRewardSheetOpen} onOpenChange={setCreateRewardSheetOpen} />
 
+      {/* CreateRewardPopup component */}
+      <CreateRewardPopup open={createRewardPopupOpen} onOpenChange={setCreateRewardPopupOpen} />
+
       {/* CreateRecurringRewardDialog component */}
       <CreateRecurringRewardDialog open={createRecurringOpen} onOpenChange={setCreateRecurringOpen} />
 
@@ -1269,6 +1275,12 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
 
       {/* NetworkRewardSheet component */}
       <NetworkRewardSheet open={networkRewardOpen} onOpenChange={setNetworkRewardOpen} />
+
+      {/* New Popup Components */}
+      <NetworkRewardPopup open={networkRewardPopupOpen} onOpenChange={setNetworkRewardPopupOpen} />
+      <SendBroadcastPopup open={sendBroadcastPopupOpen} onOpenChange={setSendBroadcastPopupOpen} />
+      <CreatePointsRulePopup open={createPointsRulePopupOpen} onOpenChange={setCreatePointsRulePopupOpen} />
+      <IntroductoryRewardPopup open={introductoryRewardPopupOpen} onOpenChange={setIntroductoryRewardPopupOpen} />
     </div>
   )
 }

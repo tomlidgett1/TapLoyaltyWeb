@@ -4,15 +4,14 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { createUserWithEmailAndPassword, updateProfile, getAuth, fetchSignInMethodsForEmail } from "firebase/auth"
 import { doc, setDoc, GeoPoint } from "firebase/firestore"
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { auth, db, storage } from "@/lib/firebase"
+import { auth, db } from "@/lib/firebase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "@/components/ui/use-toast"
-import { Eye, EyeOff, ArrowRight, Loader2, ChevronLeft, ChevronRight, Upload, ShieldCheck, Users, Zap } from "lucide-react"
+import { Eye, EyeOff, ArrowRight, Loader2, ChevronLeft, ChevronRight, ShieldCheck, Users, Zap } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -27,9 +26,7 @@ const businessTypes = [
   { value: "cafe", label: "Cafe" },
   { value: "restaurant", label: "Restaurant" },
   { value: "retail", label: "Retail" },
-  { value: "salon", label: "Salon" },
-  { value: "gym", label: "Gym" },
-  { value: "other", label: "Other" }
+  { value: "pub", label: "Pub" }
 ]
 
 // Point of sale systems
@@ -226,7 +223,6 @@ export default function SignupPage() {
   const [businessEmail, setBusinessEmail] = useState("")
   const [businessPhone, setBusinessPhone] = useState("")
   const [businessType, setBusinessType] = useState("cafe")
-  const [logoFile, setLogoFile] = useState<File | null>(null)
   
   // Step 4: Address (was Step 3)
   const [street, setStreet] = useState("")
@@ -260,6 +256,51 @@ export default function SignupPage() {
   // Template data storage for complete address and location
   const [templateData, setTemplateData] = useState<any>(null)
   
+  // Australian phone number validation function
+  const validateAustralianPhone = (phone: string) => {
+    // Remove all non-digit characters
+    const cleanPhone = phone.replace(/\D/g, '')
+    
+    // Check for Australian mobile numbers (04xx xxx xxx) - 10 digits
+    if (cleanPhone.match(/^04\d{8}$/)) {
+      return true
+    }
+    
+    // Check for Australian landline numbers (xx xxxx xxxx) - 8 digits for area code + number
+    if (cleanPhone.match(/^[23478]\d{7}$/)) {
+      return true
+    }
+    
+    // Also allow standard 8-digit format
+    if (cleanPhone.match(/^\d{8}$/)) {
+      return true
+    }
+    
+    return false
+  }
+  
+  // Format phone number for display
+  const formatPhoneNumber = (phone: string) => {
+    const cleanPhone = phone.replace(/\D/g, '')
+    
+    // Mobile format: 04xx xxx xxx
+    if (cleanPhone.match(/^04\d{8}$/)) {
+      return cleanPhone.replace(/^(04\d{2})(\d{3})(\d{3})$/, '$1 $2 $3')
+    }
+    
+    // Landline format: (xx) xxxx xxxx
+    if (cleanPhone.match(/^[23478]\d{7}$/)) {
+      return cleanPhone.replace(/^(\d{2})(\d{4})(\d{4})$/, '($1) $2 $3')
+    }
+    
+    // Standard 8-digit format: xxxx xxxx
+    if (cleanPhone.match(/^\d{8}$/)) {
+      return cleanPhone.replace(/^(\d{4})(\d{4})$/, '$1 $2')
+    }
+    
+    return phone
+  }
+  
   const updateOperatingHours = (day: string, field: string, value: any) => {
     setOperatingHours(prev => ({
       ...prev,
@@ -270,11 +311,7 @@ export default function SignupPage() {
     }))
   }
   
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setLogoFile(e.target.files[0])
-    }
-  }
+
   
   const validateCurrentStep = () => {
     const errors = []
@@ -298,6 +335,7 @@ export default function SignupPage() {
         if (!businessEmail) errors.push("Business email is required")
         if (businessEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(businessEmail)) errors.push("Invalid business email format")
         if (!businessPhone) errors.push("Business phone is required")
+        if (businessPhone && !validateAustralianPhone(businessPhone)) errors.push("Invalid Australian phone number format")
         break
         
       case 4:
@@ -322,6 +360,7 @@ export default function SignupPage() {
       case 6: // Representative
         if (!repName) errors.push("Representative name is required")
         if (!repPhone) errors.push("Contact phone is required")
+        if (repPhone && !validateAustralianPhone(repPhone)) errors.push("Invalid Australian phone number format")
         break
         
       case 7: // ABN & Verification
@@ -380,19 +419,7 @@ export default function SignupPage() {
     setCurrentStep(prev => Math.max(prev - 1, 1))
   }
   
-  const uploadLogo = async (userId) => {
-    if (!logoFile) return null
-    
-    try {
-      const logoRef = ref(storage, `merchants/${userId}/logo.${logoFile.name.split('.').pop()}`)
-      await uploadBytes(logoRef, logoFile)
-      const logoUrl = await getDownloadURL(logoRef)
-      return logoUrl
-    } catch (error) {
-      console.error("Error uploading logo:", error)
-      throw error
-    }
-  }
+
   
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -415,12 +442,7 @@ export default function SignupPage() {
       
       console.log("User created:", user.uid)
       
-      // Upload logo if provided
-      let logoUrl = null
-      if (logoFile) {
-        console.log("Uploading logo...")
-        logoUrl = await uploadLogo(user.uid)
-      }
+
       
       // Update user profile
       await updateProfile(user, {
@@ -439,7 +461,6 @@ export default function SignupPage() {
         businessEmail,
         businessPhone,
         businessType,
-        logoUrl,
         
         // Template reference
         ...(selectedTemplate && selectedTemplate !== "custom" && { merchantId: selectedTemplate }),
@@ -714,12 +735,22 @@ export default function SignupPage() {
                 <Label htmlFor="businessPhone">Business Phone</Label>
                 <Input
                   id="businessPhone"
-                  placeholder="(02) 1234 5678"
+                  placeholder="0412 345 678 or 12345678"
                   value={businessPhone}
-                  onChange={(e) => setBusinessPhone(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    // Limit to 8 digits for standard numbers or 10 for mobile
+                    const cleanValue = value.replace(/\D/g, '')
+                    if (cleanValue.length <= 10) {
+                      setBusinessPhone(formatPhoneNumber(value))
+                    }
+                  }}
                   required
                   className="rounded-md"
                 />
+                <p className="text-xs text-gray-500">
+                  Australian mobile (04xx xxx xxx) or landline (8 digits max)
+                </p>
               </div>
             </div>
             
@@ -730,17 +761,7 @@ export default function SignupPage() {
                   <SelectValue placeholder="Select business type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {/* Get unique business types from available templates */}
-                  {Array.from(new Set(availableTemplates
-                    .filter(t => t.value !== "custom" && t.description)
-                    .map(t => t.description)))
-                    .map(type => (
-                      <SelectItem key={type} value={type}>
-                        {type.charAt(0).toUpperCase() + type.slice(1)}
-                      </SelectItem>
-                    ))}
-                  {/* Fallback to default business types if no templates */}
-                  {availableTemplates.length <= 1 && businessTypes.map(type => (
+                  {businessTypes.map(type => (
                     <SelectItem key={type.value} value={type.value}>
                       {type.label}
                     </SelectItem>
@@ -749,24 +770,7 @@ export default function SignupPage() {
               </Select>
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="logo">Business Logo (Optional)</Label>
-              <div className="flex items-center gap-4">
-                <Input
-                  id="logo"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className="rounded-md"
-                />
-                {logoFile && (
-                  <div className="text-sm text-green-600 flex items-center gap-1">
-                    <Upload className="h-4 w-4" />
-                    {logoFile.name}
-                  </div>
-                )}
-              </div>
-            </div>
+
           </div>
         )
         
@@ -900,12 +904,22 @@ export default function SignupPage() {
               <Label htmlFor="repPhone">Contact Phone</Label>
               <Input
                 id="repPhone"
-                placeholder="0412 345 678"
+                placeholder="0412 345 678 or 12345678"
                 value={repPhone}
-                onChange={(e) => setRepPhone(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value
+                  // Limit to 8 digits for standard numbers or 10 for mobile
+                  const cleanValue = value.replace(/\D/g, '')
+                  if (cleanValue.length <= 10) {
+                    setRepPhone(formatPhoneNumber(value))
+                  }
+                }}
                 required
                 className="rounded-md"
               />
+              <p className="text-xs text-gray-500">
+                Australian mobile (04xx xxx xxx) or landline (8 digits max)
+              </p>
             </div>
           </div>
         )

@@ -171,24 +171,24 @@ export function CreateRewardSheet({
     
     // Conditions
     conditions: {
-      useTransactionRequirements: true,
-      useSpendingRequirements: true,
-      useTimeRequirements: true,
-      minimumTransactions: "1",
-      maximumTransactions: "10",
-      daysSinceJoined: "30",
-      daysSinceLastVisit: "7",
-      minimumLifetimeSpend: "500",
-      minimumPointsBalance: "200",
-      membershipLevel: "bronze",
+      useTransactionRequirements: false,
+      useSpendingRequirements: false,
+      useTimeRequirements: false,
+      minimumTransactions: "",
+      maximumTransactions: "",
+      daysSinceJoined: "",
+      daysSinceLastVisit: "",
+      minimumLifetimeSpend: "",
+      minimumPointsBalance: "",
+      membershipLevel: "Bronze",
       newCustomer: false,
-      useMembershipRequirements: false
+      useMembershipRequirements: true
     },
 
     // Limitations
     limitations: {
       totalRedemptionLimit: "",
-      perCustomerLimit: "",
+      perCustomerLimit: "1",
       useTimeRestrictions: false,
       startTime: "",
       endTime: "",
@@ -1024,214 +1024,171 @@ export function CreateRewardSheet({
               <div className="mb-4">
                 <h2 className="text-lg font-semibold text-gray-900">Basic Details</h2>
               </div>
-              <div className="space-y-6">
-                {/* Core Details Card */}
-                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
-                  <div className="border-b bg-gray-50 px-4 py-3">
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Reward Name <span className="text-red-500">*</span></Label>
                     <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-blue-600" />
-                      <h3 className="font-medium text-sm">Core Information</h3>
-                    </div>
-                  </div>
-                  
-                  <div className="p-4">
-                    <div className="space-y-4">
-                      <div className="grid gap-4">
-                        <div className="grid gap-2">
-                          <div className="flex items-center justify-between">
-                            <Label className="text-sm">Reward Name <span className="text-red-500">*</span></Label>
-                            <div className="flex items-center gap-2">
-                              <Label className="text-xs text-gray-600">Active</Label>
-                              <Switch
-                                checked={formData.isActive}
-                                onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
-                              />
-                            </div>
-                          </div>
-                          <Input
-                            value={formData.rewardName}
-                            onChange={(e) => setFormData({ ...formData, rewardName: e.target.value })}
-                            placeholder="Enter a clear, concise name (e.g., 'Free Coffee Reward')"
-                            className="text-sm h-9"
-                          />
-                          <p className="text-xs text-gray-500">Choose a name customers will easily understand</p>
-                        </div>
-                      
-                        <div className="grid gap-2">
-                          <Label className="text-sm">Description <span className="text-red-500">*</span></Label>
-                          <Textarea
-                            value={formData.description}
-                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            placeholder="Explain what customers will receive when they redeem this reward"
-                            className="min-h-[70px] text-sm"
-                          />
-                          <p className="text-xs text-gray-500">Provide clear details about the reward and any important conditions</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Reward Type and Points Card */}
-                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
-                  <div className="border-b bg-gray-50 px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <ShoppingBag className="h-4 w-4 text-blue-600" />
-                      <h3 className="font-medium text-sm">Reward Type & Points</h3>
-                    </div>
-                  </div>
-                  
-                  <div className="p-4">
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-6">
-                        <div className="grid gap-2">
-                          <Label className="text-sm">Reward Type</Label>
-                          <Select
-                            value={formData.type}
-                            onValueChange={(value) => setFormData({ ...formData, type: value })}
-                          >
-                            <SelectTrigger className="text-sm h-9">
-                              <SelectValue placeholder="Select reward type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="percentageDiscount">Percentage Discount</SelectItem>
-                              <SelectItem value="fixedDiscount">Fixed-Amount Discount</SelectItem>
-                              <SelectItem value="freeItem">Free Item</SelectItem>
-                              <SelectItem value="bundleOffer">Buy X Get Y (Bundle)</SelectItem>
-                              <SelectItem value="mysterySurprise">Mystery Surprise</SelectItem>
-                              <SelectItem value="other">Other</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs text-gray-500">Choose the type of reward to offer</p>
-                        </div>
-                        
-                        <div className="grid gap-2">
-                          <Label className="text-sm">Points Cost <span className="text-red-500">*</span></Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={formData.pointsCost}
-                            onChange={(e) => setFormData({ ...formData, pointsCost: e.target.value })}
-                            placeholder="e.g., 100"
-                            className="text-sm h-9"
-                          />
-                          <p className="text-xs text-gray-500">Points customers will spend to redeem</p>
-                        </div>
-                      </div>
-                      
-                      {/* Type-specific fields - only showing a few for brevity */}
-                      {formData.type === 'percentageDiscount' && (
-                        <div className="grid gap-2 border-l-2 border-blue-100 pl-4 py-2">
-                          <Label className="text-sm">Discount Percentage <span className="text-red-500">*</span></Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            max="100"
-                            value={formData.discountValue}
-                            onChange={(e) => setFormData({ ...formData, discountValue: e.target.value })}
-                            placeholder="e.g., 15 for 15% off"
-                            className="text-sm h-9"
-                          />
-                          <p className="text-xs text-gray-500">Percentage discount the customer will receive</p>
-                          
-                          <div className="mt-2">
-                            <Label className="text-sm">Applies To (Optional)</Label>
-                            <Input
-                              type="text"
-                              value={formData.discountAppliesTo}
-                              onChange={(e) => setFormData({ ...formData, discountAppliesTo: e.target.value })}
-                              placeholder="e.g., Any purchase, Coffee only, etc."
-                              className="text-sm h-9"
-                            />
-                            <p className="text-xs text-gray-500">Specify what products this discount applies to</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {formData.type === 'fixedDiscount' && (
-                        <div className="grid gap-2 border-l-2 border-blue-100 pl-4 py-2">
-                          <Label className="text-sm">Discount Amount ($) <span className="text-red-500">*</span></Label>
-                          <Input
-                            type="number"
-                            min="0.01"
-                            step="0.01"
-                            value={formData.discountValue}
-                            onChange={(e) => setFormData({ ...formData, discountValue: e.target.value })}
-                            placeholder="e.g., 10 for $10 off"
-                            className="text-sm h-9"
-                          />
-                          <p className="text-xs text-gray-500">Fixed amount discount the customer will receive</p>
-                          
-                          <div className="mt-2">
-                            <Label className="text-sm">Minimum Purchase ($) <span className="text-red-500">*</span></Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={formData.minimumPurchase}
-                              onChange={(e) => setFormData({ ...formData, minimumPurchase: e.target.value })}
-                              placeholder="e.g., 25 for minimum $25 purchase"
-                              className="text-sm h-9"
-                            />
-                            <p className="text-xs text-gray-500">Minimum purchase amount required to use this discount</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {formData.type === 'freeItem' && (
-                        <div className="grid gap-2 border-l-2 border-blue-100 pl-4 py-2">
-                          <Label className="text-sm">Free Item Name <span className="text-red-500">*</span></Label>
-                          <Input
-                            type="text"
-                            value={formData.itemName}
-                            onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
-                            placeholder="e.g., Coffee, Muffin, etc."
-                            className="text-sm h-9"
-                          />
-                          <p className="text-xs text-gray-500">Specify what item the customer will receive for free</p>
-                          
-                          <div className="mt-2">
-                            <Label className="text-sm">Item Description (Optional)</Label>
-                            <Input
-                              type="text"
-                              value={formData.itemDescription}
-                              onChange={(e) => setFormData({ ...formData, itemDescription: e.target.value })}
-                              placeholder="e.g., Any size, Specific flavor, etc."
-                              className="text-sm h-9"
-                            />
-                            <p className="text-xs text-gray-500">Additional details about the free item</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Redemption PIN Card */}
-                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
-                  <div className="border-b bg-gray-50 px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Lock className="h-4 w-4 text-blue-600" />
-                      <h3 className="font-medium text-sm">Redemption PIN</h3>
-                    </div>
-                  </div>
-                  
-                  <div className="p-4">
-                    <div className="grid gap-2 max-w-md">
-                      <Label className="text-sm">PIN Code (4 digits) <span className="text-red-500">*</span></Label>
-                      <Input
-                        maxLength={4}
-                        value={formData.pin}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
-                          setFormData({ ...formData, pin: value })
-                        }}
-                        placeholder="4-digit PIN (e.g., 1234)"
-                        className="text-sm h-9"
+                      <Label className="text-xs text-gray-600">Active</Label>
+                      <Switch
+                        checked={formData.isActive}
+                        onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
                       />
-                      <p className="text-xs text-gray-500">Staff will use this PIN during redemption</p>
                     </div>
                   </div>
+                  <Input
+                    value={formData.rewardName}
+                    onChange={(e) => setFormData({ ...formData, rewardName: e.target.value })}
+                    placeholder="Enter a clear, concise name (e.g., 'Free Coffee Reward')"
+                    className="h-9"
+                  />
+                  <p className="text-xs text-gray-500">Choose a name customers will easily understand</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-sm">Description <span className="text-red-500">*</span></Label>
+                  <Textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Explain what customers will receive when they redeem this reward"
+                    className="min-h-[70px] text-sm"
+                  />
+                  <p className="text-xs text-gray-500">Provide clear details about the reward and any important conditions</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Reward Type</Label>
+                    <Select
+                      value={formData.type}
+                      onValueChange={(value) => setFormData({ ...formData, type: value })}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select reward type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percentageDiscount">Percentage Discount</SelectItem>
+                        <SelectItem value="fixedDiscount">Fixed-Amount Discount</SelectItem>
+                        <SelectItem value="freeItem">Free Item</SelectItem>
+                        <SelectItem value="bundleOffer">Buy X Get Y (Bundle)</SelectItem>
+                        <SelectItem value="mysterySurprise">Mystery Surprise</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-gray-500">Choose the type of reward to offer</p>
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Points Cost <span className="text-red-500">*</span></Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={formData.pointsCost}
+                      onChange={(e) => setFormData({ ...formData, pointsCost: e.target.value })}
+                      placeholder="e.g., 100"
+                      className="h-9"
+                    />
+                    <p className="text-xs text-gray-500">Points customers will spend to redeem</p>
+                  </div>
+                </div>
+                {/* Type-specific fields */}
+                {formData.type === 'percentageDiscount' && (
+                  <div className="space-y-1.5 border-l-2 border-blue-100 pl-4 py-2">
+                    <Label className="text-sm">Discount Percentage <span className="text-red-500">*</span></Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={formData.discountValue}
+                      onChange={(e) => setFormData({ ...formData, discountValue: e.target.value })}
+                      placeholder="e.g., 15 for 15% off"
+                      className="h-9"
+                    />
+                    <p className="text-xs text-gray-500">Percentage discount the customer will receive</p>
+                    
+                    <div className="space-y-1.5 mt-2">
+                      <Label className="text-sm">Applies To (Optional)</Label>
+                      <Input
+                        type="text"
+                        value={formData.discountAppliesTo}
+                        onChange={(e) => setFormData({ ...formData, discountAppliesTo: e.target.value })}
+                        placeholder="e.g., Any purchase, Coffee only, etc."
+                        className="h-9"
+                      />
+                      <p className="text-xs text-gray-500">Specify what products this discount applies to</p>
+                    </div>
+                  </div>
+                )}
+
+                {formData.type === 'fixedDiscount' && (
+                  <div className="space-y-1.5 border-l-2 border-blue-100 pl-4 py-2">
+                    <Label className="text-sm">Discount Amount ($) <span className="text-red-500">*</span></Label>
+                    <Input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={formData.discountValue}
+                      onChange={(e) => setFormData({ ...formData, discountValue: e.target.value })}
+                      placeholder="e.g., 10 for $10 off"
+                      className="h-9"
+                    />
+                    <p className="text-xs text-gray-500">Fixed amount discount the customer will receive</p>
+                    
+                    <div className="space-y-1.5 mt-2">
+                      <Label className="text-sm">Minimum Purchase ($) <span className="text-red-500">*</span></Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formData.minimumPurchase}
+                        onChange={(e) => setFormData({ ...formData, minimumPurchase: e.target.value })}
+                        placeholder="e.g., 25 for minimum $25 purchase"
+                        className="h-9"
+                      />
+                      <p className="text-xs text-gray-500">Minimum purchase amount required to use this discount</p>
+                    </div>
+                  </div>
+                )}
+
+                {formData.type === 'freeItem' && (
+                  <div className="space-y-1.5 border-l-2 border-blue-100 pl-4 py-2">
+                    <Label className="text-sm">Free Item Name <span className="text-red-500">*</span></Label>
+                    <Input
+                      type="text"
+                      value={formData.itemName}
+                      onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
+                      placeholder="e.g., Coffee, Muffin, etc."
+                      className="h-9"
+                    />
+                    <p className="text-xs text-gray-500">Specify what item the customer will receive for free</p>
+                    
+                    <div className="space-y-1.5 mt-2">
+                      <Label className="text-sm">Item Description (Optional)</Label>
+                      <Input
+                        type="text"
+                        value={formData.itemDescription}
+                        onChange={(e) => setFormData({ ...formData, itemDescription: e.target.value })}
+                        placeholder="e.g., Any size, Specific flavor, etc."
+                        className="h-9"
+                      />
+                      <p className="text-xs text-gray-500">Additional details about the free item</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <Label className="text-sm">PIN Code (4 digits) <span className="text-red-500">*</span></Label>
+                  <Input
+                    maxLength={4}
+                    value={formData.pin}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
+                      setFormData({ ...formData, pin: value })
+                    }}
+                    placeholder="4-digit PIN (e.g., 1234)"
+                    className="h-9"
+                  />
+                  <p className="text-xs text-gray-500">Staff will use this PIN during redemption</p>
                 </div>
               </div>
             </div>
@@ -1243,61 +1200,53 @@ export function CreateRewardSheet({
                 <h2 className="text-lg font-semibold text-gray-900">Visibility Settings</h2>
               </div>
 
-              <div className="space-y-6">
-                {/* Visibility Type Card */}
-                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
-                  <div className="border-b bg-gray-50 px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Eye className="h-4 w-4 text-blue-600" />
-                      <h3 className="font-medium text-sm">Who Can See This Reward</h3>
-                    </div>
-                  </div>
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  <Label className="text-sm">Who Can See This Reward</Label>
+                  <p className="text-xs text-gray-600">
+                    Choose which customers will be able to see this reward in their account.
+                  </p>
                   
-                  <div className="p-4">
-                    <p className="text-xs text-gray-600 mb-4">
-                      Choose which customers will be able to see this reward in their account.
-                    </p>
-                    
-                    <RadioGroup 
-                      value={formData.rewardVisibility} 
-                      onValueChange={(value) => {
-                        if (value === 'new') {
-                          // If visibility is set to "new customers only", update conditions automatically
-                          setFormData({
-                            ...formData,
-                            rewardVisibility: value,
-                            conditions: {
-                              ...formData.conditions,
-                              newCustomer: true,
-                              maximumTransactions: "0",
-                              membershipLevel: "bronze",
-                              useMembershipRequirements: false
-                            }
-                          });
-                        } else if (value === 'specific') {
-                          // If visibility is set to "specific customer", make sure we have a customer specified
-                          setFormData({
-                            ...formData,
-                            rewardVisibility: value,
-                            conditions: {
-                              ...formData.conditions,
-                              newCustomer: false
-                            }
-                          });
-                        } else {
-                          // For "all customers" visibility
-                          setFormData({
-                            ...formData,
-                            rewardVisibility: value,
-                            conditions: {
-                              ...formData.conditions,
-                              newCustomer: false
-                            }
-                          });
-                        }
-                      }}
-                      className="space-y-3"
-                    >
+                  <RadioGroup 
+                    value={formData.rewardVisibility} 
+                    onValueChange={(value) => {
+                      if (value === 'new') {
+                        // If visibility is set to "new customers only", update conditions automatically
+                        setFormData({
+                          ...formData,
+                          rewardVisibility: value,
+                          conditions: {
+                            ...formData.conditions,
+                            newCustomer: true,
+                            maximumTransactions: "0",
+                            membershipLevel: "bronze",
+                            useMembershipRequirements: false
+                          }
+                        });
+                      } else if (value === 'specific') {
+                        // If visibility is set to "specific customer", make sure we have a customer specified
+                        setFormData({
+                          ...formData,
+                          rewardVisibility: value,
+                          conditions: {
+                            ...formData.conditions,
+                            newCustomer: false
+                          }
+                        });
+                      } else {
+                        // For "all customers" visibility
+                        setFormData({
+                          ...formData,
+                          rewardVisibility: value,
+                          conditions: {
+                            ...formData.conditions,
+                            newCustomer: false
+                          }
+                        });
+                      }
+                    }}
+                    className="space-y-3"
+                  >
                       <label htmlFor="all-customers" className="block w-full cursor-pointer">
                         <div className={`flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 transition-all duration-200 ${formData.rewardVisibility === 'all' ? 'bg-blue-50 border-blue-200 shadow-sm' : ''}`}>
                           <RadioGroupItem value="all" id="all-customers" className="mt-1" />
@@ -1333,182 +1282,178 @@ export function CreateRewardSheet({
                           </div>
                         </div>
                       </label>
-                    </RadioGroup>
-                    
-                    {formData.rewardVisibility === 'specific' && (
-                                              <div className="mt-4 border-l-2 border-blue-100 pl-4 py-2">
-                          <div className="flex items-center justify-between mb-2">
-                            <Label className="text-sm">Select Customers</Label>
-                            <div className="text-xs text-blue-600">
-                              {selectedCustomers.length} selected
-                            </div>
+                  </RadioGroup>
+                  
+                  {formData.rewardVisibility === 'specific' && (
+                    <div className="mt-4 border-l-2 border-blue-100 pl-4 py-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="text-sm">Select Customers</Label>
+                        <div className="text-xs text-blue-600">
+                          {selectedCustomers.length} selected
+                        </div>
+                      </div>
+                      
+                      {isLoadingCustomers ? (
+                        <div className="flex items-center gap-2 py-2">
+                          <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                          <p className="text-sm text-gray-600">Loading customers...</p>
+                        </div>
+                      ) : customers.length > 0 ? (
+                        <div className="space-y-4">
+                          <div className="text-xs text-gray-500 mb-2">
+                            DEBUG: {customers.length} customers loaded
                           </div>
-                        
-                        {isLoadingCustomers ? (
-                          <div className="flex items-center gap-2 py-2">
-                            <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-                            <p className="text-sm text-gray-600">Loading customers...</p>
+                          
+                          {/* Customer search input */}
+                          <div className="relative">
+                            <Input
+                              type="text"
+                              placeholder="Search customers..."
+                              className="pl-8 text-sm h-9"
+                              onChange={(e) => {
+                                // Add customer search functionality here
+                                console.log("Searching for:", e.target.value);
+                              }}
+                            />
+                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
                           </div>
-                        ) : customers.length > 0 ? (
-                          <div className="space-y-4">
-                            <div className="text-xs text-gray-500 mb-2">
-                              DEBUG: {customers.length} customers loaded
-                            </div>
-                            
-                            {/* Customer search input */}
-                            <div className="relative">
-                              <Input
-                                type="text"
-                                placeholder="Search customers..."
-                                className="pl-8 text-sm h-9"
-                                onChange={(e) => {
-                                  // Add customer search functionality here
-                                  console.log("Searching for:", e.target.value);
-                                }}
-                              />
-                              <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
-                            </div>
-                            
-                            {/* Customer list with checkboxes */}
-                            <div className="border rounded-md max-h-[300px] overflow-y-auto">
-                              {customers.map((customer) => (
-                                <div 
-                                  key={customer.id} 
-                                  className="flex items-start p-3 border-b last:border-b-0 hover:bg-gray-50"
-                                >
-                                  <Checkbox
-                                    id={`customer-${customer.id}`}
-                                    checked={selectedCustomers.some(c => c.id === customer.id)}
-                                    onCheckedChange={(checked) => {
-                                      if (checked) {
-                                        // Add customer to selection
-                                        const newSelectedCustomers = [...selectedCustomers, { 
-                                          id: customer.id, 
-                                          name: customer.name 
-                                        }];
-                                        setSelectedCustomers(newSelectedCustomers);
-                                        
-                                        // Update form data with all selected customers
-                                        setFormData({
-                                          ...formData,
-                                          specificCustomerIds: newSelectedCustomers.map(c => c.id),
-                                          specificCustomerNames: newSelectedCustomers.map(c => c.name)
-                                        });
-                                        
-                                        console.log("Added customer to selection:", customer);
-                                      } else {
-                                        // Remove customer from selection
+                          
+                          {/* Customer list with checkboxes */}
+                          <div className="border rounded-md max-h-[300px] overflow-y-auto">
+                            {customers.map((customer) => (
+                              <div 
+                                key={customer.id} 
+                                className="flex items-start p-3 border-b last:border-b-0 hover:bg-gray-50"
+                              >
+                                <Checkbox
+                                  id={`customer-${customer.id}`}
+                                  checked={selectedCustomers.some(c => c.id === customer.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      // Add customer to selection
+                                      const newSelectedCustomers = [...selectedCustomers, { 
+                                        id: customer.id, 
+                                        name: customer.name 
+                                      }];
+                                      setSelectedCustomers(newSelectedCustomers);
+                                      
+                                      // Update form data with all selected customers
+                                      setFormData({
+                                        ...formData,
+                                        specificCustomerIds: newSelectedCustomers.map(c => c.id),
+                                        specificCustomerNames: newSelectedCustomers.map(c => c.name)
+                                      });
+                                      
+                                      console.log("Added customer to selection:", customer);
+                                    } else {
+                                      // Remove customer from selection
+                                      const newSelectedCustomers = selectedCustomers.filter(
+                                        c => c.id !== customer.id
+                                      );
+                                      setSelectedCustomers(newSelectedCustomers);
+                                      
+                                      // Update form data with remaining selected customers
+                                      setFormData({
+                                        ...formData,
+                                        specificCustomerIds: newSelectedCustomers.map(c => c.id),
+                                        specificCustomerNames: newSelectedCustomers.map(c => c.name)
+                                      });
+                                      
+                                      console.log("Removed customer from selection:", customer);
+                                    }
+                                  }}
+                                  className="mt-1 mr-3"
+                                />
+                                <div className="flex-1">
+                                  <label 
+                                    htmlFor={`customer-${customer.id}`}
+                                    className="flex flex-col cursor-pointer"
+                                  >
+                                    <span className="text-sm font-medium">{customer.name}</span>
+                                    {customer.email && (
+                                      <span className="text-xs text-gray-500">{customer.email}</span>
+                                    )}
+                                    <div className="flex gap-4 mt-1">
+                                      <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
+                                        {customer.pointsBalance} points
+                                      </span>
+                                      <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">
+                                        {customer.lifetimeTransactionCount} transactions
+                                      </span>
+                                    </div>
+                                  </label>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          
+                          {/* Selected customers summary */}
+                          {selectedCustomers.length > 0 && (
+                            <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
+                              <h4 className="text-sm font-medium text-blue-800 mb-2">Selected Customers ({selectedCustomers.length})</h4>
+                              <div className="flex flex-wrap gap-2">
+                                {selectedCustomers.map(customer => (
+                                  <div key={customer.id} className="bg-white border border-blue-200 rounded-full px-3 py-1 text-sm flex items-center gap-1">
+                                    <span>{customer.name}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        // Remove this customer from selection
                                         const newSelectedCustomers = selectedCustomers.filter(
                                           c => c.id !== customer.id
                                         );
                                         setSelectedCustomers(newSelectedCustomers);
                                         
-                                        // Update form data with remaining selected customers
+                                        // Update form data
                                         setFormData({
                                           ...formData,
                                           specificCustomerIds: newSelectedCustomers.map(c => c.id),
                                           specificCustomerNames: newSelectedCustomers.map(c => c.name)
                                         });
-                                        
-                                        console.log("Removed customer from selection:", customer);
-                                      }
-                                    }}
-                                    className="mt-1 mr-3"
-                                  />
-                                  <div className="flex-1">
-                                    <label 
-                                      htmlFor={`customer-${customer.id}`}
-                                      className="flex flex-col cursor-pointer"
+                                      }}
+                                      className="text-gray-400 hover:text-red-500"
                                     >
-                                      <span className="text-sm font-medium">{customer.name}</span>
-                                      {customer.email && (
-                                        <span className="text-xs text-gray-500">{customer.email}</span>
-                                      )}
-                                      <div className="flex gap-4 mt-1">
-                                        <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
-                                          {customer.pointsBalance} points
-                                        </span>
-                                        <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">
-                                          {customer.lifetimeTransactionCount} transactions
-                                        </span>
-                                      </div>
-                                    </label>
+                                      <X className="h-3 w-3" />
+                                    </button>
                                   </div>
-                                </div>
-                              ))}
-                            </div>
-                            
-                            {/* Selected customers summary */}
-                            {selectedCustomers.length > 0 && (
-                              <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
-                                <h4 className="text-sm font-medium text-blue-800 mb-2">Selected Customers ({selectedCustomers.length})</h4>
-                                <div className="flex flex-wrap gap-2">
-                                  {selectedCustomers.map(customer => (
-                                    <div key={customer.id} className="bg-white border border-blue-200 rounded-full px-3 py-1 text-sm flex items-center gap-1">
-                                      <span>{customer.name}</span>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          // Remove this customer from selection
-                                          const newSelectedCustomers = selectedCustomers.filter(
-                                            c => c.id !== customer.id
-                                          );
-                                          setSelectedCustomers(newSelectedCustomers);
-                                          
-                                          // Update form data
-                                          setFormData({
-                                            ...formData,
-                                            specificCustomerIds: newSelectedCustomers.map(c => c.id),
-                                            specificCustomerNames: newSelectedCustomers.map(c => c.name)
-                                          });
-                                        }}
-                                        className="text-gray-400 hover:text-red-500"
-                                      >
-                                        <X className="h-3 w-3" />
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
+                                ))}
                               </div>
-                            )}
-                            
-                            <p className="text-xs text-gray-500">
-                              Only selected customers will see this reward in their account
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="space-y-3">
-                            <p className="text-sm text-amber-600">
-                              No customers found. Make sure you have customers in your loyalty program.
-                            </p>
-                            <div className="text-xs text-gray-500 mb-2">
-                              DEBUG: User ID: {user?.uid || "No user ID"}
                             </div>
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => {
-                                console.log("DEBUG: Manual retry for loading customers");
-                                fetchMerchantCustomers();
-                              }}
-                              className="text-blue-600 border-blue-200"
-                            >
-                              Retry Loading Customers
-                            </Button>
+                          )}
+                          
+                          <p className="text-xs text-gray-500">
+                            Only selected customers will see this reward in their account
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <p className="text-sm text-amber-600">
+                            No customers found. Make sure you have customers in your loyalty program.
+                          </p>
+                          <div className="text-xs text-gray-500 mb-2">
+                            DEBUG: User ID: {user?.uid || "No user ID"}
                           </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              console.log("DEBUG: Manual retry for loading customers");
+                              fetchMerchantCustomers();
+                            }}
+                            className="text-blue-600 border-blue-200"
+                          >
+                            Retry Loading Customers
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 
-                {/* Progressive Unlock Card */}
-                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
-                  <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Lock className="h-5 w-5 text-blue-600" />
-                      <h3 className="font-medium">Progressive Unlock</h3>
-                    </div>
+                {/* Progressive Unlock */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Progressive Unlock</Label>
                     <Switch
                       checked={formData.delayedVisibility}
                       onCheckedChange={(checked) => setFormData({
@@ -1524,82 +1469,79 @@ export function CreateRewardSheet({
                   </div>
                   
                   {formData.delayedVisibility && (
-                    <div className="p-4">
+                    <div className="border-l-2 border-blue-100 pl-4 py-2">
                       <p className="text-xs text-gray-600 mb-4">
                         Hide this reward until the customer reaches a certain milestone.
                       </p>
                       
-                                              <div className="space-y-4">
+                      <div className="space-y-4">
+                        <div className="grid gap-2">
+                          <Label className="text-sm">Unlock Type</Label>
+                          <RadioGroup 
+                            value={formData.delayedVisibilityType} 
+                            onValueChange={(value) => setFormData({
+                              ...formData,
+                              delayedVisibilityType: value
+                            })}
+                            className="grid grid-cols-2 gap-3"
+                          >
+                            <div className="flex items-center space-x-2 border rounded p-2 hover:bg-gray-50">
+                              <RadioGroupItem value="transactions" id="transactions" />
+                              <Label htmlFor="transactions" className="cursor-pointer text-sm">Transactions</Label>
+                            </div>
+                            <div className="flex items-center space-x-2 border rounded p-2 hover:bg-gray-50">
+                              <RadioGroupItem value="spend" id="spend" />
+                              <Label htmlFor="spend" className="cursor-pointer text-sm">Total Spend</Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+                      
+                        {formData.delayedVisibilityType === 'transactions' ? (
                           <div className="grid gap-2">
-                            <Label className="text-sm">Unlock Type</Label>
-                            <RadioGroup 
-                              value={formData.delayedVisibilityType} 
-                              onValueChange={(value) => setFormData({
+                            <Label className="text-sm">Minimum Transactions</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={formData.delayedVisibilityTransactions}
+                              onChange={(e) => setFormData({
                                 ...formData,
-                                delayedVisibilityType: value
+                                delayedVisibilityTransactions: e.target.value
                               })}
-                              className="grid grid-cols-2 gap-3"
-                            >
-                              <div className="flex items-center space-x-2 border rounded p-2 hover:bg-gray-50">
-                                <RadioGroupItem value="transactions" id="transactions" />
-                                <Label htmlFor="transactions" className="cursor-pointer text-sm">Transactions</Label>
-                              </div>
-                              <div className="flex items-center space-x-2 border rounded p-2 hover:bg-gray-50">
-                                <RadioGroupItem value="spend" id="spend" />
-                                <Label htmlFor="spend" className="cursor-pointer text-sm">Total Spend</Label>
-                              </div>
-                            </RadioGroup>
+                              placeholder="e.g., 5"
+                              className="text-sm h-9"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Customer must make this many purchases before they can see the reward
+                            </p>
                           </div>
-                        
-                                                  {formData.delayedVisibilityType === 'transactions' ? (
-                            <div className="grid gap-2">
-                              <Label className="text-sm">Minimum Transactions</Label>
-                              <Input
-                                type="number"
-                                min="1"
-                                value={formData.delayedVisibilityTransactions}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  delayedVisibilityTransactions: e.target.value
-                                })}
-                                placeholder="e.g., 5"
-                                className="text-sm h-9"
-                              />
-                              <p className="text-xs text-gray-500">
-                                Customer must make this many purchases before they can see the reward
-                              </p>
-                            </div>
-                          ) : (
-                            <div className="grid gap-2">
-                              <Label className="text-sm">Minimum Spend ($)</Label>
-                              <Input
-                                type="number"
-                                min="1"
-                                value={formData.delayedVisibilitySpend}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  delayedVisibilitySpend: e.target.value
-                                })}
-                                placeholder="e.g., 100"
-                                className="text-sm h-9"
-                              />
-                              <p className="text-xs text-gray-500">
-                                Customer must spend this much before they can see the reward
-                              </p>
-                            </div>
-                          )}
+                        ) : (
+                          <div className="grid gap-2">
+                            <Label className="text-sm">Minimum Spend ($)</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={formData.delayedVisibilitySpend}
+                              onChange={(e) => setFormData({
+                                ...formData,
+                                delayedVisibilitySpend: e.target.value
+                              })}
+                              placeholder="e.g., 100"
+                              className="text-sm h-9"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Customer must spend this much before they can see the reward
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
                 </div>
                 
-                {/* Active Period Card */}
-                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
-                  <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <CalendarIcon className="h-4 w-4 text-blue-600" />
-                      <h3 className="font-medium text-sm">Active Period</h3>
-                    </div>
+                {/* Active Period */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Active Period</Label>
                     <Switch
                       checked={formData.hasActivePeriod}
                       onCheckedChange={(checked) => setFormData({
@@ -1618,7 +1560,7 @@ export function CreateRewardSheet({
                   </div>
                   
                   {formData.hasActivePeriod && (
-                    <div className="p-4">
+                    <div className="border-l-2 border-blue-100 pl-4 py-2">
                       <p className="text-xs text-gray-600 mb-4">
                         Set a date range when this reward is active and can be redeemed.
                       </p>
@@ -1628,10 +1570,10 @@ export function CreateRewardSheet({
                           <Label className="text-sm">Start Date</Label>
                           <Popover>
                             <PopoverTrigger asChild>
-                                                        <Button
-                            variant="outline"
-                            className={`w-full justify-start text-left font-normal text-sm h-9 ${!formData.activePeriod.startDate && "text-muted-foreground"}`}
-                          >
+                              <Button
+                                variant="outline"
+                                className={`w-full justify-start text-left font-normal text-sm h-9 ${!formData.activePeriod.startDate && "text-muted-foreground"}`}
+                              >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 {formData.activePeriod.startDate ? formatDate(formData.activePeriod.startDate) : "Select date"}
                               </Button>
@@ -1712,61 +1654,58 @@ export function CreateRewardSheet({
                 <h2 className="text-lg font-semibold text-gray-900">Conditions</h2>
               </div>
                 
-              {/* New Customer Card - Always visible at the top */}
-              <div className="bg-white border rounded-md shadow-sm mb-6 overflow-hidden">
-                                  <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <UserPlus className="h-4 w-4 text-blue-600" />
-                    <h3 className="font-medium text-sm">New Customer Only</h3>
+              {/* New Customer - Always visible at the top */}
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">New Customer Only</Label>
+                    <Switch
+                      checked={formData.conditions.newCustomer}
+                      onCheckedChange={(checked) => {
+                        // If turning on new customer condition
+                        if (checked) {
+                          setFormData({
+                            ...formData,
+                            rewardVisibility: 'new',
+                            delayedVisibility: false,
+                            conditions: {
+                              ...formData.conditions,
+                              newCustomer: true,
+                              maximumTransactions: "0",
+                              membershipLevel: "bronze",
+                              useMembershipRequirements: false,
+                              useTransactionRequirements: false,
+                              useSpendingRequirements: false,
+                              useTimeRequirements: false,
+                              minimumTransactions: "",
+                              daysSinceJoined: "",
+                              daysSinceLastVisit: "",
+                              minimumLifetimeSpend: "",
+                              minimumPointsBalance: ""
+                            }
+                          });
+                        } else {
+                          setFormData({
+                            ...formData,
+                            rewardVisibility: formData.rewardVisibility === 'new' ? 'all' : formData.rewardVisibility,
+                            conditions: {
+                              ...formData.conditions,
+                              newCustomer: false
+                            }
+                          });
+                        }
+                      }}
+                      disabled={formData.rewardVisibility === 'new'}
+                      className="data-[state=checked]:bg-blue-600"
+                    />
                   </div>
-                  <Switch
-                    checked={formData.conditions.newCustomer}
-                    onCheckedChange={(checked) => {
-                      // If turning on new customer condition
-                      if (checked) {
-                        setFormData({
-                          ...formData,
-                          rewardVisibility: 'new',
-                          delayedVisibility: false,
-                          conditions: {
-                            ...formData.conditions,
-                            newCustomer: true,
-                            maximumTransactions: "0",
-                            membershipLevel: "bronze",
-                            useMembershipRequirements: false,
-                            useTransactionRequirements: false,
-                            useSpendingRequirements: false,
-                            useTimeRequirements: false,
-                            minimumTransactions: "",
-                            daysSinceJoined: "",
-                            daysSinceLastVisit: "",
-                            minimumLifetimeSpend: "",
-                            minimumPointsBalance: ""
-                          }
-                        });
-                      } else {
-                        setFormData({
-                          ...formData,
-                          rewardVisibility: formData.rewardVisibility === 'new' ? 'all' : formData.rewardVisibility,
-                          conditions: {
-                            ...formData.conditions,
-                            newCustomer: false
-                          }
-                        });
-                      }
-                    }}
-                    disabled={formData.rewardVisibility === 'new'}
-                    className="data-[state=checked]:bg-blue-600"
-                  />
-                </div>
-                
-                <div className="p-4">
-                  <p className="text-xs text-gray-600 mb-2">
+                  
+                  <p className="text-xs text-gray-600">
                     Enable this to restrict the reward to customers who recently joined your loyalty program.
                   </p>
                   
                   {formData.rewardVisibility === 'new' && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-md p-3 mt-3">
+                    <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
                       <div className="flex gap-2">
                         <Info className="h-5 w-5 text-amber-500 flex-shrink-0" />
                         <p className="text-xs text-amber-700">
@@ -1776,302 +1715,290 @@ export function CreateRewardSheet({
                     </div>
                   )}
                 </div>
-              </div>
 
-              <div className={`space-y-6 ${formData.rewardVisibility === 'new' ? 'opacity-50 pointer-events-none' : ''}`}>
-                {/* Transaction Card */}
-                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
-                  <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <ShoppingBag className="h-5 w-5 text-blue-600" />
-                      <h3 className="font-medium">Transaction Requirements</h3>
+                <div className={`space-y-4 ${formData.rewardVisibility === 'new' ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {/* Transaction Requirements */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm">Transaction Requirements</Label>
+                      <Switch
+                        checked={formData.conditions.useTransactionRequirements}
+                        onCheckedChange={(checked) => setFormData({
+                          ...formData,
+                          conditions: {
+                            ...formData.conditions,
+                            useTransactionRequirements: checked,
+                            minimumTransactions: checked ? formData.conditions.minimumTransactions : "",
+                            maximumTransactions: checked ? formData.conditions.maximumTransactions : ""
+                          }
+                        })}
+                        disabled={formData.rewardVisibility === 'new'}
+                        className="data-[state=checked]:bg-blue-600"
+                      />
                     </div>
-                    <Switch
-                      checked={formData.conditions.useTransactionRequirements}
-                      onCheckedChange={(checked) => setFormData({
-                        ...formData,
-                        conditions: {
-                          ...formData.conditions,
-                          useTransactionRequirements: checked,
-                          minimumTransactions: checked ? formData.conditions.minimumTransactions : "",
-                          maximumTransactions: checked ? formData.conditions.maximumTransactions : ""
-                        }
-                      })}
-                      disabled={formData.rewardVisibility === 'new'}
-                      className="data-[state=checked]:bg-blue-600"
-                    />
-                  </div>
-                
-                  {formData.conditions.useTransactionRequirements && (
-                    <div className="p-4">
-                      <p className="text-xs text-gray-600 mb-4">
-                        Set purchase count conditions that determine eligibility based on the number of transactions.
-                      </p>
-                      
-                      <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <Label className="text-sm">Minimum Transactions</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={formData.conditions.minimumTransactions}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              conditions: {
-                                ...formData.conditions,
-                                minimumTransactions: e.target.value
-                              }
-                            })}
-                            placeholder="e.g., 5"
-                            className="text-sm h-9"
-                          />
-                          <p className="text-xs text-gray-500 min-h-[2.5rem]">
-                            Customer must have made at least this many purchases
-                          </p>
-                        </div>
+                  
+                    {formData.conditions.useTransactionRequirements && (
+                      <div className="border-l-2 border-blue-100 pl-4 py-2">
+                        <p className="text-xs text-gray-600 mb-4">
+                          Set purchase count conditions that determine eligibility based on the number of transactions.
+                        </p>
                         
-                        <div className="space-y-2">
-                          <Label className="text-sm">Maximum Transactions</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={formData.conditions.maximumTransactions}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              conditions: {
-                                ...formData.conditions,
-                                maximumTransactions: e.target.value
-                              }
-                            })}
-                            placeholder="e.g., 20"
-                            className="text-sm h-9"
-                          />
-                          <p className="text-xs text-gray-500 min-h-[2.5rem]">
-                            Maximum purchases limit (leave empty for no limit)
-                          </p>
+                        <div className="grid grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <Label className="text-sm">Minimum Transactions</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={formData.conditions.minimumTransactions}
+                              onChange={(e) => setFormData({
+                                ...formData,
+                                conditions: {
+                                  ...formData.conditions,
+                                  minimumTransactions: e.target.value
+                                }
+                              })}
+                              placeholder="e.g., 5"
+                              className="text-sm h-9"
+                            />
+                            <p className="text-xs text-gray-500 min-h-[2.5rem]">
+                              Customer must have made at least this many purchases
+                            </p>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Label className="text-sm">Maximum Transactions</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={formData.conditions.maximumTransactions}
+                              onChange={(e) => setFormData({
+                                ...formData,
+                                conditions: {
+                                  ...formData.conditions,
+                                  maximumTransactions: e.target.value
+                                }
+                              })}
+                              placeholder="e.g., 20"
+                              className="text-sm h-9"
+                            />
+                            <p className="text-xs text-gray-500 min-h-[2.5rem]">
+                              Maximum purchases limit (leave empty for no limit)
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Spending Card */}
-                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
-                  <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-blue-600" />
-                      <h3 className="font-medium text-sm">Spending Requirements</h3>
-                    </div>
-                    <Switch
-                      checked={formData.conditions.useSpendingRequirements}
-                      onCheckedChange={(checked) => setFormData({
-                        ...formData,
-                        conditions: {
-                          ...formData.conditions,
-                          useSpendingRequirements: checked,
-                          minimumLifetimeSpend: checked ? formData.conditions.minimumLifetimeSpend : "",
-                          minimumPointsBalance: checked ? formData.conditions.minimumPointsBalance : ""
-                        }
-                      })}
-                      disabled={formData.rewardVisibility === 'new'}
-                      className="data-[state=checked]:bg-blue-600"
-                    />
-                  </div>
-                
-                  {formData.conditions.useSpendingRequirements && (
-                    <div className="p-4">
-                      <p className="text-xs text-gray-600 mb-4">
-                        Set monetary or points requirements that determine eligibility based on spending or point balance.
-                      </p>
-                      
-                      <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <Label className="text-sm">Minimum Lifetime Spend ($)</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={formData.conditions.minimumLifetimeSpend}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              conditions: {
-                                ...formData.conditions,
-                                minimumLifetimeSpend: e.target.value
-                              }
-                            })}
-                            placeholder="e.g., 100"
-                            className="text-sm h-9"
-                          />
-                          <p className="text-xs text-gray-500">
-                            Customer must have spent at least this amount across all purchases
-                          </p>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label className="text-sm">Minimum Points Balance</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={formData.conditions.minimumPointsBalance}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              conditions: {
-                                ...formData.conditions,
-                                minimumPointsBalance: e.target.value
-                              }
-                            })}
-                            placeholder="e.g., 500"
-                            className="text-sm h-9"
-                          />
-                          <p className="text-xs text-gray-500">
-                            Customer must have at least this many points in their account
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Time Requirements Card */}
-                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
-                  <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-blue-600" />
-                      <h3 className="font-medium text-sm">Time-Based Requirements</h3>
-                    </div>
-                    <Switch
-                      checked={formData.conditions.useTimeRequirements}
-                      onCheckedChange={(checked) => setFormData({
-                        ...formData,
-                        conditions: {
-                          ...formData.conditions,
-                          useTimeRequirements: checked,
-                          daysSinceJoined: checked ? formData.conditions.daysSinceJoined : "",
-                          daysSinceLastVisit: checked ? formData.conditions.daysSinceLastVisit : ""
-                        }
-                      })}
-                      disabled={formData.rewardVisibility === 'new'}
-                      className="data-[state=checked]:bg-blue-600"
-                    />
-                  </div>
-                
-                  {formData.conditions.useTimeRequirements && (
-                    <div className="p-4">
-                      <p className="text-xs text-gray-600 mb-4">
-                        Set time-based conditions that determine eligibility based on membership duration or last visit.
-                      </p>
-                      
-                      <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <Label className="text-sm">Minimum Days as Member</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={formData.conditions.daysSinceJoined}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              conditions: {
-                                ...formData.conditions,
-                                daysSinceJoined: e.target.value
-                              }
-                            })}
-                            placeholder="e.g., 30"
-                            className="text-sm h-9"
-                          />
-                          <p className="text-xs text-gray-500">
-                            Customer must have been a member for at least this many days
-                          </p>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label className="text-sm">Days Since Last Visit</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={formData.conditions.daysSinceLastVisit}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              conditions: {
-                                ...formData.conditions,
-                                daysSinceLastVisit: e.target.value
-                              }
-                            })}
-                            placeholder="e.g., 14"
-                            className="text-sm h-9"
-                          />
-                          <p className="text-xs text-gray-500">
-                            It must have been at least this many days since the customer's last purchase
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Membership Level Card */}
-                <div className="bg-white border rounded-md shadow-sm overflow-hidden">
-                  <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Award className="h-4 w-4 text-blue-600" />
-                      <h3 className="font-medium text-sm">Membership Level Requirement</h3>
-                    </div>
-                    <Switch
-                      checked={formData.rewardVisibility === 'new' ? false : formData.conditions.useMembershipRequirements}
-                      onCheckedChange={(checked) => setFormData({
-                        ...formData,
-                        conditions: {
-                          ...formData.conditions,
-                          useMembershipRequirements: checked,
-                          membershipLevel: checked ? formData.conditions.membershipLevel : ""
-                        }
-                      })}
-                      disabled={formData.rewardVisibility === 'new'}
-                      className="data-[state=checked]:bg-blue-600"
-                    />
+                    )}
                   </div>
                   
-                  {formData.rewardVisibility === 'new' ? (
-                    <div className="p-4">
-                      <div className="flex items-center gap-2 border border-blue-100 bg-blue-50 p-3 rounded-md">
-                        <div className="h-6 w-6 rounded-full bg-amber-100 flex items-center justify-center text-xs font-medium text-amber-700">B</div>
-                        <div>
-                          <p className="text-sm font-medium text-blue-800">Bronze (Default)</p>
-                          <p className="text-xs text-blue-700">
-                            Membership levels are not applicable for New Customers as they automatically start at Bronze
+                  {/* Spending Requirements */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm">Spending Requirements</Label>
+                      <Switch
+                        checked={formData.conditions.useSpendingRequirements}
+                        onCheckedChange={(checked) => setFormData({
+                          ...formData,
+                          conditions: {
+                            ...formData.conditions,
+                            useSpendingRequirements: checked,
+                            minimumLifetimeSpend: checked ? formData.conditions.minimumLifetimeSpend : "",
+                            minimumPointsBalance: checked ? formData.conditions.minimumPointsBalance : ""
+                          }
+                        })}
+                        disabled={formData.rewardVisibility === 'new'}
+                        className="data-[state=checked]:bg-blue-600"
+                      />
+                    </div>
+                  
+                    {formData.conditions.useSpendingRequirements && (
+                      <div className="border-l-2 border-blue-100 pl-4 py-2">
+                        <p className="text-xs text-gray-600 mb-4">
+                          Set monetary or points requirements that determine eligibility based on spending or point balance.
+                        </p>
+                        
+                        <div className="grid grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <Label className="text-sm">Minimum Lifetime Spend ($)</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={formData.conditions.minimumLifetimeSpend}
+                              onChange={(e) => setFormData({
+                                ...formData,
+                                conditions: {
+                                  ...formData.conditions,
+                                  minimumLifetimeSpend: e.target.value
+                                }
+                              })}
+                              placeholder="e.g., 100"
+                              className="text-sm h-9"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Customer must have spent at least this amount across all purchases
+                            </p>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Label className="text-sm">Minimum Points Balance</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={formData.conditions.minimumPointsBalance}
+                              onChange={(e) => setFormData({
+                                ...formData,
+                                conditions: {
+                                  ...formData.conditions,
+                                  minimumPointsBalance: e.target.value
+                                }
+                              })}
+                              placeholder="e.g., 500"
+                              className="text-sm h-9"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Customer must have at least this many points in their account
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Time Requirements */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm">Time-Based Requirements</Label>
+                      <Switch
+                        checked={formData.conditions.useTimeRequirements}
+                        onCheckedChange={(checked) => setFormData({
+                          ...formData,
+                          conditions: {
+                            ...formData.conditions,
+                            useTimeRequirements: checked,
+                            daysSinceJoined: checked ? formData.conditions.daysSinceJoined : "",
+                            daysSinceLastVisit: checked ? formData.conditions.daysSinceLastVisit : ""
+                          }
+                        })}
+                        disabled={formData.rewardVisibility === 'new'}
+                        className="data-[state=checked]:bg-blue-600"
+                      />
+                    </div>
+                  
+                    {formData.conditions.useTimeRequirements && (
+                      <div className="border-l-2 border-blue-100 pl-4 py-2">
+                        <p className="text-xs text-gray-600 mb-4">
+                          Set time-based conditions that determine eligibility based on membership duration or last visit.
+                        </p>
+                        
+                        <div className="grid grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <Label className="text-sm">Minimum Days as Member</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={formData.conditions.daysSinceJoined}
+                              onChange={(e) => setFormData({
+                                ...formData,
+                                conditions: {
+                                  ...formData.conditions,
+                                  daysSinceJoined: e.target.value
+                                }
+                              })}
+                              placeholder="e.g., 30"
+                              className="text-sm h-9"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Customer must have been a member for at least this many days
+                            </p>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Label className="text-sm">Days Since Last Visit</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={formData.conditions.daysSinceLastVisit}
+                              onChange={(e) => setFormData({
+                                ...formData,
+                                conditions: {
+                                  ...formData.conditions,
+                                  daysSinceLastVisit: e.target.value
+                                }
+                              })}
+                              placeholder="e.g., 14"
+                              className="text-sm h-9"
+                            />
+                            <p className="text-xs text-gray-500">
+                              It must have been at least this many days since the customer's last purchase
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Membership Level */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm">Membership Level Requirement</Label>
+                      <Switch
+                        checked={formData.rewardVisibility === 'new' ? false : formData.conditions.useMembershipRequirements}
+                        onCheckedChange={(checked) => setFormData({
+                          ...formData,
+                          conditions: {
+                            ...formData.conditions,
+                            useMembershipRequirements: checked,
+                            membershipLevel: checked ? formData.conditions.membershipLevel : ""
+                          }
+                        })}
+                        disabled={true}
+                        className="data-[state=checked]:bg-blue-600"
+                      />
+                    </div>
+                    
+                    {formData.rewardVisibility === 'new' ? (
+                      <div className="border-l-2 border-blue-100 pl-4 py-2">
+                        <div className="flex items-center gap-2 border border-blue-100 bg-blue-50 p-3 rounded-md">
+                          <div className="h-6 w-6 rounded-full bg-amber-100 flex items-center justify-center text-xs font-medium text-amber-700">B</div>
+                          <div>
+                            <p className="text-sm font-medium text-blue-800">Bronze (Default)</p>
+                            <p className="text-xs text-blue-700">
+                              Membership levels are not applicable for New Customers as they automatically start at Bronze
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border-l-2 border-blue-100 pl-4 py-2 space-y-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="membershipLevel" className="text-sm">Minimum Membership Level</Label>
+                          <Select
+                            value={formData.conditions.membershipLevel || ""}
+                            onValueChange={(value) => {
+                              setFormData({
+                                ...formData,
+                                conditions: {
+                                  ...formData.conditions,
+                                  membershipLevel: value
+                                }
+                              });
+                            }}
+                          >
+                            <SelectTrigger id="membershipLevel" className="text-sm h-9">
+                              <SelectValue placeholder="Select a membership level" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Bronze">Bronze</SelectItem>
+                              <SelectItem value="Silver">Silver</SelectItem>
+                              <SelectItem value="Gold">Gold</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            Only customers at or above this membership level will see this reward
                           </p>
                         </div>
                       </div>
-                    </div>
-                  ) : formData.conditions.useMembershipRequirements && (
-                    <div className="p-4 space-y-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="membershipLevel" className="text-sm">Minimum Membership Level</Label>
-                        <Select
-                          value={formData.conditions.membershipLevel || ""}
-                          onValueChange={(value) => {
-                            setFormData({
-                              ...formData,
-                              conditions: {
-                                ...formData.conditions,
-                                membershipLevel: value
-                              }
-                            });
-                          }}
-                        >
-                          <SelectTrigger id="membershipLevel" className="text-sm h-9">
-                            <SelectValue placeholder="Select a membership level" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Bronze">Bronze</SelectItem>
-                            <SelectItem value="Silver">Silver</SelectItem>
-                            <SelectItem value="Gold">Gold</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          Only customers at or above this membership level will see this reward
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -2083,281 +2010,272 @@ export function CreateRewardSheet({
                 <h2 className="text-lg font-semibold text-gray-900">Limitations</h2>
               </div>
 
-              {/* Redemption Limits Card */}
-              <div className="bg-white border rounded-md shadow-sm mb-6 overflow-hidden">
-                <div className="border-b bg-gray-50 px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-blue-600" />
-                    <h3 className="font-medium text-sm">Redemption Limits</h3>
-                  </div>
-                </div>
-                
-                <div className="p-4 space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="totalRedemptionLimit" className="text-sm">Total Redemption Limit</Label>
-                    <Input
-                      id="totalRedemptionLimit"
-                      type="number"
-                      min="0"
-                      value={formData.limitations.totalRedemptionLimit}
-                      onChange={(e) => {
-                        const value = parseInt(e.target.value, 10);
-                        setFormData({
-                          ...formData,
-                          limitations: {
-                            ...formData.limitations,
-                            totalRedemptionLimit: e.target.value === '' ? '' : Math.max(0, value).toString()
-                          }
-                        })
-                      }}
-                      placeholder="Unlimited"
-                      className="text-sm h-9"
-                    />
-                    <p className="text-xs text-gray-500">
-                      Maximum number of times this reward can be redeemed across all customers (leave empty for unlimited)
-                    </p>
-                  </div>
+              <div className="space-y-4">
+                {/* Redemption Limits */}
+                <div className="space-y-3">
+                  <Label className="text-sm">Redemption Limits</Label>
                   
-                  <div className="space-y-2">
-                    <Label htmlFor="perCustomerLimit" className="text-sm">Per-Customer Limit</Label>
-                    <Input
-                      id="perCustomerLimit"
-                      type="number"
-                      min="0"
-                      value={formData.limitations.perCustomerLimit}
-                      onChange={(e) => {
-                        const value = parseInt(e.target.value, 10);
-                        setFormData({
-                          ...formData,
-                          limitations: {
-                            ...formData.limitations,
-                            perCustomerLimit: e.target.value === '' ? '' : Math.max(0, value).toString()
-                          }
-                        })
-                      }}
-                      placeholder="Unlimited"
-                      className="text-sm h-9"
-                    />
-                    <p className="text-xs text-gray-500">
-                      How many times each individual customer can redeem this reward (leave empty for unlimited)
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Time Restrictions Card */}
-              <div className="bg-white border rounded-md shadow-sm overflow-hidden">
-                <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-blue-600" />
-                    <h3 className="font-medium text-sm">Time Restrictions</h3>
-                  </div>
-                  <Switch 
-                    checked={formData.limitations.useTimeRestrictions}
-                    onCheckedChange={(checked) => setFormData({
-                      ...formData,
-                      limitations: {
-                        ...formData.limitations,
-                        useTimeRestrictions: checked
-                      }
-                    })}
-                    className="data-[state=checked]:bg-blue-600"
-                  />
-                </div>
-
-                {formData.limitations.useTimeRestrictions && (
-                  <div className="p-4 space-y-6">
-                    <p className="text-sm text-gray-600">
-                      Specify when this reward can be redeemed. This is useful for happy hours, lunch specials, etc.
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="timeRestrictionStart">Available From</Label>
-                        <Input
-                          id="timeRestrictionStart"
-                          type="time"
-                          value={formData.limitations.startTime}
-                          onChange={(e) => setFormData({
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="totalRedemptionLimit" className="text-sm">Total Redemption Limit</Label>
+                      <Input
+                        id="totalRedemptionLimit"
+                        type="number"
+                        min="0"
+                        value={formData.limitations.totalRedemptionLimit}
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value, 10);
+                          setFormData({
                             ...formData,
                             limitations: {
                               ...formData.limitations,
-                              startTime: e.target.value
+                              totalRedemptionLimit: e.target.value === '' ? '' : Math.max(0, value).toString()
                             }
-                          })}
-                        />
-                        <p className="text-xs text-gray-500">
-                          Starting time when this reward can be redeemed
-                        </p>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="timeRestrictionEnd">Available Until</Label>
-                        <Input
-                          id="timeRestrictionEnd"
-                          type="time"
-                          value={formData.limitations.endTime}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            limitations: {
-                              ...formData.limitations,
-                              endTime: e.target.value
-                            }
-                          })}
-                        />
-                        <p className="text-xs text-gray-500">
-                          Ending time when this reward can be redeemed
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <Label>Available Days</Label>
-                      <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-                        {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => (
-                          <div
-                            key={day}
-                            onClick={() => {
-                              const dayIndex = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].indexOf(day);
-                              const newAvailableDays = [...formData.limitations.dayRestrictions];
-                              if (newAvailableDays.includes(dayIndex.toString())) {
-                                newAvailableDays.splice(newAvailableDays.indexOf(dayIndex.toString()), 1);
-                              } else {
-                                newAvailableDays.push(dayIndex.toString());
-                              }
-                              setFormData({
-                                ...formData,
-                                limitations: {
-                                  ...formData.limitations,
-                                  dayRestrictions: newAvailableDays
-                                }
-                              });
-                            }}
-                            className={`cursor-pointer flex items-center justify-center text-xs p-2 rounded-md ${
-                              formData.limitations.dayRestrictions.includes(
-                                ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].indexOf(day).toString()
-                              )
-                                ? "bg-blue-100 text-blue-800 font-medium"
-                                : "bg-gray-100 text-gray-500"
-                            }`}
-                          >
-                            {day.substring(0, 3)}
-                          </div>
-                        ))}
-                      </div>
+                          })
+                        }}
+                        placeholder="Unlimited"
+                        className="text-sm h-9"
+                      />
                       <p className="text-xs text-gray-500">
-                        Select the days when this reward is available for redemption
+                        Maximum number of times this reward can be redeemed across all customers (leave empty for unlimited)
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="perCustomerLimit" className="text-sm">Per-Customer Limit</Label>
+                      <Input
+                        id="perCustomerLimit"
+                        type="number"
+                        min="0"
+                        value={formData.limitations.perCustomerLimit}
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value, 10);
+                          setFormData({
+                            ...formData,
+                            limitations: {
+                              ...formData.limitations,
+                              perCustomerLimit: e.target.value === '' ? '' : Math.max(0, value).toString()
+                            }
+                          })
+                        }}
+                        placeholder="Unlimited"
+                        className="text-sm h-9"
+                      />
+                      <p className="text-xs text-gray-500">
+                        How many times each individual customer can redeem this reward (leave empty for unlimited)
                       </p>
                     </div>
                   </div>
-                )}
-              </div>
-
-              {/* Date Restrictions Card */}
-              <div className="bg-white border rounded-md shadow-sm overflow-hidden mt-6">
-                <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-blue-600" />
-                    <h3 className="font-medium text-sm">Date Range Restrictions</h3>
-                  </div>
-                  <Switch 
-                    checked={formData.limitations.useDateRestrictions}
-                    onCheckedChange={(checked) => setFormData({
-                      ...formData,
-                      limitations: {
-                        ...formData.limitations,
-                        useDateRestrictions: checked
-                      }
-                    })}
-                    className="data-[state=checked]:bg-blue-600"
-                  />
                 </div>
 
-                {formData.limitations.useDateRestrictions && (
-                  <div className="p-4 space-y-6">
-                    <p className="text-sm text-gray-600">
-                      Set a specific date range when this reward is available. Useful for seasonal promotions.
-                    </p>
+                {/* Time Restrictions */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Time Restrictions</Label>
+                    <Switch 
+                      checked={formData.limitations.useTimeRestrictions}
+                      onCheckedChange={(checked) => setFormData({
+                        ...formData,
+                        limitations: {
+                          ...formData.limitations,
+                          useTimeRestrictions: checked
+                        }
+                      })}
+                      className="data-[state=checked]:bg-blue-600"
+                    />
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="dateRestrictionStart">Start Date</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              id="dateRestrictionStart"
-                              variant="outline"
-                              className={cn(
-                                "w-full justify-start text-left font-normal",
-                                !formData.limitations.dateRestrictionStart && "text-muted-foreground"
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {formData.limitations.dateRestrictionStart ? format(new Date(formData.limitations.dateRestrictionStart), "PPP") : <span>Pick a date</span>}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <CalendarComponent
-                              mode="single"
-                              selected={formData.limitations.dateRestrictionStart ? new Date(formData.limitations.dateRestrictionStart) : undefined}
-                              onSelect={(date: Date | undefined) => 
-                                setFormData({
-                                  ...formData,
-                                  limitations: {
-                                    ...formData.limitations,
-                                    dateRestrictionStart: date ? date.toISOString() : ''
-                                  }
-                                })
+                  {formData.limitations.useTimeRestrictions && (
+                    <div className="border-l-2 border-blue-100 pl-4 py-2 space-y-6">
+                      <p className="text-sm text-gray-600">
+                        Specify when this reward can be redeemed. This is useful for happy hours, lunch specials, etc.
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="timeRestrictionStart">Available From</Label>
+                          <Input
+                            id="timeRestrictionStart"
+                            type="time"
+                            value={formData.limitations.startTime}
+                            onChange={(e) => setFormData({
+                              ...formData,
+                              limitations: {
+                                ...formData.limitations,
+                                startTime: e.target.value
                               }
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <p className="text-xs text-gray-500">
-                          First day when this reward can be redeemed
-                        </p>
+                            })}
+                          />
+                          <p className="text-xs text-gray-500">
+                            Starting time when this reward can be redeemed
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="timeRestrictionEnd">Available Until</Label>
+                          <Input
+                            id="timeRestrictionEnd"
+                            type="time"
+                            value={formData.limitations.endTime}
+                            onChange={(e) => setFormData({
+                              ...formData,
+                              limitations: {
+                                ...formData.limitations,
+                                endTime: e.target.value
+                              }
+                            })}
+                          />
+                          <p className="text-xs text-gray-500">
+                            Ending time when this reward can be redeemed
+                          </p>
+                        </div>
                       </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="dateRestrictionEnd">End Date</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              id="dateRestrictionEnd"
-                              variant="outline"
-                              className={cn(
-                                "w-full justify-start text-left font-normal",
-                                !formData.limitations.dateRestrictionEnd && "text-muted-foreground"
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {formData.limitations.dateRestrictionEnd ? format(new Date(formData.limitations.dateRestrictionEnd), "PPP") : <span>Pick a date</span>}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <CalendarComponent
-                              mode="single"
-                              selected={formData.limitations.dateRestrictionEnd ? new Date(formData.limitations.dateRestrictionEnd) : undefined}
-                              onSelect={(date: Date | undefined) => 
+
+                      <div className="space-y-3">
+                        <Label>Available Days</Label>
+                        <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+                          {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => (
+                            <div
+                              key={day}
+                              onClick={() => {
+                                const dayIndex = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].indexOf(day);
+                                const newAvailableDays = [...formData.limitations.dayRestrictions];
+                                if (newAvailableDays.includes(dayIndex.toString())) {
+                                  newAvailableDays.splice(newAvailableDays.indexOf(dayIndex.toString()), 1);
+                                } else {
+                                  newAvailableDays.push(dayIndex.toString());
+                                }
                                 setFormData({
                                   ...formData,
                                   limitations: {
                                     ...formData.limitations,
-                                    dateRestrictionEnd: date ? date.toISOString() : ''
+                                    dayRestrictions: newAvailableDays
                                   }
-                                })
-                              }
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
+                                });
+                              }}
+                              className={`cursor-pointer flex items-center justify-center text-xs p-2 rounded-md ${
+                                formData.limitations.dayRestrictions.includes(
+                                  ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].indexOf(day).toString()
+                                )
+                                  ? "bg-blue-100 text-blue-800 font-medium"
+                                  : "bg-gray-100 text-gray-500"
+                              }`}
+                            >
+                              {day.substring(0, 3)}
+                            </div>
+                          ))}
+                        </div>
                         <p className="text-xs text-gray-500">
-                          Last day when this reward can be redeemed
+                          Select the days when this reward is available for redemption
                         </p>
                       </div>
                     </div>
+                  )}
+                </div>
+
+                {/* Date Restrictions */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Date Range Restrictions</Label>
+                    <Switch 
+                      checked={formData.limitations.useDateRestrictions}
+                      onCheckedChange={(checked) => setFormData({
+                        ...formData,
+                        limitations: {
+                          ...formData.limitations,
+                          useDateRestrictions: checked
+                        }
+                      })}
+                      className="data-[state=checked]:bg-blue-600"
+                    />
                   </div>
-                )}
+
+                  {formData.limitations.useDateRestrictions && (
+                    <div className="border-l-2 border-blue-100 pl-4 py-2 space-y-6">
+                      <p className="text-sm text-gray-600">
+                        Set a specific date range when this reward is available. Useful for seasonal promotions.
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="dateRestrictionStart">Start Date</Label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                id="dateRestrictionStart"
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal",
+                                  !formData.limitations.dateRestrictionStart && "text-muted-foreground"
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {formData.limitations.dateRestrictionStart ? format(new Date(formData.limitations.dateRestrictionStart), "PPP") : <span>Pick a date</span>}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <CalendarComponent
+                                mode="single"
+                                selected={formData.limitations.dateRestrictionStart ? new Date(formData.limitations.dateRestrictionStart) : undefined}
+                                onSelect={(date: Date | undefined) => 
+                                  setFormData({
+                                    ...formData,
+                                    limitations: {
+                                      ...formData.limitations,
+                                      dateRestrictionStart: date ? date.toISOString() : ''
+                                    }
+                                  })
+                                }
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <p className="text-xs text-gray-500">
+                            First day when this reward can be redeemed
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="dateRestrictionEnd">End Date</Label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                id="dateRestrictionEnd"
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal",
+                                  !formData.limitations.dateRestrictionEnd && "text-muted-foreground"
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {formData.limitations.dateRestrictionEnd ? format(new Date(formData.limitations.dateRestrictionEnd), "PPP") : <span>Pick a date</span>}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <CalendarComponent
+                                mode="single"
+                                selected={formData.limitations.dateRestrictionEnd ? new Date(formData.limitations.dateRestrictionEnd) : undefined}
+                                onSelect={(date: Date | undefined) => 
+                                  setFormData({
+                                    ...formData,
+                                    limitations: {
+                                      ...formData.limitations,
+                                      dateRestrictionEnd: date ? date.toISOString() : ''
+                                    }
+                                  })
+                                }
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <p className="text-xs text-gray-500">
+                            Last day when this reward can be redeemed
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -2368,400 +2286,390 @@ export function CreateRewardSheet({
                 <h2 className="text-lg font-semibold text-gray-900">Review</h2>
               </div>
 
-              {/* Basic Details Review */}
-              <div className="bg-white border rounded-md shadow-sm overflow-hidden">
-                <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-blue-600" />
-                    <h3 className="font-medium text-sm">Basic Details</h3>
+              <div className="space-y-4">
+                {/* Basic Details Review */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Basic Details</Label>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                      onClick={() => handleStepChange(1)}
+                    >
+                      <EditIcon className="h-3.5 w-3.5" />
+                      Edit
+                    </Button>
                   </div>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-8 gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                    onClick={() => handleStepChange(1)}
-                  >
-                    <EditIcon className="h-3.5 w-3.5" />
-                    Edit
-                  </Button>
-                </div>
-                
-                <div className="p-4 space-y-4">
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Reward Name</p>
-                      <p className="text-sm">{formData.rewardName || 'Not specified'}</p>
-                    </div>
-                    
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Type</p>
-                      <p className="text-sm">{capitalizeFirstLetter(formData.type) || 'Not specified'}</p>
-                    </div>
-                    
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Points Cost</p>
-                      <p className="text-sm">{formData.pointsCost || '0'} points</p>
-                    </div>
-                    
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Status</p>
-                      <div className="flex items-center gap-1">
-                        <div className={`h-2 w-2 rounded-full ${formData.isActive ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                        <p className="text-sm">{formData.isActive ? 'Active' : 'Inactive'}</p>
+                  
+                  <div className="border-l-2 border-blue-100 pl-4 py-2 space-y-4">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Reward Name</p>
+                        <p className="text-sm">{formData.rewardName || 'Not specified'}</p>
                       </div>
-                    </div>
-                    
-                    <div className="col-span-2">
-                      <p className="text-sm font-medium text-gray-500">Description</p>
-                      <p className="text-sm">{formData.description || 'No description provided'}</p>
-                    </div>
-                    
-                    <div className="col-span-2">
-                      <p className="text-sm font-medium text-gray-500">Visibility</p>
-                      <p className="text-sm">{getVisibilityText(formData.rewardVisibility)}</p>
-                      {formData.rewardVisibility === 'specific' && formData.specificCustomerNames && formData.specificCustomerNames.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {formData.specificCustomerNames.map((name, index) => (
-                            <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
-                              {name}
-                            </span>
-                          ))}
+                      
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Type</p>
+                        <p className="text-sm">{capitalizeFirstLetter(formData.type) || 'Not specified'}</p>
+                      </div>
+                      
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Points Cost</p>
+                        <p className="text-sm">{formData.pointsCost || '0'} points</p>
+                      </div>
+                      
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Status</p>
+                        <div className="flex items-center gap-1">
+                          <div className={`h-2 w-2 rounded-full ${formData.isActive ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                          <p className="text-sm">{formData.isActive ? 'Active' : 'Inactive'}</p>
                         </div>
-                      )}
+                      </div>
+                      
+                      <div className="col-span-2">
+                        <p className="text-sm font-medium text-gray-500">Description</p>
+                        <p className="text-sm">{formData.description || 'No description provided'}</p>
+                      </div>
+                      
+                      <div className="col-span-2">
+                        <p className="text-sm font-medium text-gray-500">Visibility</p>
+                        <p className="text-sm">{getVisibilityText(formData.rewardVisibility)}</p>
+                        {formData.rewardVisibility === 'specific' && formData.specificCustomerNames && formData.specificCustomerNames.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {formData.specificCustomerNames.map((name, index) => (
+                              <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                                {name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-              
-              {/* Reward Details Review */}
-              <div className="bg-white border rounded-md shadow-sm overflow-hidden">
-                <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Gift className="h-5 w-5 text-blue-600" />
-                    <h3 className="font-medium">Reward Details</h3>
-                  </div>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-8 gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                    onClick={() => handleStepChange(2)}
-                  >
-                    <EditIcon className="h-3.5 w-3.5" />
-                    Edit
-                  </Button>
                 </div>
                 
-                <div className="p-4 space-y-4">
-                  {formData.type === 'percentage' && (
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Discount Value</p>
-                        <p className="text-sm">{formData.discountValue || '0'}%</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Applies To</p>
-                        <p className="text-sm">{formData.discountAppliesTo === 'entire' ? 'Entire Purchase' : 'Specific Items'}</p>
-                      </div>
-                    </div>
-                  )}
+                {/* Reward Details Review */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Reward Details</Label>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                      onClick={() => handleStepChange(2)}
+                    >
+                      <EditIcon className="h-3.5 w-3.5" />
+                      Edit
+                    </Button>
+                  </div>
                   
-                  {formData.type === 'fixed' && (
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Discount Amount</p>
-                        <p className="text-sm">${formData.discountValue || '0'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Minimum Purchase</p>
-                        <p className="text-sm">${formData.minimumPurchase || '0'}</p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {formData.type === 'item' && (
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Item Name</p>
-                        <p className="text-sm">{formData.itemName || 'Not specified'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Item Description</p>
-                        <p className="text-sm">{formData.itemDescription || 'No description provided'}</p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {formData.type === 'bundle' && (
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Required Purchase</p>
-                        <p className="text-sm">{formData.requiredPurchase || 'Not specified'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Bonus Item</p>
-                        <p className="text-sm">{formData.bonusItem || 'Not specified'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Discount Type</p>
-                        <p className="text-sm">{capitalizeFirstLetter(formData.bundleDiscountType) || 'Free'}</p>
-                      </div>
-                      {formData.bundleDiscountType !== 'free' && (
+                  <div className="border-l-2 border-blue-100 pl-4 py-2 space-y-4">
+                    {formData.type === 'percentage' && (
+                      <div className="space-y-3">
                         <div>
                           <p className="text-sm font-medium text-gray-500">Discount Value</p>
-                          <p className="text-sm">
-                            {formData.bundleDiscountType === 'percentage' ? `${formData.bundleDiscountValue || '0'}%` : `$${formData.bundleDiscountValue || '0'}`}
-                          </p>
+                          <p className="text-sm">{formData.discountValue || '0'}%</p>
                         </div>
-                      )}
-                    </div>
-                  )}
-                  
-                  {formData.type === 'mystery' && (
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Mystery Options</p>
-                        <p className="text-sm">{formData.mysteryOptions || 'Not specified'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Reveal Timing</p>
-                        <p className="text-sm">{formData.revealAtCheckout ? 'At checkout' : 'Immediately'}</p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {formData.type === 'custom' && (
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Custom Reward Details</p>
-                        <p className="text-sm">{formData.customRewardDetails || 'Not specified'}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* Conditions Review */}
-              <div className="bg-white border rounded-md shadow-sm overflow-hidden">
-                <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ListChecks className="h-5 w-5 text-blue-600" />
-                    <h3 className="font-medium">Conditions</h3>
-                  </div>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-8 gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                    onClick={() => handleStepChange(3)}
-                  >
-                    <EditIcon className="h-3.5 w-3.5" />
-                    Edit
-                  </Button>
-                </div>
-                
-                <div className="p-4 space-y-4">
-                  {formData.conditions.newCustomer ? (
-                    <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
-                      <div className="flex gap-2">
-                        <UserPlus className="h-5 w-5 text-amber-500 flex-shrink-0" />
-                        <p className="text-sm text-amber-800">
-                          This reward is for new customers only. Other conditions are disabled.
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {/* Transaction Requirements */}
-                      {formData.conditions.useTransactionRequirements && (
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-gray-700">Transaction Requirements</p>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-sm font-medium text-gray-500">Minimum Transactions</p>
-                              <p className="text-sm">{formData.conditions.minimumTransactions || '0'}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-500">Maximum Transactions</p>
-                              <p className="text-sm">{formData.conditions.maximumTransactions || 'No limit'}</p>
-                            </div>
-                          </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-500">Applies To</p>
+                          <p className="text-sm">{formData.discountAppliesTo === 'entire' ? 'Entire Purchase' : 'Specific Items'}</p>
                         </div>
-                      )}
-                      
-                      {/* Spending Requirements */}
-                      {formData.conditions.useSpendingRequirements && (
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-gray-700">Spending Requirements</p>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-sm font-medium text-gray-500">Minimum Lifetime Spend</p>
-                              <p className="text-sm">${formData.conditions.minimumLifetimeSpend || '0'}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-500">Minimum Points Balance</p>
-                              <p className="text-sm">{formData.conditions.minimumPointsBalance || '0'} points</p>
-                            </div>
-                          </div>
+                      </div>
+                    )}
+                    
+                    {formData.type === 'fixed' && (
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-sm font-medium text-gray-500">Discount Amount</p>
+                          <p className="text-sm">${formData.discountValue || '0'}</p>
                         </div>
-                      )}
-                      
-                      {/* Time Requirements */}
-                      {formData.conditions.useTimeRequirements && (
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-gray-700">Time Requirements</p>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-sm font-medium text-gray-500">Minimum Days as Member</p>
-                              <p className="text-sm">{formData.conditions.daysSinceJoined || '0'} days</p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-500">Days Since Last Visit</p>
-                              <p className="text-sm">{formData.conditions.daysSinceLastVisit || '0'} days</p>
-                            </div>
-                          </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-500">Minimum Purchase</p>
+                          <p className="text-sm">${formData.minimumPurchase || '0'}</p>
                         </div>
-                      )}
-                      
-                      {/* Membership Level Requirements */}
-                      {formData.conditions.useMembershipRequirements && (
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-gray-700">Membership Level Requirements</p>
+                      </div>
+                    )}
+                    
+                    {formData.type === 'item' && (
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-sm font-medium text-gray-500">Item Name</p>
+                          <p className="text-sm">{formData.itemName || 'Not specified'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-500">Item Description</p>
+                          <p className="text-sm">{formData.itemDescription || 'No description provided'}</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {formData.type === 'bundle' && (
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-sm font-medium text-gray-500">Required Purchase</p>
+                          <p className="text-sm">{formData.requiredPurchase || 'Not specified'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-500">Bonus Item</p>
+                          <p className="text-sm">{formData.bonusItem || 'Not specified'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-500">Discount Type</p>
+                          <p className="text-sm">{capitalizeFirstLetter(formData.bundleDiscountType) || 'Free'}</p>
+                        </div>
+                        {formData.bundleDiscountType !== 'free' && (
                           <div>
-                            <p className="text-sm font-medium text-gray-500">Minimum Membership Level</p>
-                            <p className="text-sm">{capitalizeFirstLetter(formData.conditions.membershipLevel) || 'Bronze'}</p>
+                            <p className="text-sm font-medium text-gray-500">Discount Value</p>
+                            <p className="text-sm">
+                              {formData.bundleDiscountType === 'percentage' ? `${formData.bundleDiscountValue || '0'}%` : `$${formData.bundleDiscountValue || '0'}`}
+                            </p>
                           </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {formData.type === 'mystery' && (
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-sm font-medium text-gray-500">Mystery Options</p>
+                          <p className="text-sm">{formData.mysteryOptions || 'Not specified'}</p>
                         </div>
-                      )}
-                      
-                      {/* No conditions applied message */}
-                      {!formData.conditions.useTransactionRequirements && 
-                       !formData.conditions.useSpendingRequirements && 
-                       !formData.conditions.useTimeRequirements && 
-                       !formData.conditions.useMembershipRequirements && (
-                        <p className="text-sm text-gray-500 italic">No specific conditions applied. This reward is available to all customers.</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* Limitations Review */}
-              <div className="bg-white border rounded-md shadow-sm overflow-hidden">
-                <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Lock className="h-5 w-5 text-blue-600" />
-                    <h3 className="font-medium">Limitations</h3>
+                        <div>
+                          <p className="text-sm font-medium text-gray-500">Reveal Timing</p>
+                          <p className="text-sm">{formData.revealAtCheckout ? 'At checkout' : 'Immediately'}</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {formData.type === 'custom' && (
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-sm font-medium text-gray-500">Custom Reward Details</p>
+                          <p className="text-sm">{formData.customRewardDetails || 'Not specified'}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-8 gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                    onClick={() => handleStepChange(4)}
-                  >
-                    <EditIcon className="h-3.5 w-3.5" />
-                    Edit
-                  </Button>
                 </div>
                 
-                <div className="p-4 space-y-4">
-                  {/* Redemption Limits */}
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-gray-700">Redemption Limits</p>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Total Redemption Limit</p>
-                        <p className="text-sm">{formData.limitations.totalRedemptionLimit || 'Unlimited'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Per-Customer Limit</p>
-                        <p className="text-sm">{formData.limitations.perCustomerLimit || 'Unlimited'}</p>
-                      </div>
-                    </div>
+                {/* Conditions Review */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Conditions</Label>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                      onClick={() => handleStepChange(3)}
+                    >
+                      <EditIcon className="h-3.5 w-3.5" />
+                      Edit
+                    </Button>
                   </div>
                   
-                  {/* Time Restrictions */}
-                  {formData.limitations.useTimeRestrictions && (
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium text-gray-700">Time Restrictions</p>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Available From</p>
-                          <p className="text-sm">{formData.limitations.startTime || 'Not specified'}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Available Until</p>
-                          <p className="text-sm">{formData.limitations.endTime || 'Not specified'}</p>
-                        </div>
-                      </div>
-                      
-                      <div className="mt-2">
-                        <p className="text-sm font-medium text-gray-500">Available Days</p>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {formData.limitations.dayRestrictions.length > 0 ? (
-                            ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day, index) => {
-                              const isSelected = formData.limitations.dayRestrictions.includes(index.toString());
-                              return (
-                                <span 
-                                  key={day} 
-                                  className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
-                                    isSelected ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-400 line-through'
-                                  }`}
-                                >
-                                  {day.substring(0, 3)}
-                                </span>
-                              )
-                            })
-                          ) : (
-                            <p className="text-sm text-gray-500">All days</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Date Range Restrictions */}
-                  {formData.limitations.useDateRestrictions && (
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium text-gray-700">Date Range Restrictions</p>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Start Date</p>
-                          <p className="text-sm">
-                            {formData.limitations.dateRestrictionStart ? 
-                              format(new Date(formData.limitations.dateRestrictionStart), "MMM d, yyyy") : 
-                              'Not specified'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">End Date</p>
-                          <p className="text-sm">
-                            {formData.limitations.dateRestrictionEnd ? 
-                              format(new Date(formData.limitations.dateRestrictionEnd), "MMM d, yyyy") : 
-                              'Not specified'}
+                  <div className="border-l-2 border-blue-100 pl-4 py-2 space-y-4">
+                    {formData.conditions.newCustomer ? (
+                      <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
+                        <div className="flex gap-2">
+                          <UserPlus className="h-5 w-5 text-amber-500 flex-shrink-0" />
+                          <p className="text-sm text-amber-800">
+                            This reward is for new customers only. Other conditions are disabled.
                           </p>
                         </div>
                       </div>
-                    </div>
-                  )}
-                  
-                  {/* No limitations message */}
-                  {!formData.limitations.useTimeRestrictions && 
-                   !formData.limitations.useDateRestrictions && 
-                   !formData.limitations.totalRedemptionLimit && 
-                   !formData.limitations.perCustomerLimit && (
-                    <p className="text-sm text-gray-500 italic">No specific limitations applied. This reward has no redemption limits or time restrictions.</p>
-                  )}
+                    ) : (
+                      <div className="space-y-4">
+                        {/* Transaction Requirements */}
+                        {formData.conditions.useTransactionRequirements && (
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-gray-700">Transaction Requirements</p>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm font-medium text-gray-500">Minimum Transactions</p>
+                                <p className="text-sm">{formData.conditions.minimumTransactions || '0'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-500">Maximum Transactions</p>
+                                <p className="text-sm">{formData.conditions.maximumTransactions || 'No limit'}</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Spending Requirements */}
+                        {formData.conditions.useSpendingRequirements && (
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-gray-700">Spending Requirements</p>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm font-medium text-gray-500">Minimum Lifetime Spend</p>
+                                <p className="text-sm">${formData.conditions.minimumLifetimeSpend || '0'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-500">Minimum Points Balance</p>
+                                <p className="text-sm">{formData.conditions.minimumPointsBalance || '0'} points</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Time Requirements */}
+                        {formData.conditions.useTimeRequirements && (
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-gray-700">Time Requirements</p>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm font-medium text-gray-500">Minimum Days as Member</p>
+                                <p className="text-sm">{formData.conditions.daysSinceJoined || '0'} days</p>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-500">Days Since Last Visit</p>
+                                <p className="text-sm">{formData.conditions.daysSinceLastVisit || '0'} days</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Membership Level Requirements */}
+                        {formData.rewardVisibility !== 'new' && (
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-gray-700">Membership Level Requirements</p>
+                            <div>
+                              <p className="text-sm font-medium text-gray-500">Minimum Membership Level</p>
+                              <p className="text-sm">{capitalizeFirstLetter(formData.conditions.membershipLevel) || 'Bronze'}</p>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* No conditions applied message */}
+                        {!formData.conditions.useTransactionRequirements && 
+                         !formData.conditions.useSpendingRequirements && 
+                         !formData.conditions.useTimeRequirements && 
+                         formData.rewardVisibility === 'new' && (
+                          <p className="text-sm text-gray-500 italic">Only new customer requirement applied. This reward is available to new customers only.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-              
-              {/* Summary card */}
-              <div className="bg-blue-50 border border-blue-100 rounded-md p-4">
-                <div className="flex gap-3">
-                  <CheckCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h3 className="text-sm font-medium text-blue-800 mb-1">Reward Summary</h3>
-                    <p className="text-sm text-blue-700">
-                      {formData.rewardSummary || generateRewardSummary()}
-                    </p>
+                
+                {/* Limitations Review */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Limitations</Label>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                      onClick={() => handleStepChange(4)}
+                    >
+                      <EditIcon className="h-3.5 w-3.5" />
+                      Edit
+                    </Button>
+                  </div>
+                  
+                  <div className="border-l-2 border-blue-100 pl-4 py-2 space-y-4">
+                    {/* Redemption Limits */}
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-gray-700">Redemption Limits</p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-gray-500">Total Redemption Limit</p>
+                          <p className="text-sm">{formData.limitations.totalRedemptionLimit || 'Unlimited'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-500">Per-Customer Limit</p>
+                          <p className="text-sm">{formData.limitations.perCustomerLimit || 'Unlimited'}</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Time Restrictions */}
+                    {formData.limitations.useTimeRestrictions && (
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-700">Time Restrictions</p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm font-medium text-gray-500">Available From</p>
+                            <p className="text-sm">{formData.limitations.startTime || 'Not specified'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-500">Available Until</p>
+                            <p className="text-sm">{formData.limitations.endTime || 'Not specified'}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-2">
+                          <p className="text-sm font-medium text-gray-500">Available Days</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {formData.limitations.dayRestrictions.length > 0 ? (
+                              ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day, index) => {
+                                const isSelected = formData.limitations.dayRestrictions.includes(index.toString());
+                                return (
+                                  <span 
+                                    key={day} 
+                                    className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
+                                      isSelected ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-400 line-through'
+                                    }`}
+                                  >
+                                    {day.substring(0, 3)}
+                                  </span>
+                                )
+                              })
+                            ) : (
+                              <p className="text-sm text-gray-500">All days</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Date Range Restrictions */}
+                    {formData.limitations.useDateRestrictions && (
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-700">Date Range Restrictions</p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm font-medium text-gray-500">Start Date</p>
+                            <p className="text-sm">
+                              {formData.limitations.dateRestrictionStart ? 
+                                format(new Date(formData.limitations.dateRestrictionStart), "MMM d, yyyy") : 
+                                'Not specified'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-500">End Date</p>
+                            <p className="text-sm">
+                              {formData.limitations.dateRestrictionEnd ? 
+                                format(new Date(formData.limitations.dateRestrictionEnd), "MMM d, yyyy") : 
+                                'Not specified'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* No limitations message */}
+                    {!formData.limitations.useTimeRestrictions && 
+                     !formData.limitations.useDateRestrictions && 
+                     !formData.limitations.totalRedemptionLimit && 
+                     !formData.limitations.perCustomerLimit && (
+                      <p className="text-sm text-gray-500 italic">No specific limitations applied. This reward has no redemption limits or time restrictions.</p>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Summary card */}
+                <div className="bg-blue-50 border border-blue-100 rounded-md p-4">
+                  <div className="flex gap-3">
+                    <CheckCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h3 className="text-sm font-medium text-blue-800 mb-1">Reward Summary</h3>
+                      <p className="text-sm text-blue-700">
+                        {formData.rewardSummary || generateRewardSummary()}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>

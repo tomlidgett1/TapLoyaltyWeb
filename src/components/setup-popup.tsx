@@ -1,18 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { X, ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, Check, Coffee, DollarSign, Info, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { v4 as uuidv4 } from "uuid";
 import { useAuth } from "@/contexts/auth-context";
 import { db } from "@/lib/firebase";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp, collection, addDoc, query, where, getDocs } from "firebase/firestore";
 import Image from "next/image";
 
 interface SetupPopupProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+interface RewardFormData {
+  rewardName: string;
+  description: string;
+  itemName: string;
+  pin: string;
+  type: "voucher" | "freeItem";
 }
 
 export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
@@ -27,6 +35,19 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
   const [logoPreview, setLogoPreview] = useState<string | null>(null); // For logo preview URL
   const [isUploading, setIsUploading] = useState(false); // For upload loading state
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null); // For uploaded file URL
+  
+  // Rewards setup state
+  const [createdRewards, setCreatedRewards] = useState<RewardFormData[]>([]);
+  const [currentRewardForm, setCurrentRewardForm] = useState<RewardFormData>({
+    rewardName: "",
+    description: "",
+    itemName: "",
+    pin: "",
+    type: "voucher"
+  });
+  const [showRewardForm, setShowRewardForm] = useState(false);
+  const [isCreatingReward, setIsCreatingReward] = useState(false);
+  const [isSavingRewards, setIsSavingRewards] = useState(false);
 
   const steps = [
     { id: "what-is-tap", label: "What is Tap Loyalty?", description: "Understanding the platform" },
@@ -34,7 +55,6 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
     { id: "for-customers-merchants", label: "For Customers & Merchants", description: "Detailed benefits for each" },
     { id: "upload-logo", label: "Upload Company Logo", description: "Add your business branding" },
     { id: "account-type", label: "Account Type", description: "Choose your setup" },
-    { id: "business-info", label: "Business Information", description: "Tell us about your business" },
     { id: "rewards-setup", label: "Rewards Setup", description: "Configure your first rewards" },
     { id: "complete", label: "Complete", description: "You're ready to go!" },
   ];
@@ -42,8 +62,96 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
   const canGoNext = currentStep < steps.length - 1;
   const canGoBack = currentStep > 0;
 
-  const handleNext = () => {
+  // Function to save created rewards to Firebase
+  const saveRewardsToFirebase = async () => {
+    if (!user?.uid || createdRewards.length === 0) return;
+
+    setIsSavingRewards(true);
+    try {
+      const promises = createdRewards.map(async (reward) => {
+        const timestamp = new Date().toISOString();
+        
+        const rewardData = {
+          rewardName: reward.rewardName,
+          description: reward.description,
+          type: reward.type,
+          isIntroductoryReward: true,
+          fundedByTapLoyalty: true,
+          maxValue: 5.00,
+          itemName: reward.type === "freeItem" ? reward.itemName : "",
+          voucherAmount: reward.type === "voucher" ? 5.00 : 0,
+          itemValue: reward.type === "freeItem" ? 5.00 : 0,
+          pin: reward.pin,
+          isActive: true,
+          status: "active",
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          merchantId: user.uid,
+          rewardVisibility: "global",
+          pointsCost: 0,
+          redemptionCount: 0,
+          uniqueCustomersCount: 0,
+          limitations: [
+            {
+              type: "customerLimit",
+              value: 1
+            }
+          ]
+        };
+
+        // Create in merchant's rewards subcollection
+        const merchantRewardsRef = collection(db, 'merchants', user.uid, 'rewards');
+        const newRewardRef = await addDoc(merchantRewardsRef, rewardData);
+        
+        // Add the ID to the reward data
+        const rewardWithId = { ...rewardData, id: newRewardRef.id };
+        
+        // Update the merchant's reward with the ID
+        await setDoc(
+          doc(db, 'merchants', user.uid, 'rewards', newRewardRef.id),
+          rewardWithId
+        );
+
+        // Also save to top-level rewards collection
+        await setDoc(
+          doc(db, 'rewards', newRewardRef.id),
+          rewardWithId
+        );
+
+        return newRewardRef.id;
+      });
+
+      const rewardIds = await Promise.all(promises);
+
+      // Update merchant document with introductory rewards info
+      const merchantRef = doc(db, 'merchants', user.uid);
+      await setDoc(
+        merchantRef,
+        { 
+          hasIntroductoryReward: true,
+          introductoryRewardIds: rewardIds,
+          introductoryRewardCount: rewardIds.length,
+          setupCompleted: true,
+          setupCompletedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      console.log(`Successfully created ${rewardIds.length} introductory rewards`);
+    } catch (error) {
+      console.error("Error saving rewards to Firebase:", error);
+      alert("There was an error saving your rewards. Please try again.");
+    } finally {
+      setIsSavingRewards(false);
+    }
+  };
+
+  const handleNext = async () => {
     if (canGoNext) {
+      // If we're on the rewards setup step and moving to completion, save the rewards
+      if (currentStep === 6 && currentStep + 1 === 7) {
+        await saveRewardsToFirebase();
+      }
       setCurrentStep(currentStep + 1);
     }
   };
@@ -96,8 +204,6 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
     const fileInput = document.getElementById('logo-upload') as HTMLInputElement;
     fileInput?.click();
   };
-
-
 
   const uploadToFirebaseStorage = async () => {
     if (!uploadedLogo || !user?.uid) {
@@ -177,7 +283,7 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
             />
           </div>
           <div className="flex-1 text-center">
-            <h2 className="text-xl font-semibold text-gray-900">Get Started</h2>
+            <h2 className="text-xl font-semibold bg-gradient-to-r from-blue-700 via-blue-600 to-blue-500 bg-clip-text text-transparent animate-pulse" style={{ animationDuration: '3s' }}>Get Started</h2>
           </div>
           <button
             onClick={() => onOpenChange(false)}
@@ -188,17 +294,17 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
         </div>
 
         {/* Content Area */}
-        <div className={currentStep === -1 ? "flex-1 flex items-center justify-center" : "flex-1 overflow-y-auto"}>
+        <div className="flex-1 overflow-y-auto">
           {/* Main Content */}
-          <div className={currentStep === -1 ? "px-6" : "px-6 py-8"}>
+          <div className="px-6 py-8">
             {currentStep === -1 && (
-              <div className="text-center space-y-6 max-w-2xl mx-auto">
+              <div className="text-center space-y-6 max-w-2xl mx-auto animate-in fade-in duration-500">
                 <div className="space-y-3">
                   <h3 className="text-xl font-semibold text-gray-900">
                     Welcome to Tap Loyalty
                   </h3>
                   <p className="text-base text-gray-600">
-                    This will take no more than 5 minutes to get you set up with a powerful loyalty program for your business.
+                    Setup only takes a few minutes.
                   </p>
                 </div>
                 
@@ -240,7 +346,7 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
             )}
 
             {currentStep === 0 && (
-              <div className="space-y-8">
+              <div className="space-y-8 animate-in fade-in duration-500">
                 <div className="text-center">
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">
                     What is Tap Loyalty?
@@ -252,7 +358,7 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
                 
                 <div className="grid md:grid-cols-2 gap-8">
                   {/* For Customers */}
-                  <div className="bg-blue-50 rounded-md p-6">
+                  <div className="bg-gray-50 rounded-md p-6 border border-transparent transition-all duration-300 hover:border-gray-300 cursor-pointer">
                     <h4 className="text-base font-semibold text-gray-900 mb-4">For Customers</h4>
                     <ul className="space-y-3 text-sm text-gray-700">
                       <li className="flex items-start gap-3">
@@ -275,7 +381,7 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
                   </div>
 
                   {/* For Merchants */}
-                  <div className="bg-gray-50 rounded-md p-6">
+                  <div className="bg-gray-50 rounded-md p-6 border border-transparent transition-all duration-300 hover:border-gray-300 cursor-pointer">
                     <h4 className="text-base font-semibold text-gray-900 mb-4">For Merchants</h4>
                     <ul className="space-y-3 text-sm text-gray-700">
                       <li className="flex items-start gap-3">
@@ -299,159 +405,177 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
                 </div>
               </div>
             )}
+
             {currentStep === 1 && (
-              <div className="max-w-5xl mx-auto space-y-8">
-                {/* Header */}
-                <div className="text-center space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    How Tap Works
+              <div className="space-y-8 animate-in fade-in duration-500">
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-4">
+                    Customer App
                   </h3>
-                  <div className="space-y-3">
-                    <p className="text-base text-gray-600">
-                    Our proprietary AutoTap™ technology makes loyalty effortless for everyone.
-                    </p>
-                    <p className="text-base">
-                      <span className="bg-gradient-to-r from-[#007AFF] to-[#0066CC] text-transparent bg-clip-text font-semibold text-lg">
-                        No Cards. No Email Addresses. No Sign Ups.
-                      </span>
-                    </p>
+                  <p className="text-base text-gray-600 mb-2">
+                    Customers download the Tap Loyalty app to automatically earn rewards.
+                  </p>
+                  <p className="text-sm text-gray-500 mb-6">
+                    Available on iPhone (Android coming soon)
+                  </p>
+                  
+                  <div className="flex justify-center mb-8">
+                    <img 
+                      src="/appstore.svg" 
+                      alt="Available on App Store" 
+                      className="h-12 w-auto"
+                    />
                   </div>
                 </div>
-
-                                 {/* Process Steps - Two Columns */}
-                 <div className="bg-white border border-gray-200 rounded-md p-6">
-                   <div className="max-w-4xl mx-auto">
-                     <div className="grid md:grid-cols-2 gap-8">
-                       {/* Left Column - Setup Process */}
-                       <div>
-                         <h4 className="font-semibold text-gray-900 text-base mb-4 text-center">Setup Process</h4>
-                         <div className="space-y-4">
-                           {/* Step 1 */}
-                           <div className="flex items-center gap-4">
-                             <div className="w-8 h-8 bg-[#007AFF] rounded-full flex items-center justify-center flex-shrink-0">
-                               <span className="text-white font-medium text-sm">1</span>
-                             </div>
-                             <div>
-                               <h5 className="font-medium text-gray-900 text-sm mb-1">Download App</h5>
-                               <p className="text-gray-600 text-sm">Customer downloads the Tap Loyalty iPhone app</p>
-                             </div>
-                           </div>
-
-                           {/* Step 2 */}
-                           <div className="flex items-center gap-4">
-                             <div className="w-8 h-8 bg-[#007AFF] rounded-full flex items-center justify-center flex-shrink-0">
-                               <span className="text-white font-medium text-sm">2</span>
-                             </div>
-                             <div>
-                               <h5 className="font-medium text-gray-900 text-sm mb-1">Connect Bank</h5>
-                               <p className="text-gray-600 text-sm">AutoTap™ securely connects using CDR - government accredited, bank-level security</p>
-                             </div>
-                           </div>
-                         </div>
-                       </div>
-
-                       {/* Right Column - How It Works */}
-                       <div>
-                         <h4 className="font-semibold text-gray-900 text-base mb-4 text-center">How It Works</h4>
-                         <div className="space-y-4">
-                           {/* Step 3 */}
-                           <div className="flex items-center gap-4">
-                             <div className="w-8 h-8 bg-[#007AFF] rounded-full flex items-center justify-center flex-shrink-0">
-                               <span className="text-white font-medium text-sm">3</span>
-                             </div>
-                             <div>
-                               <h5 className="font-medium text-gray-900 text-sm mb-1">Shop Normally</h5>
-                               <p className="text-gray-600 text-sm">Customer pays normally at your store (not using any app)</p>
-                             </div>
-                           </div>
-
-                           {/* Step 4 */}
-                           <div className="flex items-center gap-4">
-                             <div className="w-8 h-8 bg-[#007AFF] rounded-full flex items-center justify-center flex-shrink-0">
-                               <span className="text-white font-medium text-sm">4</span>
-                             </div>
-                             <div>
-                               <h5 className="font-medium text-gray-900 text-sm mb-1">AutoTap Matches</h5>
-                               <p className="text-gray-600 text-sm">Our matching algorithms determine if they shopped at your store</p>
-                             </div>
-                           </div>
-
-                           {/* Step 5 */}
-                           <div className="flex items-center gap-4">
-                             <div className="w-8 h-8 bg-[#007AFF] rounded-full flex items-center justify-center flex-shrink-0">
-                               <span className="text-white font-medium text-sm">5</span>
-                             </div>
-                             <div>
-                               <h5 className="font-medium text-gray-900 text-sm mb-1">Earn Points</h5>
-                               <p className="text-gray-600 text-sm">Customer automatically earns loyalty points</p>
-                             </div>
-                           </div>
-
-                           {/* Step 6 */}
-                           <div className="flex items-center gap-4">
-                             <div className="w-8 h-8 bg-[#007AFF] rounded-full flex items-center justify-center flex-shrink-0">
-                               <span className="text-white font-medium text-sm">6</span>
-                             </div>
-                             <div>
-                               <h5 className="font-medium text-gray-900 text-sm mb-1">Redeem Rewards</h5>
-                               <p className="text-gray-600 text-sm">Customer redeems rewards across the entire network</p>
-                             </div>
-                           </div>
-                         </div>
-                       </div>
-                     </div>
-                   </div>
-                 </div>
-
-                                 {/* What is AutoTap button */}
-                 <div className="text-center">
-                   <button
-                     onClick={() => setShowAutoTapInfo(true)}
-                     className="inline-flex items-center gap-1 px-4 py-2 text-[#007AFF] text-sm font-medium border border-[#007AFF] rounded-md hover:bg-[#007AFF] hover:text-white transition-colors"
-                   >
-                     What is AutoTap?
-                   </button>
-                 </div>
-
-                {/* AutoTap Technology Popup */}
-                {showAutoTapInfo && (
-                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowAutoTapInfo(false)}>
-                    <div className="bg-white rounded-md p-6 max-w-2xl mx-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-between mb-6">
-                        <h4 className="text-lg font-semibold text-gray-900">AutoTap™ Technology</h4>
-                        <button
-                          onClick={() => setShowAutoTapInfo(false)}
-                          className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-md hover:bg-gray-100"
-                        >
-                          <X size={20} />
-                        </button>
-                      </div>
-                      <p className="text-gray-600 text-center mb-8 leading-relaxed">
-                        Our technology uses Australia's Open Banking framework to securely detect your purchases and automatically assign rewards in real-time.
-                      </p>
-                      
-                      <div className="grid md:grid-cols-3 gap-4">
-                        <div className="text-center p-4 bg-blue-50 rounded-md">
-                          <h5 className="font-semibold text-gray-900 mb-2">CDR Approved</h5>
-                          <p className="text-sm text-gray-600">Government accredited and bank-level security compliance</p>
-                        </div>
-                        <div className="text-center p-4 bg-green-50 rounded-md">
-                          <h5 className="font-semibold text-gray-900 mb-2">Privacy-first</h5>
-                          <p className="text-sm text-gray-600">We never sell your data or access more than you consent to</p>
-                        </div>
-                        <div className="text-center p-4 bg-purple-50 rounded-md">
-                          <h5 className="font-semibold text-gray-900 mb-2">Matching Algorithms</h5>
-                          <p className="text-sm text-gray-600">Advanced algorithms detect purchases at participating merchants</p>
-                        </div>
-                      </div>
-                    </div>
+                
+                <div className="flex justify-center gap-8 px-16">
+                  <div className="flex-shrink-0">
+                    <img 
+                      src="/vp1.png" 
+                      alt="Tap Loyalty App Screenshot 1" 
+                      className="w-80 h-auto rounded-md"
+                    />
                   </div>
-                )}
+                  <div className="flex-shrink-0">
+                    <img 
+                      src="/vp2.png" 
+                      alt="Tap Loyalty App Screenshot 2" 
+                      className="w-80 h-auto rounded-md"
+                    />
+                  </div>
+                  <div className="flex-shrink-0">
+                    <img 
+                      src="/vp3.png" 
+                      alt="Tap Loyalty App Screenshot 3" 
+                      className="w-80 h-auto rounded-md"
+                    />
+                  </div>
+                </div>
               </div>
             )}
 
             {currentStep === 2 && (
-              <div className="max-w-4xl mx-auto space-y-8">
+              <div className="space-y-8 animate-in fade-in duration-500">
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-4">
+                    Merchant Portal
+                  </h3>
+                  <p className="text-base text-gray-600 mb-6">
+                    Your powerful dashboard to manage loyalty programs and track customer engagement.
+                  </p>
+                </div>
+                
+                {/* Placeholder for merchant portal image */}
+                <div className="flex justify-center">
+                  <div className="bg-gray-100 rounded-md p-12 border-2 border-dashed border-gray-300">
+                    <p className="text-gray-500 text-center">
+                      Merchant portal image will be added here
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 3 && (
+              <div className="space-y-6 text-center animate-in fade-in duration-500">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-4">
+                    Upload Company Logo
+                  </h3>
+                  <p className="text-gray-600 mb-6">
+                    Add your business logo to personalise your loyalty program.
+                  </p>
+                </div>
+                
+                <div className="max-w-lg mx-auto">
+                  {/* Hidden file input */}
+                  <input
+                    id="logo-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    className="hidden"
+                  />
+                  
+                  {/* Upload area */}
+                  <div 
+                    className="border-2 border-dashed border-gray-300 rounded-md p-6 hover:border-gray-400 transition-colors cursor-pointer"
+                    onClick={triggerFileUpload}
+                  >
+                    <div className="space-y-4">
+                      {logoPreview ? (
+                        <div className="space-y-3">
+                          <div className="w-16 h-16 mx-auto rounded-md overflow-hidden">
+                            <img 
+                              src={logoPreview} 
+                              alt="Logo preview" 
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs text-gray-500">
+                              Logo should be square for best results
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center mx-auto">
+                          <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {uploadedLogo ? uploadedLogo.name : "Upload your logo"}
+                        </p>
+                        <p className="text-xs text-gray-500">Square logos work best • PNG, JPG or SVG up to 5MB</p>
+                      </div>
+                      <button 
+                        type="button"
+                        className="bg-[#007AFF] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#0066CC] transition-colors"
+                      >
+                        {uploadedLogo ? "Change File" : "Choose File"}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Upload and Skip options */}
+                  <div className="mt-6 space-y-3">
+                    {uploadedLogo && !uploadedUrl && (
+                      <button
+                        onClick={uploadToFirebaseStorage}
+                        disabled={isUploading}
+                        className={cn(
+                          "w-full px-4 py-2 rounded-md text-sm font-medium transition-colors",
+                          isUploading
+                            ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                            : "bg-green-600 text-white hover:bg-green-700"
+                        )}
+                      >
+                        {isUploading ? "Uploading..." : "Upload Logo"}
+                      </button>
+                    )}
+                    
+                    {uploadedUrl && (
+                      <div className="text-center">
+                        <p className="text-sm text-green-600 font-medium">✓ Logo uploaded successfully!</p>
+                        <p className="text-xs text-gray-500 mt-1">Stored in GCS bucket</p>
+                      </div>
+                    )}
+                    
+                    <div className="text-center">
+                      <button className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
+                        Skip for now
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 4 && (
+              <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
                 {/* Header */}
                 <div className="text-center space-y-4">
                   <h3 className="text-lg font-semibold text-gray-900">
@@ -627,106 +751,8 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
                   </div>
                 )}
 
-            {currentStep === 3 && (
-              <div className="space-y-6 text-center">
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                    Upload Company Logo
-                  </h3>
-                  <p className="text-gray-600 mb-6">
-                    Add your business logo to personalise your loyalty program.
-                  </p>
-                </div>
-                
-                <div className="max-w-lg mx-auto">
-                  {/* Hidden file input */}
-                  <input
-                    id="logo-upload"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleLogoUpload}
-                    className="hidden"
-                  />
-                  
-                  {/* Upload area */}
-                  <div 
-                    className="border-2 border-dashed border-gray-300 rounded-md p-6 hover:border-gray-400 transition-colors cursor-pointer"
-                    onClick={triggerFileUpload}
-                  >
-                    <div className="space-y-4">
-                                            {logoPreview ? (
-                        <div className="space-y-3">
-                          <div className="w-16 h-16 mx-auto rounded-md overflow-hidden">
-                            <img 
-                              src={logoPreview} 
-                              alt="Logo preview" 
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                      <div className="text-center">
-                            <p className="text-xs text-gray-500">
-                              Logo should be square for best results
-                          </p>
-                        </div>
-                      </div>
-                      ) : (
-                        <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center mx-auto">
-                          <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                        </div>
-                      )}
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {uploadedLogo ? uploadedLogo.name : "Upload your logo"}
-                        </p>
-                        <p className="text-xs text-gray-500">Square logos work best • PNG, JPG or SVG up to 5MB</p>
-                      </div>
-                      <button 
-                        type="button"
-                        className="bg-[#007AFF] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#0066CC] transition-colors"
-                      >
-                        {uploadedLogo ? "Change File" : "Choose File"}
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {/* Upload and Skip options */}
-                  <div className="mt-6 space-y-3">
-                    {uploadedLogo && !uploadedUrl && (
-                      <button
-                        onClick={uploadToFirebaseStorage}
-                        disabled={isUploading}
-                        className={cn(
-                          "w-full px-4 py-2 rounded-md text-sm font-medium transition-colors",
-                          isUploading
-                            ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                            : "bg-green-600 text-white hover:bg-green-700"
-                        )}
-                      >
-                        {isUploading ? "Uploading..." : "Upload Logo"}
-                      </button>
-                    )}
-                    
-                    {uploadedUrl && (
-                      <div className="text-center">
-                        <p className="text-sm text-green-600 font-medium">✓ Logo uploaded successfully!</p>
-                        <p className="text-xs text-gray-500 mt-1">Stored in GCS bucket</p>
-                    </div>
-                    )}
-                    
-                    <div className="text-center">
-                      <button className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
-                        Skip for now
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {currentStep === 4 && (
-              <div className="space-y-8">
+            {currentStep === 5 && (
+              <div className="space-y-8 animate-in fade-in duration-500">
                 <div className="text-center">
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">
                     Choose Your Account Type
@@ -909,48 +935,261 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
               </div>
             )}
 
-            {currentStep === 5 && (
-              <div className="space-y-6">
-                <div className="text-center">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                    Business Information
-                  </h3>
-                  <p className="text-gray-600 mb-6">
-                    Tell us about your business so we can personalise your experience.
-                  </p>
-                </div>
-                
-                {/* Placeholder for content */}
-                <div className="bg-gray-50 rounded-md p-6 border-2 border-dashed border-gray-200">
-                  <p className="text-gray-500 text-center">
-                    Step 6 content will be designed here
-                  </p>
-                </div>
-              </div>
-            )}
-
             {currentStep === 6 && (
-              <div className="space-y-6">
+              <div className="space-y-6 animate-in fade-in duration-500">
                 <div className="text-center">
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                    Rewards Setup
+                    Create Introductory Rewards
                   </h3>
                   <p className="text-gray-600 mb-6">
-                    Configure your first rewards to start engaging customers.
+                    Create up to 3 special rewards funded by Tap Loyalty to welcome new customers.
                   </p>
                 </div>
                 
-                {/* Placeholder for content */}
-                <div className="bg-gray-50 rounded-md p-6 border-2 border-dashed border-gray-200">
-                  <p className="text-gray-500 text-center">
-                    Step 7 content will be designed here
-                  </p>
+                <div className="max-w-2xl mx-auto">
+                  {/* Info Banner */}
+                  <div className="bg-blue-50 border border-blue-100 rounded-md p-4 mb-6">
+                    <div className="flex items-start gap-3">
+                      <Info className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm text-blue-800">
+                        <p className="font-medium mb-1">About Introductory Rewards ({createdRewards.length}/3)</p>
+                        <p>Each reward is worth up to $5 and is funded by Tap Loyalty. These rewards help attract new customers and each customer can only redeem one introductory reward across the entire platform.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Created Rewards List */}
+                  {createdRewards.length > 0 && (
+                    <div className="space-y-3 mb-6">
+                      <h4 className="font-medium text-gray-900">Your Introductory Rewards</h4>
+                                             {createdRewards.map((reward, index) => (
+                         <div key={index} className="border border-gray-200 rounded-md p-4 bg-gray-50">
+                           <div className="flex items-start justify-between">
+                             <div>
+                               <div className="flex items-center gap-2 mb-2">
+                                 <h5 className="font-medium text-gray-900">{reward.rewardName}</h5>
+                                 <span className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-md">
+                                   <img src="/taplogo.png" alt="Tap" className="h-3 w-auto" />
+                                   Funded by Tap Loyalty
+                                 </span>
+                               </div>
+                               <p className="text-sm text-gray-600">{reward.description}</p>
+                               <p className="text-xs text-gray-500 mt-1">
+                                 {reward.type === "voucher" 
+                                   ? "$5.00 voucher" 
+                                   : `Free ${reward.itemName}`} • PIN: {reward.pin}
+                               </p>
+                             </div>
+                            <button
+                              onClick={() => {
+                                const newRewards = createdRewards.filter((_, i) => i !== index);
+                                setCreatedRewards(newRewards);
+                              }}
+                              className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add New Reward Button */}
+                  {!showRewardForm && createdRewards.length < 3 && (
+                    <div className="text-center mb-6">
+                      <button
+                        onClick={() => {
+                          setShowRewardForm(true);
+                          setCurrentRewardForm({
+                            rewardName: "",
+                            description: "",
+                            itemName: "",
+                            pin: "",
+                            type: "voucher"
+                          });
+                        }}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-[#007AFF] text-white rounded-md text-sm font-medium hover:bg-[#0066CC] transition-colors"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Create Introductory Reward
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Reward Creation Form */}
+                  {showRewardForm && (
+                    <div className="border border-gray-200 rounded-md p-6 space-y-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-medium text-gray-900">Create New Reward</h4>
+                        <button
+                          onClick={() => setShowRewardForm(false)}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      {/* Reward Type Selection */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Reward Type</label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div
+                            className={cn(
+                              "border rounded-md p-3 cursor-pointer transition-all",
+                              currentRewardForm.type === "voucher" 
+                                ? "border-blue-500 bg-blue-50" 
+                                : "border-gray-200 hover:border-gray-300"
+                            )}
+                            onClick={() => setCurrentRewardForm({...currentRewardForm, type: "voucher"})}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className={cn(
+                                "h-6 w-6 rounded-full flex items-center justify-center",
+                                currentRewardForm.type === "voucher" ? "bg-blue-500 text-white" : "bg-gray-100"
+                              )}>
+                                <DollarSign className="h-3 w-3" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-sm">Gift Voucher</p>
+                                <p className="text-xs text-gray-500">$5 credit</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div
+                            className={cn(
+                              "border rounded-md p-3 cursor-pointer transition-all",
+                              currentRewardForm.type === "freeItem" 
+                                ? "border-blue-500 bg-blue-50" 
+                                : "border-gray-200 hover:border-gray-300"
+                            )}
+                            onClick={() => setCurrentRewardForm({...currentRewardForm, type: "freeItem"})}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className={cn(
+                                "h-6 w-6 rounded-full flex items-center justify-center",
+                                currentRewardForm.type === "freeItem" ? "bg-blue-500 text-white" : "bg-gray-100"
+                              )}>
+                                <Coffee className="h-3 w-3" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-sm">Free Item</p>
+                                <p className="text-xs text-gray-500">Up to $5 value</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Reward Name */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Reward Name</label>
+                        <input
+                          type="text"
+                          value={currentRewardForm.rewardName}
+                          onChange={(e) => setCurrentRewardForm({...currentRewardForm, rewardName: e.target.value})}
+                          placeholder={currentRewardForm.type === "voucher" ? "e.g., Welcome $5 Voucher" : "e.g., Free Coffee for New Customers"}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#007AFF]"
+                        />
+                      </div>
+
+                      {/* Description */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                        <textarea
+                          value={currentRewardForm.description}
+                          onChange={(e) => setCurrentRewardForm({...currentRewardForm, description: e.target.value})}
+                          placeholder={currentRewardForm.type === "voucher" 
+                            ? "e.g., Enjoy $5 off your first purchase as a welcome gift!" 
+                            : "e.g., Welcome! Enjoy a free coffee on your first visit."}
+                          rows={3}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#007AFF]"
+                        />
+                      </div>
+
+                      {/* Free Item Name (conditional) */}
+                      {currentRewardForm.type === "freeItem" && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Free Item Name</label>
+                          <input
+                            type="text"
+                            value={currentRewardForm.itemName}
+                            onChange={(e) => setCurrentRewardForm({...currentRewardForm, itemName: e.target.value})}
+                            placeholder="e.g., Regular Coffee, Pastry, etc."
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#007AFF]"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Item must be valued at $5 or less</p>
+                        </div>
+                      )}
+
+                      {/* PIN */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Redemption PIN</label>
+                        <input
+                          type="text"
+                          maxLength={4}
+                          value={currentRewardForm.pin}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, '');
+                            setCurrentRewardForm({...currentRewardForm, pin: value});
+                          }}
+                          placeholder="4-digit PIN"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#007AFF]"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Enter a 4-digit PIN required for redemption</p>
+                      </div>
+
+                      {/* Form Actions */}
+                      <div className="flex justify-end gap-3 pt-4 border-t">
+                        <button
+                          onClick={() => setShowRewardForm(false)}
+                          className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            // Validate form
+                            if (!currentRewardForm.rewardName.trim()) {
+                              alert("Please enter a reward name");
+                              return;
+                            }
+                            if (!currentRewardForm.description.trim()) {
+                              alert("Please enter a description");
+                              return;
+                            }
+                            if (currentRewardForm.type === "freeItem" && !currentRewardForm.itemName.trim()) {
+                              alert("Please enter the free item name");
+                              return;
+                            }
+                            if (!currentRewardForm.pin.trim() || currentRewardForm.pin.length !== 4) {
+                              alert("Please enter a 4-digit PIN");
+                              return;
+                            }
+
+                            // Add to created rewards
+                            setCreatedRewards([...createdRewards, currentRewardForm]);
+                            setShowRewardForm(false);
+                          }}
+                          disabled={isCreatingReward}
+                          className="px-4 py-2 bg-[#007AFF] text-white rounded-md hover:bg-[#0066CC] transition-colors disabled:opacity-50"
+                        >
+                          Add Reward
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Skip Option */}
+                  <div className="text-center text-sm text-gray-500">
+                    You can create rewards later from your dashboard if you prefer to skip this step.
+                  </div>
                 </div>
               </div>
             )}
 
             {currentStep === 7 && (
-              <div className="space-y-6">
+              <div className="space-y-6 animate-in fade-in duration-500">
                 <div className="text-center">
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">
                     Setup Complete!
@@ -960,11 +1199,45 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
                   </p>
                 </div>
                 
-                {/* Placeholder for content */}
-                <div className="bg-gray-50 rounded-md p-6 border-2 border-dashed border-gray-200">
-                  <p className="text-gray-500 text-center">
-                    Step 8 content will be designed here
-                  </p>
+                <div className="max-w-lg mx-auto space-y-4">
+                  <div className="p-6 bg-green-50 rounded-md border border-green-200">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                        <Check size={20} className="text-white" />
+                      </div>
+                      <h4 className="font-semibold text-gray-900">You're All Set!</h4>
+                    </div>
+                    <ul className="space-y-2 text-sm text-gray-700">
+                      <li>✓ Account created and configured</li>
+                      <li>✓ Rewards program activated</li>
+                      <li>✓ AutoTap matching enabled</li>
+                      {createdRewards.length > 0 && (
+                        <li>✓ {createdRewards.length} introductory reward{createdRewards.length > 1 ? 's' : ''} created</li>
+                      )}
+                    </ul>
+                  </div>
+
+                  {createdRewards.length > 0 && (
+                    <div className="p-4 bg-blue-50 rounded-md border border-blue-200">
+                      <h5 className="font-medium text-gray-900 mb-2">Your Introductory Rewards</h5>
+                                             <div className="space-y-1">
+                         {createdRewards.map((reward, index) => (
+                           <div key={index} className="text-sm text-gray-700">
+                             <span>• {reward.rewardName}</span>
+                           </div>
+                         ))}
+                       </div>
+                    </div>
+                  )}
+                  
+                  <div className="text-center">
+                    <button
+                      onClick={() => onOpenChange(false)}
+                      className="bg-[#007AFF] text-white px-6 py-2 rounded-md font-medium text-sm hover:bg-[#0066CC] transition-colors"
+                    >
+                      Go to Dashboard
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1005,16 +1278,16 @@ export function SetupPopup({ open, onOpenChange }: SetupPopupProps) {
               ) : (
                 <button
                   onClick={handleNext}
-                  disabled={!canGoNext}
+                  disabled={!canGoNext || isSavingRewards}
                   className={cn(
                     "flex items-center gap-2 px-6 py-2 text-sm font-medium rounded-md transition-colors",
-                    canGoNext
+                    canGoNext && !isSavingRewards
                       ? "bg-[#007AFF] text-white hover:bg-[#0066CC]"
                       : "bg-gray-200 text-gray-400 cursor-not-allowed"
                   )}
                 >
-                  Next
-                  <ChevronRight size={16} />
+                  {isSavingRewards && currentStep === 6 ? "Saving Rewards..." : "Next"}
+                  {!isSavingRewards && <ChevronRight size={16} />}
                 </button>
               )}
             </div>

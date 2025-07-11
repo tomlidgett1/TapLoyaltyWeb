@@ -3191,9 +3191,9 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                       <table className="w-full">
-                        <tbody className="divide-y divide-gray-200">
+                        <tbody className="divide-y divide-gray-100">
                     {recentActivity.slice(0, 5).map((activity, index) => (
-                            <tr key={activity.id} className="hover:bg-gray-50">
+                            <tr key={activity.id} className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
                                   <div className="h-8 w-8 flex-shrink-0">
@@ -3212,22 +3212,31 @@ export default function DashboardPage() {
                                     )}
                                   </div>
                                   <div className="min-w-0">
-                                    <p className="text-sm font-medium text-gray-900 truncate">{activity.customer.name}</p>
-                                    <p className="text-xs text-gray-500">{formatTimeAgo(activity.timestamp)}</p>
+                                    <p className="text-sm font-medium text-gray-800 truncate">{activity.customer.name}</p>
+                                    <p className="text-xs text-gray-600">{formatTimeAgo(activity.timestamp)}</p>
                                   </div>
                                 </div>
                               </td>
                               <td className="px-4 py-3">
-                                <span className="text-xs font-medium text-gray-700">
-                                  {activity.type === "transaction" 
-                                    ? "Purchase" 
-                                    : activity.tapCashUsed > 0
-                                      ? "TapCash"
-                                      : "Redemption"}
-                                </span>
+                                {activity.type === "transaction" ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                                    <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                                    Purchase
+                                  </span>
+                                ) : activity.tapCashUsed > 0 ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                                    <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                                    TapCash
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                                    <div className="h-1.5 w-1.5 bg-gray-500 rounded-full flex-shrink-0"></div>
+                                    Redemption
+                                  </span>
+                                )}
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700">
+                                <span className="text-sm font-medium text-gray-800">
                             {activity.type === "transaction" 
                               ? `$${activity.amount.toFixed(2)}` 
                               : activity.tapCashUsed > 0
@@ -3269,26 +3278,26 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                       <table className="w-full">
-                        <tbody className="divide-y divide-gray-200">
+                        <tbody className="divide-y divide-gray-100">
                     {popularRewards.slice(0, 5).map((reward, index) => (
-                            <tr key={reward.id} className="hover:bg-gray-50">
+                            <tr key={reward.id} className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
                                   <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
                                     <Star className="h-3 w-3 text-gray-600" />
                         </div>
                                   <div className="min-w-0">
-                                    <p className="text-sm font-medium text-gray-900 truncate">{reward.name}</p>
+                                    <p className="text-sm font-medium text-gray-800 truncate">{reward.name}</p>
                         </div>
                         </div>
                               </td>
                               <td className="px-4 py-3 text-center">
-                                <span className="text-xs font-medium text-gray-700">
+                                <span className="text-xs font-medium text-gray-600">
                                   {reward.pointsCost} pts
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700">{reward.views || 0}</span>
+                                <span className="text-sm font-medium text-gray-800">{reward.views || 0}</span>
                               </td>
                             </tr>
                     ))}
@@ -3336,120 +3345,120 @@ export default function DashboardPage() {
                     isMetricsTransitioning ? 'tab-content-fade-out' : 'tab-content-fade-in'
                   }`}>
                     <table className="w-full">
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className="divide-y divide-gray-100">
                         {metricsTab === 'platform' ? (
                           <>
-                            <tr className="hover:bg-gray-50">
+                            <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
                                   <Eye className="h-4 w-4 text-blue-500" />
-                                  <span className="text-sm font-medium text-gray-900">Store Views</span>
+                                  <span className="text-sm font-medium text-gray-800">Store Views</span>
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700">{metrics.totalStoreViews}</span>
+                                <span className="text-sm font-medium text-gray-800">{metrics.totalStoreViews}</span>
                               </td>
                             </tr>
-                            <tr className="hover:bg-gray-50">
+                            <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
                                   <Gift className="h-4 w-4 text-blue-500" />
-                                  <span className="text-sm font-medium text-gray-900">Reward Views</span>
+                                  <span className="text-sm font-medium text-gray-800">Reward Views</span>
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700">{metrics.totalRewardViews}</span>
+                                <span className="text-sm font-medium text-gray-800">{metrics.totalRewardViews}</span>
                               </td>
                             </tr>
-                            <tr className="hover:bg-gray-50">
+                            <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
                                   <ShoppingCart className="h-4 w-4 text-blue-500" />
-                                  <span className="text-sm font-medium text-gray-900">Transactions</span>
+                                  <span className="text-sm font-medium text-gray-800">Transactions</span>
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700">{metrics.totalTransactions}</span>
+                                <span className="text-sm font-medium text-gray-800">{metrics.totalTransactions}</span>
                               </td>
                             </tr>
-                            <tr className="hover:bg-gray-50">
+                            <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
                                   <DollarSign className="h-4 w-4 text-blue-500" />
-                                  <span className="text-sm font-medium text-gray-900">Avg Order Value</span>
+                                  <span className="text-sm font-medium text-gray-800">Avg Order Value</span>
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700">${metrics.avgOrderValue}</span>
+                                <span className="text-sm font-medium text-gray-800">${metrics.avgOrderValue}</span>
                               </td>
                             </tr>
                           </>
                         ) : (
                           <>
-                            <tr className="hover:bg-gray-50">
+                            <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
                                   <Users className="h-4 w-4 text-blue-500" />
-                                  <span className="text-sm font-medium text-gray-900">Total Customers</span>
+                                  <span className="text-sm font-medium text-gray-800">Total Customers</span>
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700">{metrics.totalCustomers}</span>
+                                <span className="text-sm font-medium text-gray-800">{metrics.totalCustomers}</span>
                               </td>
                             </tr>
-                            <tr className="hover:bg-gray-50">
+                            <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
                                   <Users className="h-4 w-4 text-blue-500" />
-                                  <span className="text-sm font-medium text-gray-900">Active Customers</span>
+                                  <span className="text-sm font-medium text-gray-800">Active Customers</span>
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700">{metrics.activeCustomers}</span>
+                                <span className="text-sm font-medium text-gray-800">{metrics.activeCustomers}</span>
                               </td>
                             </tr>
-                            <tr className="hover:bg-gray-50">
+                            <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
                                   <Star className="h-4 w-4 text-blue-500" />
-                                  <span className="text-sm font-medium text-gray-900">Points Issued</span>
+                                  <span className="text-sm font-medium text-gray-800">Points Issued</span>
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700">{metrics.totalPointsIssued.toLocaleString()}</span>
+                                <span className="text-sm font-medium text-gray-800">{metrics.totalPointsIssued.toLocaleString()}</span>
                               </td>
                             </tr>
-                            <tr className="hover:bg-gray-50">
+                            <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
                                   <Gift className="h-4 w-4 text-blue-500" />
-                                  <span className="text-sm font-medium text-gray-900">Total Redemptions</span>
+                                  <span className="text-sm font-medium text-gray-800">Total Redemptions</span>
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700">{metrics.totalRedemptions}</span>
+                                <span className="text-sm font-medium text-gray-800">{metrics.totalRedemptions}</span>
                               </td>
                             </tr>
-                            <tr className="hover:bg-gray-50">
+                            <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
                                   <Percent className="h-4 w-4 text-blue-500" />
-                                  <span className="text-sm font-medium text-gray-900">Redemption Rate</span>
+                                  <span className="text-sm font-medium text-gray-800">Redemption Rate</span>
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700">{metrics.redemptionRate}%</span>
+                                <span className="text-sm font-medium text-gray-800">{metrics.redemptionRate}%</span>
                               </td>
                             </tr>
-                            <tr className="hover:bg-gray-50">
+                            <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
                                   <Zap className="h-4 w-4 text-blue-500" />
-                                  <span className="text-sm font-medium text-gray-900">Active Rewards</span>
+                                  <span className="text-sm font-medium text-gray-800">Active Rewards</span>
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700">{metrics.activeRewards}</span>
+                                <span className="text-sm font-medium text-gray-800">{metrics.activeRewards}</span>
                               </td>
                             </tr>
                           </>
@@ -3668,9 +3677,9 @@ export default function DashboardPage() {
                          </div>
                        ) : (
                          <table className="w-full">
-                           <tbody className="divide-y divide-gray-200">
+                           <tbody className="divide-y divide-gray-100">
                              {liveProgramsTab === 'coffee' && programCustomers.coffee.map((customer, index) => (
-                               <tr key={customer.id} className="hover:bg-gray-50">
+                               <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
                                  <td className="px-4 py-3">
                                    <div className="flex items-center gap-3">
                                      <div className="h-8 w-8 flex-shrink-0">
@@ -3687,7 +3696,7 @@ export default function DashboardPage() {
                                        )}
                                      </div>
                                      <div className="min-w-0 flex-1">
-                                       <p className="text-sm font-medium text-gray-900 truncate">{customer.fullName}</p>
+                                       <p className="text-sm font-medium text-gray-800 truncate">{customer.fullName}</p>
                                        <div className="flex items-center gap-2 mt-1">
                                          <div className="w-32 bg-gray-200 rounded-full h-2">
                                            <div 
@@ -3695,7 +3704,7 @@ export default function DashboardPage() {
                                              style={{ width: `${Math.min(customer.progressPercentage, 100)}%` }}
                                            ></div>
                                          </div>
-                                         <span className="text-xs text-gray-500 whitespace-nowrap">
+                                         <span className="text-xs text-gray-600 whitespace-nowrap">
                                            {customer.progress}/{customer.target}
                                          </span>
                                        </div>
@@ -3703,18 +3712,19 @@ export default function DashboardPage() {
                                    </div>
                                  </td>
                                  <td className="px-4 py-3 text-center">
-                                   <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
+                                   <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                                     <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
                                      {Math.round(customer.progressPercentage)}%
                                    </span>
                                  </td>
                                  <td className="px-4 py-3 text-right">
-                                   <span className="text-sm font-semibold text-gray-900">{customer.progress} stamps</span>
+                                   <span className="text-sm font-medium text-gray-800">{customer.progress} stamps</span>
                                  </td>
                                </tr>
                              ))}
                              
                              {liveProgramsTab === 'voucher' && programCustomers.voucher.map((customer, index) => (
-                               <tr key={customer.id} className="hover:bg-gray-50">
+                               <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
                                  <td className="px-4 py-3">
                                    <div className="flex items-center gap-3">
                                      <div className="h-8 w-8 flex-shrink-0">
@@ -3731,7 +3741,7 @@ export default function DashboardPage() {
                                        )}
                                      </div>
                                      <div className="min-w-0 flex-1">
-                                       <p className="text-sm font-medium text-gray-900 truncate">{customer.fullName}</p>
+                                       <p className="text-sm font-medium text-gray-800 truncate">{customer.fullName}</p>
                                        <div className="flex items-center gap-2 mt-1">
                                          <div className="w-32 bg-gray-200 rounded-full h-2">
                                            <div 
@@ -3739,7 +3749,7 @@ export default function DashboardPage() {
                                              style={{ width: `${Math.min(customer.progressPercentage, 100)}%` }}
                                            ></div>
                                          </div>
-                                         <span className="text-xs text-gray-500 whitespace-nowrap">
+                                         <span className="text-xs text-gray-600 whitespace-nowrap">
                                            ${customer.progress.toFixed(2)}/${customer.target}
                                          </span>
                                        </div>
@@ -3747,18 +3757,19 @@ export default function DashboardPage() {
                                    </div>
                                  </td>
                                  <td className="px-4 py-3 text-center">
-                                   <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-orange-100 text-orange-800">
+                                   <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                                     <div className="h-1.5 w-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>
                                      {Math.round(customer.progressPercentage)}%
                                    </span>
                                  </td>
                                  <td className="px-4 py-3 text-right">
-                                   <span className="text-sm font-semibold text-gray-900">${customer.progress.toFixed(2)}</span>
+                                   <span className="text-sm font-medium text-gray-800">${customer.progress.toFixed(2)}</span>
                                  </td>
                                </tr>
                              ))}
                              
                              {liveProgramsTab === 'transaction' && programCustomers.transaction.map((customer, index) => (
-                               <tr key={customer.id} className="hover:bg-gray-50">
+                               <tr key={customer.id} className="hover:bg-gray-50/50 transition-colors">
                                  <td className="px-4 py-3">
                                    <div className="flex items-center gap-3">
                                      <div className="h-8 w-8 flex-shrink-0">
@@ -3775,7 +3786,7 @@ export default function DashboardPage() {
                                        )}
                                      </div>
                                      <div className="min-w-0 flex-1">
-                                       <p className="text-sm font-medium text-gray-900 truncate">{customer.fullName}</p>
+                                       <p className="text-sm font-medium text-gray-800 truncate">{customer.fullName}</p>
                                        <div className="flex items-center gap-2 mt-1">
                                          <div className="w-32 bg-gray-200 rounded-full h-2">
                                            <div 
@@ -3783,7 +3794,7 @@ export default function DashboardPage() {
                                              style={{ width: `${Math.min(customer.progressPercentage, 100)}%` }}
                                            ></div>
                                          </div>
-                                         <span className="text-xs text-gray-500 whitespace-nowrap">
+                                         <span className="text-xs text-gray-600 whitespace-nowrap">
                                            {customer.progress}/{customer.target}
                                          </span>
                                        </div>
@@ -3791,18 +3802,19 @@ export default function DashboardPage() {
                                    </div>
                                  </td>
                                  <td className="px-4 py-3 text-center">
-                                   <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
+                                   <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                                     <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
                                      {Math.round(customer.progressPercentage)}%
                                    </span>
                                  </td>
                                  <td className="px-4 py-3 text-right">
-                                   <span className="text-sm font-semibold text-gray-900">{customer.progress} transactions</span>
+                                   <span className="text-sm font-medium text-gray-800">{customer.progress} transactions</span>
                                  </td>
                                </tr>
                              ))}
                              
                              {liveProgramsTab === 'cashback' && programCustomers.cashback.map((customer, index) => (
-                               <tr key={customer.id} className="hover:bg-gray-50">
+                               <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
                                  <td className="px-4 py-3">
                                    <div className="flex items-center gap-3">
                                      <div className="h-8 w-8 flex-shrink-0">
@@ -3819,18 +3831,19 @@ export default function DashboardPage() {
                                        )}
                                      </div>
                                      <div className="min-w-0">
-                                       <p className="text-sm font-medium text-gray-900 truncate">{customer.fullName}</p>
-                                       <p className="text-xs text-gray-500">Total cashback earned</p>
+                                       <p className="text-sm font-medium text-gray-800 truncate">{customer.fullName}</p>
+                                       <p className="text-xs text-gray-600">Total cashback earned</p>
                                      </div>
                                    </div>
                                  </td>
                                  <td className="px-4 py-3 text-center">
-                                   <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
+                                   <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                                     <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
                                      Active
                                    </span>
                                  </td>
                                  <td className="px-4 py-3 text-right">
-                                   <span className="text-sm font-semibold text-gray-900">${customer.totalCashback.toFixed(2)}</span>
+                                   <span className="text-sm font-medium text-gray-800">${customer.totalCashback.toFixed(2)}</span>
                                  </td>
                                </tr>
                              ))}
@@ -3899,12 +3912,12 @@ export default function DashboardPage() {
                       </div>
                     ) : (
                       <table className="w-full">
-                        <thead className="bg-gray-50">
-                          <tr>
+                        <thead className="bg-gray-50/80">
+                          <tr className="border-b border-gray-100">
                             <th className="px-4 py-3 text-left">
                               <button
                                 onClick={() => handleCustomerSort('fullName')}
-                                className="w-full flex items-center justify-start gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
+                                className="w-full flex items-center justify-start gap-1 text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors"
                               >
                                 Customer
                                 {customerSortField === 'fullName' && (
@@ -3915,7 +3928,7 @@ export default function DashboardPage() {
                             <th className="px-4 py-3 text-center">
                               <button
                                 onClick={() => handleCustomerSort('pointsBalance')}
-                                className="w-full flex items-center justify-center gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
+                                className="w-full flex items-center justify-center gap-1 text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors"
                               >
                                 Points
                                 {customerSortField === 'pointsBalance' && (
@@ -3926,7 +3939,7 @@ export default function DashboardPage() {
                             <th className="px-4 py-3 text-center">
                               <button
                                 onClick={() => handleCustomerSort('cashback')}
-                                className="w-full flex items-center justify-center gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
+                                className="w-full flex items-center justify-center gap-1 text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors"
                               >
                                 TapCash
                                 {customerSortField === 'cashback' && (
@@ -3937,7 +3950,7 @@ export default function DashboardPage() {
                             <th className="px-4 py-3 text-center">
                               <button
                                 onClick={() => handleCustomerSort('lastTransactionDate')}
-                                className="w-full flex items-center justify-center gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
+                                className="w-full flex items-center justify-center gap-1 text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors"
                               >
                                 Last Order
                                 {customerSortField === 'lastTransactionDate' && (
@@ -3948,7 +3961,7 @@ export default function DashboardPage() {
                             <th className="px-4 py-3 text-right">
                               <button
                                 onClick={() => handleCustomerSort('totalLifetimeSpend')}
-                                className="w-full flex items-center justify-end gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
+                                className="w-full flex items-center justify-end gap-1 text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors"
                               >
                                 Lifetime Spend
                                 {customerSortField === 'totalLifetimeSpend' && (
@@ -3959,7 +3972,7 @@ export default function DashboardPage() {
                             <th className="px-4 py-3 text-right">
                               <button
                                 onClick={() => handleCustomerSort('lifetimeTransactionCount')}
-                                className="w-full flex items-center justify-end gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
+                                className="w-full flex items-center justify-end gap-1 text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors"
                               >
                                 Orders
                                 {customerSortField === 'lifetimeTransactionCount' && (
@@ -3969,68 +3982,70 @@ export default function DashboardPage() {
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200">
-                          {getFilteredAndSortedCustomers().slice(0, 10).map((customer) => (
-                            <tr key={customer.id} className="hover:bg-gray-50">
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                  <div className="h-8 w-8 flex-shrink-0">
-                                    {customer.profilePicture ? (
-                                      <img 
-                                        src={customer.profilePicture} 
-                                        alt={customer.fullName}
-                                        className="h-8 w-8 rounded-full object-cover border border-gray-200"
-                                      />
-                                    ) : (
-                                      <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-gray-100 text-gray-600">
-                                        {customer.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
-                                      </div>
-                                    )}
+                        <tbody className="divide-y divide-gray-100">
+                                                      {getFilteredAndSortedCustomers().slice(0, 10).map((customer) => (
+                              <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-3">
+                                    <div className="h-8 w-8 flex-shrink-0">
+                                      {customer.profilePicture ? (
+                                        <img 
+                                          src={customer.profilePicture} 
+                                          alt={customer.fullName}
+                                          className="h-8 w-8 rounded-full object-cover border border-gray-200"
+                                        />
+                                      ) : (
+                                        <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-gray-100 text-gray-600">
+                                          {customer.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-medium text-gray-800 truncate">{customer.fullName}</p>
+                                      <p className="text-xs text-gray-600 truncate">{customer.email}</p>
+                                    </div>
                                   </div>
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-medium text-gray-900 truncate">{customer.fullName}</p>
-                                    <p className="text-xs text-gray-500 truncate">{customer.email}</p>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                {customer.pointsBalance ? (
-                                  <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
-                                    {customer.pointsBalance} pts
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  {customer.pointsBalance ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                                      <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                                      {customer.pointsBalance} pts
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-gray-400">—</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  {customer.cashback && customer.cashback > 0 ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                                      <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                                      ${customer.cashback.toFixed(2)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-gray-400">—</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className="text-xs text-gray-600">
+                                    {customer.lastTransactionDate 
+                                      ? formatTimeAgo(customer.lastTransactionDate.toDate ? customer.lastTransactionDate.toDate() : new Date(customer.lastTransactionDate))
+                                      : 'Never'
+                                    }
                                   </span>
-                                ) : (
-                                  <span className="text-xs text-gray-400">—</span>
-                                )}
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                {customer.cashback && customer.cashback > 0 ? (
-                                  <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
-                                    ${customer.cashback.toFixed(2)}
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <span className="text-sm font-medium text-gray-800">
+                                    {customer.totalLifetimeSpend ? `$${customer.totalLifetimeSpend.toFixed(2)}` : '$0.00'}
                                   </span>
-                                ) : (
-                                  <span className="text-xs text-gray-400">—</span>
-                                )}
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <span className="text-xs text-gray-500">
-                                  {customer.lastTransactionDate 
-                                    ? formatTimeAgo(customer.lastTransactionDate.toDate ? customer.lastTransactionDate.toDate() : new Date(customer.lastTransactionDate))
-                                    : 'Never'
-                                  }
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-semibold text-gray-900">
-                                  {customer.totalLifetimeSpend ? `$${customer.totalLifetimeSpend.toFixed(2)}` : '$0.00'}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-semibold text-gray-900">
-                                  {customer.lifetimeTransactionCount || 0}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <span className="text-sm font-medium text-gray-800">
+                                    {customer.lifetimeTransactionCount || 0}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
                         </tbody>
                       </table>
                     )}

@@ -3218,13 +3218,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3">
-                                <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
-                                  activity.type === "transaction" 
-                                    ? 'bg-gray-100 text-gray-800' 
-                                    : activity.tapCashUsed > 0
-                                      ? 'bg-green-100 text-green-800'
-                                      : 'bg-gray-100 text-gray-800'
-                                }`}>
+                                <span className="text-xs font-medium text-gray-700">
                                   {activity.type === "transaction" 
                                     ? "Purchase" 
                                     : activity.tapCashUsed > 0
@@ -3233,7 +3227,7 @@ export default function DashboardPage() {
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-semibold text-gray-900">
+                                <span className="text-sm font-medium text-gray-700">
                             {activity.type === "transaction" 
                               ? `$${activity.amount.toFixed(2)}` 
                               : activity.tapCashUsed > 0
@@ -3294,7 +3288,7 @@ export default function DashboardPage() {
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-semibold text-gray-900">{reward.views || 0}</span>
+                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{reward.views || 0}</span>
                               </td>
                             </tr>
                     ))}
@@ -3353,7 +3347,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-semibold text-gray-900">{metrics.totalStoreViews}</span>
+                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.totalStoreViews}</span>
                               </td>
                             </tr>
                             <tr className="hover:bg-gray-50">
@@ -3364,7 +3358,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-semibold text-gray-900">{metrics.totalRewardViews}</span>
+                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.totalRewardViews}</span>
                               </td>
                             </tr>
                             <tr className="hover:bg-gray-50">
@@ -3375,7 +3369,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-semibold text-gray-900">{metrics.totalTransactions}</span>
+                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.totalTransactions}</span>
                               </td>
                             </tr>
                             <tr className="hover:bg-gray-50">
@@ -3386,7 +3380,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-semibold text-gray-900">${metrics.avgOrderValue}</span>
+                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">${metrics.avgOrderValue}</span>
                               </td>
                             </tr>
                           </>
@@ -3400,7 +3394,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-semibold text-gray-900">{metrics.totalCustomers}</span>
+                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.totalCustomers}</span>
                               </td>
                             </tr>
                             <tr className="hover:bg-gray-50">
@@ -3411,7 +3405,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-semibold text-gray-900">{metrics.activeCustomers}</span>
+                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.activeCustomers}</span>
                               </td>
                             </tr>
                             <tr className="hover:bg-gray-50">
@@ -3422,7 +3416,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-semibold text-gray-900">{metrics.totalPointsIssued.toLocaleString()}</span>
+                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.totalPointsIssued.toLocaleString()}</span>
                               </td>
                             </tr>
                             <tr className="hover:bg-gray-50">
@@ -3433,7 +3427,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-semibold text-gray-900">{metrics.totalRedemptions}</span>
+                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.totalRedemptions}</span>
                               </td>
                             </tr>
                             <tr className="hover:bg-gray-50">
@@ -3444,7 +3438,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-semibold text-gray-900">{metrics.redemptionRate}%</span>
+                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.redemptionRate}%</span>
                               </td>
                             </tr>
                             <tr className="hover:bg-gray-50">
@@ -3455,7 +3449,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-semibold text-gray-900">{metrics.activeRewards}</span>
+                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.activeRewards}</span>
                               </td>
                             </tr>
                           </>
@@ -3741,7 +3735,7 @@ export default function DashboardPage() {
                                        <div className="flex items-center gap-2 mt-1">
                                          <div className="w-32 bg-gray-200 rounded-full h-2">
                                            <div 
-                                             className="bg-purple-500 h-2 rounded-full transition-all duration-300" 
+                                             className="bg-orange-500 h-2 rounded-full transition-all duration-300" 
                                              style={{ width: `${Math.min(customer.progressPercentage, 100)}%` }}
                                            ></div>
                                          </div>
@@ -3753,7 +3747,7 @@ export default function DashboardPage() {
                                    </div>
                                  </td>
                                  <td className="px-4 py-3 text-center">
-                                   <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-purple-100 text-purple-800">
+                                   <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-orange-100 text-orange-800">
                                      {Math.round(customer.progressPercentage)}%
                                    </span>
                                  </td>
@@ -3785,7 +3779,7 @@ export default function DashboardPage() {
                                        <div className="flex items-center gap-2 mt-1">
                                          <div className="w-32 bg-gray-200 rounded-full h-2">
                                            <div 
-                                             className="bg-green-500 h-2 rounded-full transition-all duration-300" 
+                                             className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
                                              style={{ width: `${Math.min(customer.progressPercentage, 100)}%` }}
                                            ></div>
                                          </div>
@@ -3797,7 +3791,7 @@ export default function DashboardPage() {
                                    </div>
                                  </td>
                                  <td className="px-4 py-3 text-center">
-                                   <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
+                                   <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
                                      {Math.round(customer.progressPercentage)}%
                                    </span>
                                  </td>

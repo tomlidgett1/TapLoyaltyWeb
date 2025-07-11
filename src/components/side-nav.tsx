@@ -68,6 +68,7 @@ import { NetworkRewardPopup } from "@/components/network-reward-popup"
 import { SendBroadcastPopup } from "@/components/send-broadcast-popup"
 import { CreatePointsRulePopup } from "@/components/create-points-rule-popup"
 import { IntroductoryRewardPopup } from "@/components/introductory-reward-popup"
+import { CreateManualProgramDialog } from "@/components/create-manual-program-dialog"
 
 // Get auth instance
 const auth = getAuth();
@@ -256,54 +257,16 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   const [sendBroadcastPopupOpen, setSendBroadcastPopupOpen] = useState(false)
   const [createPointsRulePopupOpen, setCreatePointsRulePopupOpen] = useState(false)
   const [introductoryRewardPopupOpen, setIntroductoryRewardPopupOpen] = useState(false)
+  const [programTypeSelectorOpen, setProgramTypeSelectorOpen] = useState(false)
+  const [createManualProgramOpen, setCreateManualProgramOpen] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isInternalChange, setIsInternalChange] = useState(true)
-  const [createMenuOpen, setCreateMenuOpen] = useState(false)
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 })
-  const createButtonRef = useRef<HTMLButtonElement>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
   
   // Merchant status and plan state
   const [merchantStatus, setMerchantStatus] = useState<'active' | 'inactive'>('active')
   const [merchantPlan, setMerchantPlan] = useState<'light' | 'advanced' | 'pro'>('light')
 
-  // Handle clicks outside of the dropdown to close it
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (createMenuOpen &&
-          dropdownRef.current && 
-          !dropdownRef.current.contains(event.target as Node) &&
-          createButtonRef.current && 
-          !createButtonRef.current.contains(event.target as Node)) {
-        setCreateMenuOpen(false);
-      }
-    };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [createMenuOpen]);
-
-  // Position dropdown when button is clicked
-  useEffect(() => {
-    if (createMenuOpen && createButtonRef.current) {
-      const rect = createButtonRef.current.getBoundingClientRect()
-      if (isCollapsed) {
-        // Position dropdown to the right of collapsed sidebar
-        setDropdownPosition({
-          top: rect.top,
-          left: rect.right + 5
-        })
-      } else {
-        // Position dropdown below the button for expanded sidebar
-        setDropdownPosition({
-          top: rect.bottom + 5,
-          left: rect.left
-        })
-      }
-    }
-  }, [createMenuOpen, isCollapsed])
 
   // Sync with parent's collapsed prop (external change)
   useEffect(() => {
@@ -316,8 +279,8 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   // Close dropdown menus when sheets are opened/closed
   useEffect(() => {
     // Reset the dropdown states when sheets are opened or closed
-    setCreateMenuOpen(false)
-  }, [createSheetOpen, createRewardSheetOpen, createRewardPopupOpen, createRecurringOpen, createBannerOpen, broadcastDialogOpen, createRuleOpen, introRewardOpen, setupPopupOpen, networkRewardOpen, networkRewardPopupOpen, sendBroadcastPopupOpen, createPointsRulePopupOpen, introductoryRewardPopupOpen])
+    // No custom dropdown state to reset anymore since we use DropdownMenu components
+  }, [createSheetOpen, createRewardSheetOpen, createRewardPopupOpen, createRecurringOpen, createBannerOpen, broadcastDialogOpen, createRuleOpen, introRewardOpen, setupPopupOpen, networkRewardOpen, networkRewardPopupOpen, sendBroadcastPopupOpen, createPointsRulePopupOpen, introductoryRewardPopupOpen, programTypeSelectorOpen, createManualProgramOpen])
 
   // Notify parent component when collapse state changes (only for internal changes)
   useEffect(() => {
@@ -608,245 +571,125 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       
       {/* Create Button */}
       <div className="px-3 mb-2">
-                  {isCollapsed ? (
-          <div className="relative">
-            <button
-              className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 w-full h-9"
-              title="Create"
-              onClick={() => setCreateMenuOpen(!createMenuOpen)}
-              ref={createButtonRef}
-            >
-              <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                <PlusCircle className="h-4 w-4 text-gray-500 group-hover:text-[#007AFF]" />
-              </div>
-            </button>
-            {createMenuOpen && (
-              <div 
-                ref={dropdownRef} 
-                className="fixed z-[1000] bg-white rounded-md shadow-lg border border-gray-200 py-1 w-56 animate-in fade-in-0 zoom-in-95 duration-200 ease-out" 
-                style={dropdownPosition}
+        {isCollapsed ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 w-full h-9"
+                title="Create"
               >
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
-                  onClick={() => {
-                    setCreateRewardSheetOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <Gift className="h-4 w-4 mr-2" />
-                  New Reward
-                </button>
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
-                  onClick={() => {
-                    setCreateRewardPopupOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <Gift className="h-4 w-4 mr-2" />
-                  Create Reward New
-                </button>
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
-                  onClick={() => {
-                    setNetworkRewardOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <ZapIcon className="h-4 w-4 mr-2" />
-                  Network Reward
-                </button>
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
-                  onClick={() => {
-                    setCreateRecurringOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <Coffee className="h-4 w-4 mr-2" />
-                  Create Program
-                </button>
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
-                  onClick={() => {
-                    setCreateBannerOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <Image className="h-4 w-4 mr-2" />
-                  New Banner
-                </button>
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
-                  onClick={() => {
-                    setBroadcastDialogOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  New Message
-                </button>
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
-                  onClick={() => {
-                    setCreateRuleOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <Zap className="h-4 w-4 mr-2" />
-                  New Points Rule
-                </button>
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
-                  onClick={() => {
-                    setIntroRewardOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  <span>Intro Reward</span>
-                </button>
-                <div className="border-t border-gray-100 my-1"></div>
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100 text-purple-600"
-                  onClick={() => {
-                    setSetupPopupOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <Settings className="w-4 h-4 mr-2" />
-                  <span>Setup Popup (Dev)</span>
-                </button>
-              </div>
-            )}
-          </div>
-                  ) : (
-          <div className="relative">
-            <button
-              className="group flex items-center justify-between w-full gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 h-9"
-              onClick={() => setCreateMenuOpen(!createMenuOpen)}
-              ref={createButtonRef}
-            >
-              <div className="flex items-center gap-3 h-full">
                 <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
                   <PlusCircle className="h-4 w-4 text-gray-500 group-hover:text-[#007AFF]" />
                 </div>
-                <div className="h-full flex items-center overflow-hidden">
-                  <span className={cn(
-                    "transition-all duration-300 ease-in-out whitespace-nowrap group-hover:text-[#007AFF]",
-                    isCollapsed ? "w-0 opacity-0 delay-0" : "w-auto opacity-100 delay-75"
-                  )}>
-                    Create
-                  </span>
-                </div>
-              </div>
-              <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                <ChevronDown className={cn(
-                  "h-4 w-4 transition-all duration-300 ease-in-out text-gray-500 group-hover:text-[#007AFF]",
-                  isCollapsed ? "w-0 opacity-0 delay-0" : "w-auto opacity-100 delay-75"
-                )} />
-              </div>
-            </button>
-            {createMenuOpen && (
-              <div 
-                ref={dropdownRef} 
-                className="fixed z-[1000] bg-white rounded-md shadow-lg border border-gray-200 py-1 w-56 animate-in fade-in-0 zoom-in-95 duration-200 ease-out" 
-                style={dropdownPosition}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="right" className="w-48">
+              <DropdownMenuItem onClick={() => setCreateRewardSheetOpen(true)}>
+                <Gift className="h-4 w-4 mr-2" />
+                New Reward
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCreateRewardPopupOpen(true)}>
+                <Gift className="h-4 w-4 mr-2" />
+                Create Reward New
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setNetworkRewardOpen(true)}>
+                <ZapIcon className="h-4 w-4 mr-2" />
+                Network Reward
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setProgramTypeSelectorOpen(true)}>
+                <Coffee className="h-4 w-4 mr-2" />
+                Create Program
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCreateBannerOpen(true)}>
+                <Image className="h-4 w-4 mr-2" />
+                New Banner
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setBroadcastDialogOpen(true)}>
+                <MessageSquare className="h-4 w-4 mr-2" />
+                New Message
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCreateRuleOpen(true)}>
+                <Zap className="h-4 w-4 mr-2" />
+                New Points Rule
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIntroRewardOpen(true)}>
+                <Sparkles className="w-4 h-4 mr-2" />
+                Intro Reward
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setSetupPopupOpen(true)} className="text-purple-600">
+                <Settings className="w-4 h-4 mr-2" />
+                Setup Popup (Dev)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="group flex items-center justify-between w-full gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 h-9"
               >
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
-                  onClick={() => {
-                    setCreateRewardSheetOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <Gift className="h-4 w-4 mr-2" />
-                  New Reward
-                </button>
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
-                  onClick={() => {
-                    setCreateRewardPopupOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <Gift className="h-4 w-4 mr-2" />
-                  Create Reward New
-                </button>
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
-                  onClick={() => {
-                    setNetworkRewardPopupOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <ZapIcon className="h-4 w-4 mr-2" />
-                  Network Reward
-                </button>
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
-                  onClick={() => {
-                    setCreateRecurringOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <Coffee className="h-4 w-4 mr-2" />
-                  Create Program
-                </button>
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
-                  onClick={() => {
-                    setCreateBannerOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <Image className="h-4 w-4 mr-2" />
-                  New Banner
-                </button>
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
-                  onClick={() => {
-                    setSendBroadcastPopupOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  New Message
-                </button>
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
-                  onClick={() => {
-                    setCreatePointsRulePopupOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <Zap className="h-4 w-4 mr-2" />
-                  New Points Rule
-                </button>
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100"
-                  onClick={() => {
-                    setIntroductoryRewardPopupOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  <span>Intro Reward</span>
-                </button>
-                <div className="border-t border-gray-100 my-1"></div>
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-100 text-purple-600"
-                  onClick={() => {
-                    setSetupPopupOpen(true);
-                    setCreateMenuOpen(false);
-                  }}
-                >
-                  <Settings className="w-4 h-4 mr-2" />
-                  <span>Setup Popup (Dev)</span>
-                </button>
-              </div>
-            )}
-          </div>
+                <div className="flex items-center gap-3 h-full">
+                  <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+                    <PlusCircle className="h-4 w-4 text-gray-500 group-hover:text-[#007AFF]" />
+                  </div>
+                  <div className="h-full flex items-center overflow-hidden">
+                    <span className={cn(
+                      "transition-all duration-300 ease-in-out whitespace-nowrap group-hover:text-[#007AFF]",
+                      isCollapsed ? "w-0 opacity-0 delay-0" : "w-auto opacity-100 delay-75"
+                    )}>
+                      Create
+                    </span>
+                  </div>
+                </div>
+                <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+                  <ChevronDown className={cn(
+                    "h-4 w-4 transition-all duration-300 ease-in-out text-gray-500 group-hover:text-[#007AFF]",
+                    isCollapsed ? "w-0 opacity-0 delay-0" : "w-auto opacity-100 delay-75"
+                  )} />
+                </div>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              <DropdownMenuItem onClick={() => setCreateRewardSheetOpen(true)}>
+                <Gift className="h-4 w-4 mr-2" />
+                New Reward
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCreateRewardPopupOpen(true)}>
+                <Gift className="h-4 w-4 mr-2" />
+                Create Reward New
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setNetworkRewardPopupOpen(true)}>
+                <ZapIcon className="h-4 w-4 mr-2" />
+                Network Reward
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setProgramTypeSelectorOpen(true)}>
+                <Coffee className="h-4 w-4 mr-2" />
+                Create Program
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCreateBannerOpen(true)}>
+                <Image className="h-4 w-4 mr-2" />
+                New Banner
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSendBroadcastPopupOpen(true)}>
+                <MessageSquare className="h-4 w-4 mr-2" />
+                New Message
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCreatePointsRulePopupOpen(true)}>
+                <Zap className="h-4 w-4 mr-2" />
+                New Points Rule
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIntroductoryRewardPopupOpen(true)}>
+                <Sparkles className="w-4 h-4 mr-2" />
+                Intro Reward
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setSetupPopupOpen(true)} className="text-purple-600">
+                <Settings className="w-4 h-4 mr-2" />
+                Setup Popup (Dev)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
       
@@ -1281,6 +1124,62 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       <SendBroadcastPopup open={sendBroadcastPopupOpen} onOpenChange={setSendBroadcastPopupOpen} />
       <CreatePointsRulePopup open={createPointsRulePopupOpen} onOpenChange={setCreatePointsRulePopupOpen} />
       <IntroductoryRewardPopup open={introductoryRewardPopupOpen} onOpenChange={setIntroductoryRewardPopupOpen} />
+      
+      {/* CreateManualProgramDialog component */}
+      <CreateManualProgramDialog open={createManualProgramOpen} onOpenChange={setCreateManualProgramOpen} />
+
+      {/* Program Type Selector Popup */}
+      {programTypeSelectorOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg max-w-md mx-4 shadow-lg border border-gray-200 overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                <span style={{ color: '#007AFF' }}>Create</span> Program
+              </h3>
+            </div>
+            
+            {/* Body */}
+            <div className="p-6">
+              <div className="space-y-2">
+                <button
+                  onClick={() => {
+                    setCreateManualProgramOpen(true);
+                    setProgramTypeSelectorOpen(false);
+                  }}
+                  className="w-full p-3 text-left border border-gray-200 rounded-md hover:bg-gray-50 hover:border-blue-300 transition-colors"
+                >
+                  <h4 className="font-medium text-gray-900">Custom Program</h4>
+                  <p className="text-sm text-gray-600">Create a manual program with custom rewards and conditions</p>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setCreateRecurringOpen(true);
+                    setProgramTypeSelectorOpen(false);
+                  }}
+                  className="w-full p-3 text-left border border-gray-200 rounded-md hover:bg-gray-50 hover:border-blue-300 transition-colors"
+                >
+                  <h4 className="font-medium text-gray-900">Recurring Program</h4>
+                  <p className="text-sm text-gray-600">Set up coffee programs, vouchers, or cashback rewards</p>
+                </button>
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setProgramTypeSelectorOpen(false)}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

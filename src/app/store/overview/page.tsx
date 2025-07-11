@@ -1261,7 +1261,6 @@ const ProgramsTabContent = () => {
                     <div key={index} className="bg-gray-50 border border-gray-200 rounded-md p-4">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          {getProgramTypeIcon(program.type)}
                           <span className="font-medium text-sm capitalize">
                             {program.type === 'coffee' ? 'Coffee Program' : 
                              program.type === 'voucher' ? 'Recurring Voucher' : 
@@ -1335,7 +1334,6 @@ const ProgramsTabContent = () => {
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <Award className="h-4 w-4 text-blue-600" />
                         <span className="font-medium text-sm">{program.name}</span>
                       </div>
                       <div className="flex items-center gap-2">

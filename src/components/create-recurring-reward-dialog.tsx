@@ -907,7 +907,7 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                               <div className="flex items-center gap-2 mb-2">
                                 <Award className="h-4 w-4 text-green-600" />
                                 <p className="text-sm text-gray-900 font-medium">✓ Tap Cash is Active</p>
-                              </div>
+                            </div>
                               
                               <div className="space-y-2 text-sm">
                                 <div className="flex justify-between">
@@ -948,7 +948,7 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                                 size="sm"
                                 className="rounded-md"
                               >
-                                <Edit size={14} className="mr-1" />
+                                                                 <Edit size={14} className="mr-1" />
                                 Edit Settings
                               </Button>
                               <Button
@@ -1108,7 +1108,7 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                 </p>
               </div>
             </div>
-          </div>
+                              </div>
         </DialogPrimitive.Content>
       </DialogPortal>
     </Dialog>

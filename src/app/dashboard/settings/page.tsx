@@ -2511,40 +2511,40 @@ const SettingsPage: React.FC = () => {
                       return (
                         <div key={day} className="space-y-2 pb-2 border-b">
                           <div className="flex items-center gap-3">
-                                              <Switch 
-                    id={`open-${dayLower}`}
+                            <Switch 
+                              id={`open-${dayLower}`}
                     checked={!operatingHours[dayLower]?.isClosed}
-                    onCheckedChange={(checked) => 
+                              onCheckedChange={(checked) => 
                       updateOperatingHours(dayLower, 'isClosed', !checked)
-                    }
-                  />
+                              }
+                            />
                             <Label htmlFor={`open-${dayLower}`} className="font-medium">{day}</Label>
                           </div>
                           
                                           {!operatingHours[dayLower]?.isClosed && (
-                  <div className="flex items-center gap-4 ml-8 mt-2">
-                    <div className="space-y-1">
-                      <Label htmlFor={`open-time-${dayLower}`} className="text-xs">Open</Label>
-                      <Input
-                        id={`open-time-${dayLower}`}
-                        type="time"
+                            <div className="flex items-center gap-4 ml-8 mt-2">
+                              <div className="space-y-1">
+                                <Label htmlFor={`open-time-${dayLower}`} className="text-xs">Open</Label>
+                                <Input
+                                  id={`open-time-${dayLower}`}
+                                  type="time"
                         value={operatingHours[dayLower]?.open || "09:00"}
                         onChange={(e) => updateOperatingHours(dayLower, 'open', e.target.value)}
-                        className="w-32"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor={`close-time-${dayLower}`} className="text-xs">Close</Label>
-                      <Input
-                        id={`close-time-${dayLower}`}
-                        type="time"
+                                  className="w-32"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label htmlFor={`close-time-${dayLower}`} className="text-xs">Close</Label>
+                                <Input
+                                  id={`close-time-${dayLower}`}
+                                  type="time"
                         value={operatingHours[dayLower]?.close || "17:00"}
                         onChange={(e) => updateOperatingHours(dayLower, 'close', e.target.value)}
-                        className="w-32"
-                        />
-                    </div>
-                  </div>
-                )}
+                                  className="w-32"
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )
                     })}

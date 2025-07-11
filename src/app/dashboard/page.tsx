@@ -260,6 +260,16 @@ export default function DashboardPage() {
       setIsMetricsTransitioning(false)
     }, 150) // Half of the total transition duration
   }
+
+  // Handle live rewards tab change
+  const handleLiveRewardsTabChange = (newTab: 'individual' | 'customer-specific') => {
+    setLiveRewardsTab(newTab)
+  }
+
+  // Handle rewards type filter change
+  const handleRewardsTypeFilterChange = (newFilter: 'all' | 'free' | 'points') => {
+    setRewardsTypeFilter(newFilter)
+  }
   
   const [tapAgentMetrics, setTapAgentMetrics] = useState({
     lastRun: null as Date | null,
@@ -408,6 +418,12 @@ export default function DashboardPage() {
   const [liveProgramsTab, setLiveProgramsTab] = useState<'coffee' | 'voucher' | 'transaction' | 'cashback'>('coffee')
   const [isProgramsTransitioning, setIsProgramsTransitioning] = useState(false)
   const [isMetricsTransitioning, setIsMetricsTransitioning] = useState(false)
+  
+  // Live Rewards state
+  const [liveRewardsTab, setLiveRewardsTab] = useState<'individual' | 'customer-specific'>('individual')
+  const [rewardsTypeFilter, setRewardsTypeFilter] = useState<'all' | 'free' | 'points'>('all')
+  const [liveRewards, setLiveRewards] = useState<any[]>([])
+  const [liveRewardsLoading, setLiveRewardsLoading] = useState(false)
   const [livePrograms, setLivePrograms] = useState({
     coffee: [] as any[],
     voucher: [] as any[],
@@ -2089,11 +2105,30 @@ export default function DashboardPage() {
         
         for (const customerDoc of customersSnapshot.docs) {
           const customerData = customerDoc.data()
-          const customer = { 
+          const customer: any = { 
             id: customerDoc.id, 
             ...customerData,
             // Include profile picture if available (temporary - removed privacy check for debugging)
-            profilePicture: customerData.profilePictureUrl || null
+            profilePicture: customerData.profilePictureUrl || null,
+            lastTransactionDate: null
+          }
+
+          // Fetch last transaction date for this customer
+          try {
+            const customerTransactionsQuery = query(
+              collection(db, 'merchants', user.uid, 'transactions'),
+              where('customerId', '==', customer.id),
+              orderBy('createdAt', 'desc'),
+              limit(1)
+            )
+            const transactionSnapshot = await getDocs(customerTransactionsQuery)
+            if (!transactionSnapshot.empty) {
+              const lastTransaction = transactionSnapshot.docs[0].data()
+              customer.lastTransactionDate = lastTransaction.createdAt?.toDate() || null
+            }
+          } catch (error) {
+            console.error('Error fetching last transaction for customer:', customer.id, error)
+            customer.lastTransactionDate = null
           }
           
           // Coffee loyalty progress
@@ -2218,6 +2253,85 @@ export default function DashboardPage() {
        }
      }
 
+     // Function to fetch live rewards
+     const fetchLiveRewards = async () => {
+       if (!user?.uid) return
+       
+       setLiveRewardsLoading(true)
+       
+       try {
+         // Fetch individual rewards
+         const individualRewardsQuery = query(
+           collection(db, 'merchants', user.uid, 'rewards'),
+           orderBy('createdAt', 'desc')
+         )
+         const individualRewardsSnapshot = await getDocs(individualRewardsQuery)
+         
+         // Fetch customer-specific rewards
+         const customerSpecificRewardsQuery = query(
+           collection(db, 'merchants', user.uid, 'customerSpecificRewards'),
+           orderBy('createdAt', 'desc')
+         )
+         const customerSpecificRewardsSnapshot = await getDocs(customerSpecificRewardsQuery)
+         
+         // Process individual rewards
+         const individualRewards = await Promise.all(
+           individualRewardsSnapshot.docs.map(async (doc) => {
+             const data = doc.data()
+             
+             // Fetch redemption count for this reward
+             const redemptionsQuery = query(
+               collection(db, 'redemptions'),
+               where('rewardId', '==', doc.id),
+               where('merchantId', '==', user.uid)
+             )
+             const redemptionsSnapshot = await getDocs(redemptionsQuery)
+             
+             return {
+               id: doc.id,
+               ...data,
+               type: 'individual',
+               redemptionCount: redemptionsSnapshot.docs.length,
+               createdAt: data.createdAt,
+               costType: data.pointsRequired > 0 ? 'points' : 'free'
+             }
+           })
+         )
+         
+         // Process customer-specific rewards
+         const customerSpecificRewards = await Promise.all(
+           customerSpecificRewardsSnapshot.docs.map(async (doc) => {
+             const data = doc.data()
+             
+             // Fetch redemption count for this reward
+             const redemptionsQuery = query(
+               collection(db, 'redemptions'),
+               where('rewardId', '==', doc.id),
+               where('merchantId', '==', user.uid)
+             )
+             const redemptionsSnapshot = await getDocs(redemptionsQuery)
+             
+             return {
+               id: doc.id,
+               ...data,
+               type: 'customer-specific',
+               redemptionCount: redemptionsSnapshot.docs.length,
+               createdAt: data.createdAt,
+               costType: data.pointsRequired > 0 ? 'points' : 'free'
+             }
+           })
+         )
+         
+         // Combine all rewards
+         const allRewards = [...individualRewards, ...customerSpecificRewards]
+         setLiveRewards(allRewards)
+       } catch (error) {
+         console.error('Error fetching live rewards:', error)
+       } finally {
+         setLiveRewardsLoading(false)
+       }
+     }
+
 
      
      if (user?.uid) {
@@ -2226,6 +2340,7 @@ export default function DashboardPage() {
       fetchRecurringPrograms()
       fetchLivePrograms()
       fetchAllCustomers()
+      fetchLiveRewards()
     }
   }, [user?.uid]);
 
@@ -3289,7 +3404,7 @@ export default function DashboardPage() {
                   </Link>
                 </div>
               </div>
-                  <div className="overflow-x-auto max-h-80 overflow-y-auto scrollbar-subtle">
+                  <div className="max-h-80 overflow-y-auto scrollbar-subtle">
                 {activityLoading ? (
                   <div className="flex items-center justify-center py-8">
                         <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
@@ -3305,7 +3420,7 @@ export default function DashboardPage() {
                 ) : (
                       <table className="w-full">
                         <tbody className="divide-y divide-gray-100">
-                    {recentActivity.map((activity, index) => (
+                    {recentActivity.slice(0, 7).map((activity, index) => (
                             <tr key={activity.id} className="hover:bg-gray-100/50 transition-colors cursor-pointer" onClick={() => handleActivityClick(activity)}>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
@@ -3326,7 +3441,7 @@ export default function DashboardPage() {
                                   </div>
                                   <div className="min-w-0">
                                     <p className="text-sm font-medium text-gray-800 truncate">{activity.customer.name}</p>
-                                    <p className="text-xs text-gray-600">{formatTimeAgo(activity.timestamp)}</p>
+                                    <p className="text-xs text-gray-600 truncate">{formatTimeAgo(activity.timestamp)}</p>
                                   </div>
                                 </div>
                               </td>
@@ -3582,9 +3697,10 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Live Programs Section */}
-              {recurringPrograms.hasAny && (
-                <div className="mt-8 max-w-2xl">
+              {/* Live Programs and Live Rewards Section */}
+              <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Live Programs */}
+                {recurringPrograms.hasAny && (
                   <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                       <div className="flex items-center justify-between">
@@ -3793,170 +3909,166 @@ export default function DashboardPage() {
                            <tbody className="divide-y divide-gray-100">
                              {liveProgramsTab === 'coffee' && programCustomers.coffee.map((customer, index) => (
                                <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
-                                 <td className="px-4 py-3">
-                                   <div className="flex items-center gap-3">
-                                     <div className="h-8 w-8 flex-shrink-0">
+                                 <td className="px-3 py-2">
+                                   <div className="flex items-center gap-2">
+                                     <div className="h-6 w-6 flex-shrink-0">
                                        {customer.profilePicture ? (
                                          <img 
                                            src={customer.profilePicture} 
                                            alt={customer.fullName}
-                                           className="h-8 w-8 rounded-full object-cover border border-gray-200"
+                                           className="h-6 w-6 rounded-full object-cover border border-gray-200"
                                          />
                                        ) : (
-                                         <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
+                                         <div className="h-6 w-6 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
                                            {customer.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                                          </div>
                                        )}
                                      </div>
                                      <div className="min-w-0 flex-1">
-                                       <p className="text-sm font-medium text-gray-800 truncate">{customer.fullName}</p>
-                                       <div className="flex items-center gap-2 mt-1">
-                                         <div className="w-32 bg-gray-200 rounded-full h-2">
+                                       <p className="text-xs font-medium text-gray-800 truncate">{customer.fullName}</p>
+                                       <div className="flex items-center gap-1.5 mt-0.5">
+                                         <div className="w-24 bg-gray-200 rounded-full h-1.5">
                                            <div 
-                                             className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
+                                             className="bg-blue-500 h-1.5 rounded-full transition-all duration-300" 
                                              style={{ width: `${Math.min(customer.progressPercentage, 100)}%` }}
                                            ></div>
                                          </div>
-                                         <span className="text-xs text-gray-600 whitespace-nowrap">
+                                         <span className="text-xs text-gray-500 whitespace-nowrap">
                                            {customer.progress}/{customer.target}
                                          </span>
                                        </div>
                                      </div>
                                    </div>
                                  </td>
-                                 <td className="px-4 py-3 text-center">
-                                   <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
-                                     <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
-                                     {Math.round(customer.progressPercentage)}%
+                                 <td className="px-3 py-2 text-center">
+                                   <span className="text-xs text-gray-600">
+                                     {customer.lastTransactionDate ? format(customer.lastTransactionDate, 'MMM d') : 'No recent activity'}
                                    </span>
                                  </td>
-                                 <td className="px-4 py-3 text-right">
-                                   <span className="text-sm font-medium text-gray-800">{customer.progress} stamps</span>
+                                 <td className="px-3 py-2 text-right">
+                                   <span className="text-xs font-medium text-gray-800">{customer.progress}</span>
                                  </td>
                                </tr>
                              ))}
                              
                              {liveProgramsTab === 'voucher' && programCustomers.voucher.map((customer, index) => (
                                <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
-                                 <td className="px-4 py-3">
-                                   <div className="flex items-center gap-3">
-                                     <div className="h-8 w-8 flex-shrink-0">
+                                 <td className="px-3 py-2">
+                                   <div className="flex items-center gap-2">
+                                     <div className="h-6 w-6 flex-shrink-0">
                                        {customer.profilePicture ? (
                                          <img 
                                            src={customer.profilePicture} 
                                            alt={customer.fullName}
-                                           className="h-8 w-8 rounded-full object-cover border border-gray-200"
+                                           className="h-6 w-6 rounded-full object-cover border border-gray-200"
                                          />
                                        ) : (
-                                         <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
+                                         <div className="h-6 w-6 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
                                            {customer.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                                          </div>
                                        )}
                                      </div>
                                      <div className="min-w-0 flex-1">
-                                       <p className="text-sm font-medium text-gray-800 truncate">{customer.fullName}</p>
-                                       <div className="flex items-center gap-2 mt-1">
-                                         <div className="w-32 bg-gray-200 rounded-full h-2">
+                                       <p className="text-xs font-medium text-gray-800 truncate">{customer.fullName}</p>
+                                       <div className="flex items-center gap-1.5 mt-0.5">
+                                         <div className="w-24 bg-gray-200 rounded-full h-1.5">
                                            <div 
-                                             className="bg-orange-500 h-2 rounded-full transition-all duration-300" 
+                                             className="bg-orange-500 h-1.5 rounded-full transition-all duration-300" 
                                              style={{ width: `${Math.min(customer.progressPercentage, 100)}%` }}
                                            ></div>
                                          </div>
-                                         <span className="text-xs text-gray-600 whitespace-nowrap">
+                                         <span className="text-xs text-gray-500 whitespace-nowrap">
                                            ${customer.progress.toFixed(2)}/${customer.target}
                                          </span>
                                        </div>
                                      </div>
                                    </div>
                                  </td>
-                                 <td className="px-4 py-3 text-center">
-                                   <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
-                                     <div className="h-1.5 w-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>
-                                     {Math.round(customer.progressPercentage)}%
+                                 <td className="px-3 py-2 text-center">
+                                   <span className="text-xs text-gray-600">
+                                     {customer.lastTransactionDate ? format(customer.lastTransactionDate, 'MMM d') : 'No recent activity'}
                                    </span>
                                  </td>
-                                 <td className="px-4 py-3 text-right">
-                                   <span className="text-sm font-medium text-gray-800">${customer.progress.toFixed(2)}</span>
+                                 <td className="px-3 py-2 text-right">
+                                   <span className="text-xs font-medium text-gray-800">${customer.progress.toFixed(2)}</span>
                                  </td>
                                </tr>
                              ))}
                              
                              {liveProgramsTab === 'transaction' && programCustomers.transaction.map((customer, index) => (
-                               <tr key={customer.id} className="hover:bg-gray-50/50 transition-colors">
-                                 <td className="px-4 py-3">
-                                   <div className="flex items-center gap-3">
-                                     <div className="h-8 w-8 flex-shrink-0">
+                               <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
+                                 <td className="px-3 py-2">
+                                   <div className="flex items-center gap-2">
+                                     <div className="h-6 w-6 flex-shrink-0">
                                        {customer.profilePicture ? (
                                          <img 
                                            src={customer.profilePicture} 
                                            alt={customer.fullName}
-                                           className="h-8 w-8 rounded-full object-cover border border-gray-200"
+                                           className="h-6 w-6 rounded-full object-cover border border-gray-200"
                                          />
                                        ) : (
-                                         <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
+                                         <div className="h-6 w-6 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
                                            {customer.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                                          </div>
                                        )}
                                      </div>
                                      <div className="min-w-0 flex-1">
-                                       <p className="text-sm font-medium text-gray-800 truncate">{customer.fullName}</p>
-                                       <div className="flex items-center gap-2 mt-1">
-                                         <div className="w-32 bg-gray-200 rounded-full h-2">
+                                       <p className="text-xs font-medium text-gray-800 truncate">{customer.fullName}</p>
+                                       <div className="flex items-center gap-1.5 mt-0.5">
+                                         <div className="w-24 bg-gray-200 rounded-full h-1.5">
                                            <div 
-                                             className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
+                                             className="bg-blue-500 h-1.5 rounded-full transition-all duration-300" 
                                              style={{ width: `${Math.min(customer.progressPercentage, 100)}%` }}
                                            ></div>
                                          </div>
-                                         <span className="text-xs text-gray-600 whitespace-nowrap">
+                                         <span className="text-xs text-gray-500 whitespace-nowrap">
                                            {customer.progress}/{customer.target}
                                          </span>
                                        </div>
                                      </div>
                                    </div>
                                  </td>
-                                 <td className="px-4 py-3 text-center">
-                                   <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
-                                     <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
-                                     {Math.round(customer.progressPercentage)}%
+                                 <td className="px-3 py-2 text-center">
+                                   <span className="text-xs text-gray-600">
+                                     {customer.lastTransactionDate ? format(customer.lastTransactionDate, 'MMM d') : 'No recent activity'}
                                    </span>
                                  </td>
-                                 <td className="px-4 py-3 text-right">
-                                   <span className="text-sm font-medium text-gray-800">{customer.progress} transactions</span>
+                                 <td className="px-3 py-2 text-right">
+                                   <span className="text-xs font-medium text-gray-800">{customer.progress}</span>
                                  </td>
                                </tr>
                              ))}
                              
                              {liveProgramsTab === 'cashback' && programCustomers.cashback.map((customer, index) => (
                                <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
-                                 <td className="px-4 py-3">
-                                   <div className="flex items-center gap-3">
-                                     <div className="h-8 w-8 flex-shrink-0">
+                                 <td className="px-3 py-2">
+                                   <div className="flex items-center gap-2">
+                                     <div className="h-6 w-6 flex-shrink-0">
                                        {customer.profilePicture ? (
                                          <img 
                                            src={customer.profilePicture} 
                                            alt={customer.fullName}
-                                           className="h-8 w-8 rounded-full object-cover border border-gray-200"
+                                           className="h-6 w-6 rounded-full object-cover border border-gray-200"
                                          />
                                        ) : (
-                                         <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
+                                         <div className="h-6 w-6 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
                                            {customer.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                                          </div>
                                        )}
                                      </div>
-                                     <div className="min-w-0">
-                                       <p className="text-sm font-medium text-gray-800 truncate">{customer.fullName}</p>
-                                       <p className="text-xs text-gray-600">Total cashback earned</p>
+                                     <div className="min-w-0 flex-1">
+                                       <p className="text-xs font-medium text-gray-800 truncate">{customer.fullName}</p>
+                                       <p className="text-xs text-gray-500">Total cashback earned</p>
                                      </div>
                                    </div>
                                  </td>
-                                 <td className="px-4 py-3 text-center">
-                                   <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
-                                     <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
-                                     Active
+                                 <td className="px-3 py-2 text-center">
+                                   <span className="text-xs text-gray-600">
+                                     {customer.lastTransactionDate ? format(customer.lastTransactionDate, 'MMM d') : 'No recent activity'}
                                    </span>
                                  </td>
-                                 <td className="px-4 py-3 text-right">
-                                   <span className="text-sm font-medium text-gray-800">${customer.totalCashback.toFixed(2)}</span>
+                                 <td className="px-3 py-2 text-right">
+                                   <span className="text-xs font-medium text-gray-800">${customer.totalCashback.toFixed(2)}</span>
                                  </td>
                                </tr>
                              ))}
@@ -3966,12 +4078,12 @@ export default function DashboardPage() {
                                (liveProgramsTab === 'transaction' && programCustomers.transaction.length === 0) ||
                                (liveProgramsTab === 'cashback' && programCustomers.cashback.length === 0)) && (
                                <tr>
-                                 <td colSpan={3} className="px-4 py-8 text-center">
-                                   <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
-                                     <Users className="h-6 w-6 text-gray-400" />
+                                 <td colSpan={3} className="px-3 py-6 text-center">
+                                   <div className="bg-gray-100 rounded-full h-10 w-10 flex items-center justify-center mx-auto mb-2">
+                                     <Users className="h-5 w-5 text-gray-400" />
                                    </div>
-                                   <p className="text-sm font-medium text-gray-700">No participating customers</p>
-                                   <p className="text-xs text-gray-500 mt-1">Customers will appear here once they start participating</p>
+                                   <p className="text-xs font-medium text-gray-700">No participating customers</p>
+                                   <p className="text-xs text-gray-500 mt-0.5">Customers will appear here once they start participating</p>
                                  </td>
                                </tr>
                              )}
@@ -3980,8 +4092,191 @@ export default function DashboardPage() {
                        )}
                     </div>
                   </div>
+                )}
+                
+                {/* Live Rewards */}
+                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-900">Live Rewards</h3>
+                      {/* Reward Type Tabs */}
+                      <div className="flex items-center gap-4">
+                        <button
+                          className={cn(
+                            "flex items-center gap-1 text-xs font-medium transition-colors",
+                            liveRewardsTab === 'individual'
+                              ? "text-blue-600"
+                              : "text-gray-600 hover:text-gray-800"
+                          )}
+                                                     onClick={() => handleLiveRewardsTabChange('individual')}
+                        >
+                          <Gift className="h-3 w-3" />
+                          Individual
+                        </button>
+                        <button
+                          className={cn(
+                            "flex items-center gap-1 text-xs font-medium transition-colors",
+                            liveRewardsTab === 'customer-specific'
+                              ? "text-blue-600"
+                              : "text-gray-600 hover:text-gray-800"
+                          )}
+                                                     onClick={() => handleLiveRewardsTabChange('customer-specific')}
+                        >
+                          <Users className="h-3 w-3" />
+                          Customer Specific
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Filter Options */}
+                  <div className="px-6 py-3 border-b border-gray-100 bg-gray-50/50">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-600">Filter:</span>
+                      <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+                        <button
+                          className={cn(
+                            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                            rewardsTypeFilter === 'all'
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                                                     onClick={() => handleRewardsTypeFilterChange('all')}
+                        >
+                          All
+                        </button>
+                        <button
+                          className={cn(
+                            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                            rewardsTypeFilter === 'free'
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                                                     onClick={() => handleRewardsTypeFilterChange('free')}
+                        >
+                          <Gift className="h-3 w-3" />
+                          Free
+                        </button>
+                        <button
+                          className={cn(
+                            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                            rewardsTypeFilter === 'points'
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                                                     onClick={() => handleRewardsTypeFilterChange('points')}
+                        >
+                          <Star className="h-3 w-3" />
+                          Points Required
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="max-h-80 overflow-y-auto scrollbar-subtle">
+                    {liveRewardsLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
+                      </div>
+                    ) : (() => {
+                      const filteredRewards = liveRewards.filter(reward => {
+                        const matchesTab = reward.type === liveRewardsTab
+                        const matchesFilter = rewardsTypeFilter === 'all' || reward.costType === rewardsTypeFilter
+                        return matchesTab && matchesFilter
+                      })
+                      
+                      return filteredRewards.length === 0 ? (
+                        <div className="py-8 text-center">
+                          <div className="bg-gray-100 rounded-full h-10 w-10 flex items-center justify-center mx-auto mb-2">
+                            <Gift className="h-5 w-5 text-gray-400" />
+                          </div>
+                          <p className="text-xs font-medium text-gray-700">No rewards found</p>
+                          <p className="text-xs text-gray-500 mt-0.5">Rewards will appear here once created</p>
+                        </div>
+                      ) : (
+                        <table className="w-full">
+                          <thead className="bg-gray-50/80 sticky top-0">
+                            <tr className="border-b border-gray-100">
+                              <th className="px-4 py-3 text-left">
+                                <span className="text-xs font-medium text-gray-600">Reward</span>
+                              </th>
+                              <th className="px-4 py-3 text-center">
+                                <span className="text-xs font-medium text-gray-600">Type</span>
+                              </th>
+                              <th className="px-4 py-3 text-center">
+                                <span className="text-xs font-medium text-gray-600">Redemptions</span>
+                              </th>
+                              <th className="px-4 py-3 text-right">
+                                <span className="text-xs font-medium text-gray-600">Created</span>
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {filteredRewards.slice(0, 7).map((reward) => (
+                              <tr key={reward.id} className="hover:bg-gray-100/50 transition-colors">
+                                <td className="px-4 py-3">
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium text-gray-800 truncate">{reward.title || reward.name}</p>
+                                    <p className="text-xs text-gray-600 truncate">{reward.description}</p>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  {reward.costType === 'free' ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                                      <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                                      Free
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                                      <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                                      {reward.pointsRequired} pts
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className="text-sm font-medium text-gray-800">{reward.redemptionCount}</span>
+                                </td>
+                                                                 <td className="px-4 py-3 text-right">
+                                   <span className="text-xs text-gray-600">
+                                     {(() => {
+                                       if (!reward.createdAt) return 'Unknown'
+                                       try {
+                                         // Handle Firestore Timestamp
+                                         if (reward.createdAt.toDate && typeof reward.createdAt.toDate === 'function') {
+                                           return format(reward.createdAt.toDate(), 'MMM d, yyyy')
+                                         }
+                                         // Handle JavaScript Date
+                                         if (reward.createdAt instanceof Date) {
+                                           return format(reward.createdAt, 'MMM d, yyyy')
+                                         }
+                                         // Handle string dates
+                                         if (typeof reward.createdAt === 'string') {
+                                           return format(new Date(reward.createdAt), 'MMM d, yyyy')
+                                         }
+                                         // Handle seconds/milliseconds timestamps
+                                         if (typeof reward.createdAt === 'number') {
+                                           const date = reward.createdAt > 1000000000000 
+                                             ? new Date(reward.createdAt) // milliseconds
+                                             : new Date(reward.createdAt * 1000) // seconds
+                                           return format(date, 'MMM d, yyyy')
+                                         }
+                                         return 'Unknown'
+                                       } catch (error) {
+                                         console.error('Error formatting reward date:', error, reward.createdAt)
+                                         return 'Unknown'
+                                       }
+                                     })()}
+                                   </span>
+                                 </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )
+                    })()}
+                  </div>
                 </div>
-              )}
+              </div>
 
               {/* All Customers Section */}
               <div className="mt-8">

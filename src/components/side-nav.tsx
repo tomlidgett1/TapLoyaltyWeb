@@ -536,7 +536,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       `}</style>
       
       <div className="h-16 flex items-end px-3 pb-2 mb-2 relative">
-        <div className="flex items-center gap-2.5 pl-2 h-8">
+        <Link href="/dashboard" className="flex items-center gap-2.5 pl-2 h-8 hover:opacity-80 transition-opacity">
           <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
             <img 
               src="/taplogo.png" 
@@ -552,21 +552,21 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
               Tap
             </span>
           </div>
-          {!isCollapsed && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setIsInternalChange(true)
-                setIsCollapsed(!isCollapsed)
-              }}
-              className="h-5 w-5 p-0 hover:bg-gray-200 rounded-sm flex-shrink-0 absolute right-3 bottom-3"
-              title="Collapse sidebar"
-            >
-              <PanelRight className="h-4 w-4 text-gray-600" />
-            </Button>
-          )}
-        </div>
+        </Link>
+        {!isCollapsed && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setIsInternalChange(true)
+              setIsCollapsed(!isCollapsed)
+            }}
+            className="h-5 w-5 p-0 hover:bg-gray-200 rounded-sm flex-shrink-0 absolute right-3 bottom-3"
+            title="Collapse sidebar"
+          >
+            <PanelRight className="h-4 w-4 text-gray-600" />
+          </Button>
+        )}
       </div>
       
       {/* Create Button */}

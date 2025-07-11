@@ -50,7 +50,8 @@ import {
   Headphones,
   Brain,
   BarChart3,
-  Megaphone
+  Megaphone,
+  Info
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -123,7 +124,7 @@ import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 import { TapAgentSheet } from "@/components/tap-agent-sheet"
 
-// Add custom animation for the popup
+// Add custom animation for the popup and tab transitions
 const customAnimationStyles = `
   @keyframes slideInUp {
     from {
@@ -138,6 +139,27 @@ const customAnimationStyles = `
   
   .animate-slideInUp {
     animation: slideInUp 0.3s ease-out forwards;
+  }
+  
+  .tab-content-transition {
+    transition: opacity 0.3s ease-in-out;
+  }
+  
+  .tab-content-fade-out {
+    opacity: 0;
+  }
+  
+  .tab-content-fade-in {
+    opacity: 1;
+  }
+  
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* Internet Explorer 10+ */
+    scrollbar-width: none;  /* Firefox */
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;  /* Safari and Chrome */
   }
 `;
 
@@ -167,6 +189,21 @@ export default function DashboardPage() {
   const [scheduledBanners, setScheduledBanners] = useState<any[]>([])
   const [metricsType, setMetricsType] = useState<"loyalty" | "merchant">("loyalty")
   const [metricsTab, setMetricsTab] = useState<'platform' | 'loyalty'>('platform')
+  const [isTransitioning, setIsTransitioning] = useState(false)
+  
+  // Handle tab transition with fade effect
+  const handleMetricsTypeChange = (newType: "loyalty" | "merchant") => {
+    if (newType === metricsType) return
+    
+    setIsTransitioning(true)
+    
+    // After fade out, change content and fade in
+    setTimeout(() => {
+      setMetricsType(newType)
+      setIsTransitioning(false)
+    }, 150) // Half of the total transition duration
+  }
+  
   const [tapAgentMetrics, setTapAgentMetrics] = useState({
     lastRun: null as Date | null,
     rewardsCreated: 0,
@@ -297,6 +334,47 @@ export default function DashboardPage() {
   const [assistantLoading, setAssistantLoading] = useState(false)
   const [activeAgents, setActiveAgents] = useState<any[]>([])
   const [agentsLoading, setAgentsLoading] = useState(false)
+  const [infoPopupOpen, setInfoPopupOpen] = useState<string | null>(null)
+
+  // Info content for each feature
+  const featureInfo = {
+    recurringProgram: {
+      title: "Recurring Program",
+      description: "Set up automated loyalty programs that reward customers for repeat actions like visits, purchases, or specific behaviors. Perfect for coffee shops with punch cards or retail stores with purchase-based rewards.",
+      examples: ["Buy 10 coffees, get 1 free", "Spend $500, earn $50 voucher", "Visit 5 times this month, get 20% off"],
+      benefits: "Increases customer retention and creates predictable revenue streams."
+    },
+    individualReward: {
+      title: "Individual Reward",
+      description: "Create one-time or limited rewards for specific customers or occasions. Flexible reward types include percentage discounts, fixed dollar amounts, or free items.",
+      examples: ["15% off next purchase", "$10 off orders over $50", "Free dessert with meal"],
+      benefits: "Perfect for targeted promotions and special customer recognition."
+    },
+    banner: {
+      title: "Banner",
+      description: "Design eye-catching promotional banners that appear on your customer-facing loyalty app. Highlight special offers, new rewards, or featured products to drive engagement.",
+      examples: ["Happy Hour Special", "New Reward Available", "Limited Time Offer"],
+      benefits: "Increases visibility of promotions and drives customer action."
+    },
+    introReward: {
+      title: "Intro Reward",
+      description: "Welcome new customers with special first-time rewards to encourage sign-ups and initial purchases. These can be Tap-funded rewards that don't cost you anything.",
+      examples: ["$5 welcome voucher", "Free item on first visit", "50 bonus points for signing up"],
+      benefits: "Reduces barrier to entry and increases new customer acquisition."
+    },
+    integrations: {
+      title: "Integrations",
+      description: "Connect your existing business tools to streamline operations. Sync with POS systems for automatic transaction tracking, email platforms for marketing, and CRM systems for customer data.",
+      examples: ["Square POS integration", "Mailchimp email sync", "Lightspeed inventory connection"],
+      benefits: "Automates data flow and reduces manual work across your business systems."
+    },
+    agentCreation: {
+      title: "Agent Creation",
+      description: "Build AI-powered agents that handle routine business tasks automatically. From customer service chatbots to analytics reporting, agents work 24/7 to improve your operations.",
+      examples: ["Customer support bot", "Daily sales reports", "Inventory alerts"],
+      benefits: "Saves time on repetitive tasks and provides consistent service quality."
+    }
+  }
 
   // Add integrations state
   const [integrations, setIntegrations] = useState({
@@ -2504,7 +2582,7 @@ export default function DashboardPage() {
               {/* Metrics type tabs moved to the left */}
               <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
                 <button
-                  onClick={() => setMetricsType("loyalty")}
+                  onClick={() => handleMetricsTypeChange("loyalty")}
                   className={cn(
                     "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                     metricsType === "loyalty"
@@ -2515,7 +2593,7 @@ export default function DashboardPage() {
                   <span>Loyalty</span>
                 </button>
                 <button
-                  onClick={() => setMetricsType("merchant")}
+                  onClick={() => handleMetricsTypeChange("merchant")}
                   className={cn(
                     "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                     metricsType === "merchant"
@@ -2530,58 +2608,88 @@ export default function DashboardPage() {
               </div>
             </div>
             
-        <div className="px-6 pt-2 pb-14 flex-1 overflow-y-auto bg-white">
+        <div className="px-6 pt-2 pb-14 flex-1 overflow-y-auto bg-white scrollbar-hide">
           {/* Content based on selected tab */}
+          <div className={cn(
+            "tab-content-transition",
+            isTransitioning ? "tab-content-fade-out" : "tab-content-fade-in"
+          )}>
           {metricsType === "loyalty" && (
             <>
               {/* Setup Section for Loyalty */}
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-medium">Essential Setup</h2>
-                  <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-md">1/4</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Recurring Program */}
-                  <button className="border-2 border-gray-200 rounded-md p-6 text-center transition-all hover:border-blue-300 bg-white">
-                    <h4 className="font-semibold text-gray-900 mb-1">Recurring Program</h4>
-                    <p className="text-xs text-gray-600 mb-4">Create recurring loyalty programs</p>
-                    <div className="mb-4">
-                      <p className="text-xs text-gray-400">Coffee • Voucher • Transaction-Based</p>
+                  <div className="group relative bg-white border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                    <div className="flex items-start justify-between mb-3">
+                      <h4 className="text-sm font-medium text-gray-900">Recurring Program</h4>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setInfoPopupOpen('recurringProgram')}
+                          className="opacity-40 hover:opacity-70 transition-opacity"
+                        >
+                          <Info className="h-3 w-3 text-gray-600" />
+                        </button>
+                        <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
+                      </div>
                     </div>
+                    <p className="text-xs text-gray-500 mb-4 line-clamp-2">Create recurring loyalty programs that reward customer visits, purchases or specific actions</p>
                     <Button 
                       size="sm" 
-                      variant="outline" 
-                      className="w-full rounded-md text-xs"
+                      variant="ghost" 
+                      className="w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity"
                       asChild
                     >
                       <Link href="/dashboard/rewards">Setup Now</Link>
                     </Button>
-                  </button>
+                  </div>
                   {/* Individual Reward */}
-                  <button className="border-2 border-gray-200 rounded-md p-6 text-center transition-all hover:border-blue-300 bg-white">
-                    <h4 className="font-semibold text-gray-900 mb-1">Individual Reward</h4>
-                    <p className="text-xs text-gray-600 mb-4">Create custom rewards with percentage discounts, fixed amounts or free items</p>
+                  <div className="group relative bg-white border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                    <div className="flex items-start justify-between mb-3">
+                      <h4 className="text-sm font-medium text-gray-900">Individual Reward</h4>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setInfoPopupOpen('individualReward')}
+                          className="opacity-40 hover:opacity-70 transition-opacity"
+                        >
+                          <Info className="h-3 w-3 text-gray-600" />
+                        </button>
+                        <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-4 line-clamp-2">Create custom rewards with percentage discounts, fixed amounts or free items</p>
                     <Button 
                       size="sm" 
-                      variant="outline" 
-                      className="w-full rounded-md text-xs"
+                      variant="ghost" 
+                      className="w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity"
                       onClick={() => setShowRewardDialog(true)}
                     >
                       Setup Now
                     </Button>
-                  </button>
+                  </div>
                 
                   {/* Banner */}
-                  <button className="border-2 border-blue-200 rounded-md p-6 text-center transition-all hover:border-blue-300 bg-blue-50">
-                    <h4 className="font-semibold text-gray-900 mb-1">Banner</h4>
-                    <p className="text-xs text-gray-600 mb-4">Create eye-catching promotional banners</p>
-                    <div className="mb-4">
-                      <p className="text-xs text-gray-400">Offers • Promotions • Featured Products</p>
+                  <div className="group relative bg-white border border-green-200 rounded-lg p-4 transition-all hover:border-green-300 hover:shadow-sm">
+                    <div className="flex items-start justify-between mb-3">
+                      <h4 className="text-sm font-medium text-gray-900">Banner</h4>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setInfoPopupOpen('banner')}
+                          className="opacity-40 hover:opacity-70 transition-opacity"
+                        >
+                          <Info className="h-3 w-3 text-gray-600" />
+                        </button>
+                        <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+                      </div>
                     </div>
+                    <p className="text-xs text-gray-500 mb-4 line-clamp-2">Create eye-catching promotional banners to highlight offers, rewards and featured products</p>
                     <Button 
                       size="sm" 
-                      variant="outline" 
-                      className="w-full rounded-md text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
+                      variant="ghost" 
+                      className="w-full rounded-md text-xs h-7 text-green-600 opacity-60 group-hover:opacity-100 transition-opacity"
                       asChild
                     >
                       <Link href="/dashboard/banners" className="flex items-center gap-2">
@@ -2589,24 +2697,32 @@ export default function DashboardPage() {
                         Configured
                       </Link>
                     </Button>
-                  </button>
+                  </div>
                 
                   {/* Intro Reward */}
-                  <button className="border-2 border-gray-200 rounded-md p-6 text-center transition-all hover:border-blue-300 bg-white">
-                    <h4 className="font-semibold text-gray-900 mb-1">Intro Reward</h4>
-                    <p className="text-xs text-gray-600 mb-4">Welcome new customers with special rewards</p>
-                    <div className="mb-4">
-                      <p className="text-xs text-gray-400">$5 Vouchers • Free Items • Tap Funded</p>
+                  <div className="group relative bg-white border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                    <div className="flex items-start justify-between mb-3">
+                      <h4 className="text-sm font-medium text-gray-900">Intro Reward</h4>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setInfoPopupOpen('introReward')}
+                          className="opacity-40 hover:opacity-70 transition-opacity"
+                        >
+                          <Info className="h-3 w-3 text-gray-600" />
+                        </button>
+                        <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
+                      </div>
                     </div>
+                    <p className="text-xs text-gray-500 mb-4 line-clamp-2">Welcome new customers with special rewards like vouchers, free items or bonus points</p>
                     <Button 
                       size="sm" 
-                      variant="outline" 
-                      className="w-full rounded-md text-xs"
+                      variant="ghost" 
+                      className="w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity"
                       onClick={() => setIsIntroductoryRewardSheetOpen(true)}
                     >
                       Setup Now
                     </Button>
-                  </button>
+                  </div>
                 </div>
           </div>
 
@@ -2921,53 +3037,52 @@ export default function DashboardPage() {
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-medium">Essential Setup</h2>
-                  <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-md">0/2</span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Integrations */}
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors w-72">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <Settings className="h-4 w-4 text-blue-500" />
-                        <h3 className="text-sm font-semibold text-gray-900">Integrations</h3>
-                      </div>
+                  <div className="group relative bg-white border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                    <div className="flex items-start justify-between mb-3">
+                      <h3 className="text-sm font-medium text-gray-900">Integrations</h3>
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
-                          <Clock className="h-3 w-3" />
-                          10 min
-                        </span>
+                        <button
+                          onClick={() => setInfoPopupOpen('integrations')}
+                          className="opacity-40 hover:opacity-70 transition-opacity"
+                        >
+                          <Info className="h-3 w-3 text-gray-600" />
+                        </button>
+                        <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
                       </div>
                     </div>
-                    <p className="text-xs text-gray-600 mb-4 leading-relaxed">Connect your business tools and services.</p>
-                  <Button 
-                    size="sm"
-                      variant="outline" 
-                      className="w-full rounded-md mt-auto text-xs"
-                    asChild
-                  >
-                      <Link href="/dashboard/integrations">Setup Now</Link>
-                  </Button>
-                </div>
-
-                  {/* Agent Creation */}
-                  <div className="border border-gray-200 rounded-md p-5 flex flex-col bg-gray-50 hover:bg-gray-100 transition-colors w-72">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <Bot className="h-4 w-4 text-blue-500" />
-                        <h3 className="text-sm font-semibold text-gray-900">Agent Creation</h3>
-              </div>
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
-                          <Clock className="h-3 w-3" />
-                          7 min
-                        </span>
-                  </div>
-                    </div>
-                    <p className="text-xs text-gray-600 mb-4 leading-relaxed">Create AI agents for business automation.</p>
+                    <p className="text-xs text-gray-500 mb-4 line-clamp-2">Connect your business tools and services like POS systems, email platforms and CRM</p>
                     <Button 
                       size="sm" 
-                      variant="outline" 
-                      className="w-full rounded-md mt-auto text-xs"
+                      variant="ghost" 
+                      className="w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity"
+                      asChild
+                    >
+                      <Link href="/dashboard/integrations">Setup Now</Link>
+                    </Button>
+                  </div>
+
+                  {/* Agent Creation */}
+                  <div className="group relative bg-white border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                    <div className="flex items-start justify-between mb-3">
+                      <h3 className="text-sm font-medium text-gray-900">Agent Creation</h3>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setInfoPopupOpen('agentCreation')}
+                          className="opacity-40 hover:opacity-70 transition-opacity"
+                        >
+                          <Info className="h-3 w-3 text-gray-600" />
+                        </button>
+                        <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-4 line-clamp-2">Create AI agents for business automation like customer service, analytics and reporting</p>
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      className="w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity"
                       asChild
                     >
                       <Link href="/dashboard/agents">Setup Now</Link>
@@ -3140,7 +3255,7 @@ export default function DashboardPage() {
               </div>
             </>
           )}
-
+          </div>
 
         </div>
       </div>
@@ -3289,6 +3404,81 @@ export default function DashboardPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Feature Info Popup */}
+      {infoPopupOpen && featureInfo[infoPopupOpen as keyof typeof featureInfo] && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg max-w-md mx-4 shadow-lg border border-gray-200 overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {(() => {
+                    const title = featureInfo[infoPopupOpen as keyof typeof featureInfo].title;
+                    const words = title.split(' ');
+                    if (words.length === 2) {
+                      return (
+                        <>
+                          <span style={{ color: '#007AFF' }}>{words[0]}</span>
+                          <span className="text-gray-900"> {words[1]}</span>
+                        </>
+                      );
+                    } else {
+                      return <span style={{ color: '#007AFF' }}>{title}</span>;
+                    }
+                  })()}
+                </h3>
+                <Info className="h-5 w-5" style={{ color: '#007AFF' }} />
+              </div>
+            </div>
+            
+            {/* Body */}
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    {featureInfo[infoPopupOpen as keyof typeof featureInfo].description}
+                  </p>
+                </div>
+                
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-2">Examples:</h4>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    {featureInfo[infoPopupOpen as keyof typeof featureInfo].examples.map((example, index) => (
+                      <li key={index} className="flex items-start gap-2">
+                        <div className="h-1.5 w-1.5 bg-blue-400 rounded-full mt-2 flex-shrink-0"></div>
+                        <span>{example}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                
+                <div className="border-l-2 border-gray-300 pl-4">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-1">Benefits:</h4>
+                  <p className="text-sm text-gray-700">
+                    {featureInfo[infoPopupOpen as keyof typeof featureInfo].benefits}
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex justify-between items-center">
+                <p className="text-xs text-gray-500">
+                  Need help setting this up? Contact our support team.
+                </p>
+                <button
+                  onClick={() => setInfoPopupOpen(null)}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  Got it
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

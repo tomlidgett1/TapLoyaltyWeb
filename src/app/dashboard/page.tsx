@@ -51,7 +51,8 @@ import {
   Brain,
   BarChart3,
   Megaphone,
-  Info
+  Info,
+  Repeat
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -88,6 +89,10 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { BasicRewardWizard } from "@/components/basic-reward-wizard"
 import { CreateRewardSheet } from "@/components/create-reward-sheet"
 import { IntroductoryRewardSheet } from "@/components/introductory-reward-sheet"
+import { CreateRewardPopup } from "@/components/create-reward-popup"
+import { IntroductoryRewardPopup } from "@/components/introductory-reward-popup"
+import { CreateManualProgramDialog } from "@/components/create-manual-program-dialog"
+import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
 import { 
   Command,
   CommandDialog,
@@ -201,6 +206,32 @@ export default function DashboardPage() {
     setTimeout(() => {
       setMetricsType(newType)
       setIsTransitioning(false)
+    }, 150) // Half of the total transition duration
+  }
+
+  // Handle live programs tab transition with fade effect
+  const handleLiveProgramsTabChange = (newTab: 'coffee' | 'voucher' | 'transaction' | 'cashback') => {
+    if (newTab === liveProgramsTab) return
+    
+    setIsProgramsTransitioning(true)
+    
+    // After fade out, change content and fade in
+    setTimeout(() => {
+      setLiveProgramsTab(newTab)
+      setIsProgramsTransitioning(false)
+    }, 150) // Half of the total transition duration
+  }
+
+  // Handle metrics tab transition with fade effect
+  const handleMetricsTabChange = (newTab: 'platform' | 'loyalty') => {
+    if (newTab === metricsTab) return
+    
+    setIsMetricsTransitioning(true)
+    
+    // After fade out, change content and fade in
+    setTimeout(() => {
+      setMetricsTab(newTab)
+      setIsMetricsTransitioning(false)
     }, 150) // Half of the total transition duration
   }
   
@@ -335,6 +366,99 @@ export default function DashboardPage() {
   const [activeAgents, setActiveAgents] = useState<any[]>([])
   const [agentsLoading, setAgentsLoading] = useState(false)
   const [infoPopupOpen, setInfoPopupOpen] = useState<string | null>(null)
+  const [createRewardPopupOpen, setCreateRewardPopupOpen] = useState(false)
+  const [introductoryRewardPopupOpen, setIntroductoryRewardPopupOpen] = useState(false)
+  const [programTypeSelectorOpen, setProgramTypeSelectorOpen] = useState(false)
+  const [createManualProgramOpen, setCreateManualProgramOpen] = useState(false)
+  const [createRecurringRewardOpen, setCreateRecurringRewardOpen] = useState(false)
+  
+  const [recurringPrograms, setRecurringPrograms] = useState({
+    hasAny: false,
+    coffee: false,
+    voucher: false,
+    transaction: false,
+    cashback: false
+  })
+  const [liveProgramsTab, setLiveProgramsTab] = useState<'coffee' | 'voucher' | 'transaction' | 'cashback'>('coffee')
+  const [isProgramsTransitioning, setIsProgramsTransitioning] = useState(false)
+  const [isMetricsTransitioning, setIsMetricsTransitioning] = useState(false)
+  const [livePrograms, setLivePrograms] = useState({
+    coffee: [] as any[],
+    voucher: [] as any[],
+    transaction: [] as any[],
+    cashback: null as any,
+    loading: false
+  })
+  const [programCustomers, setProgramCustomers] = useState({
+    coffee: [] as any[],
+    voucher: [] as any[],
+    transaction: [] as any[],
+    cashback: [] as any[],
+    loading: false
+  })
+  const [allCustomers, setAllCustomers] = useState<any[]>([])
+  const [customersLoading, setCustomersLoading] = useState(false)
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('')
+  const [customerSortField, setCustomerSortField] = useState<'fullName' | 'pointsBalance' | 'cashback' | 'lastTransactionDate' | 'totalLifetimeSpend' | 'lifetimeTransactionCount'>('fullName')
+  const [customerSortDirection, setCustomerSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [hasIntroductoryReward, setHasIntroductoryReward] = useState(false)
+
+  // Handle customer sorting
+  const handleCustomerSort = (field: typeof customerSortField) => {
+    if (customerSortField === field) {
+      setCustomerSortDirection(customerSortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setCustomerSortField(field)
+      setCustomerSortDirection('asc')
+    }
+  }
+
+  // Filter and sort customers
+  const getFilteredAndSortedCustomers = () => {
+    let filtered = allCustomers
+
+    // Apply search filter
+    if (customerSearchTerm.trim()) {
+      const searchLower = customerSearchTerm.toLowerCase()
+      filtered = filtered.filter(customer => 
+        customer.fullName?.toLowerCase().includes(searchLower) ||
+        customer.email?.toLowerCase().includes(searchLower)
+      )
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue = a[customerSortField]
+      let bValue = b[customerSortField]
+
+      // Handle null/undefined values
+      if (aValue == null && bValue == null) return 0
+      if (aValue == null) return customerSortDirection === 'asc' ? 1 : -1
+      if (bValue == null) return customerSortDirection === 'asc' ? -1 : 1
+
+      // Handle date fields
+      if (customerSortField === 'lastTransactionDate') {
+        aValue = aValue?.toDate ? aValue.toDate() : new Date(aValue)
+        bValue = bValue?.toDate ? bValue.toDate() : new Date(bValue)
+      }
+
+      // Handle string fields
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return customerSortDirection === 'asc' 
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue)
+      }
+
+      // Handle numeric fields
+      if (customerSortDirection === 'asc') {
+        return aValue - bValue
+      } else {
+        return bValue - aValue
+      }
+    })
+
+    return filtered
+  }
 
   // Info content for each feature
   const featureInfo = {
@@ -560,8 +684,10 @@ export default function DashboardPage() {
                 const data = customerDoc.data()
                 customerData[customerId] = {
                   name: data.fullName || 'Unknown Customer',
-                  // Use the correct field from customers collection
-                  profilePicture: data.profilePictureUrl || null
+                  // Only include profile picture if customer allows sharing with merchants
+                  profilePicture: (data.shareProfileWithMerchants === true && data.profilePictureUrl) 
+                    ? data.profilePictureUrl 
+                    : null
                 }
                 console.log('Processed customer:', customerId, customerData[customerId])
               }
@@ -599,18 +725,22 @@ export default function DashboardPage() {
           const data = doc.data() as {
             customerId?: string
             merchantId: string
-            pointsUsed: number
+            pointsUsed?: number
+            TapCashUsed?: number
             redemptionDate: { toDate(): Date }
             redemptionId: string
             rewardId: string
             rewardName: string
             status: string
+            isNetworkReward?: boolean
           }
           
           return {
             id: doc.id,
             type: "redemption",
-            displayName: data.rewardName || "Unknown Reward",
+            displayName: data.isNetworkReward ? 
+              `${data.rewardName || "Unknown Reward"} (Network Reward)` : 
+              (data.rewardName || "Unknown Reward"),
             customer: {
               id: data.customerId || '',
               name: customerData[data.customerId || '']?.name || "Unknown Customer",
@@ -618,6 +748,8 @@ export default function DashboardPage() {
             },
             timestamp: data.redemptionDate?.toDate() || new Date(),
             points: data.pointsUsed || 0,
+            tapCashUsed: data.TapCashUsed || 0,
+            isNetworkReward: data.isNetworkReward || false,
             status: data.status || "completed",
             rewardName: data.rewardName,
             rewardId: data.rewardId,
@@ -1722,9 +1854,265 @@ export default function DashboardPage() {
       }
     }
     
-    if (user?.uid) {
+    // Function to fetch recurring programs status
+    const fetchRecurringPrograms = async () => {
+      if (!user?.uid) return
+      
+      try {
+        const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
+        
+        if (merchantDoc.exists()) {
+          const data = merchantDoc.data()
+          
+          let hasActivePrograms = false
+          let coffee = false
+          let voucher = false
+          let transaction = false
+          let cashback = false
+          
+          // Check coffee programs
+          if (data.coffeePrograms && Array.isArray(data.coffeePrograms)) {
+            coffee = data.coffeePrograms.some((program: any) => program.active === true)
+            if (coffee) hasActivePrograms = true
+          }
+          
+          // Check voucher programs
+          if (data.voucherPrograms && Array.isArray(data.voucherPrograms)) {
+            voucher = data.voucherPrograms.some((program: any) => program.active === true)
+            if (voucher) hasActivePrograms = true
+          }
+          
+          // Check transaction rewards
+          if (data.transactionRewards && Array.isArray(data.transactionRewards)) {
+            transaction = data.transactionRewards.some((program: any) => program.active === true)
+            if (transaction) hasActivePrograms = true
+          }
+          
+          // Check cashback program
+          if (data.isCashback === true && data.cashbackProgram?.isActive === true) {
+            cashback = true
+            hasActivePrograms = true
+          }
+          
+          setRecurringPrograms({
+            hasAny: hasActivePrograms,
+            coffee,
+            voucher,
+            transaction,
+            cashback
+          })
+          
+          // Check for introductory reward
+          setHasIntroductoryReward(data.hasIntroductoryReward === true)
+        }
+      } catch (error) {
+        console.error('Error fetching recurring programs:', error)
+      }
+    }
+
+    // Function to fetch detailed live programs data
+    const fetchLivePrograms = async () => {
+      if (!user?.uid) return
+      
+      setLivePrograms(prev => ({ ...prev, loading: true }))
+      
+      try {
+        const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
+        
+        if (merchantDoc.exists()) {
+          const data = merchantDoc.data()
+          
+          const activeCoffeePrograms = data.coffeePrograms?.filter((program: any) => program.active === true) || []
+          const activeVoucherPrograms = data.voucherPrograms?.filter((program: any) => program.active === true) || []
+          const activeTransactionPrograms = data.transactionRewards?.filter((program: any) => program.active === true) || []
+          const activeCashbackProgram = (data.isCashback === true && data.cashbackProgram?.isActive === true) ? data.cashbackProgram : null
+          
+          setLivePrograms({
+            coffee: activeCoffeePrograms,
+            voucher: activeVoucherPrograms,
+            transaction: activeTransactionPrograms,
+            cashback: activeCashbackProgram,
+            loading: false
+          })
+          
+          // Set default tab to first available program type (without transition on initial load)
+          if (activeCoffeePrograms.length > 0) {
+            setLiveProgramsTab('coffee')
+          } else if (activeVoucherPrograms.length > 0) {
+            setLiveProgramsTab('voucher')
+          } else if (activeTransactionPrograms.length > 0) {
+            setLiveProgramsTab('transaction')
+          } else if (activeCashbackProgram) {
+            setLiveProgramsTab('cashback')
+          }
+          
+          // Fetch customer data for programs
+          await fetchProgramCustomers(data)
+        }
+      } catch (error) {
+        console.error('Error fetching live programs:', error)
+        setLivePrograms(prev => ({ ...prev, loading: false }))
+      }
+    }
+
+    // Function to fetch customers participating in programs
+    const fetchProgramCustomers = async (merchantData: any) => {
+      if (!user?.uid) return
+      
+      setProgramCustomers(prev => ({ ...prev, loading: true }))
+      
+      try {
+        // Get all customers
+        const customersQuery = query(
+          collection(db, 'merchants', user.uid, 'customers'),
+          orderBy('fullName')
+        )
+        const customersSnapshot = await getDocs(customersQuery)
+        
+        const coffeeCustomers = []
+        const voucherCustomers = []
+        const transactionCustomers = []
+        const cashbackCustomers = []
+        
+        for (const customerDoc of customersSnapshot.docs) {
+          const customerData = customerDoc.data()
+          const customer = { 
+            id: customerDoc.id, 
+            ...customerData,
+            // Include profile picture if available (temporary - removed privacy check for debugging)
+            profilePicture: customerData.profilePictureUrl || null
+          }
+          
+          // Coffee loyalty progress
+          if (merchantData.coffeePrograms?.some((p: any) => p.active)) {
+            try {
+              const coffeeRecordDoc = await getDoc(doc(db, 'merchants', user.uid, 'customers', customer.id, 'coffeeLoyalty', 'record'))
+              if (coffeeRecordDoc.exists()) {
+                const coffeeData = coffeeRecordDoc.data()
+                const coffeeProgram = merchantData.coffeePrograms?.find((p: any) => p.active)
+                if (coffeeProgram && coffeeData.purchaseCount > 0) {
+                  coffeeCustomers.push({
+                    ...customer,
+                    progress: coffeeData.purchaseCount || 0,
+                    target: coffeeProgram.frequency || coffeeProgram.stampsRequired || 10,
+                    progressPercentage: Math.min(((coffeeData.purchaseCount || 0) / (coffeeProgram.frequency || coffeeProgram.stampsRequired || 10)) * 100, 100)
+                  })
+                }
+              }
+            } catch (error) {
+              console.error('Error fetching coffee loyalty for customer:', customer.id, error)
+            }
+          }
+          
+          // Transaction loyalty progress
+          if (merchantData.transactionRewards?.some((p: any) => p.active)) {
+            try {
+              const transactionRecordDoc = await getDoc(doc(db, 'merchants', user.uid, 'customers', customer.id, 'transactionLoyalty', 'record'))
+              if (transactionRecordDoc.exists()) {
+                const transactionData = transactionRecordDoc.data()
+                const transactionProgram = merchantData.transactionRewards?.find((p: any) => p.active)
+                if (transactionProgram && transactionData.transactionCount > 0) {
+                  transactionCustomers.push({
+                    ...customer,
+                    progress: transactionData.transactionCount || 0,
+                    target: transactionProgram.transactionThreshold || 10,
+                    progressPercentage: Math.min(((transactionData.transactionCount || 0) / (transactionProgram.transactionThreshold || 10)) * 100, 100)
+                  })
+                }
+              }
+            } catch (error) {
+              console.error('Error fetching transaction loyalty for customer:', customer.id, error)
+            }
+          }
+          
+          // Voucher loyalty progress
+          if (merchantData.voucherPrograms?.some((p: any) => p.active)) {
+            try {
+              const voucherRecordDoc = await getDoc(doc(db, 'merchants', user.uid, 'customers', customer.id, 'voucherLoyalty', 'record'))
+              if (voucherRecordDoc.exists()) {
+                const voucherData = voucherRecordDoc.data()
+                const voucherProgram = merchantData.voucherPrograms?.find((p: any) => p.active)
+                if (voucherProgram && voucherData.totalSpend > 0) {
+                  voucherCustomers.push({
+                    ...customer,
+                    progress: voucherData.totalSpend || 0,
+                    target: voucherProgram.totalSpendRequired || 100,
+                    progressPercentage: Math.min(((voucherData.totalSpend || 0) / (voucherProgram.totalSpendRequired || 100)) * 100, 100)
+                  })
+                }
+              }
+            } catch (error) {
+              console.error('Error fetching voucher loyalty for customer:', customer.id, error)
+            }
+          }
+          
+          // Cashback earnings
+          if (merchantData.isCashback === true && merchantData.cashbackProgram?.isActive === true) {
+            const customerCashback = (customer as any).cashback
+            if (customerCashback && customerCashback > 0) {
+              cashbackCustomers.push({
+                ...customer,
+                totalCashback: customerCashback || 0
+              })
+            }
+          }
+        }
+        
+        setProgramCustomers({
+          coffee: coffeeCustomers.sort((a, b) => b.progressPercentage - a.progressPercentage),
+          voucher: voucherCustomers.sort((a, b) => b.progressPercentage - a.progressPercentage),
+          transaction: transactionCustomers.sort((a, b) => b.progressPercentage - a.progressPercentage),
+          cashback: cashbackCustomers.sort((a, b) => b.totalCashback - a.totalCashback),
+          loading: false
+        })
+        
+             } catch (error) {
+         console.error('Error fetching program customers:', error)
+         setProgramCustomers(prev => ({ ...prev, loading: false }))
+       }
+     }
+
+     // Function to fetch all customers
+     const fetchAllCustomers = async () => {
+       if (!user?.uid) return
+       
+       setCustomersLoading(true)
+       
+       try {
+         const customersQuery = query(
+           collection(db, 'merchants', user.uid, 'customers'),
+           orderBy('fullName')
+         )
+         const customersSnapshot = await getDocs(customersQuery)
+         
+         const customers = customersSnapshot.docs.map(doc => {
+           const data = doc.data()
+           return {
+             id: doc.id,
+             ...data,
+             // Include profile picture if available (temporary - removed privacy check for debugging)
+             profilePicture: data.profilePictureUrl || null,
+             // Include cashback for TapCash display
+             cashback: data.cashback || 0
+           }
+         })
+         
+         setAllCustomers(customers)
+       } catch (error) {
+         console.error('Error fetching customers:', error)
+       } finally {
+         setCustomersLoading(false)
+       }
+     }
+
+
+     
+     if (user?.uid) {
       fetchActiveAgents()
       fetchIntegrations()
+      fetchRecurringPrograms()
+      fetchLivePrograms()
+      fetchAllCustomers()
     }
   }, [user?.uid]);
 
@@ -2623,7 +3011,11 @@ export default function DashboardPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Recurring Program */}
-                  <div className="group relative bg-white border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                  <div className={`group relative bg-white border rounded-lg p-4 transition-all hover:shadow-sm ${
+                    recurringPrograms.hasAny 
+                      ? 'border-blue-200 hover:border-blue-300' 
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}>
                     <div className="flex items-start justify-between mb-3">
                       <h4 className="text-sm font-medium text-gray-900">Recurring Program</h4>
                       <div className="flex items-center gap-2">
@@ -2633,17 +3025,43 @@ export default function DashboardPage() {
                         >
                           <Info className="h-3 w-3 text-gray-600" />
                         </button>
-                        <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
+                        <div className={`h-2 w-2 rounded-full ${
+                          recurringPrograms.hasAny 
+                            ? 'bg-blue-500' 
+                            : 'bg-gray-300 opacity-60'
+                        }`}></div>
                       </div>
                     </div>
-                    <p className="text-xs text-gray-500 mb-4 line-clamp-2">Create recurring loyalty programs that reward customer visits, purchases or specific actions</p>
+                    <p className="text-xs text-gray-500 mb-4 line-clamp-2">
+                      {recurringPrograms.hasAny ? (
+                        <>
+                          Active: {[
+                            recurringPrograms.coffee && 'Coffee',
+                            recurringPrograms.voucher && 'Voucher',
+                            recurringPrograms.transaction && 'Transaction',
+                            recurringPrograms.cashback && 'Cashback'
+                          ].filter(Boolean).join(', ')} programs
+                        </>
+                      ) : (
+                        'Create recurring loyalty programs that reward customer visits, purchases or specific actions'
+                      )}
+                    </p>
                     <Button 
                       size="sm" 
                       variant="ghost" 
-                      className="w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity"
-                      asChild
+                      className={`w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity ${
+                        recurringPrograms.hasAny ? 'text-blue-600' : ''
+                      }`}
+                      onClick={() => setProgramTypeSelectorOpen(true)}
                     >
-                      <Link href="/dashboard/rewards">Setup Now</Link>
+                      {recurringPrograms.hasAny ? (
+                        <div className="flex items-center gap-2">
+                          <CheckIcon className="h-3 w-3" />
+                          Configured
+                        </div>
+                      ) : (
+                        'Setup Now'
+                      )}
                     </Button>
                   </div>
                   {/* Individual Reward */}
@@ -2665,14 +3083,14 @@ export default function DashboardPage() {
                       size="sm" 
                       variant="ghost" 
                       className="w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity"
-                      onClick={() => setShowRewardDialog(true)}
+                      onClick={() => setCreateRewardPopupOpen(true)}
                     >
                       Setup Now
                     </Button>
                   </div>
                 
                   {/* Banner */}
-                  <div className="group relative bg-white border border-green-200 rounded-lg p-4 transition-all hover:border-green-300 hover:shadow-sm">
+                  <div className="group relative bg-white border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
                     <div className="flex items-start justify-between mb-3">
                       <h4 className="text-sm font-medium text-gray-900">Banner</h4>
                       <div className="flex items-center gap-2">
@@ -2682,14 +3100,14 @@ export default function DashboardPage() {
                         >
                           <Info className="h-3 w-3 text-gray-600" />
                         </button>
-                        <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+                        <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
                       </div>
                     </div>
                     <p className="text-xs text-gray-500 mb-4 line-clamp-2">Create eye-catching promotional banners to highlight offers, rewards and featured products</p>
                     <Button 
                       size="sm" 
                       variant="ghost" 
-                      className="w-full rounded-md text-xs h-7 text-green-600 opacity-60 group-hover:opacity-100 transition-opacity"
+                      className="w-full rounded-md text-xs h-7 text-blue-600 opacity-60 group-hover:opacity-100 transition-opacity"
                       asChild
                     >
                       <Link href="/dashboard/banners" className="flex items-center gap-2">
@@ -2700,7 +3118,11 @@ export default function DashboardPage() {
                   </div>
                 
                   {/* Intro Reward */}
-                  <div className="group relative bg-white border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                  <div className={`group relative bg-white border rounded-lg p-4 transition-all hover:shadow-sm ${
+                    hasIntroductoryReward 
+                      ? 'border-blue-200 hover:border-blue-300' 
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}>
                     <div className="flex items-start justify-between mb-3">
                       <h4 className="text-sm font-medium text-gray-900">Intro Reward</h4>
                       <div className="flex items-center gap-2">
@@ -2710,17 +3132,30 @@ export default function DashboardPage() {
                         >
                           <Info className="h-3 w-3 text-gray-600" />
                         </button>
-                        <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
+                        <div className={`h-2 w-2 rounded-full ${
+                          hasIntroductoryReward 
+                            ? 'bg-blue-500' 
+                            : 'bg-gray-300 opacity-60'
+                        }`}></div>
                       </div>
                     </div>
                     <p className="text-xs text-gray-500 mb-4 line-clamp-2">Welcome new customers with special rewards like vouchers, free items or bonus points</p>
                     <Button 
                       size="sm" 
                       variant="ghost" 
-                      className="w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity"
-                      onClick={() => setIsIntroductoryRewardSheetOpen(true)}
+                      className={`w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity ${
+                        hasIntroductoryReward ? 'text-blue-600' : ''
+                      }`}
+                      onClick={() => setIntroductoryRewardPopupOpen(true)}
                     >
-                      Setup Now
+                      {hasIntroductoryReward ? (
+                        <div className="flex items-center gap-2">
+                          <CheckIcon className="h-3 w-3" />
+                          Configured
+                        </div>
+                      ) : (
+                        'Setup Now'
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -2735,17 +3170,10 @@ export default function DashboardPage() {
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
                       <h3 className="text-sm font-semibold text-gray-900">Recent Activity</h3>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                        className="h-7 px-2 text-xs rounded-md"
-                    asChild
-                  >
-                    <Link href="/store/activity" className="flex items-center gap-1">
-                      View all
-                      <ChevronRight className="h-3 w-3" />
-                    </Link>
-                  </Button>
+                  <Link href="/store/activity" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
+                    View all
+                    <ChevronRight className="h-3 w-3" />
+                  </Link>
                 </div>
               </div>
                   <div className="overflow-x-auto">
@@ -2768,35 +3196,49 @@ export default function DashboardPage() {
                             <tr key={activity.id} className="hover:bg-gray-50">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                  <div className={`h-6 w-6 rounded-full ${
-                                    activity.type === "transaction" ? 'bg-blue-100' : 'bg-blue-100'
-                                  } flex items-center justify-center flex-shrink-0`}>
-                          {activity.type === "transaction" ? (
-                                      <ShoppingCart className="h-3 w-3 text-blue-600" />
-                          ) : (
-                                      <Gift className="h-3 w-3 text-blue-600" />
-                          )}
-                        </div>
+                                  <div className="h-8 w-8 flex-shrink-0">
+                                    {activity.customer.profilePicture ? (
+                                      <img 
+                                        src={activity.customer.profilePicture} 
+                                        alt={activity.customer.name}
+                                        className="h-8 w-8 rounded-full object-cover border border-gray-200"
+                                      />
+                                    ) : (
+                                      <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 ${
+                                        activity.type === "transaction" ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'
+                                      }`}>
+                                        {activity.customer.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                                      </div>
+                                    )}
+                                  </div>
                                   <div className="min-w-0">
                                     <p className="text-sm font-medium text-gray-900 truncate">{activity.customer.name}</p>
                                     <p className="text-xs text-gray-500">{formatTimeAgo(activity.timestamp)}</p>
-                        </div>
+                                  </div>
                                 </div>
                               </td>
                               <td className="px-4 py-3">
                                 <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
                                   activity.type === "transaction" 
                                     ? 'bg-gray-100 text-gray-800' 
-                                    : 'bg-gray-100 text-gray-800'
+                                    : activity.tapCashUsed > 0
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-gray-100 text-gray-800'
                                 }`}>
-                                  {activity.type === "transaction" ? "Purchase" : "Redemption"}
+                                  {activity.type === "transaction" 
+                                    ? "Purchase" 
+                                    : activity.tapCashUsed > 0
+                                      ? "TapCash"
+                                      : "Redemption"}
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-right">
                                 <span className="text-sm font-semibold text-gray-900">
                             {activity.type === "transaction" 
                               ? `$${activity.amount.toFixed(2)}` 
-                              : `${activity.points} pts`}
+                              : activity.tapCashUsed > 0
+                                ? `$${activity.tapCashUsed.toFixed(2)}`
+                                : `${activity.points} pts`}
                                 </span>
                               </td>
                             </tr>
@@ -2812,17 +3254,10 @@ export default function DashboardPage() {
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
                       <h3 className="text-sm font-semibold text-gray-900">Popular Rewards</h3>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                        className="h-7 px-2 text-xs rounded-md"
-                    asChild
-                  >
-                    <Link href="/store/rewards" className="flex items-center gap-1">
-                      View all
-                      <ChevronRight className="h-3 w-3" />
-                    </Link>
-                  </Button>
+                  <Link href="/store/rewards" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
+                    View all
+                    <ChevronRight className="h-3 w-3" />
+                  </Link>
                 </div>
               </div>
                   <div className="overflow-x-auto">
@@ -2875,27 +3310,27 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between">
                       <h3 className="text-sm font-semibold text-gray-900">Metrics</h3>
                       {/* Metrics Tab Container */}
-                      <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+                      <div className="flex items-center gap-4">
                         <button
                           className={cn(
-                            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                            "flex items-center gap-1 text-xs font-medium transition-colors",
                             metricsTab === 'platform'
-                              ? "text-gray-800 bg-white shadow-sm"
-                              : "text-gray-600 hover:bg-gray-200/70"
+                              ? "text-blue-600"
+                              : "text-gray-600 hover:text-gray-800"
                           )}
-                          onClick={() => setMetricsTab('platform')}
+                          onClick={() => handleMetricsTabChange('platform')}
                         >
                           <BarChart3 className="h-3 w-3" />
                           Platform
                         </button>
                         <button
                           className={cn(
-                            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                            "flex items-center gap-1 text-xs font-medium transition-colors",
                             metricsTab === 'loyalty'
-                              ? "text-gray-800 bg-white shadow-sm"
-                              : "text-gray-600 hover:bg-gray-200/70"
+                              ? "text-blue-600"
+                              : "text-gray-600 hover:text-gray-800"
                           )}
-                          onClick={() => setMetricsTab('loyalty')}
+                          onClick={() => handleMetricsTabChange('loyalty')}
                         >
                           <Gift className="h-3 w-3" />
                           Loyalty
@@ -2903,7 +3338,9 @@ export default function DashboardPage() {
                   </div>
                     </div>
                   </div>
-                  <div className="overflow-x-auto">
+                  <div className={`overflow-x-auto tab-content-transition ${
+                    isMetricsTransitioning ? 'tab-content-fade-out' : 'tab-content-fade-in'
+                  }`}>
                     <table className="w-full">
                       <tbody className="divide-y divide-gray-200">
                         {metricsTab === 'platform' ? (
@@ -2911,7 +3348,7 @@ export default function DashboardPage() {
                             <tr className="hover:bg-gray-50">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                  <Eye className="h-4 w-4 text-gray-500" />
+                                  <Eye className="h-4 w-4 text-blue-500" />
                                   <span className="text-sm font-medium text-gray-900">Store Views</span>
                                 </div>
                               </td>
@@ -2922,7 +3359,7 @@ export default function DashboardPage() {
                             <tr className="hover:bg-gray-50">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                  <Gift className="h-4 w-4 text-gray-500" />
+                                  <Gift className="h-4 w-4 text-blue-500" />
                                   <span className="text-sm font-medium text-gray-900">Reward Views</span>
                                 </div>
                               </td>
@@ -2933,7 +3370,7 @@ export default function DashboardPage() {
                             <tr className="hover:bg-gray-50">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                  <ShoppingCart className="h-4 w-4 text-gray-500" />
+                                  <ShoppingCart className="h-4 w-4 text-blue-500" />
                                   <span className="text-sm font-medium text-gray-900">Transactions</span>
                                 </div>
                               </td>
@@ -2944,7 +3381,7 @@ export default function DashboardPage() {
                             <tr className="hover:bg-gray-50">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                  <DollarSign className="h-4 w-4 text-gray-500" />
+                                  <DollarSign className="h-4 w-4 text-blue-500" />
                                   <span className="text-sm font-medium text-gray-900">Avg Order Value</span>
                                 </div>
                               </td>
@@ -3028,6 +3465,584 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Live Programs Section */}
+              {recurringPrograms.hasAny && (
+                <div className="mt-8 max-w-2xl">
+                  <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-gray-900">Live Programs</h3>
+                        {/* Program Type Tabs */}
+                        <div className="flex items-center gap-4">
+                          {recurringPrograms.coffee && (
+                            <button
+                              className={cn(
+                                "flex items-center gap-1 text-xs font-medium transition-colors",
+                                liveProgramsTab === 'coffee'
+                                  ? "text-blue-600"
+                                  : "text-gray-600 hover:text-gray-800"
+                              )}
+                              onClick={() => handleLiveProgramsTabChange('coffee')}
+                            >
+                              <Coffee className="h-3 w-3" />
+                              Coffee
+                            </button>
+                          )}
+                          {recurringPrograms.voucher && (
+                            <button
+                              className={cn(
+                                "flex items-center gap-1 text-xs font-medium transition-colors",
+                                liveProgramsTab === 'voucher'
+                                  ? "text-blue-600"
+                                  : "text-gray-600 hover:text-gray-800"
+                              )}
+                              onClick={() => handleLiveProgramsTabChange('voucher')}
+                            >
+                              <Ticket className="h-3 w-3" />
+                              Voucher
+                            </button>
+                          )}
+                          {recurringPrograms.transaction && (
+                            <button
+                              className={cn(
+                                "flex items-center gap-1 text-xs font-medium transition-colors",
+                                liveProgramsTab === 'transaction'
+                                  ? "text-blue-600"
+                                  : "text-gray-600 hover:text-gray-800"
+                              )}
+                              onClick={() => handleLiveProgramsTabChange('transaction')}
+                            >
+                              <Receipt className="h-3 w-3" />
+                              Transaction
+                            </button>
+                          )}
+                          {recurringPrograms.cashback && (
+                            <button
+                              className={cn(
+                                "flex items-center gap-1 text-xs font-medium transition-colors",
+                                liveProgramsTab === 'cashback'
+                                  ? "text-blue-600"
+                                  : "text-gray-600 hover:text-gray-800"
+                              )}
+                              onClick={() => handleLiveProgramsTabChange('cashback')}
+                            >
+                              <DollarSign className="h-3 w-3" />
+                              Cashback
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                                         {/* Program Metrics */}
+                     <div className={`px-6 py-3 border-b border-gray-100 tab-content-transition ${
+                       isProgramsTransitioning ? 'tab-content-fade-out' : 'tab-content-fade-in'
+                     }`}>
+                       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                         {liveProgramsTab === 'coffee' && (
+                           <>
+                             <div className="text-center">
+                               <div className="text-sm font-medium text-gray-700">{programCustomers.coffee.length}</div>
+                               <div className="text-xs text-gray-400">Active Participants</div>
+                             </div>
+                             <div className="text-center">
+                               <div className="text-sm font-medium text-gray-700">
+                                 {programCustomers.coffee.length > 0 
+                                   ? Math.round(programCustomers.coffee.reduce((sum, c) => sum + c.progress, 0) / programCustomers.coffee.length)
+                                   : 0}
+                               </div>
+                               <div className="text-xs text-gray-400">Avg Stamps</div>
+                             </div>
+                             <div className="text-center">
+                               <div className="text-sm font-medium text-gray-700">
+                                 {programCustomers.coffee.length > 0 
+                                   ? Math.round(programCustomers.coffee.filter(c => c.progressPercentage >= 100).length / programCustomers.coffee.length * 100)
+                                   : 0}%
+                               </div>
+                               <div className="text-xs text-gray-400">Completion Rate</div>
+                             </div>
+                             <div className="text-center">
+                               <div className="text-sm font-medium text-gray-700">
+                                 {programCustomers.coffee.reduce((sum, c) => sum + c.progress, 0)}
+                               </div>
+                               <div className="text-xs text-gray-400">Total Stamps</div>
+                             </div>
+                           </>
+                         )}
+                         
+                         {liveProgramsTab === 'voucher' && (
+                           <>
+                             <div className="text-center">
+                               <div className="text-sm font-medium text-gray-700">{programCustomers.voucher.length}</div>
+                               <div className="text-xs text-gray-400">Active Participants</div>
+                             </div>
+                             <div className="text-center">
+                               <div className="text-sm font-medium text-gray-700">
+                                 ${programCustomers.voucher.length > 0 
+                                   ? (programCustomers.voucher.reduce((sum, c) => sum + c.progress, 0) / programCustomers.voucher.length).toFixed(2)
+                                   : '0.00'}
+                               </div>
+                               <div className="text-xs text-gray-400">Avg Spend</div>
+                             </div>
+                             <div className="text-center">
+                               <div className="text-sm font-medium text-gray-700">
+                                 {programCustomers.voucher.length > 0 
+                                   ? Math.round(programCustomers.voucher.filter(c => c.progressPercentage >= 100).length / programCustomers.voucher.length * 100)
+                                   : 0}%
+                               </div>
+                               <div className="text-xs text-gray-400">Completion Rate</div>
+                             </div>
+                             <div className="text-center">
+                               <div className="text-sm font-medium text-gray-700">
+                                 ${programCustomers.voucher.reduce((sum, c) => sum + c.progress, 0).toFixed(2)}
+                               </div>
+                               <div className="text-xs text-gray-400">Total Spend</div>
+                             </div>
+                           </>
+                         )}
+                         
+                         {liveProgramsTab === 'transaction' && (
+                           <>
+                             <div className="text-center">
+                               <div className="text-sm font-medium text-gray-700">{programCustomers.transaction.length}</div>
+                               <div className="text-xs text-gray-400">Active Participants</div>
+                             </div>
+                             <div className="text-center">
+                               <div className="text-sm font-medium text-gray-700">
+                                 {programCustomers.transaction.length > 0 
+                                   ? Math.round(programCustomers.transaction.reduce((sum, c) => sum + c.progress, 0) / programCustomers.transaction.length)
+                                   : 0}
+                               </div>
+                               <div className="text-xs text-gray-400">Avg Transactions</div>
+                             </div>
+                             <div className="text-center">
+                               <div className="text-sm font-medium text-gray-700">
+                                 {programCustomers.transaction.length > 0 
+                                   ? Math.round(programCustomers.transaction.filter(c => c.progressPercentage >= 100).length / programCustomers.transaction.length * 100)
+                                   : 0}%
+                               </div>
+                               <div className="text-xs text-gray-400">Completion Rate</div>
+                             </div>
+                             <div className="text-center">
+                               <div className="text-sm font-medium text-gray-700">
+                                 {programCustomers.transaction.reduce((sum, c) => sum + c.progress, 0)}
+                               </div>
+                               <div className="text-xs text-gray-400">Total Transactions</div>
+                             </div>
+                           </>
+                         )}
+                         
+                         {liveProgramsTab === 'cashback' && (
+                           <>
+                             <div className="text-center">
+                               <div className="text-sm font-medium text-gray-700">{programCustomers.cashback.length}</div>
+                               <div className="text-xs text-gray-400">Total Participants</div>
+                             </div>
+                             <div className="text-center">
+                               <div className="text-sm font-medium text-gray-700">
+                                 ${programCustomers.cashback.length > 0 
+                                   ? (programCustomers.cashback.reduce((sum, c) => sum + c.totalCashback, 0) / programCustomers.cashback.length).toFixed(2)
+                                   : '0.00'}
+                               </div>
+                               <div className="text-xs text-gray-400">Avg Cashback</div>
+                             </div>
+                             <div className="text-center">
+                               <div className="text-sm font-medium text-gray-700">
+                                 ${programCustomers.cashback.reduce((sum, c) => sum + c.totalCashback, 0).toFixed(2)}
+                               </div>
+                               <div className="text-xs text-gray-400">Total Earned</div>
+                             </div>
+                             <div className="text-center">
+                               <div className="text-sm font-medium text-gray-700">
+                                 ${programCustomers.cashback.length > 0 
+                                   ? Math.max(...programCustomers.cashback.map(c => c.totalCashback)).toFixed(2)
+                                   : '0.00'}
+                               </div>
+                               <div className="text-xs text-gray-400">Top Earner</div>
+                             </div>
+                           </>
+                         )}
+                       </div>
+                     </div>
+                     
+                     <div className={`overflow-x-auto tab-content-transition ${
+                       isProgramsTransitioning ? 'tab-content-fade-out' : 'tab-content-fade-in'
+                     }`}>
+                       {programCustomers.loading ? (
+                         <div className="flex items-center justify-center py-8">
+                           <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
+                         </div>
+                       ) : (
+                         <table className="w-full">
+                           <tbody className="divide-y divide-gray-200">
+                             {liveProgramsTab === 'coffee' && programCustomers.coffee.map((customer, index) => (
+                               <tr key={customer.id} className="hover:bg-gray-50">
+                                 <td className="px-4 py-3">
+                                   <div className="flex items-center gap-3">
+                                     <div className="h-8 w-8 flex-shrink-0">
+                                       {customer.profilePicture ? (
+                                         <img 
+                                           src={customer.profilePicture} 
+                                           alt={customer.fullName}
+                                           className="h-8 w-8 rounded-full object-cover border border-gray-200"
+                                         />
+                                       ) : (
+                                         <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
+                                           {customer.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                                         </div>
+                                       )}
+                                     </div>
+                                     <div className="min-w-0 flex-1">
+                                       <p className="text-sm font-medium text-gray-900 truncate">{customer.fullName}</p>
+                                       <div className="flex items-center gap-2 mt-1">
+                                         <div className="w-32 bg-gray-200 rounded-full h-2">
+                                           <div 
+                                             className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
+                                             style={{ width: `${Math.min(customer.progressPercentage, 100)}%` }}
+                                           ></div>
+                                         </div>
+                                         <span className="text-xs text-gray-500 whitespace-nowrap">
+                                           {customer.progress}/{customer.target}
+                                         </span>
+                                       </div>
+                                     </div>
+                                   </div>
+                                 </td>
+                                 <td className="px-4 py-3 text-center">
+                                   <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
+                                     {Math.round(customer.progressPercentage)}%
+                                   </span>
+                                 </td>
+                                 <td className="px-4 py-3 text-right">
+                                   <span className="text-sm font-semibold text-gray-900">{customer.progress} stamps</span>
+                                 </td>
+                               </tr>
+                             ))}
+                             
+                             {liveProgramsTab === 'voucher' && programCustomers.voucher.map((customer, index) => (
+                               <tr key={customer.id} className="hover:bg-gray-50">
+                                 <td className="px-4 py-3">
+                                   <div className="flex items-center gap-3">
+                                     <div className="h-8 w-8 flex-shrink-0">
+                                       {customer.profilePicture ? (
+                                         <img 
+                                           src={customer.profilePicture} 
+                                           alt={customer.fullName}
+                                           className="h-8 w-8 rounded-full object-cover border border-gray-200"
+                                         />
+                                       ) : (
+                                         <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
+                                           {customer.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                                         </div>
+                                       )}
+                                     </div>
+                                     <div className="min-w-0 flex-1">
+                                       <p className="text-sm font-medium text-gray-900 truncate">{customer.fullName}</p>
+                                       <div className="flex items-center gap-2 mt-1">
+                                         <div className="w-32 bg-gray-200 rounded-full h-2">
+                                           <div 
+                                             className="bg-purple-500 h-2 rounded-full transition-all duration-300" 
+                                             style={{ width: `${Math.min(customer.progressPercentage, 100)}%` }}
+                                           ></div>
+                                         </div>
+                                         <span className="text-xs text-gray-500 whitespace-nowrap">
+                                           ${customer.progress.toFixed(2)}/${customer.target}
+                                         </span>
+                                       </div>
+                                     </div>
+                                   </div>
+                                 </td>
+                                 <td className="px-4 py-3 text-center">
+                                   <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-purple-100 text-purple-800">
+                                     {Math.round(customer.progressPercentage)}%
+                                   </span>
+                                 </td>
+                                 <td className="px-4 py-3 text-right">
+                                   <span className="text-sm font-semibold text-gray-900">${customer.progress.toFixed(2)}</span>
+                                 </td>
+                               </tr>
+                             ))}
+                             
+                             {liveProgramsTab === 'transaction' && programCustomers.transaction.map((customer, index) => (
+                               <tr key={customer.id} className="hover:bg-gray-50">
+                                 <td className="px-4 py-3">
+                                   <div className="flex items-center gap-3">
+                                     <div className="h-8 w-8 flex-shrink-0">
+                                       {customer.profilePicture ? (
+                                         <img 
+                                           src={customer.profilePicture} 
+                                           alt={customer.fullName}
+                                           className="h-8 w-8 rounded-full object-cover border border-gray-200"
+                                         />
+                                       ) : (
+                                         <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
+                                           {customer.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                                         </div>
+                                       )}
+                                     </div>
+                                     <div className="min-w-0 flex-1">
+                                       <p className="text-sm font-medium text-gray-900 truncate">{customer.fullName}</p>
+                                       <div className="flex items-center gap-2 mt-1">
+                                         <div className="w-32 bg-gray-200 rounded-full h-2">
+                                           <div 
+                                             className="bg-green-500 h-2 rounded-full transition-all duration-300" 
+                                             style={{ width: `${Math.min(customer.progressPercentage, 100)}%` }}
+                                           ></div>
+                                         </div>
+                                         <span className="text-xs text-gray-500 whitespace-nowrap">
+                                           {customer.progress}/{customer.target}
+                                         </span>
+                                       </div>
+                                     </div>
+                                   </div>
+                                 </td>
+                                 <td className="px-4 py-3 text-center">
+                                   <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
+                                     {Math.round(customer.progressPercentage)}%
+                                   </span>
+                                 </td>
+                                 <td className="px-4 py-3 text-right">
+                                   <span className="text-sm font-semibold text-gray-900">{customer.progress} transactions</span>
+                                 </td>
+                               </tr>
+                             ))}
+                             
+                             {liveProgramsTab === 'cashback' && programCustomers.cashback.map((customer, index) => (
+                               <tr key={customer.id} className="hover:bg-gray-50">
+                                 <td className="px-4 py-3">
+                                   <div className="flex items-center gap-3">
+                                     <div className="h-8 w-8 flex-shrink-0">
+                                       {customer.profilePicture ? (
+                                         <img 
+                                           src={customer.profilePicture} 
+                                           alt={customer.fullName}
+                                           className="h-8 w-8 rounded-full object-cover border border-gray-200"
+                                         />
+                                       ) : (
+                                         <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
+                                           {customer.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                                         </div>
+                                       )}
+                                     </div>
+                                     <div className="min-w-0">
+                                       <p className="text-sm font-medium text-gray-900 truncate">{customer.fullName}</p>
+                                       <p className="text-xs text-gray-500">Total cashback earned</p>
+                                     </div>
+                                   </div>
+                                 </td>
+                                 <td className="px-4 py-3 text-center">
+                                   <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
+                                     Active
+                                   </span>
+                                 </td>
+                                 <td className="px-4 py-3 text-right">
+                                   <span className="text-sm font-semibold text-gray-900">${customer.totalCashback.toFixed(2)}</span>
+                                 </td>
+                               </tr>
+                             ))}
+                             
+                             {((liveProgramsTab === 'coffee' && programCustomers.coffee.length === 0) ||
+                               (liveProgramsTab === 'voucher' && programCustomers.voucher.length === 0) ||
+                               (liveProgramsTab === 'transaction' && programCustomers.transaction.length === 0) ||
+                               (liveProgramsTab === 'cashback' && programCustomers.cashback.length === 0)) && (
+                               <tr>
+                                 <td colSpan={3} className="px-4 py-8 text-center">
+                                   <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
+                                     <Users className="h-6 w-6 text-gray-400" />
+                                   </div>
+                                   <p className="text-sm font-medium text-gray-700">No participating customers</p>
+                                   <p className="text-xs text-gray-500 mt-1">Customers will appear here once they start participating</p>
+                                 </td>
+                               </tr>
+                             )}
+                           </tbody>
+                         </table>
+                       )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* All Customers Section */}
+              <div className="mt-8">
+                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-gray-900">All Customers</h3>
+                      <Link href="/customers" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
+                        View all
+                        <ChevronRight className="h-3 w-3" />
+                      </Link>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="relative flex-1 max-w-sm">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <input
+                          type="text"
+                          placeholder="Search customers..."
+                          value={customerSearchTerm}
+                          onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {getFilteredAndSortedCustomers().length} of {allCustomers.length} customers
+                      </div>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    {customersLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
+                      </div>
+                    ) : allCustomers.length === 0 ? (
+                      <div className="py-8 text-center">
+                        <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
+                          <Users className="h-6 w-6 text-gray-400" />
+                        </div>
+                        <p className="text-sm font-medium text-gray-700">No customers yet</p>
+                        <p className="text-xs text-gray-500 mt-1">Customers will appear here once they join</p>
+                      </div>
+                    ) : (
+                      <table className="w-full">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left">
+                              <button
+                                onClick={() => handleCustomerSort('fullName')}
+                                className="w-full flex items-center justify-start gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
+                              >
+                                Customer
+                                {customerSortField === 'fullName' && (
+                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                )}
+                              </button>
+                            </th>
+                            <th className="px-4 py-3 text-center">
+                              <button
+                                onClick={() => handleCustomerSort('pointsBalance')}
+                                className="w-full flex items-center justify-center gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
+                              >
+                                Points
+                                {customerSortField === 'pointsBalance' && (
+                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                )}
+                              </button>
+                            </th>
+                            <th className="px-4 py-3 text-center">
+                              <button
+                                onClick={() => handleCustomerSort('cashback')}
+                                className="w-full flex items-center justify-center gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
+                              >
+                                TapCash
+                                {customerSortField === 'cashback' && (
+                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                )}
+                              </button>
+                            </th>
+                            <th className="px-4 py-3 text-center">
+                              <button
+                                onClick={() => handleCustomerSort('lastTransactionDate')}
+                                className="w-full flex items-center justify-center gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
+                              >
+                                Last Order
+                                {customerSortField === 'lastTransactionDate' && (
+                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                )}
+                              </button>
+                            </th>
+                            <th className="px-4 py-3 text-right">
+                              <button
+                                onClick={() => handleCustomerSort('totalLifetimeSpend')}
+                                className="w-full flex items-center justify-end gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
+                              >
+                                Lifetime Spend
+                                {customerSortField === 'totalLifetimeSpend' && (
+                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                )}
+                              </button>
+                            </th>
+                            <th className="px-4 py-3 text-right">
+                              <button
+                                onClick={() => handleCustomerSort('lifetimeTransactionCount')}
+                                className="w-full flex items-center justify-end gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
+                              >
+                                Orders
+                                {customerSortField === 'lifetimeTransactionCount' && (
+                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                )}
+                              </button>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {getFilteredAndSortedCustomers().slice(0, 10).map((customer) => (
+                            <tr key={customer.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="h-8 w-8 flex-shrink-0">
+                                    {customer.profilePicture ? (
+                                      <img 
+                                        src={customer.profilePicture} 
+                                        alt={customer.fullName}
+                                        className="h-8 w-8 rounded-full object-cover border border-gray-200"
+                                      />
+                                    ) : (
+                                      <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-gray-100 text-gray-600">
+                                        {customer.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium text-gray-900 truncate">{customer.fullName}</p>
+                                    <p className="text-xs text-gray-500 truncate">{customer.email}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                {customer.pointsBalance ? (
+                                  <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
+                                    {customer.pointsBalance} pts
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-gray-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                {customer.cashback && customer.cashback > 0 ? (
+                                  <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
+                                    ${customer.cashback.toFixed(2)}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-gray-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className="text-xs text-gray-500">
+                                  {customer.lastTransactionDate 
+                                    ? formatTimeAgo(customer.lastTransactionDate.toDate ? customer.lastTransactionDate.toDate() : new Date(customer.lastTransactionDate))
+                                    : 'Never'
+                                  }
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-sm font-semibold text-gray-900">
+                                  {customer.totalLifetimeSpend ? `$${customer.totalLifetimeSpend.toFixed(2)}` : '$0.00'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-sm font-semibold text-gray-900">
+                                  {customer.lifetimeTransactionCount || 0}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              </div>
             </>
           )}
 
@@ -3094,7 +4109,7 @@ export default function DashboardPage() {
               {/* Connected Integrations Section */}
               <div className="mb-8">
                 <h2 className="text-lg font-medium mb-4">Connected Integrations</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {integrationsLoading ? (
                     <div className="col-span-full flex items-center justify-center py-8">
                       <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
@@ -3105,23 +4120,23 @@ export default function DashboardPage() {
                     const getIntegrationIcon = (integrationKey: string) => {
                       switch (integrationKey) {
                         case 'gmail':
-                          return <img src="/gmailpro.png" alt="Gmail" className="h-8 w-8 object-contain" />
+                          return <img src="/gmailpro.png" alt="Gmail" className="h-5 w-5 object-contain" />
                         case 'google_calendar':
-                          return <img src="/cal.svg" alt="Google Calendar" className="h-8 w-8 object-contain" />
+                          return <img src="/cal.svg" alt="Google Calendar" className="h-5 w-5 object-contain" />
                         case 'google_docs':
-                          return <img src="/docspro.png" alt="Google Docs" className="h-8 w-8 object-contain" />
+                          return <img src="/docspro.png" alt="Google Docs" className="h-5 w-5 object-contain" />
                         case 'google_sheets':
-                          return <img src="/sheetspro.png" alt="Google Sheets" className="h-8 w-8 object-contain" />
+                          return <img src="/sheetspro.png" alt="Google Sheets" className="h-5 w-5 object-contain" />
                         case 'square':
-                          return <img src="/squarepro.png" alt="Square" className="h-8 w-8 object-contain" />
+                          return <img src="/squarepro.png" alt="Square" className="h-5 w-5 object-contain" />
                         case 'lightspeed_new':
-                          return <img src="/lslogo.png" alt="Lightspeed" className="h-8 w-8 object-contain" />
+                          return <img src="/lslogo.png" alt="Lightspeed" className="h-5 w-5 object-contain" />
                         case 'hubspot':
-                          return <img src="/hubspot.png" alt="HubSpot" className="h-8 w-8 object-contain" />
+                          return <img src="/hubspot.png" alt="HubSpot" className="h-5 w-5 object-contain" />
                         case 'outlook':
-                          return <img src="/outlook.png" alt="Outlook" className="h-8 w-8 object-contain" />
+                          return <img src="/outlook.png" alt="Outlook" className="h-5 w-5 object-contain" />
                         default:
-                          return <Settings className="h-8 w-8 text-gray-500" />
+                          return <Settings className="h-5 w-5 text-gray-500" />
                       }
                     }
 
@@ -3132,66 +4147,71 @@ export default function DashboardPage() {
                         case 'google_docs': return 'Google Docs'
                         case 'google_sheets': return 'Google Sheets'
                         case 'square': return 'Square'
-                        case 'lightspeed_new': return 'Lightspeed Retail'
+                        case 'lightspeed_new': return 'Lightspeed'
                         case 'hubspot': return 'HubSpot'
-                        case 'outlook': return 'Microsoft Outlook'
+                        case 'outlook': return 'Outlook'
                         default: return integrationKey
                       }
                     }
 
                     const getIntegrationDescription = (integrationKey: string) => {
                       switch (integrationKey) {
-                        case 'gmail': return 'Email Integration'
-                        case 'google_calendar': return 'Calendar Integration'
-                        case 'google_docs': return 'Document Management'
-                        case 'google_sheets': return 'Spreadsheet Integration'
-                        case 'square': return 'Point of Sale'
-                        case 'lightspeed_new': return 'Point of Sale'
-                        case 'hubspot': return 'CRM Integration'
-                        case 'outlook': return 'Email Integration'
-                        default: return 'Business Tool'
+                        case 'gmail': return 'Connected email platform for automated customer communications and inbox management'
+                        case 'google_calendar': return 'Integrated calendar system for appointment scheduling and event coordination'
+                        case 'google_docs': return 'Document management system for business templates and collaborative editing'
+                        case 'google_sheets': return 'Spreadsheet integration for data analysis and automated reporting workflows'
+                        case 'square': return 'Point of sale system providing seamless transaction processing and inventory tracking'
+                        case 'lightspeed_new': return 'Retail management platform offering comprehensive sales and inventory analytics'
+                        case 'hubspot': return 'Customer relationship management system for lead tracking and marketing automation'
+                        case 'outlook': return 'Enterprise email solution with calendar integration and team collaboration features'
+                        default: return 'Business tool integration for enhanced workflow automation and data synchronisation'
                       }
                     }
 
                     const integrationBoxes = connectedIntegrations.map(([key, integration]) => (
-                      <div key={key} className="bg-gray-50 border border-gray-200 rounded-md p-6 hover:shadow-sm transition-shadow">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="h-12 w-12 rounded-md bg-white flex items-center justify-center">
+                      <div key={key} className="group relative bg-white border border-blue-200 rounded-lg p-4 transition-all hover:border-blue-300 hover:shadow-sm">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2">
                             {getIntegrationIcon(key)}
+                            <h4 className="text-sm font-medium text-gray-900">{getIntegrationName(key)}</h4>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <span className="text-xs text-green-600 font-medium">Connected</span>
-                          </div>
+                          <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="text-sm font-semibold text-gray-900">{getIntegrationName(key)}</h3>
-                            <CheckCircle className="h-3 w-3 text-green-500" />
-                          </div>
-                          <p className="text-xs text-gray-500">{getIntegrationDescription(key)}</p>
-                        </div>
+                        <p className="text-xs text-gray-500 mb-4 line-clamp-2">{getIntegrationDescription(key)}</p>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="w-full rounded-md text-xs h-7 text-blue-600 opacity-60 group-hover:opacity-100 transition-opacity"
+                          asChild
+                        >
+                          <Link href="/dashboard/integrations" className="flex items-center gap-2">
+                            <CheckIcon className="h-3 w-3" />
+                            Connected
+                          </Link>
+                        </Button>
                       </div>
                     ))
 
                     // Add the "Add Integrations" box
                     const addIntegrationsBox = (
-                      <Button
-                        key="add-integrations"
-                        variant="outline"
-                        className="bg-gray-50 border border-gray-200 rounded-md p-6 h-auto flex flex-col items-center justify-center gap-3 hover:bg-gray-100 hover:border-gray-300 transition-colors min-h-[140px]"
-                        asChild
-                      >
-                        <Link href="/dashboard/integrations">
-                          <div className="h-12 w-12 rounded-md bg-blue-50 flex items-center justify-center">
-                            <PlusCircle className="h-8 w-8 text-blue-500" />
+                      <div key="add-integrations" className="group relative bg-white border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <PlusCircle className="h-5 w-5 text-gray-500" />
+                            <h4 className="text-sm font-medium text-gray-900">Add Integrations</h4>
                           </div>
-                          <div className="text-center">
-                            <h3 className="text-sm font-semibold text-gray-900 mb-1">Add Integrations</h3>
-                            <p className="text-xs text-gray-500">Connect your business tools</p>
-                          </div>
-                        </Link>
-                      </Button>
+                          <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
+                        </div>
+                        <p className="text-xs text-gray-500 mb-4 line-clamp-2">Connect your business tools and services like POS systems, email platforms and CRM</p>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity"
+                          asChild
+                        >
+                          <Link href="/dashboard/integrations">Setup Now</Link>
+                        </Button>
+                      </div>
                     )
 
                     if (connectedIntegrations.length === 0) {
@@ -3206,7 +4226,7 @@ export default function DashboardPage() {
                             {/* Active Agents Section for Merchant */}
               <div className="mb-8">
                 <h2 className="text-lg font-medium mb-4">Active Agents</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {agentsLoading ? (
                     <div className="col-span-full flex items-center justify-center py-8">
                       <div className="h-6 w-6 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
@@ -3214,41 +4234,47 @@ export default function DashboardPage() {
                   ) : (
                     <>
                                             {activeAgents.map((agent, index) => (
-                        <div key={agent.id} className="bg-gray-50 border border-gray-200 rounded-md p-6 hover:shadow-sm transition-shadow">
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="h-12 w-12 rounded-md bg-white flex items-center justify-center">
-                              <Bot className="h-8 w-8 text-gray-500" />
-                          </div>
-                            <div className="flex items-center gap-1">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span className="text-xs text-green-600 font-medium">Active</span>
+                        <div key={agent.id} className="group relative bg-white border border-blue-200 rounded-lg p-4 transition-all hover:border-blue-300 hover:shadow-sm">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <Bot className="h-5 w-5 text-gray-500" />
+                              <h4 className="text-sm font-medium text-gray-900">{agent.name}</h4>
                             </div>
+                            <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
                           </div>
-                          <div>
-                            <h3 className="text-sm font-semibold text-gray-900 mb-1">{agent.name}</h3>
-                            <p className="text-xs text-gray-500 mb-2">{agent.description}</p>
-                            <p className="text-xs text-gray-400">
-                              {agent.lastRun ? `Last run ${formatTimeAgo(agent.lastRun)}` : 'Never run'}
-                            </p>
-                        </div>
+                          <p className="text-xs text-gray-500 mb-4 line-clamp-2">{agent.description}</p>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="w-full rounded-md text-xs h-7 text-blue-600 opacity-60 group-hover:opacity-100 transition-opacity"
+                            asChild
+                          >
+                            <Link href="/dashboard/agents" className="flex items-center gap-2">
+                              <CheckIcon className="h-3 w-3" />
+                              {agent.lastRun ? `Active` : 'Ready'}
+                            </Link>
+                          </Button>
                   </div>
                       ))}
                       
-                                            <Button
-                        variant="outline"
-                        className="bg-gray-50 border border-gray-200 rounded-md p-6 h-auto flex flex-col items-center justify-center gap-3 hover:bg-gray-100 hover:border-gray-300 transition-colors min-h-[140px]"
-                        asChild
-                      >
-                        <Link href="/dashboard/agents">
-                          <div className="h-12 w-12 rounded-md bg-blue-50 flex items-center justify-center">
-                            <PlusCircle className="h-8 w-8 text-blue-500" />
-              </div>
-                          <div className="text-center">
-                            <h3 className="text-sm font-semibold text-gray-900 mb-1">Add Agents</h3>
-                            <p className="text-xs text-gray-500">Create AI agents</p>
-            </div>
-                        </Link>
-                      </Button>
+                      <div className="group relative bg-white border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <PlusCircle className="h-5 w-5 text-gray-500" />
+                            <h4 className="text-sm font-medium text-gray-900">Add Agents</h4>
+                          </div>
+                          <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
+                        </div>
+                        <p className="text-xs text-gray-500 mb-4 line-clamp-2">Create AI agents for business automation like customer service, analytics and reporting</p>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity"
+                          asChild
+                        >
+                          <Link href="/dashboard/agents">Setup Now</Link>
+                        </Button>
+                      </div>
                     </>
                   )}
           </div>
@@ -3473,6 +4499,81 @@ export default function DashboardPage() {
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
                 >
                   Got it
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Popup Components */}
+      <CreateRewardPopup open={createRewardPopupOpen} onOpenChange={setCreateRewardPopupOpen} />
+      <IntroductoryRewardPopup open={introductoryRewardPopupOpen} onOpenChange={setIntroductoryRewardPopupOpen} />
+      <CreateManualProgramDialog open={createManualProgramOpen} onOpenChange={setCreateManualProgramOpen} />
+      <CreateRecurringRewardDialog open={createRecurringRewardOpen} onOpenChange={setCreateRecurringRewardOpen} />
+
+            {/* Program Type Selector Popup */}
+      {programTypeSelectorOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] animate-in fade-in duration-200"
+          onClick={() => setProgramTypeSelectorOpen(false)}
+        >
+          <div 
+            className="bg-white rounded-lg max-w-md mx-4 shadow-lg border border-gray-200 overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                <span style={{ color: '#007AFF' }}>Create</span> Program
+              </h3>
+            </div>
+            
+            {/* Body */}
+            <div className="p-6">
+              <div className="space-y-2">
+                <button
+                  onClick={() => {
+                    setCreateManualProgramOpen(true);
+                    setTimeout(() => setProgramTypeSelectorOpen(false), 100);
+                  }}
+                  className="w-full p-3 text-left border border-gray-200 rounded-md hover:bg-gray-50 hover:border-blue-300 transition-colors"
+                >
+                  <div className="flex items-start gap-3">
+                    <Settings className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900">Custom Program</h4>
+                      <p className="text-xs text-gray-500">Create a manual program with custom rewards and conditions</p>
+                    </div>
+                  </div>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setCreateRecurringRewardOpen(true);
+                    setTimeout(() => setProgramTypeSelectorOpen(false), 100);
+                  }}
+                  className="w-full p-3 text-left border border-gray-200 rounded-md hover:bg-gray-50 hover:border-blue-300 transition-colors"
+                >
+                  <div className="flex items-start gap-3">
+                    <Repeat className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900">Recurring Program</h4>
+                      <p className="text-xs text-gray-500">Set up coffee programs, vouchers, or cashback rewards</p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setProgramTypeSelectorOpen(false)}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  Cancel
                 </button>
               </div>
             </div>

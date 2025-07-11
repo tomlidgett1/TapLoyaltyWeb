@@ -2360,7 +2360,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                         )}
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-96 rounded-md">
+                    <DropdownMenuContent align="end" className="w-[450px] rounded-md">
                       <div className="flex items-center justify-between px-4 py-2 border-b">
                         <h3 className="font-medium">Notifications</h3>
                         {unreadCount > 0 && (
@@ -2400,8 +2400,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                   {getNotificationIcon(notification.type)}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex justify-between items-start">
-                                    <p className="text-sm font-medium">
+                                  <div className="flex justify-between items-start gap-3">
+                                    <p className="text-sm font-medium flex-1">
                                       {notification.type === "AGENT_ACTION" ? (
                                         <>
                                           <span className="agent-notification-gradient">
@@ -2413,7 +2413,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                         notification.message
                                       )}
                                     </p>
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
                                       {formatTimeAgo(notification.dateCreated || notification.timestamp)}
                                     </p>
                                   </div>

@@ -261,6 +261,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   const [createManualProgramOpen, setCreateManualProgramOpen] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isInternalChange, setIsInternalChange] = useState(true)
+  const [createDropdownOpen, setCreateDropdownOpen] = useState(false)
   
   // Merchant status and plan state
   const [merchantStatus, setMerchantStatus] = useState<'active' | 'inactive'>('active')
@@ -278,8 +279,14 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
 
   // Close dropdown menus when sheets are opened/closed
   useEffect(() => {
-    // Reset the dropdown states when sheets are opened or closed
-    // No custom dropdown state to reset anymore since we use DropdownMenu components
+    // Close the create dropdown when any dialog/sheet opens
+    if (createSheetOpen || createRewardSheetOpen || createRewardPopupOpen || createRecurringOpen || 
+        createBannerOpen || broadcastDialogOpen || createRuleOpen || introRewardOpen || 
+        setupPopupOpen || networkRewardOpen || networkRewardPopupOpen || sendBroadcastPopupOpen || 
+        createPointsRulePopupOpen || introductoryRewardPopupOpen || programTypeSelectorOpen || 
+        createManualProgramOpen) {
+      setCreateDropdownOpen(false)
+    }
   }, [createSheetOpen, createRewardSheetOpen, createRewardPopupOpen, createRecurringOpen, createBannerOpen, broadcastDialogOpen, createRuleOpen, introRewardOpen, setupPopupOpen, networkRewardOpen, networkRewardPopupOpen, sendBroadcastPopupOpen, createPointsRulePopupOpen, introductoryRewardPopupOpen, programTypeSelectorOpen, createManualProgramOpen])
 
   // Notify parent component when collapse state changes (only for internal changes)
@@ -572,7 +579,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       {/* Create Button */}
       <div className="px-3 mb-2">
         {isCollapsed ? (
-          <DropdownMenu>
+          <DropdownMenu open={createDropdownOpen} onOpenChange={setCreateDropdownOpen}>
             <DropdownMenuTrigger asChild>
               <button
                 className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 w-full h-9"
@@ -624,7 +631,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <DropdownMenu>
+          <DropdownMenu open={createDropdownOpen} onOpenChange={setCreateDropdownOpen}>
             <DropdownMenuTrigger asChild>
               <button
                 className="group flex items-center justify-between w-full gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 h-9"

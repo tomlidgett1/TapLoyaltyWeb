@@ -3011,7 +3011,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Recurring Program */}
-                  <div className={`group relative bg-white border rounded-lg p-4 transition-all hover:shadow-sm ${
+                  <div className={`group relative bg-gray-50 border rounded-lg p-4 transition-all hover:shadow-sm ${
                     recurringPrograms.hasAny 
                       ? 'border-blue-200 hover:border-blue-300' 
                       : 'border-gray-200 hover:border-gray-300'
@@ -3048,15 +3048,16 @@ export default function DashboardPage() {
                     </p>
                     <Button 
                       size="sm" 
-                      variant="ghost" 
-                      className={`w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity ${
-                        recurringPrograms.hasAny ? 'text-blue-600' : ''
+                      className={`w-full rounded-md text-xs h-8 font-medium transition-all ${
+                        recurringPrograms.hasAny 
+                          ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100' 
+                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400'
                       }`}
                       onClick={() => setProgramTypeSelectorOpen(true)}
                     >
                       {recurringPrograms.hasAny ? (
                         <div className="flex items-center gap-2">
-                          <CheckIcon className="h-3 w-3" />
+                          <CheckIcon className="h-4 w-4" />
                           Configured
                         </div>
                       ) : (
@@ -3065,7 +3066,7 @@ export default function DashboardPage() {
                     </Button>
                   </div>
                   {/* Individual Reward */}
-                  <div className="group relative bg-white border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                  <div className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
                     <div className="flex items-start justify-between mb-3">
                       <h4 className="text-sm font-medium text-gray-900">Individual Reward</h4>
                       <div className="flex items-center gap-2">
@@ -3081,8 +3082,7 @@ export default function DashboardPage() {
                     <p className="text-xs text-gray-500 mb-4 line-clamp-2">Create custom rewards with percentage discounts, fixed amounts or free items</p>
                     <Button 
                       size="sm" 
-                      variant="ghost" 
-                      className="w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity"
+                      className="w-full rounded-md text-xs h-8 font-medium bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all"
                       onClick={() => setCreateRewardPopupOpen(true)}
                     >
                       Setup Now
@@ -3090,7 +3090,7 @@ export default function DashboardPage() {
                   </div>
                 
                   {/* Banner */}
-                  <div className="group relative bg-white border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                  <div className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
                     <div className="flex items-start justify-between mb-3">
                       <h4 className="text-sm font-medium text-gray-900">Banner</h4>
                       <div className="flex items-center gap-2">
@@ -3106,19 +3106,18 @@ export default function DashboardPage() {
                     <p className="text-xs text-gray-500 mb-4 line-clamp-2">Create eye-catching promotional banners to highlight offers, rewards and featured products</p>
                     <Button 
                       size="sm" 
-                      variant="ghost" 
-                      className="w-full rounded-md text-xs h-7 text-blue-600 opacity-60 group-hover:opacity-100 transition-opacity"
+                      className="w-full rounded-md text-xs h-8 font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-all"
                       asChild
                     >
                       <Link href="/dashboard/banners" className="flex items-center gap-2">
-                        <CheckIcon className="h-3 w-3" />
+                        <CheckIcon className="h-4 w-4" />
                         Configured
                       </Link>
                     </Button>
                   </div>
                 
                   {/* Intro Reward */}
-                  <div className={`group relative bg-white border rounded-lg p-4 transition-all hover:shadow-sm ${
+                  <div className={`group relative bg-gray-50 border rounded-lg p-4 transition-all hover:shadow-sm ${
                     hasIntroductoryReward 
                       ? 'border-blue-200 hover:border-blue-300' 
                       : 'border-gray-200 hover:border-gray-300'
@@ -3142,15 +3141,16 @@ export default function DashboardPage() {
                     <p className="text-xs text-gray-500 mb-4 line-clamp-2">Welcome new customers with special rewards like vouchers, free items or bonus points</p>
                     <Button 
                       size="sm" 
-                      variant="ghost" 
-                      className={`w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity ${
-                        hasIntroductoryReward ? 'text-blue-600' : ''
+                      className={`w-full rounded-md text-xs h-8 font-medium transition-all ${
+                        hasIntroductoryReward 
+                          ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100' 
+                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400'
                       }`}
                       onClick={() => setIntroductoryRewardPopupOpen(true)}
                     >
                       {hasIntroductoryReward ? (
                         <div className="flex items-center gap-2">
-                          <CheckIcon className="h-3 w-3" />
+                          <CheckIcon className="h-4 w-4" />
                           Configured
                         </div>
                       ) : (
@@ -3283,12 +3283,12 @@ export default function DashboardPage() {
                         </div>
                               </td>
                               <td className="px-4 py-3 text-center">
-                                <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-800">
+                                <span className="text-xs font-medium text-gray-700">
                                   {reward.pointsCost} pts
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{reward.views || 0}</span>
+                                <span className="text-sm font-medium text-gray-700">{reward.views || 0}</span>
                               </td>
                             </tr>
                     ))}
@@ -3347,7 +3347,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.totalStoreViews}</span>
+                                <span className="text-sm font-medium text-gray-700">{metrics.totalStoreViews}</span>
                               </td>
                             </tr>
                             <tr className="hover:bg-gray-50">
@@ -3358,7 +3358,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.totalRewardViews}</span>
+                                <span className="text-sm font-medium text-gray-700">{metrics.totalRewardViews}</span>
                               </td>
                             </tr>
                             <tr className="hover:bg-gray-50">
@@ -3369,7 +3369,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.totalTransactions}</span>
+                                <span className="text-sm font-medium text-gray-700">{metrics.totalTransactions}</span>
                               </td>
                             </tr>
                             <tr className="hover:bg-gray-50">
@@ -3380,7 +3380,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">${metrics.avgOrderValue}</span>
+                                <span className="text-sm font-medium text-gray-700">${metrics.avgOrderValue}</span>
                               </td>
                             </tr>
                           </>
@@ -3394,7 +3394,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.totalCustomers}</span>
+                                <span className="text-sm font-medium text-gray-700">{metrics.totalCustomers}</span>
                               </td>
                             </tr>
                             <tr className="hover:bg-gray-50">
@@ -3405,7 +3405,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.activeCustomers}</span>
+                                <span className="text-sm font-medium text-gray-700">{metrics.activeCustomers}</span>
                               </td>
                             </tr>
                             <tr className="hover:bg-gray-50">
@@ -3416,7 +3416,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.totalPointsIssued.toLocaleString()}</span>
+                                <span className="text-sm font-medium text-gray-700">{metrics.totalPointsIssued.toLocaleString()}</span>
                               </td>
                             </tr>
                             <tr className="hover:bg-gray-50">
@@ -3427,7 +3427,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.totalRedemptions}</span>
+                                <span className="text-sm font-medium text-gray-700">{metrics.totalRedemptions}</span>
                               </td>
                             </tr>
                             <tr className="hover:bg-gray-50">
@@ -3438,7 +3438,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.redemptionRate}%</span>
+                                <span className="text-sm font-medium text-gray-700">{metrics.redemptionRate}%</span>
                               </td>
                             </tr>
                             <tr className="hover:bg-gray-50">
@@ -3449,7 +3449,7 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded-md">{metrics.activeRewards}</span>
+                                <span className="text-sm font-medium text-gray-700">{metrics.activeRewards}</span>
                               </td>
                             </tr>
                           </>
@@ -4049,7 +4049,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Integrations */}
-                  <div className="group relative bg-white border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                  <div className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
                     <div className="flex items-start justify-between mb-3">
                       <h3 className="text-sm font-medium text-gray-900">Integrations</h3>
                       <div className="flex items-center gap-2">
@@ -4065,8 +4065,7 @@ export default function DashboardPage() {
                     <p className="text-xs text-gray-500 mb-4 line-clamp-2">Connect your business tools and services like POS systems, email platforms and CRM</p>
                     <Button 
                       size="sm" 
-                      variant="ghost" 
-                      className="w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity"
+                      className="w-full rounded-md text-xs h-8 font-medium bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all"
                       asChild
                     >
                       <Link href="/dashboard/integrations">Setup Now</Link>
@@ -4074,7 +4073,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Agent Creation */}
-                  <div className="group relative bg-white border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                  <div className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
                     <div className="flex items-start justify-between mb-3">
                       <h3 className="text-sm font-medium text-gray-900">Agent Creation</h3>
                       <div className="flex items-center gap-2">
@@ -4090,8 +4089,7 @@ export default function DashboardPage() {
                     <p className="text-xs text-gray-500 mb-4 line-clamp-2">Create AI agents for business automation like customer service, analytics and reporting</p>
                     <Button 
                       size="sm" 
-                      variant="ghost" 
-                      className="w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity"
+                      className="w-full rounded-md text-xs h-8 font-medium bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all"
                       asChild
                     >
                       <Link href="/dashboard/agents">Setup Now</Link>
@@ -4163,7 +4161,7 @@ export default function DashboardPage() {
                     }
 
                     const integrationBoxes = connectedIntegrations.map(([key, integration]) => (
-                      <div key={key} className="group relative bg-white border border-blue-200 rounded-lg p-4 transition-all hover:border-blue-300 hover:shadow-sm">
+                      <div key={key} className="group relative bg-gray-50 border border-blue-200 rounded-lg p-4 transition-all hover:border-blue-300 hover:shadow-sm">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2">
                             {getIntegrationIcon(key)}
@@ -4174,12 +4172,11 @@ export default function DashboardPage() {
                         <p className="text-xs text-gray-500 mb-4 line-clamp-2">{getIntegrationDescription(key)}</p>
                         <Button 
                           size="sm" 
-                          variant="ghost" 
-                          className="w-full rounded-md text-xs h-7 text-blue-600 opacity-60 group-hover:opacity-100 transition-opacity"
+                          className="w-full rounded-md text-xs h-8 font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-all"
                           asChild
                         >
                           <Link href="/dashboard/integrations" className="flex items-center gap-2">
-                            <CheckIcon className="h-3 w-3" />
+                            <CheckIcon className="h-4 w-4" />
                             Connected
                           </Link>
                         </Button>
@@ -4188,7 +4185,7 @@ export default function DashboardPage() {
 
                     // Add the "Add Integrations" box
                     const addIntegrationsBox = (
-                      <div key="add-integrations" className="group relative bg-white border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                      <div key="add-integrations" className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2">
                             <PlusCircle className="h-5 w-5 text-gray-500" />
@@ -4199,8 +4196,7 @@ export default function DashboardPage() {
                         <p className="text-xs text-gray-500 mb-4 line-clamp-2">Connect your business tools and services like POS systems, email platforms and CRM</p>
                         <Button 
                           size="sm" 
-                          variant="ghost" 
-                          className="w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity"
+                          className="w-full rounded-md text-xs h-8 font-medium bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all"
                           asChild
                         >
                           <Link href="/dashboard/integrations">Setup Now</Link>
@@ -4228,7 +4224,7 @@ export default function DashboardPage() {
                   ) : (
                     <>
                                             {activeAgents.map((agent, index) => (
-                        <div key={agent.id} className="group relative bg-white border border-blue-200 rounded-lg p-4 transition-all hover:border-blue-300 hover:shadow-sm">
+                        <div key={agent.id} className="group relative bg-gray-50 border border-blue-200 rounded-lg p-4 transition-all hover:border-blue-300 hover:shadow-sm">
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-2">
                               <Bot className="h-5 w-5 text-gray-500" />
@@ -4239,19 +4235,18 @@ export default function DashboardPage() {
                           <p className="text-xs text-gray-500 mb-4 line-clamp-2">{agent.description}</p>
                           <Button 
                             size="sm" 
-                            variant="ghost" 
-                            className="w-full rounded-md text-xs h-7 text-blue-600 opacity-60 group-hover:opacity-100 transition-opacity"
+                            className="w-full rounded-md text-xs h-8 font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-all"
                             asChild
                           >
                             <Link href="/dashboard/agents" className="flex items-center gap-2">
-                              <CheckIcon className="h-3 w-3" />
+                              <CheckIcon className="h-4 w-4" />
                               {agent.lastRun ? `Active` : 'Ready'}
                             </Link>
                           </Button>
                   </div>
                       ))}
                       
-                      <div className="group relative bg-white border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                      <div className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2">
                             <PlusCircle className="h-5 w-5 text-gray-500" />
@@ -4262,8 +4257,7 @@ export default function DashboardPage() {
                         <p className="text-xs text-gray-500 mb-4 line-clamp-2">Create AI agents for business automation like customer service, analytics and reporting</p>
                         <Button 
                           size="sm" 
-                          variant="ghost" 
-                          className="w-full rounded-md text-xs h-7 opacity-60 group-hover:opacity-100 transition-opacity"
+                          className="w-full rounded-md text-xs h-8 font-medium bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all"
                           asChild
                         >
                           <Link href="/dashboard/agents">Setup Now</Link>
@@ -4427,8 +4421,14 @@ export default function DashboardPage() {
 
       {/* Feature Info Popup */}
       {infoPopupOpen && featureInfo[infoPopupOpen as keyof typeof featureInfo] && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
-          <div className="bg-white rounded-lg max-w-md mx-4 shadow-lg border border-gray-200 overflow-hidden">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] animate-in fade-in duration-200"
+          onClick={() => setInfoPopupOpen(null)}
+        >
+          <div 
+            className="bg-white rounded-lg max-w-md mx-4 shadow-lg border border-gray-200 overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="px-6 py-4 border-b border-gray-200">
               <div className="flex items-center justify-between">

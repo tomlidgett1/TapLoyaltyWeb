@@ -2433,116 +2433,45 @@ const RewardsTabContent = () => {
           ) : rewardCategory === "customer-search" ? (
             <CustomerSearchTabContent />
           ) : (
-          <Card className="rounded-md overflow-hidden">
-            <CardContent className="p-0">
-              <Table>
+          <div className="w-full bg-white border border-gray-200 rounded-md shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table className="w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[320px]">
-                      <Button 
-                        variant="ghost" 
-                        onClick={() => handleSort("rewardName")}
-                        className="flex items-center gap-1 px-0 font-medium"
-                      >
-                        Preview
-                        {sortField === "rewardName" && (
-                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </TableHead>
-                    <TableHead className="text-center">
-                      <Button 
-                        variant="ghost" 
-                        onClick={() => handleSort("type")}
-                        className="flex items-center gap-1 px-0 font-medium mx-auto"
-                      >
-                        Type
-                        {sortField === "type" && (
-                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </TableHead>
-                    <TableHead className="text-center">
-                      <Button 
-                        variant="ghost" 
-                        onClick={() => handleSort("pointsCost")}
-                        className="flex items-center gap-1 px-0 font-medium mx-auto"
-                      >
-                        Points
-                        {sortField === "pointsCost" && (
-                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </TableHead>
-                    <TableHead className="text-center">
-                      <Button 
-                        variant="ghost" 
-                        onClick={() => handleSort("redemptionCount")}
-                        className="flex items-center gap-1 px-0 font-medium mx-auto"
-                      >
-                        Redemptions
-                        {sortField === "redemptionCount" && (
-                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </TableHead>
-
-                    <TableHead className="text-center">
-                      <div className="flex items-center gap-1 px-0 font-medium mx-auto">
-                        <Eye className="h-4 w-4" />
-                        Visibility
-                      </div>
-                    </TableHead>
-                    <TableHead className="text-center">
-                      <Button 
-                        variant="ghost" 
-                        onClick={() => handleSort("createdAt")}
-                        className="flex items-center gap-1 px-0 font-medium mx-auto"
-                      >
-                        Created
-                        {sortField === "createdAt" && (
-                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </TableHead>
-                    <TableHead className="text-center">
-                      <Button 
-                        variant="ghost" 
-                        onClick={() => handleSort("isActive")}
-                        className="flex items-center gap-1 px-0 font-medium mx-auto"
-                      >
-                        Active
-                        {sortField === "isActive" && (
-                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </TableHead>
+                    <TableHead className="w-[320px]">Preview</TableHead>
+                    <TableHead className="text-center">Type</TableHead>
+                    <TableHead className="text-center">Points</TableHead>
+                    <TableHead className="text-center">Redemptions</TableHead>
+                    <TableHead className="text-center">Visibility</TableHead>
+                    <TableHead className="text-center">Created</TableHead>
+                    <TableHead className="text-center">Active</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loadingRewards ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-24 text-center">
-                        <div className="flex justify-center">
-                          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
+                      <TableCell colSpan={8} className="h-32 text-center px-6 py-8">
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600"></div>
+                          <p className="text-sm text-gray-500 mt-3">Loading rewards...</p>
                         </div>
                       </TableCell>
                     </TableRow>
                   ) : getFilteredRewards().length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-24 text-center">
+                      <TableCell colSpan={8} className="h-40 text-center px-6 py-12">
                         <div className="flex flex-col items-center justify-center">
-                          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                            <Gift className="h-6 w-6 text-muted-foreground" />
+                          <div className="h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center">
+                            <Gift className="h-8 w-8 text-gray-400" />
                           </div>
-                          <h3 className="mt-4 text-lg font-medium">No rewards found</h3>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {searchQuery ? "Try adjusting your search query" : "Create your first reward to get started"}
+                          <h3 className="mt-4 text-lg font-semibold text-gray-900">No rewards found</h3>
+                          <p className="text-sm text-gray-500 mt-2 max-w-sm">
+                            {searchQuery ? "Try adjusting your search query or filters" : "Create your first reward to get started with your loyalty program"}
                           </p>
                           {!searchQuery && (
                             <Button 
-                              className="mt-4 h-9 gap-2 rounded-md"
+                              className="mt-6 h-10 gap-2 rounded-md bg-blue-600 hover:bg-blue-700"
                               onClick={() => router.push('/create')}
                             >
                               <Plus className="h-4 w-4" />
@@ -2556,52 +2485,54 @@ const RewardsTabContent = () => {
                     getFilteredRewards().map((reward) => (
                       <TableRow 
                         key={reward.id}
-                        className="cursor-pointer hover:bg-gray-50"
+                        className="cursor-pointer hover:bg-gray-50/80 transition-colors border-b border-gray-100 last:border-b-0"
                         onClick={() => handleViewReward(reward.id)}
                       >
-                        <TableCell className="font-medium py-2 px-4">
+                        <TableCell className="font-medium py-4 px-6">
                           <RewardPreviewCard reward={reward} />
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center px-6 py-4">
                           {reward.programType === "agent" ? (
-                            <div className="font-medium">
-                              <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-orange-500">
+                            <div className="font-semibold">
+                              <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-orange-600">
                                 Agent
                               </span>
                             </div>
                           ) : reward.programType ? (
-                            <div className="font-medium text-gray-700">
+                            <div className="font-medium text-gray-800">
                               {reward.programType === "coffeeprogramnew" ? "Coffee Program" :
                                reward.programType === "voucherprogramnew" ? "Voucher Program" :
                                reward.programType === "transactionrewardsnew" ? "Transaction Rewards" :
                                reward.programType.charAt(0).toUpperCase() + reward.programType.slice(1)}
                             </div>
                           ) : (
-                            <div className="font-medium text-gray-700">
+                            <div className="font-medium text-gray-800">
                               {reward.programtype 
                                 ? reward.programtype.charAt(0).toUpperCase() + reward.programtype.slice(1)
                                 : "Individual Reward"}
                             </div>
                           )}
                         </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 rounded-md">
+                        <TableCell className="text-center px-6 py-4">
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 rounded-md font-medium">
                             {reward.pointsCost > 0 ? `${reward.pointsCost} pts` : 'Free'}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-center">
-                          <div className="font-medium" style={{ color: '#007AFF' }}>
+                        <TableCell className="text-center px-6 py-4">
+                          <div className="font-semibold text-blue-600">
                             {reward.redemptionCount || 0}
                           </div>
                         </TableCell>
 
-                        <TableCell className="text-center">
+                        <TableCell className="text-center px-6 py-4">
                           <VisibilityStats rewardId={reward.id} />
                         </TableCell>
-                        <TableCell className="text-center">
-                          {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
+                        <TableCell className="text-center px-6 py-4">
+                          <div className="text-sm font-medium text-gray-600">
+                            {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
+                          </div>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center px-6 py-4">
                           <div onClick={(e) => e.stopPropagation()}>
                             <Switch
                               checked={reward.isActive}
@@ -2609,12 +2540,12 @@ const RewardsTabContent = () => {
                             />
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="px-6 py-4">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button 
                                 variant="ghost" 
-                                className="h-8 w-8 p-0"
+                                className="h-8 w-8 p-0 hover:bg-gray-200"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <MoreHorizontal className="h-4 w-4" />
@@ -2661,8 +2592,8 @@ const RewardsTabContent = () => {
                   )}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
           )}
         </TabsContent>
 

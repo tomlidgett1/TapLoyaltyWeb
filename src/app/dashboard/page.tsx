@@ -70,6 +70,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -112,7 +113,9 @@ import {
   SendHorizontal,
   Globe,
   Smartphone,
-  XCircle
+  XCircle,
+  Share2,
+  Download
 } from "lucide-react"
 import Image from "next/image" // Add this import at the top of the file with other imports
 import { getGmailMessages, getGmailMessage, GmailMessage, GmailFullMessage } from '@/lib/gmail-api'
@@ -165,6 +168,29 @@ const customAnimationStyles = `
   
   .scrollbar-hide::-webkit-scrollbar {
     display: none;  /* Safari and Chrome */
+  }
+  
+  .scrollbar-subtle {
+    scrollbar-width: thin;
+    scrollbar-color: #e5e7eb #f9fafb;
+  }
+  
+  .scrollbar-subtle::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  .scrollbar-subtle::-webkit-scrollbar-track {
+    background: #f9fafb;
+    border-radius: 2px;
+  }
+  
+  .scrollbar-subtle::-webkit-scrollbar-thumb {
+    background: #e5e7eb;
+    border-radius: 2px;
+  }
+  
+  .scrollbar-subtle::-webkit-scrollbar-thumb:hover {
+    background: #d1d5db;
   }
 `;
 
@@ -402,6 +428,9 @@ export default function DashboardPage() {
   const [customerSortField, setCustomerSortField] = useState<'fullName' | 'pointsBalance' | 'cashback' | 'lastTransactionDate' | 'totalLifetimeSpend' | 'lifetimeTransactionCount'>('fullName')
   const [customerSortDirection, setCustomerSortDirection] = useState<'asc' | 'desc'>('asc')
   const [hasIntroductoryReward, setHasIntroductoryReward] = useState(false)
+  const [selectedActivity, setSelectedActivity] = useState<any>(null)
+  const [activityDetailOpen, setActivityDetailOpen] = useState(false)
+  const [shareDropdownOpen, setShareDropdownOpen] = useState(false)
 
   // Handle customer sorting
   const handleCustomerSort = (field: typeof customerSortField) => {
@@ -411,6 +440,91 @@ export default function DashboardPage() {
       setCustomerSortField(field)
       setCustomerSortDirection('asc')
     }
+  }
+
+  // Handle activity click
+  const handleActivityClick = (activity: any) => {
+    setSelectedActivity(activity)
+    setActivityDetailOpen(true)
+  }
+
+  // Handle sharing via email
+  const handleEmailShare = () => {
+    if (!selectedActivity) return
+    
+    const subject = `${selectedActivity.type === 'transaction' ? 'Transaction' : 'Redemption'} Details - ${selectedActivity.customer.name}`
+    
+    let body = `Activity Details:\n\n`
+    body += `Customer: ${selectedActivity.customer.name}\n`
+    body += `Customer ID: ${selectedActivity.customer.id}\n`
+    body += `Type: ${selectedActivity.type}\n`
+    body += `Date: ${format(selectedActivity.timestamp, 'MMM d, yyyy h:mm a')}\n`
+    
+    if (selectedActivity.type === 'transaction') {
+      body += `Amount: $${selectedActivity.amount.toFixed(2)}\n`
+    } else {
+      body += `Reward: ${selectedActivity.rewardName || 'Unknown Reward'}\n`
+      if (selectedActivity.points > 0) {
+        body += `Points Used: ${selectedActivity.points} pts\n`
+      }
+      if (selectedActivity.tapCashUsed > 0) {
+        body += `TapCash Used: $${selectedActivity.tapCashUsed.toFixed(2)}\n`
+      }
+    }
+    
+    body += `Status: ${selectedActivity.status}\n`
+    body += `Activity ID: ${selectedActivity.id}\n`
+    
+    const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    window.open(mailtoLink)
+    setShareDropdownOpen(false)
+  }
+
+  // Handle download
+  const handleDownload = () => {
+    if (!selectedActivity) return
+    
+    const activityType = selectedActivity.type === 'transaction' ? 'Transaction' : 'Redemption'
+    let content = `${activityType} Details\n`
+    content += `${'='.repeat(activityType.length + 8)}\n\n`
+    
+    content += `Customer Information:\n`
+    content += `- Name: ${selectedActivity.customer.name}\n`
+    content += `- Customer ID: ${selectedActivity.customer.id}\n\n`
+    
+    content += `Activity Information:\n`
+    content += `- Type: ${selectedActivity.type}\n`
+    content += `- Date & Time: ${format(selectedActivity.timestamp, 'MMM d, yyyy h:mm a')}\n`
+    
+    if (selectedActivity.type === 'transaction') {
+      content += `- Amount: $${selectedActivity.amount.toFixed(2)}\n`
+    } else {
+      content += `- Reward: ${selectedActivity.rewardName || 'Unknown Reward'}\n`
+      if (selectedActivity.points > 0) {
+        content += `- Points Used: ${selectedActivity.points} pts\n`
+      }
+      if (selectedActivity.tapCashUsed > 0) {
+        content += `- TapCash Used: $${selectedActivity.tapCashUsed.toFixed(2)}\n`
+      }
+      if (selectedActivity.isNetworkReward) {
+        content += `- Type: Network Reward\n`
+      }
+    }
+    
+    content += `- Status: ${selectedActivity.status}\n`
+    content += `- Activity ID: ${selectedActivity.id}\n\n`
+    content += `Generated on: ${format(new Date(), 'MMM d, yyyy h:mm a')}\n`
+    
+    const blob = new Blob([content], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${activityType.toLowerCase()}-${selectedActivity.id}-${format(selectedActivity.timestamp, 'yyyy-MM-dd')}.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    setShareDropdownOpen(false)
   }
 
   // Filter and sort customers
@@ -634,7 +748,7 @@ export default function DashboardPage() {
         const transactionsQuery = query(
           transactionsRef,
           orderBy('createdAt', 'desc'),
-          limit(5)
+          limit(20)
         )
         console.log('Fetching transactions from:', `merchants/${user.uid}/transactions`)
         
@@ -644,7 +758,7 @@ export default function DashboardPage() {
           redemptionsRef,
           where('merchantId', '==', user.uid),
           orderBy('redemptionDate', 'desc'),
-          limit(5)
+          limit(20)
         )
         
         console.log('Fetching redemptions for merchant:', user.uid)
@@ -762,7 +876,6 @@ export default function DashboardPage() {
         // Combine and sort by timestamp
         const combinedActivity = [...transactionActivity, ...redemptionActivity]
           .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-          .slice(0, 5) // Keep only the 5 most recent activities
         
         console.log('Final combined activity:', combinedActivity)
         
@@ -3176,7 +3289,7 @@ export default function DashboardPage() {
                   </Link>
                 </div>
               </div>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto max-h-80 overflow-y-auto scrollbar-subtle">
                 {activityLoading ? (
                   <div className="flex items-center justify-center py-8">
                         <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
@@ -3192,8 +3305,8 @@ export default function DashboardPage() {
                 ) : (
                       <table className="w-full">
                         <tbody className="divide-y divide-gray-100">
-                    {recentActivity.slice(0, 5).map((activity, index) => (
-                            <tr key={activity.id} className="hover:bg-gray-100/50 transition-colors">
+                    {recentActivity.map((activity, index) => (
+                            <tr key={activity.id} className="hover:bg-gray-100/50 transition-colors cursor-pointer" onClick={() => handleActivityClick(activity)}>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
                                   <div className="h-8 w-8 flex-shrink-0">
@@ -3231,7 +3344,7 @@ export default function DashboardPage() {
                                 ) : (
                                   <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
                                     <div className="h-1.5 w-1.5 bg-gray-500 rounded-full flex-shrink-0"></div>
-                                    Redemption
+                                    {activity.rewardName || "Redemption"}
                                   </span>
                                 )}
                               </td>
@@ -4433,6 +4546,153 @@ export default function DashboardPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Activity Detail Dialog */}
+      <Dialog open={activityDetailOpen} onOpenChange={setActivityDetailOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedActivity?.type === 'transaction' ? 'Transaction Details' : 'Redemption Details'}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedActivity?.type === 'transaction' 
+                ? 'Details about this customer transaction'
+                : 'Details about this reward redemption'
+              }
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedActivity && (
+            <div className="py-4 space-y-4">
+              {/* Customer Info */}
+              <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
+                <div className="h-10 w-10 flex-shrink-0">
+                  {selectedActivity.customer.profilePicture ? (
+                    <img 
+                      src={selectedActivity.customer.profilePicture} 
+                      alt={selectedActivity.customer.name}
+                      className="h-10 w-10 rounded-full object-cover border border-gray-200"
+                    />
+                  ) : (
+                    <div className="h-10 w-10 rounded-full flex items-center justify-center text-sm font-medium border border-gray-200 bg-gray-100 text-gray-600">
+                      {selectedActivity.customer.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900">{selectedActivity.customer.name}</p>
+                  <p className="text-sm text-gray-500">Customer ID: {selectedActivity.customer.id}</p>
+                </div>
+              </div>
+
+              {/* Activity Details */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-gray-700">Type</span>
+                  <span className="text-sm text-gray-900 capitalize">{selectedActivity.type}</span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-gray-700">Date & Time</span>
+                  <span className="text-sm text-gray-900">
+                    {format(selectedActivity.timestamp, 'MMM d, yyyy h:mm a')}
+                  </span>
+                </div>
+
+                {selectedActivity.type === 'transaction' ? (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-700">Amount</span>
+                      <span className="text-sm font-semibold text-gray-900">
+                        ${selectedActivity.amount.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-700">Status</span>
+                      <span className={`text-sm px-2 py-1 rounded-full text-xs font-medium ${
+                        selectedActivity.status === 'completed' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {selectedActivity.status}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-700">Reward</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {selectedActivity.rewardName || 'Unknown Reward'}
+                      </span>
+                    </div>
+                    {selectedActivity.points > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-700">Points Used</span>
+                        <span className="text-sm font-semibold text-gray-900">
+                          {selectedActivity.points} pts
+                        </span>
+                      </div>
+                    )}
+                    {selectedActivity.tapCashUsed > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-700">TapCash Used</span>
+                        <span className="text-sm font-semibold text-gray-900">
+                          ${selectedActivity.tapCashUsed.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                    {selectedActivity.isNetworkReward && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-700">Type</span>
+                        <span className="text-sm px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          Network Reward
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-700">Status</span>
+                      <span className={`text-sm px-2 py-1 rounded-full text-xs font-medium ${
+                        selectedActivity.status === 'completed' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {selectedActivity.status}
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                                 <div className="flex justify-between items-center">
+                   <span className="text-sm font-medium text-gray-700">Activity ID</span>
+                   <span className="text-sm text-gray-500 font-mono">{selectedActivity.id}</span>
+                 </div>
+               </div>
+             </div>
+           )}
+
+           <DialogFooter>
+             <DropdownMenu open={shareDropdownOpen} onOpenChange={setShareDropdownOpen}>
+               <DropdownMenuTrigger asChild>
+                 <Button variant="outline" size="sm" className="gap-2">
+                   <Share2 className="h-4 w-4" />
+                   Share
+                 </Button>
+               </DropdownMenuTrigger>
+               <DropdownMenuContent align="end" className="w-48">
+                 <DropdownMenuItem onClick={handleEmailShare} className="gap-2">
+                   <Mail className="h-4 w-4" />
+                   Share via Email
+                 </DropdownMenuItem>
+                 <DropdownMenuItem onClick={handleDownload} className="gap-2">
+                   <Download className="h-4 w-4" />
+                   Download Details
+                 </DropdownMenuItem>
+               </DropdownMenuContent>
+             </DropdownMenu>
+           </DialogFooter>
+         </DialogContent>
+       </Dialog>
 
       {/* Feature Info Popup */}
       {infoPopupOpen && featureInfo[infoPopupOpen as keyof typeof featureInfo] && (

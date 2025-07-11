@@ -2437,18 +2437,18 @@ const RewardsTabContent = () => {
             <div className="overflow-x-auto">
               <Table className="w-full">
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[320px]">Preview</TableHead>
-                    <TableHead className="text-center">Type</TableHead>
-                    <TableHead className="text-center">Points</TableHead>
-                    <TableHead className="text-center">Redemptions</TableHead>
-                    <TableHead className="text-center">Visibility</TableHead>
-                    <TableHead className="text-center">Created</TableHead>
-                    <TableHead className="text-center">Active</TableHead>
+                  <TableRow className="bg-gray-50/80 border-b border-gray-100">
+                    <TableHead className="w-[320px] text-gray-600 hover:text-gray-800 transition-colors">Preview</TableHead>
+                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">Type</TableHead>
+                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">Points</TableHead>
+                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">Redemptions</TableHead>
+                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">Visibility</TableHead>
+                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">Created</TableHead>
+                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">Active</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className="divide-y divide-gray-100">
                   {loadingRewards ? (
                     <TableRow>
                       <TableCell colSpan={8} className="h-32 text-center px-6 py-8">
@@ -2485,7 +2485,7 @@ const RewardsTabContent = () => {
                     getFilteredRewards().map((reward) => (
                       <TableRow 
                         key={reward.id}
-                        className="cursor-pointer hover:bg-gray-50/80 transition-colors border-b border-gray-100 last:border-b-0"
+                        className="cursor-pointer hover:bg-gray-100/50 transition-colors"
                         onClick={() => handleViewReward(reward.id)}
                       >
                         <TableCell className="font-medium py-4 px-6">
@@ -2514,12 +2514,13 @@ const RewardsTabContent = () => {
                           )}
                         </TableCell>
                         <TableCell className="text-center px-6 py-4">
-                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 rounded-md font-medium">
+                          <div className="inline-flex items-center gap-1.5 bg-white border border-gray-200 px-2 py-1 rounded-md text-xs font-medium text-gray-800">
+                            <div className="h-1.5 w-1.5 rounded-full bg-blue-500"></div>
                             {reward.pointsCost > 0 ? `${reward.pointsCost} pts` : 'Free'}
-                          </Badge>
+                          </div>
                         </TableCell>
                         <TableCell className="text-center px-6 py-4">
-                          <div className="font-semibold text-blue-600">
+                          <div className="font-medium text-gray-800">
                             {reward.redemptionCount || 0}
                           </div>
                         </TableCell>
@@ -2528,7 +2529,7 @@ const RewardsTabContent = () => {
                           <VisibilityStats rewardId={reward.id} />
                         </TableCell>
                         <TableCell className="text-center px-6 py-4">
-                          <div className="text-sm font-medium text-gray-600">
+                          <div className="text-sm text-gray-600">
                             {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
                           </div>
                         </TableCell>
@@ -2635,7 +2636,7 @@ const RewardsTabContent = () => {
                     getFilteredRewards().filter(r => r.category === "individual").map((reward) => (
                       <TableRow 
                         key={reward.id}
-                        className="cursor-pointer hover:bg-gray-50"
+                        className="cursor-pointer hover:bg-gray-100/50 transition-colors"
                         onClick={() => handleViewReward(reward.id)}
                       >
                         <TableCell className="font-medium">
@@ -2657,9 +2658,10 @@ const RewardsTabContent = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 rounded-md">
+                          <div className="inline-flex items-center gap-1.5 bg-white border border-gray-200 px-2 py-1 rounded-md text-xs font-medium text-gray-800">
+                            <div className="h-1.5 w-1.5 rounded-full bg-blue-500"></div>
                             {reward.pointsCost > 0 ? `${reward.pointsCost} pts` : 'Free'}
-                          </Badge>
+                          </div>
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="font-medium" style={{ color: '#007AFF' }}>

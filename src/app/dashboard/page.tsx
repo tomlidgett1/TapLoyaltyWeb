@@ -476,6 +476,10 @@ export default function DashboardPage() {
   const [rewardDetailSheetOpen, setRewardDetailSheetOpen] = useState(false)
   const [selectedRewardId, setSelectedRewardId] = useState<string | null>(null)
 
+  // Customer Reward Analytics state
+  const [customerRewardAnalytics, setCustomerRewardAnalytics] = useState<any[]>([])
+  const [customerRewardAnalyticsLoading, setCustomerRewardAnalyticsLoading] = useState(false)
+
   // Handle customer sorting
   const handleCustomerSort = (field: typeof customerSortField) => {
     if (customerSortField === field) {
@@ -2370,6 +2374,136 @@ export default function DashboardPage() {
        }
      }
 
+     // Function to fetch customer reward analytics
+     const fetchCustomerRewardAnalytics = async () => {
+       if (!user?.uid) return
+
+       setCustomerRewardAnalyticsLoading(true)
+
+       try {
+         // Get all customers for this merchant
+         const customersQuery = query(
+           collection(db, 'merchants', user.uid, 'customers'),
+           orderBy('fullName')
+         )
+         const customersSnapshot = await getDocs(customersQuery)
+
+         const customerAnalytics = await Promise.all(
+           customersSnapshot.docs.map(async (customerDoc) => {
+             const customerData = customerDoc.data()
+             const customerId = customerDoc.id
+
+             // Get customer rewards data
+             const customerRewardsQuery = query(
+               collection(db, 'customers', customerId, 'rewards')
+             )
+             const customerRewardsSnapshot = await getDocs(customerRewardsQuery)
+
+                           let redeemableCount = 0
+              let visibleButNotRedeemableCount = 0
+
+              // Count rewards based on visibility, redeemability, and merchant reward status
+              for (const rewardDoc of customerRewardsSnapshot.docs) {
+                const rewardData = rewardDoc.data()
+                const rewardId = rewardDoc.id
+                
+                // Check if this reward belongs to our merchant
+                if (rewardData.merchantId === user.uid) {
+                  const isVisible = rewardData.visible === true || rewardData.visible === 'true' || rewardData.visible === 1
+                  const isRedeemable = rewardData.redeemable === true || rewardData.redeemable === 'true' || rewardData.redeemable === 1
+
+                  // Also check if the reward is active in the merchant's rewards collection
+                  try {
+                    const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId)
+                    const merchantRewardSnapshot = await getDoc(merchantRewardRef)
+                    
+                    if (merchantRewardSnapshot.exists()) {
+                      const merchantRewardData = merchantRewardSnapshot.data()
+                      const isActiveInMerchant = merchantRewardData.isActive === true || merchantRewardData.isActive === 'true' || merchantRewardData.isActive === 1
+                      
+                      // Only count if the reward is also active in merchant's collection
+                      if (isActiveInMerchant) {
+                        if (isVisible && isRedeemable) {
+                          redeemableCount++
+                        } else if (isVisible && !isRedeemable) {
+                          visibleButNotRedeemableCount++
+                        }
+                      }
+                    }
+                  } catch (error) {
+                    console.error('Error checking merchant reward status:', rewardId, error)
+                  }
+                }
+              }
+
+             // Get last transaction date
+             let lastTransactionDate = null
+             try {
+               const transactionsQuery = query(
+                 collection(db, 'merchants', user.uid, 'transactions'),
+                 where('customerId', '==', customerId),
+                 orderBy('createdAt', 'desc'),
+                 limit(1)
+               )
+               const transactionsSnapshot = await getDocs(transactionsQuery)
+               if (!transactionsSnapshot.empty) {
+                 lastTransactionDate = transactionsSnapshot.docs[0].data().createdAt?.toDate()
+               }
+             } catch (error) {
+               console.error('Error fetching last transaction for customer:', customerId, error)
+             }
+
+             // Get last store view
+             let lastStoreView = null
+             try {
+               const storeViewsQuery = query(
+                 collection(db, 'merchants', user.uid, 'storeViews'),
+                 where('customerId', '==', customerId),
+                 orderBy('timestamp', 'desc'),
+                 limit(1)
+               )
+               const storeViewsSnapshot = await getDocs(storeViewsQuery)
+               if (!storeViewsSnapshot.empty) {
+                 lastStoreView = storeViewsSnapshot.docs[0].data().timestamp?.toDate()
+               }
+             } catch (error) {
+               console.error('Error fetching last store view for customer:', customerId, error)
+             }
+
+             return {
+               id: customerId,
+               name: customerData.fullName || 'Unknown Customer',
+               email: customerData.email || '',
+               profilePicture: customerData.profilePictureUrl || null,
+               redeemableRewards: redeemableCount,
+               visibleButNotRedeemableRewards: visibleButNotRedeemableCount,
+               totalVisibleRewards: redeemableCount + visibleButNotRedeemableCount,
+               lifetimeTransactionCount: customerData.lifetimeTransactionCount || 0,
+               totalLifetimeSpend: customerData.totalLifetimeSpend || 0,
+               lastTransactionDate,
+               lastStoreView,
+               pointsBalance: customerData.pointsBalance || 0,
+               currentCohort: customerData.currentCohort
+             }
+           })
+         )
+
+         // Sort by least number of redeemable rewards first
+         const sortedAnalytics = customerAnalytics.sort((a, b) => {
+           if (a.redeemableRewards === b.redeemableRewards) {
+             return a.totalVisibleRewards - b.totalVisibleRewards
+           }
+           return a.redeemableRewards - b.redeemableRewards
+         })
+
+         setCustomerRewardAnalytics(sortedAnalytics)
+       } catch (error) {
+         console.error('Error fetching customer reward analytics:', error)
+       } finally {
+         setCustomerRewardAnalyticsLoading(false)
+       }
+     }
+
 
      
      if (user?.uid) {
@@ -2379,6 +2513,7 @@ export default function DashboardPage() {
       fetchLivePrograms()
       fetchAllCustomers()
       fetchLiveRewards()
+      fetchCustomerRewardAnalytics()
     }
   }, [user?.uid]);
 
@@ -4831,6 +4966,246 @@ export default function DashboardPage() {
                             ))}
                         </tbody>
                       </table>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Customer Reward Analytics Section */}
+              <div className="mt-8">
+                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-gray-900">Customer Engagement Analysis</h3>
+                      <div className="flex items-center gap-2">
+                        <TooltipProvider>
+                          <TooltipComponent>
+                            <TooltipTrigger asChild>
+                              <Info className="h-4 w-4 text-gray-500 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs max-w-xs">Customers are ranked by reward availability to help identify those who may need more engagement</p>
+                            </TooltipContent>
+                          </TooltipComponent>
+                        </TooltipProvider>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-600">Customers with fewer available rewards are ranked first as they may be less likely to engage</p>
+                  </div>
+                  
+                  <div className="overflow-x-auto">
+                    {customerRewardAnalyticsLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
+                      </div>
+                    ) : customerRewardAnalytics.length === 0 ? (
+                      <div className="py-8 text-center">
+                        <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
+                          <Users className="h-6 w-6 text-gray-400" />
+                        </div>
+                        <p className="text-sm font-medium text-gray-700">No customer data available</p>
+                        <p className="text-xs text-gray-500 mt-1">Customer engagement data will appear here once available</p>
+                      </div>
+                    ) : (
+                      <table className="w-full">
+                        <thead className="bg-gray-50/80">
+                          <tr className="border-b border-gray-100">
+                            <th className="px-4 py-3 text-left">
+                              <span className="text-xs font-medium text-gray-600">Customer</span>
+                            </th>
+                            <th className="px-4 py-3 text-center">
+                              <TooltipProvider>
+                                <TooltipComponent>
+                                  <TooltipTrigger asChild>
+                                    <span className="text-xs font-medium text-gray-600 cursor-help">Redeemable</span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p className="text-xs">Rewards that are both visible and redeemable</p>
+                                  </TooltipContent>
+                                </TooltipComponent>
+                              </TooltipProvider>
+                            </th>
+                            <th className="px-4 py-3 text-center">
+                              <TooltipProvider>
+                                <TooltipComponent>
+                                  <TooltipTrigger asChild>
+                                    <span className="text-xs font-medium text-gray-600 cursor-help">Visible Only</span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p className="text-xs">Rewards visible but not yet redeemable</p>
+                                  </TooltipContent>
+                                </TooltipComponent>
+                              </TooltipProvider>
+                            </th>
+                            <th className="px-4 py-3 text-center">
+                              <span className="text-xs font-medium text-gray-600">Last Visit</span>
+                            </th>
+                            <th className="px-4 py-3 text-center">
+                              <span className="text-xs font-medium text-gray-600">Last View</span>
+                            </th>
+                            <th className="px-4 py-3 text-center">
+                              <span className="text-xs font-medium text-gray-600">Orders</span>
+                            </th>
+                            <th className="px-4 py-3 text-center">
+                              <span className="text-xs font-medium text-gray-600">Engagement</span>
+                            </th>
+                            <th className="px-4 py-3 text-right">
+                              <span className="text-xs font-medium text-gray-600">Action</span>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {customerRewardAnalytics.slice(0, 15).map((customer) => {
+                            // Calculate engagement score
+                            const engagementScore = (() => {
+                              let score = 0
+                              if (customer.redeemableRewards > 0) score += 3
+                              if (customer.visibleButNotRedeemableRewards > 0) score += 1
+                              if (customer.lastTransactionDate) {
+                                const daysSinceTransaction = Math.floor((new Date().getTime() - customer.lastTransactionDate.getTime()) / (1000 * 60 * 60 * 24))
+                                if (daysSinceTransaction <= 7) score += 3
+                                else if (daysSinceTransaction <= 30) score += 2
+                                else if (daysSinceTransaction <= 90) score += 1
+                              }
+                              if (customer.lastStoreView) {
+                                const daysSinceView = Math.floor((new Date().getTime() - customer.lastStoreView.getTime()) / (1000 * 60 * 60 * 24))
+                                if (daysSinceView <= 7) score += 2
+                                else if (daysSinceView <= 30) score += 1
+                              }
+                              return Math.min(score, 10)
+                            })()
+
+                            const getEngagementBadge = (score: number) => {
+                              if (score >= 7) return { text: 'High', color: 'bg-green-500' }
+                              if (score >= 4) return { text: 'Medium', color: 'bg-yellow-500' }
+                              return { text: 'Low', color: 'bg-red-500' }
+                            }
+
+                            const getSuggestion = () => {
+                              if (customer.redeemableRewards === 0) {
+                                if (customer.lifetimeTransactionCount === 0) {
+                                  return 'New customer - create welcome reward'
+                                } else if (!customer.lastTransactionDate || 
+                                          (new Date().getTime() - customer.lastTransactionDate.getTime()) / (1000 * 60 * 60 * 24) > 30) {
+                                  return 'Inactive customer - create comeback incentive'
+                                } else {
+                                  return 'Active customer with no rewards - create targeted offer'
+                                }
+                              } else if (customer.redeemableRewards <= 2) {
+                                return 'Limited rewards - consider adding more options'
+                              } else {
+                                return 'Well engaged - maintain current strategy'
+                              }
+                            }
+
+                            const engagementBadge = getEngagementBadge(engagementScore)
+
+                            return (
+                              <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-3">
+                                    <div className="h-8 w-8 flex-shrink-0">
+                                      {customer.profilePicture ? (
+                                        <img 
+                                          src={customer.profilePicture} 
+                                          alt={customer.name}
+                                          className="h-8 w-8 rounded-full object-cover border border-gray-200"
+                                        />
+                                      ) : (
+                                        <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-gray-100 text-gray-600">
+                                          {customer.name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-medium text-gray-800 truncate">{customer.name}</p>
+                                      <TooltipProvider>
+                                        <TooltipComponent>
+                                          <TooltipTrigger asChild>
+                                            <p className="text-xs text-gray-500 truncate cursor-help">{getSuggestion()}</p>
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p className="text-xs max-w-xs">{getSuggestion()}</p>
+                                          </TooltipContent>
+                                        </TooltipComponent>
+                                      </TooltipProvider>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  {customer.redeemableRewards > 0 ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                                      <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                                      {customer.redeemableRewards}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                                      <div className="h-1.5 w-1.5 bg-red-500 rounded-full flex-shrink-0"></div>
+                                      0
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  {customer.visibleButNotRedeemableRewards > 0 ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                                      <div className="h-1.5 w-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>
+                                      {customer.visibleButNotRedeemableRewards}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-gray-400">—</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className="text-xs text-gray-600">
+                                    {customer.lastTransactionDate 
+                                      ? formatTimeAgo(customer.lastTransactionDate)
+                                      : 'Never'
+                                    }
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className="text-xs text-gray-600">
+                                    {customer.lastStoreView 
+                                      ? formatTimeAgo(customer.lastStoreView)
+                                      : 'Never'
+                                    }
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className="text-xs font-medium text-gray-800">
+                                    {customer.lifetimeTransactionCount}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200`}>
+                                    <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${engagementBadge.color}`}></div>
+                                    {engagementBadge.text}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedCustomer({ id: customer.id, name: customer.name })
+                                      setIsRewardDialogOpen(true)
+                                    }}
+                                    className="h-7 px-3 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-md"
+                                  >
+                                    Create Reward
+                                  </Button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                    {!customerRewardAnalyticsLoading && customerRewardAnalytics.length > 15 && (
+                      <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
+                        <p className="text-xs text-gray-500 text-center">
+                          Showing top 15 customers. <Link href="/customers" className="text-blue-600 hover:text-blue-800">View all customers</Link>
+                        </p>
+                      </div>
                     )}
                   </div>
                 </div>

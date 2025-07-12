@@ -487,16 +487,16 @@ const ProgramCard = ({
           <div className="flex items-center gap-2 mb-2">
             <h3 className="text-sm font-medium text-gray-900">{title}</h3>
             {status === 'active' && (
-              <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">
-                <CheckCircle className="h-3 w-3 mr-1" />
+              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
                 Active
-              </Badge>
+              </span>
             )}
             {status === 'inactive' && (
-              <Badge variant="outline" className="text-gray-600 border-gray-200 bg-gray-50">
-                <XCircle className="h-3 w-3 mr-1" />
+              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                <div className="h-1.5 w-1.5 bg-gray-500 rounded-full flex-shrink-0"></div>
                 Inactive
-              </Badge>
+              </span>
             )}
           </div>
           <p className="text-xs text-gray-500 mb-4">{description}</p>
@@ -1192,17 +1192,17 @@ const ProgramsTabContent = () => {
         <TableColumnHeader column={column} title="Progress" />
       ),
       cell: ({ row }) => (
-        <Badge 
-          variant="outline" 
-          className={cn(
-            "rounded-md",
+        <span className={cn(
+          "inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit"
+        )}>
+          <div className={cn(
+            "h-1.5 w-1.5 rounded-full flex-shrink-0",
             row.original.type.includes('earned') || row.original.type.includes('progress') 
-              ? "bg-blue-50 text-blue-700 border-blue-200"
-              : "bg-purple-50 text-purple-700 border-purple-200"
-          )}
-        >
+              ? "bg-blue-500"
+              : "bg-purple-500"
+          )}></div>
           {row.original.progress}
-        </Badge>
+        </span>
       ),
     },
     {
@@ -2301,9 +2301,10 @@ const RewardsTabContent = () => {
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 rounded-md text-xs px-1.5 py-0.5">
+                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                              <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
                               {customer.currentCohort?.name ? customer.currentCohort.name.charAt(0).toUpperCase() + customer.currentCohort.name.slice(1) : 'None'}
-                            </Badge>
+                            </span>
                           </TooltipTrigger>
                           <TooltipContent>
                             <p>Customer Cohort</p>
@@ -2437,85 +2438,87 @@ const RewardsTabContent = () => {
           
           <div className="flex items-center gap-2">
             <div className="relative flex items-center">
-              {/* View Toggle - Only show for "all" tab when not in programs or customer-search */}
-              {rewardCategory === "all" && (
-                <div className={cn(
-                  "flex items-center bg-gray-100 p-0.5 rounded-md transition-all duration-150 ease-out",
-                  isSearchOpen 
-                    ? "transform -translate-x-[260px]" 
-                    : "transform translate-x-0"
-                )}>
-                  <button
-                    onClick={() => setViewMode("preview")}
-                    className={cn(
-                      "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
-                      viewMode === "preview"
-                        ? "text-gray-800 bg-white shadow-sm"
-                        : "text-gray-600 hover:bg-gray-200/70"
-                    )}
-                  >
-                    <Eye className="h-3 w-3" />
-                    Preview
-                  </button>
-                  <button
-                    onClick={() => setViewMode("text")}
-                    className={cn(
-                      "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
-                      viewMode === "text"
-                        ? "text-gray-800 bg-white shadow-sm"
-                        : "text-gray-600 hover:bg-gray-200/70"
-                    )}
-                  >
-                    <List className="h-3 w-3" />
-                    List
-                  </button>
-                </div>
-              )}
-              
-              <div className={cn(
-                "relative w-[250px] h-9 transition-all duration-150 ease-out",
-                rewardCategory === "all" && !isSearchOpen ? "ml-2" : ""
-              )}>
-                {/* Search Icon Button */}
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className={cn(
-                    "absolute right-0 top-0 h-9 w-9 rounded-md transition-all duration-150 ease-out",
-                    isSearchOpen ? "opacity-0 scale-95 pointer-events-none" : "opacity-100 scale-100"
-                  )}
-                  onClick={() => setIsSearchOpen(true)}
-                >
-                  <Search className="h-4 w-4" />
-                </Button>
-                
-                {/* Search Input */}
-                <div 
-                  className={cn(
-                    "absolute right-0 top-0 transition-all duration-150 ease-out",
+              <div className="flex items-center">
+                {/* View Toggle - Only show for "all" tab when not in programs or customer-search */}
+                {rewardCategory === "all" && (
+                  <div className={cn(
+                    "flex items-center bg-gray-100 p-0.5 rounded-md transition-all duration-150 ease-out",
                     isSearchOpen 
-                      ? "w-full opacity-100 scale-100" 
-                      : "w-9 opacity-0 scale-95 pointer-events-none"
-                  )}
-                >
-                  <div className="relative w-full">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  type="search" 
-                  placeholder="Search rewards..." 
-                      className="w-full pl-9 h-9 rounded-md"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                      onBlur={() => {
-                        if (!searchQuery) {
-                          setTimeout(() => setIsSearchOpen(false), 100)
-                        }
-                      }}
-                      autoFocus={isSearchOpen}
-                />
+                      ? "transform -translate-x-[260px]" 
+                      : "transform translate-x-0"
+                  )}>
+                    <button
+                      onClick={() => setViewMode("preview")}
+                      className={cn(
+                        "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                        viewMode === "preview"
+                          ? "text-gray-800 bg-white shadow-sm"
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
+                    >
+                      <Eye className="h-3 w-3" />
+                      Preview
+                    </button>
+                    <button
+                      onClick={() => setViewMode("text")}
+                      className={cn(
+                        "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                        viewMode === "text"
+                          ? "text-gray-800 bg-white shadow-sm"
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
+                    >
+                      <List className="h-3 w-3" />
+                      List
+                    </button>
+                  </div>
+                )}
+                
+                <div className={cn(
+                  "relative w-[250px] h-9 transition-all duration-150 ease-out",
+                  rewardCategory === "all" ? "ml-2" : ""
+                )}>
+                  {/* Search Icon Button */}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className={cn(
+                      "absolute right-0 top-0 h-9 w-9 rounded-md transition-all duration-150 ease-out",
+                      isSearchOpen ? "opacity-0 scale-95 pointer-events-none" : "opacity-100 scale-100"
+                    )}
+                    onClick={() => setIsSearchOpen(true)}
+                  >
+                    <Search className="h-4 w-4" />
+                  </Button>
+                  
+                  {/* Search Input */}
+                  <div 
+                    className={cn(
+                      "absolute right-0 top-0 transition-all duration-150 ease-out",
+                      isSearchOpen 
+                        ? "w-full opacity-100 scale-100" 
+                        : "w-9 opacity-0 scale-95 pointer-events-none"
+                    )}
+                  >
+                    <div className="relative w-full">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    type="search" 
+                    placeholder="Search rewards..." 
+                        className="w-full pl-9 h-9 rounded-md"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                        onBlur={() => {
+                          if (!searchQuery) {
+                            setTimeout(() => setIsSearchOpen(false), 100)
+                          }
+                        }}
+                        autoFocus={isSearchOpen}
+                  />
+                </div>
+                          </div>
+                          </div>
               </div>
-                        </div>
-                        </div>
             </div>
           </div>
         </div>
@@ -2527,6 +2530,35 @@ const RewardsTabContent = () => {
             <CustomerSearchTabContent />
           ) : (
           <div className="w-full bg-white border border-gray-200 rounded-md shadow-sm overflow-hidden">
+            {/* Bulk Actions Bar */}
+            {selectedRewardIds.size > 0 && (
+              <div className="px-4 py-3 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-blue-900">
+                    {selectedRewardIds.size} reward{selectedRewardIds.size > 1 ? 's' : ''} selected
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedRewardIds(new Set())}
+                    className="text-blue-700 hover:text-blue-900 hover:bg-blue-100"
+                  >
+                    Clear selection
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleBulkDelete}
+                    className="gap-2"
+                  >
+                    <Trash className="h-4 w-4" />
+                    Delete Selected
+                  </Button>
+                </div>
+              </div>
+            )}
             <div className="overflow-x-auto">
               <Table className="w-full">
                 <TableHeader>
@@ -2556,7 +2588,7 @@ const RewardsTabContent = () => {
                 <TableBody className="divide-y divide-gray-100">
                   {loadingRewards ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-32 text-center px-6 py-8">
+                      <TableCell colSpan={9} className="h-32 text-center px-6 py-8">
                         <div className="flex flex-col items-center justify-center">
                           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600"></div>
                           <p className="text-sm text-gray-500 mt-3">Loading rewards...</p>
@@ -2565,7 +2597,7 @@ const RewardsTabContent = () => {
                     </TableRow>
                   ) : getFilteredRewards().length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-40 text-center px-6 py-12">
+                      <TableCell colSpan={9} className="h-40 text-center px-6 py-12">
                         <div className="flex flex-col items-center justify-center">
                           <div className="h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center">
                             <Gift className="h-8 w-8 text-gray-400" />
@@ -2593,6 +2625,14 @@ const RewardsTabContent = () => {
                         className="cursor-pointer hover:bg-gray-100/50 transition-colors"
                         onClick={() => handleViewReward(reward.id)}
                       >
+                        <TableCell className="py-2.5 px-6">
+                          <Checkbox
+                            checked={selectedRewardIds.has(reward.id)}
+                            onCheckedChange={() => toggleRewardSelection(reward.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`Select ${reward.rewardName}`}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium py-2.5 px-6">
                           {viewMode === "preview" ? (
                             <RewardPreviewCard reward={reward} />
@@ -2902,6 +2942,42 @@ const RewardsTabContent = () => {
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
               Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog open={bulkDeleteConfirmOpen} onOpenChange={setBulkDeleteConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <Trash className="h-5 w-5 text-red-500" />
+              Delete Multiple Rewards
+            </DialogTitle>
+            <DialogDescription className="space-y-2">
+              <div className="text-red-600 font-medium">
+                ⚠️ You are about to permanently delete {selectedRewardIds.size} reward{selectedRewardIds.size > 1 ? 's' : ''}
+              </div>
+              <div className="text-gray-600">
+                This action cannot be undone. All reward data, redemption history, and customer associations will be permanently removed.
+              </div>
+              <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded-md">
+                Selected rewards: {selectedRewardIds.size} item{selectedRewardIds.size > 1 ? 's' : ''}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end space-x-2 mt-6">
+            <Button variant="outline" onClick={() => setBulkDeleteConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={confirmBulkDelete}
+              className="gap-2"
+            >
+              <Trash className="h-4 w-4" />
+              Delete {selectedRewardIds.size} Reward{selectedRewardIds.size > 1 ? 's' : ''}
             </Button>
           </div>
         </DialogContent>
@@ -3377,27 +3453,28 @@ const CustomerSearchTabContent = () => {
                   </TableCell>
                   <TableCell className="text-center">
                     {item.reward.pointsCost === 0 ? (
-                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 rounded-md">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                        <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
                         Free
-                      </Badge>
+                      </span>
                     ) : (
-                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 rounded-md">
-                        <Star className="h-3 w-3 mr-1 fill-current" />
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                        <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
                         {item.reward.pointsCost}
-                      </Badge>
+                      </span>
                     )}
                   </TableCell>
                   <TableCell className="text-center">
                     {item.isRedeemable ? (
-                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 rounded-md">
-                        <CheckCircle className="h-3 w-3 mr-1" />
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                        <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
                         Redeemable
-                      </Badge>
+                      </span>
                     ) : (
-                      <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 rounded-md">
-                        <Clock className="h-3 w-3 mr-1" />
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                        <div className="h-1.5 w-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>
                         Not Redeemable
-                      </Badge>
+                      </span>
                     )}
                   </TableCell>
                 </TableRow>
@@ -3552,22 +3629,20 @@ const AdvancedCustomersView = () => {
 
   const getCohortBadge = (cohortName: string) => {
     const cohortColors: Record<string, string> = {
-      active: "bg-green-50 text-green-700 border-green-200",
-      engaged: "bg-blue-50 text-blue-700 border-blue-200",
-      "at-risk": "bg-amber-50 text-amber-700 border-amber-200",
-      dormant: "bg-gray-50 text-gray-700 border-gray-200",
-      churned: "bg-red-50 text-red-700 border-red-200",
-      new: "bg-purple-50 text-purple-700 border-purple-200",
-      vip: "bg-yellow-50 text-yellow-700 border-yellow-200"
+      active: "bg-green-500",
+      engaged: "bg-blue-500",
+      "at-risk": "bg-amber-500",
+      dormant: "bg-gray-500",
+      churned: "bg-red-500",
+      new: "bg-purple-500",
+      vip: "bg-yellow-500"
     }
     
     return (
-      <Badge 
-        variant="outline" 
-        className={cn("rounded-md capitalize", cohortColors[cohortName] || "bg-gray-50 text-gray-700 border-gray-200")}
-      >
+      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit capitalize">
+        <div className={cn("h-1.5 w-1.5 rounded-full flex-shrink-0", cohortColors[cohortName] || "bg-gray-500")}></div>
         {cohortName}
-      </Badge>
+      </span>
     )
   }
 
@@ -4130,16 +4205,18 @@ const AdvancedCustomersView = () => {
                     
                     {/* Cohort */}
                     <td className="px-2 py-2 whitespace-nowrap">
-                      <Badge variant="outline" className={cn("text-xs rounded-md capitalize", 
-                        customer.currentCohort?.name === 'active' && "bg-green-50 text-green-700 border-green-200",
-                        customer.currentCohort?.name === 'engaged' && "bg-blue-50 text-blue-700 border-blue-200",
-                        customer.currentCohort?.name === 'at-risk' && "bg-amber-50 text-amber-700 border-amber-200",
-                        customer.currentCohort?.name === 'dormant' && "bg-gray-50 text-gray-700 border-gray-200",
-                        customer.currentCohort?.name === 'churned' && "bg-red-50 text-red-700 border-red-200",
-                        (!customer.currentCohort?.name || customer.currentCohort?.name === 'unknown') && "bg-gray-50 text-gray-700 border-gray-200"
-                      )}>
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit capitalize">
+                        <div className={cn(
+                          "h-1.5 w-1.5 rounded-full flex-shrink-0",
+                          customer.currentCohort?.name === 'active' && "bg-green-500",
+                          customer.currentCohort?.name === 'engaged' && "bg-blue-500",
+                          customer.currentCohort?.name === 'at-risk' && "bg-amber-500",
+                          customer.currentCohort?.name === 'dormant' && "bg-gray-500",
+                          customer.currentCohort?.name === 'churned' && "bg-red-500",
+                          (!customer.currentCohort?.name || customer.currentCohort?.name === 'unknown') && "bg-gray-500"
+                        )}></div>
                         {customer.currentCohort?.name || 'Unknown'}
-                      </Badge>
+                      </span>
                     </td>
 
                     {/* Transaction Metrics */}
@@ -4192,9 +4269,10 @@ const AdvancedCustomersView = () => {
 
                     {/* Customer Preferences */}
                     <td className="px-2 py-2 whitespace-nowrap">
-                      <Badge variant="outline" className="text-xs rounded-md capitalize">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit capitalize">
+                        <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
                         {customer.membershipTier || 'None'}
-                      </Badge>
+                      </span>
                     </td>
                     <td className="px-2 py-2 whitespace-nowrap text-xs">
                       {customer.emailOptIn === true ? '✓' : customer.emailOptIn === false ? '✗' : 'N/A'}
@@ -4352,13 +4430,33 @@ const CustomersTabContent = () => {
   // Get cohort badge color
   const getCohortBadge = (customer: any) => {
     if (customer.daysSinceLastVisit <= 30) {
-      return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 rounded-md">Active</Badge>
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+          <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+          Active
+        </span>
+      )
     } else if (customer.daysSinceLastVisit <= 90) {
-      return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 rounded-md">Engaged</Badge>
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+          <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+          Engaged
+        </span>
+      )
     } else if (customer.daysSinceLastVisit <= 180) {
-      return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 rounded-md">At Risk</Badge>
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+          <div className="h-1.5 w-1.5 bg-amber-500 rounded-full flex-shrink-0"></div>
+          At Risk
+        </span>
+      )
     } else {
-      return <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 rounded-md">Dormant</Badge>
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+          <div className="h-1.5 w-1.5 bg-gray-500 rounded-full flex-shrink-0"></div>
+          Dormant
+        </span>
+      )
     }
   }
 

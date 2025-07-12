@@ -116,7 +116,8 @@ import {
   Calculator,
   FileText,
   X,
-  ArrowUpRight
+  ArrowUpRight,
+  List
 } from "lucide-react"
 
 // Kibo Table Components
@@ -1707,6 +1708,9 @@ const RewardsTabContent = () => {
   const [expandedPrograms, setExpandedPrograms] = useState<Record<string, boolean>>({})
   const [customerNames, setCustomerNames] = useState<Record<string, string>>({})
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<"preview" | "text">("preview")
+  const [selectedRewardIds, setSelectedRewardIds] = useState<Set<string>>(new Set())
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false)
 
     // Function to get customer name by ID from top-level customers collection
   const getCustomerName = async (customerId: string): Promise<string> => {
@@ -2012,6 +2016,55 @@ const RewardsTabContent = () => {
     setSelectedRewardId(rewardId);
     setIsRewardDetailOpen(true);
   };
+
+  // Bulk selection functions
+  const toggleRewardSelection = (rewardId: string) => {
+    const newSelected = new Set(selectedRewardIds)
+    if (newSelected.has(rewardId)) {
+      newSelected.delete(rewardId)
+    } else {
+      newSelected.add(rewardId)
+    }
+    setSelectedRewardIds(newSelected)
+  }
+
+  const toggleSelectAll = () => {
+    const filteredRewards = getFilteredRewards()
+    if (selectedRewardIds.size === filteredRewards.length) {
+      // Deselect all
+      setSelectedRewardIds(new Set())
+    } else {
+      // Select all
+      setSelectedRewardIds(new Set(filteredRewards.map(r => r.id)))
+    }
+  }
+
+  const handleBulkDelete = () => {
+    if (selectedRewardIds.size > 0) {
+      setBulkDeleteConfirmOpen(true)
+    }
+  }
+
+  const confirmBulkDelete = async () => {
+    try {
+      if (!user?.uid) return
+
+      // Delete rewards in parallel
+      const deletePromises = Array.from(selectedRewardIds).map(async (rewardId) => {
+        const rewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId)
+        return deleteDoc(rewardRef)
+      })
+
+      await Promise.all(deletePromises)
+
+      // Update local state
+      setRewardsData(prev => prev.filter(reward => !selectedRewardIds.has(reward.id)))
+      setSelectedRewardIds(new Set())
+      setBulkDeleteConfirmOpen(false)
+    } catch (error) {
+      console.error('Error deleting rewards:', error)
+    }
+  }
 
   const handleExportPDF = async () => {
     try {
@@ -2383,47 +2436,87 @@ const RewardsTabContent = () => {
           </div>
           
           <div className="flex items-center gap-2">
-            <div className="relative w-[250px] h-9">
-              {/* Search Icon Button */}
-              <Button
-                variant="outline"
-                size="icon"
-                className={cn(
-                  "absolute right-0 top-0 h-9 w-9 rounded-md transition-all duration-150 ease-out",
-                  isSearchOpen ? "opacity-0 scale-95 pointer-events-none" : "opacity-100 scale-100"
-                )}
-                onClick={() => setIsSearchOpen(true)}
-              >
-                <Search className="h-4 w-4" />
-              </Button>
-              
-              {/* Search Input */}
-              <div 
-                className={cn(
-                  "absolute right-0 top-0 transition-all duration-150 ease-out",
+            <div className="relative flex items-center">
+              {/* View Toggle - Only show for "all" tab when not in programs or customer-search */}
+              {rewardCategory === "all" && (
+                <div className={cn(
+                  "flex items-center bg-gray-100 p-0.5 rounded-md transition-all duration-150 ease-out",
                   isSearchOpen 
-                    ? "w-full opacity-100 scale-100" 
-                    : "w-9 opacity-0 scale-95 pointer-events-none"
-                )}
-              >
-                <div className="relative w-full">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input 
-                type="search" 
-                placeholder="Search rewards..." 
-                    className="w-full pl-9 h-9 rounded-md"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                    onBlur={() => {
-                      if (!searchQuery) {
-                        setTimeout(() => setIsSearchOpen(false), 100)
-                      }
-                    }}
-                    autoFocus={isSearchOpen}
-              />
+                    ? "transform -translate-x-[260px]" 
+                    : "transform translate-x-0"
+                )}>
+                  <button
+                    onClick={() => setViewMode("preview")}
+                    className={cn(
+                      "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                      viewMode === "preview"
+                        ? "text-gray-800 bg-white shadow-sm"
+                        : "text-gray-600 hover:bg-gray-200/70"
+                    )}
+                  >
+                    <Eye className="h-3 w-3" />
+                    Preview
+                  </button>
+                  <button
+                    onClick={() => setViewMode("text")}
+                    className={cn(
+                      "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                      viewMode === "text"
+                        ? "text-gray-800 bg-white shadow-sm"
+                        : "text-gray-600 hover:bg-gray-200/70"
+                    )}
+                  >
+                    <List className="h-3 w-3" />
+                    List
+                  </button>
+                </div>
+              )}
+              
+              <div className={cn(
+                "relative w-[250px] h-9 transition-all duration-150 ease-out",
+                rewardCategory === "all" && !isSearchOpen ? "ml-2" : ""
+              )}>
+                {/* Search Icon Button */}
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={cn(
+                    "absolute right-0 top-0 h-9 w-9 rounded-md transition-all duration-150 ease-out",
+                    isSearchOpen ? "opacity-0 scale-95 pointer-events-none" : "opacity-100 scale-100"
+                  )}
+                  onClick={() => setIsSearchOpen(true)}
+                >
+                  <Search className="h-4 w-4" />
+                </Button>
+                
+                {/* Search Input */}
+                <div 
+                  className={cn(
+                    "absolute right-0 top-0 transition-all duration-150 ease-out",
+                    isSearchOpen 
+                      ? "w-full opacity-100 scale-100" 
+                      : "w-9 opacity-0 scale-95 pointer-events-none"
+                  )}
+                >
+                  <div className="relative w-full">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  type="search" 
+                  placeholder="Search rewards..." 
+                      className="w-full pl-9 h-9 rounded-md"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                      onBlur={() => {
+                        if (!searchQuery) {
+                          setTimeout(() => setIsSearchOpen(false), 100)
+                        }
+                      }}
+                      autoFocus={isSearchOpen}
+                />
+              </div>
+                        </div>
+                        </div>
             </div>
-                      </div>
-                      </div>
           </div>
         </div>
         
@@ -2438,7 +2531,19 @@ const RewardsTabContent = () => {
               <Table className="w-full">
                 <TableHeader>
                   <TableRow className="bg-gray-50/80 border-b border-gray-100">
-                    <TableHead className="w-[320px] text-gray-600 hover:text-gray-800 transition-colors">Preview</TableHead>
+                    <TableHead className="w-[40px] text-gray-600">
+                      <Checkbox
+                        checked={selectedRewardIds.size > 0 && selectedRewardIds.size === getFilteredRewards().length}
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Select all rewards"
+                      />
+                    </TableHead>
+                    <TableHead className={cn(
+                      "text-gray-600 hover:text-gray-800 transition-colors",
+                      viewMode === "preview" ? "w-[320px]" : "w-[300px]"
+                    )}>
+                      {viewMode === "preview" ? "Preview" : "Reward Name"}
+                    </TableHead>
                     <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">Type</TableHead>
                     <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">Points</TableHead>
                     <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">Redemptions</TableHead>
@@ -2488,10 +2593,24 @@ const RewardsTabContent = () => {
                         className="cursor-pointer hover:bg-gray-100/50 transition-colors"
                         onClick={() => handleViewReward(reward.id)}
                       >
-                        <TableCell className="font-medium py-4 px-6">
-                          <RewardPreviewCard reward={reward} />
+                        <TableCell className="font-medium py-2.5 px-6">
+                          {viewMode === "preview" ? (
+                            <RewardPreviewCard reward={reward} />
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <div className="h-9 w-9 min-w-[36px] rounded-md bg-muted flex items-center justify-center">
+                                {getRewardTypeIcon(reward.type)}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="truncate font-medium text-sm">{reward.rewardName}</div>
+                                <div className="text-xs text-muted-foreground line-clamp-1">
+                                  {reward.description}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </TableCell>
-                        <TableCell className="text-center px-6 py-4">
+                        <TableCell className="text-center px-6 py-2.5">
                           {reward.programType === "agent" ? (
                             <div className="font-semibold">
                               <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-orange-600">
@@ -2513,27 +2632,27 @@ const RewardsTabContent = () => {
                             </div>
                           )}
                         </TableCell>
-                        <TableCell className="text-center px-6 py-4">
+                        <TableCell className="text-center px-6 py-2.5">
                           <div className="inline-flex items-center gap-1.5 bg-white border border-gray-200 px-2 py-1 rounded-md text-xs font-medium text-gray-800">
                             <div className="h-1.5 w-1.5 rounded-full bg-blue-500"></div>
                             {reward.pointsCost > 0 ? `${reward.pointsCost} pts` : 'Free'}
                           </div>
                         </TableCell>
-                        <TableCell className="text-center px-6 py-4">
+                        <TableCell className="text-center px-6 py-2.5">
                           <div className="font-medium text-gray-800">
                             {reward.redemptionCount || 0}
                           </div>
                         </TableCell>
 
-                        <TableCell className="text-center px-6 py-4">
+                        <TableCell className="text-center px-6 py-2.5">
                           <VisibilityStats rewardId={reward.id} />
                         </TableCell>
-                        <TableCell className="text-center px-6 py-4">
+                        <TableCell className="text-center px-6 py-2.5">
                           <div className="text-sm text-gray-600">
                             {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
                           </div>
                         </TableCell>
-                        <TableCell className="text-center px-6 py-4">
+                        <TableCell className="text-center px-6 py-2.5">
                           <div onClick={(e) => e.stopPropagation()}>
                             <Switch
                               checked={reward.isActive}
@@ -2541,7 +2660,7 @@ const RewardsTabContent = () => {
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="px-6 py-4">
+                        <TableCell className="px-6 py-2.5">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button 
@@ -7048,17 +7167,15 @@ export default function StoreOverviewPage() {
         <TableColumnHeader column={column} title="Type" />
       ),
       cell: ({ row }) => (
-        <Badge 
-          variant="outline" 
-          className={cn(
-            "capitalize rounded-md",
+        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+          <div className={cn(
+            "h-1.5 w-1.5 rounded-full flex-shrink-0",
             row.original.type === 'email' 
-              ? "bg-blue-50 text-blue-700 border-blue-200" 
-              : "bg-orange-50 text-orange-700 border-orange-200"
-          )}
-        >
+              ? "bg-blue-500" 
+              : "bg-orange-500"
+          )}></div>
           {row.original.type === 'email' ? 'Email' : 'Push Notification'}
-        </Badge>
+        </span>
       ),
     },
     {

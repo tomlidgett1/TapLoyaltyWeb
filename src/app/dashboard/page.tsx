@@ -4512,7 +4512,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   
-                  <div className="max-h-80 overflow-y-auto scrollbar-subtle">
+                  <div className="overflow-x-auto">
                     {liveRewardsLoading ? (
                       <div className="flex items-center justify-center py-8">
                         <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
@@ -4526,15 +4526,15 @@ export default function DashboardPage() {
                       
                       return filteredRewards.length === 0 ? (
                         <div className="py-8 text-center">
-                          <div className="bg-gray-100 rounded-full h-10 w-10 flex items-center justify-center mx-auto mb-2">
-                            <Gift className="h-5 w-5 text-gray-400" />
+                          <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
+                            <Gift className="h-6 w-6 text-gray-400" />
                           </div>
-                          <p className="text-xs font-medium text-gray-700">No rewards found</p>
-                          <p className="text-xs text-gray-500 mt-0.5">Rewards will appear here once created</p>
+                          <p className="text-sm font-medium text-gray-700">No rewards found</p>
+                          <p className="text-xs text-gray-500 mt-1">Rewards will appear here once created</p>
                         </div>
                       ) : (
                         <table className="w-full">
-                          <thead className="bg-gray-50/80 sticky top-0">
+                          <thead className="bg-gray-50/80">
                             <tr className="border-b border-gray-100">
                               <th className="px-4 py-3 text-left">
                                 <span className="text-xs font-medium text-gray-600">Reward</span>
@@ -4551,19 +4551,19 @@ export default function DashboardPage() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100">
-                                                    {filteredRewards.slice(0, 7).map((reward) => (
+                                                    {filteredRewards.slice(0, 10).map((reward) => (
                           <tr 
                             key={reward.id} 
                             className="hover:bg-gray-100/50 transition-colors cursor-pointer"
                             onClick={() => handleRewardClick(reward.id)}
                           >
-                                <td className="px-4 py-3">
+                                <td className="px-4 py-2.5">
                                   <div className="min-w-0">
                                     <p className="text-sm font-medium text-gray-800 truncate">{reward.rewardName || reward.title || reward.name}</p>
                                     <p className="text-xs text-gray-600 truncate">{reward.description}</p>
                                   </div>
                                 </td>
-                                <td className="px-4 py-3 text-center">
+                                <td className="px-4 py-2.5 text-center">
                                   {reward.costType === 'free' ? (
                                     <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
                                       <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
@@ -4576,10 +4576,10 @@ export default function DashboardPage() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-4 py-3 text-center">
+                                <td className="px-4 py-2.5 text-center">
                                   <span className="text-sm font-medium text-gray-800">{reward.redemptionCount}</span>
                                 </td>
-                                                                 <td className="px-4 py-3 text-right">
+                                                                 <td className="px-4 py-2.5 text-right">
                                    <span className="text-xs text-gray-600">
                                      {(() => {
                                        if (!reward.createdAt) return 'Unknown'

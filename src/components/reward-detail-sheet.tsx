@@ -179,8 +179,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
   // Fetch reward details
   useEffect(() => {
     async function fetchRewardDetails() {
-      if (!user?.uid || !rewardId) {
-        setLoading(false);
+      if (!user?.uid || !rewardId || !open) {
         return;
       }
 
@@ -209,15 +208,18 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
       }
     }
 
+    // Defer the data fetching to not block the opening animation
     if (open && rewardId) {
-      fetchRewardDetails();
+      setTimeout(() => {
+        fetchRewardDetails();
+      }, 0);
     }
   }, [rewardId, user?.uid, open]);
 
-  // Fetch redemptions
+  // Fetch redemptions - only when redemptions tab is active
   useEffect(() => {
     async function fetchRedemptions() {
-      if (!user?.uid || !rewardId) return;
+      if (!user?.uid || !rewardId || !reward || activeTab !== 'redemptions') return;
       
       try {
         setRedemptionsLoading(true);
@@ -268,15 +270,15 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
       }
     }
     
-    if (reward) {
+    if (reward && activeTab === 'redemptions') {
       fetchRedemptions();
     }
-  }, [user?.uid, rewardId, reward]);
+  }, [user?.uid, rewardId, reward, activeTab]);
 
-  // Fetch customer visibility
+  // Fetch customer visibility - only when visibility tab is active
   useEffect(() => {
     async function fetchCustomerVisibility() {
-      if (!user?.uid || !rewardId) return;
+      if (!user?.uid || !rewardId || !reward || activeTab !== 'visibility') return;
       
       try {
         setVisibilityLoading(true);
@@ -344,10 +346,10 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
       }
     }
 
-    if (open && rewardId && activeTab === 'visibility') {
+    if (reward && activeTab === 'visibility') {
       fetchCustomerVisibility();
     }
-  }, [rewardId, user?.uid, open, activeTab]);
+  }, [rewardId, user?.uid, reward, activeTab]);
 
   // Format the conditions and limitations for display
   const formatCondition = (condition: Condition) => {
@@ -433,95 +435,25 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
     }
   };
 
-  // Prepare data for the edit dialog
-  const createRewardDialogData = reward ? {
-    rewardName: reward.rewardName || '',
-    description: reward.description || '',
-    type: reward.rewardType || reward.category || 'discount',
-    rewardVisibility: reward.customers && reward.customers.length > 0 ? 'specific' : 'all',
-    pin: reward.pin || '',
-    pointsCost: reward.pointsCost?.toString() || '0',
-    isActive: reward.status === 'active',
-    delayedVisibility: false,
-    delayedVisibilityType: 'transactions',
-    delayedVisibilityTransactions: '',
-    delayedVisibilitySpend: '',
-    itemName: '',
-    voucherAmount: '',
-    spendThreshold: '',
+  // Only compute dialog data when needed
+  const getCreateRewardDialogData = () => {
+    if (!reward) return null;
     
-    // Add customer-specific data
-    specificCustomerIds: reward.customers || [],
-    specificCustomerNames: [], // We don't have the names in the reward data
-    
-    // Map conditions array to object structure
-    conditions: {
-      useTransactionRequirements: Array.isArray(reward.conditions) && 
-        reward.conditions.some(c => ['minimumTransactions', 'maximumTransactions'].includes(c.type)),
-      useSpendingRequirements: Array.isArray(reward.conditions) && 
-        reward.conditions.some(c => ['minimumLifetimeSpend', 'minimumPointsBalance'].includes(c.type)),
-      useTimeRequirements: Array.isArray(reward.conditions) && 
-        reward.conditions.some(c => ['daysSinceJoined', 'daysSinceLastVisit'].includes(c.type)),
-      minimumTransactions: Array.isArray(reward.conditions) ? 
-        reward.conditions.find(c => c.type === 'minimumTransactions')?.value?.toString() || '' : '',
-      maximumTransactions: Array.isArray(reward.conditions) ? 
-        reward.conditions.find(c => c.type === 'maximumTransactions')?.value?.toString() || '' : '',
-      daysSinceJoined: Array.isArray(reward.conditions) ? 
-        reward.conditions.find(c => c.type === 'daysSinceJoined')?.value?.toString() || '' : '',
-      daysSinceLastVisit: Array.isArray(reward.conditions) ? 
-        reward.conditions.find(c => c.type === 'daysSinceLastVisit')?.value?.toString() || '' : '',
-      minimumLifetimeSpend: Array.isArray(reward.conditions) ? 
-        reward.conditions.find(c => c.type === 'minimumLifetimeSpend')?.value?.toString() || '' : '',
-      minimumPointsBalance: Array.isArray(reward.conditions) ? 
-        reward.conditions.find(c => c.type === 'minimumPointsBalance')?.value?.toString() || '' : '',
-      membershipLevel: Array.isArray(reward.conditions) ? 
-        reward.conditions.find(c => c.type === 'membershipLevel')?.value?.toString() || '' : '',
-      newCustomer: Array.isArray(reward.conditions) && 
-        reward.conditions.some(c => c.type === 'newCustomer'),
-    },
-    
-    // Map limitations array to object structure
-    limitations: {
-      totalRedemptionLimit: Array.isArray(reward.limitations) ? 
-        reward.limitations.find(l => l.type === 'totalRedemptionLimit')?.value?.toString() || '' : '',
-      perCustomerLimit: Array.isArray(reward.limitations) ? 
-        reward.limitations.find(l => l.type === 'customerLimit')?.value?.toString() || '' : '',
-      useTimeRestrictions: Array.isArray(reward.limitations) && 
-        reward.limitations.some(l => l.type === 'timeOfDay' || l.type === 'daysOfWeek'),
-      startTime: Array.isArray(reward.limitations) && reward.limitations.find(l => l.type === 'timeOfDay') ? 
-        (reward.limitations.find(l => l.type === 'timeOfDay')?.value as any)?.startTime || '' : '',
-      endTime: Array.isArray(reward.limitations) && reward.limitations.find(l => l.type === 'timeOfDay') ? 
-        (reward.limitations.find(l => l.type === 'timeOfDay')?.value as any)?.endTime || '' : '',
-      dayRestrictions: Array.isArray(reward.limitations) && reward.limitations.find(l => l.type === 'daysOfWeek') ? 
-        (reward.limitations.find(l => l.type === 'daysOfWeek')?.value as string[]) || [] : [],
-    },
-    
-    // Add active period with proper date formatting
-    hasActivePeriod: !!(reward.startDate || reward.endDate),
-    activePeriod: {
-      startDate: safeParseDate(reward.startDate),
-      endDate: safeParseDate(reward.endDate)
-    }
-  } : null;
+    return {
+      rewardName: reward.rewardName || '',
+      description: reward.description || '',
+      type: reward.rewardType || reward.category || 'discount',
+      pointsCost: reward.pointsCost?.toString() || '0',
+      isActive: reward.status === 'active',
+    };
+  };
 
-  // For loading state
-  if (loading) {
-    return (
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-full sm:max-w-lg md:max-w-xl lg:max-w-2xl overflow-y-auto">
-          <div className="min-h-screen flex items-center justify-center">
-            <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-          </div>
-        </SheetContent>
-      </Sheet>
-    );
-  }
-
-  if (!reward) return null;
+  // Don't block the sheet from opening - show skeleton instead
+  if (!open) return null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-lg md:max-w-xl lg:max-w-2xl p-0 overflow-y-auto animate-in slide-in-from-right duration-[30ms] data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:duration-[70ms] focus:outline-none focus-visible:outline-none">
+      <SheetContent className="w-full sm:max-w-lg md:max-w-xl lg:max-w-2xl p-0 overflow-y-auto focus:outline-none focus-visible:outline-none">
         <div className="sticky top-0 z-20 bg-white border-b p-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -530,73 +462,86 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
               </SheetClose>
-              <h2 className="text-lg font-semibold">{reward.rewardName}</h2>
-              <Badge variant="outline" className={cn(
-                "ml-2 rounded-sm",
-                reward.status === 'active' ? "bg-green-50 text-green-600 border-green-200" : "bg-gray-100 text-gray-600"
-              )}>
-                {capitalize(reward.status)}
-              </Badge>
+              {loading || !reward ? (
+                <>
+                  <div className="h-6 w-48 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-6 w-16 bg-gray-200 rounded animate-pulse ml-2"></div>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-lg font-semibold">{reward.rewardName}</h2>
+                  <Badge variant="outline" className={cn(
+                    "ml-2 rounded-sm",
+                    reward.status === 'active' ? "bg-green-50 text-green-600 border-green-200" : "bg-gray-100 text-gray-600"
+                  )}>
+                    {capitalize(reward.status)}
+                  </Badge>
+                </>
+              )}
             </div>
             <div className="flex items-center gap-2">
-              <Switch 
-                checked={reward.isActive || false} 
-                onCheckedChange={async (checked) => {
-                  console.log("Switch toggled, new value:", checked);
-                  if (!user?.uid || !rewardId) {
-                    console.error("Missing user ID or reward ID", { userId: user?.uid, rewardId });
-                    return;
-                  }
-                  try {
-                    setIsToggling(true);
-                    console.log("Updating reward isActive to:", checked);
-                    
-                    // Update the reward isActive in Firestore
-                    const rewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
-                    console.log("Updating merchant reward at path:", `merchants/${user.uid}/rewards/${rewardId}`);
-                    
-                    await updateDoc(rewardRef, {
-                      isActive: checked,
-                      updatedAt: new Date().toISOString()
-                    });
-                    
-                    // Also update in top-level rewards collection
-                    const globalRewardRef = doc(db, 'rewards', rewardId);
-                    console.log("Updating global reward at path:", `rewards/${rewardId}`);
-                    
-                    await updateDoc(globalRewardRef, {
-                      isActive: checked,
-                      updatedAt: new Date().toISOString()
-                    });
-                    
-                    // Update the local state
-                    console.log("Updating local state");
-                    setReward(prev => {
-                      const newState = prev ? {...prev, isActive: checked} : null;
-                      console.log("New reward state:", newState);
-                      return newState;
-                    });
-                    
-                    showToast({
-                      title: "Success",
-                      description: `Reward ${checked ? 'activated' : 'deactivated'} successfully.`,
-                    });
-                    console.log("Toast shown");
-                  } catch (error) {
-                    console.error("Error updating reward isActive:", error);
-                    showToast({
-                      title: "Error",
-                      description: "Failed to update reward status. Please try again.",
-                      variant: "destructive"
-                    });
-                  } finally {
-                    setIsToggling(false);
-                    console.log("Toggle state reset");
-                  }
-                }}
-                disabled={isToggling}
-                className="data-[state=checked]:bg-[#007AFF]"
-              />
+              {loading || !reward ? (
+                <div className="h-6 w-10 bg-gray-200 rounded animate-pulse"></div>
+              ) : (
+                <Switch 
+                  checked={reward.isActive || false} 
+                  onCheckedChange={async (checked) => {
+                    console.log("Switch toggled, new value:", checked);
+                    if (!user?.uid || !rewardId) {
+                      console.error("Missing user ID or reward ID", { userId: user?.uid, rewardId });
+                      return;
+                    }
+                    try {
+                      setIsToggling(true);
+                      console.log("Updating reward isActive to:", checked);
+                      
+                      // Update the reward isActive in Firestore
+                      const rewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
+                      console.log("Updating merchant reward at path:", `merchants/${user.uid}/rewards/${rewardId}`);
+                      
+                      await updateDoc(rewardRef, {
+                        isActive: checked,
+                        updatedAt: new Date().toISOString()
+                      });
+                      
+                      // Also update in top-level rewards collection
+                      const globalRewardRef = doc(db, 'rewards', rewardId);
+                      console.log("Updating global reward at path:", `rewards/${rewardId}`);
+                      
+                      await updateDoc(globalRewardRef, {
+                        isActive: checked,
+                        updatedAt: new Date().toISOString()
+                      });
+                      
+                      // Update the local state
+                      console.log("Updating local state");
+                      setReward(prev => {
+                        const newState = prev ? {...prev, isActive: checked} : null;
+                        console.log("New reward state:", newState);
+                        return newState;
+                      });
+                      
+                      showToast({
+                        title: "Success",
+                        description: `Reward ${checked ? 'activated' : 'deactivated'} successfully.`,
+                      });
+                      console.log("Toast shown");
+                    } catch (error) {
+                      console.error("Error updating reward isActive:", error);
+                      showToast({
+                        title: "Error",
+                        description: "Failed to update reward status. Please try again.",
+                        variant: "destructive"
+                      });
+                    } finally {
+                      setIsToggling(false);
+                      console.log("Toggle state reset");
+                    }
+                  }}
+                  disabled={isToggling}
+                  className="data-[state=checked]:bg-[#007AFF]"
+                />
+              )}
             </div>
           </div>
           
@@ -665,19 +610,69 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
           </div>
         </div>
 
-        <Tabs defaultValue="overview" className="w-full" value={activeTab} onValueChange={setActiveTab}>
+        {loading || !reward ? (
           <ScrollArea className="h-[calc(100vh-8rem)]">
             <div className="px-6 py-6">
-              <TabsContent value="overview" className="mt-0 space-y-6">
-                                {/* App Preview Card */}
+              {/* Loading Skeleton */}
+              <div className="space-y-6">
+                {/* App Preview Skeleton */}
                 <div className="flex-shrink-0 w-fit">
-                  <div className="text-xs text-gray-500 mb-2 font-medium">Preview</div>
+                  <div className="h-4 w-16 bg-gray-200 rounded animate-pulse mb-2"></div>
                   <div className="bg-white border border-gray-200 rounded-xl shadow-lg px-3 py-2 w-80">
-                  <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-medium text-gray-900 truncate" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
-                          {reward.rewardName}
-                        </h3>
+                        <div className="h-4 w-32 bg-gray-200 rounded animate-pulse mb-1"></div>
+                        <div className="h-3 w-48 bg-gray-200 rounded animate-pulse"></div>
+                      </div>
+                      <div className="h-6 w-16 bg-gray-200 rounded animate-pulse ml-3"></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stats Grid Skeleton */}
+                <div className="grid grid-cols-2 gap-3">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="bg-white border border-gray-200 rounded-md shadow-sm p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 bg-gray-200 rounded-md animate-pulse"></div>
+                        <div>
+                          <div className="h-3 w-16 bg-gray-200 rounded animate-pulse mb-1"></div>
+                          <div className="h-4 w-12 bg-gray-200 rounded animate-pulse"></div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Key Information Skeleton */}
+                <div className="bg-white border border-gray-200 rounded-md shadow-sm p-4">
+                  <div className="h-4 w-32 bg-gray-200 rounded animate-pulse mb-3"></div>
+                  <div className="grid grid-cols-2 gap-y-4">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i}>
+                        <div className="h-3 w-20 bg-gray-200 rounded animate-pulse mb-1"></div>
+                        <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </ScrollArea>
+        ) : (
+          <Tabs defaultValue="overview" className="w-full" value={activeTab} onValueChange={setActiveTab}>
+            <ScrollArea className="h-[calc(100vh-8rem)]">
+              <div className="px-6 py-6">
+                <TabsContent value="overview" className="mt-0 space-y-6">
+                  {/* App Preview Card */}
+                  <div className="flex-shrink-0 w-fit">
+                    <div className="text-xs text-gray-500 mb-2 font-medium">Preview</div>
+                    <div className="bg-white border border-gray-200 rounded-xl shadow-lg px-3 py-2 w-80">
+                    <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm font-medium text-gray-900 truncate" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                            {reward.rewardName}
+                          </h3>
                         <p className="text-xs text-gray-500 mt-0.5" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
                           {reward.description}
                         </p>
@@ -1415,9 +1410,532 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                   </CardContent>
                 </Card>
               </TabsContent>
-            </div>
-          </ScrollArea>
-        </Tabs>
+
+              <TabsContent value="details" className="mt-0 space-y-6">
+                {/* Requirements */}
+                <Card className="rounded-md shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <CheckCircle className="h-4 w-4 text-gray-600" />
+                      <h3 className="text-sm font-medium">Requirements</h3>
+                    </div>
+                    <div className="space-y-2">
+                      {Array.isArray(reward.conditions) && reward.conditions.map((condition, index) => (
+                        <div 
+                          key={index}
+                          className="flex items-center gap-2 text-xs p-2 rounded-md bg-gray-50 border border-gray-100"
+                        >
+                          <div className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+                          <span className="text-gray-700">{formatCondition(condition)}</span>
+                        </div>
+                      ))}
+                      {(!reward.conditions || !Array.isArray(reward.conditions) || reward.conditions.length === 0) && (
+                        <div className="text-xs text-gray-500 italic">No special requirements</div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Limitations */}
+                <Card className="rounded-md shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertCircle className="h-4 w-4 text-gray-600" />
+                      <h3 className="text-sm font-medium">Limitations</h3>
+                    </div>
+                    <div className="space-y-2">
+                      {Array.isArray(reward.limitations) && reward.limitations.map((limitation, index) => (
+                        <div 
+                          key={index}
+                          className="flex items-center gap-2 text-xs p-2 rounded-md bg-gray-50 border border-gray-100"
+                        >
+                          <div className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+                          <span className="text-gray-700">{formatLimitation(limitation)}</span>
+                        </div>
+                      ))}
+                      {(!reward.limitations || !Array.isArray(reward.limitations) || reward.limitations.length === 0) && (
+                        <div className="text-xs text-gray-500 italic">No limitations set</div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Reward Type Details */}
+                <Card className="rounded-md shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Tag className="h-4 w-4 text-gray-600" />
+                      <h3 className="text-sm font-medium">Reward Type</h3>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <Badge className="capitalize bg-blue-50 text-blue-700 border-blue-200 rounded-sm">
+                        {reward.rewardType || reward.category || 'Discount'}
+                      </Badge>
+                      <span className="text-xs text-gray-500">
+                        {reward.rewardType === 'discount' ? 'Gives customers a discount on purchases' : 
+                         reward.rewardType === 'freeItem' ? 'Offers a free item with purchase' :
+                         reward.rewardType === 'bundle' ? 'Bundle offer (buy X get Y)' :
+                         reward.rewardType === 'mystery' ? 'Mystery reward revealed at checkout' :
+                         reward.rewardType === 'custom' ? 'Custom reward with special terms' :
+                         'General loyalty reward'}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Advanced Options */}
+                <Card className="rounded-md shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Award className="h-4 w-4 text-gray-600" />
+                      <h3 className="text-sm font-medium">Advanced Options</h3>
+                    </div>
+                    <div className="space-y-3 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-700">Visibility</span>
+                        <Badge variant="outline" className="rounded-sm bg-gray-50 text-gray-700">
+                          {reward.customers && reward.customers.length > 0 ? 'Selected Customers' : 'All Customers'}
+                        </Badge>
+                      </div>
+                      
+                      {reward.pin && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-700">Redemption PIN</span>
+                          <div className="font-mono bg-gray-50 px-2 py-0.5 rounded border text-gray-700">{reward.pin}</div>
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-700">Created</span>
+                        <span className="text-gray-600">{formatTimestamp(reward.createdAt)}</span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-700">Last Updated</span>
+                        <span className="text-gray-600">{formatTimestamp(reward.updatedAt)}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="redemptions" className="mt-0 space-y-6">
+                <Card className="rounded-md shadow-sm">
+                  <CardContent className="p-0">
+                    <div className="p-4 border-b">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Gift className="h-4 w-4 text-gray-600" />
+                          <h3 className="text-sm font-medium">Redemption History</h3>
+                        </div>
+                        <Badge className="bg-blue-50 text-blue-700 border-blue-200 rounded-sm">
+                          {reward.redemptionCount || 0} total
+                        </Badge>
+                      </div>
+                    </div>
+                    <div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">Date & Time</TableHead>
+                            <TableHead className="text-xs">Customer</TableHead>
+                            <TableHead className="text-xs">Points</TableHead>
+                            <TableHead className="text-xs">Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {redemptionsLoading ? (
+                            <TableRow>
+                              <TableCell colSpan={4} className="h-24 text-center">
+                                <div className="flex justify-center">
+                                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ) : redemptions.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={4} className="h-24 text-center">
+                                <div className="flex flex-col items-center justify-center py-6">
+                                  <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
+                                    <Gift className="h-5 w-5 text-gray-400" />
+                                  </div>
+                                  <h3 className="mt-3 text-sm font-medium">No redemptions yet</h3>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    This reward hasn't been redeemed by any customers
+                                  </p>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            redemptions.map((redemption) => (
+                              <TableRow 
+                                key={redemption.id}
+                                className="hover:bg-gray-50"
+                              >
+                                <TableCell className="text-xs py-2">
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">
+                                      {redemption.redemptionDate 
+                                        ? new Date(
+                                            typeof redemption.redemptionDate === 'string' 
+                                              ? redemption.redemptionDate 
+                                              : redemption.redemptionDate.seconds * 1000
+                                          ).toLocaleDateString()
+                                        : 'Unknown date'
+                                      }
+                                    </span>
+                                    <span className="text-xs text-gray-500">
+                                      {redemption.redemptionDate
+                                        ? new Date(
+                                            typeof redemption.redemptionDate === 'string' 
+                                              ? redemption.redemptionDate 
+                                              : redemption.redemptionDate.seconds * 1000
+                                          ).toLocaleTimeString()
+                                        : 'Unknown time'
+                                      }
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs py-2">
+                                  <div className="flex items-center gap-2">
+                                    {redemption.profilePictureUrl ? (
+                                      <img 
+                                        src={redemption.profilePictureUrl} 
+                                        alt={redemption.customerName || 'Customer'} 
+                                        className="h-6 w-6 rounded-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center">
+                                        <Users className="h-3 w-3 text-gray-400" />
+                                      </div>
+                                    )}
+                                    <span className="truncate max-w-[100px]">{redemption.customerName || 'Unknown'}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs py-2">
+                                  <div className="inline-block px-2 py-1 rounded-md border border-slate-200 shadow-sm bg-white">
+                                    <span className="text-indigo-600 font-medium text-xs">
+                                      {(redemption.pointsUsed ?? reward.pointsCost ?? 0).toLocaleString()}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs py-2">
+                                  <Badge 
+                                    variant="outline" 
+                                    className={cn(
+                                      "rounded-sm text-xs",
+                                      redemption.status === 'successful' || redemption.status === 'completed'
+                                        ? "bg-green-50 text-green-700 border-green-200" 
+                                        : redemption.status === 'pending'
+                                        ? "bg-blue-50 text-blue-600 border-blue-200"
+                                        : "bg-gray-50 text-gray-500 border-gray-100"
+                                    )}
+                                  >
+                                    {capitalize(redemption.status || 'unknown')}
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                {/* Additional Stats and Information */}
+                <div className="grid grid-cols-2 gap-3">
+                  <Card className="rounded-md shadow-sm">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-md bg-blue-50 flex items-center justify-center">
+                          <BarChart className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Conversion Rate</div>
+                          <div className="font-medium">
+                            {reward.impressions && reward.impressions > 0 
+                              ? `${((reward.redemptionCount || 0) / reward.impressions * 100).toFixed(1)}%` 
+                              : '0%'}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="rounded-md shadow-sm">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-md bg-blue-50 flex items-center justify-center">
+                          <Clock className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Last Redeemed</div>
+                          <div className="font-medium text-xs">
+                            {formatTimestamp(reward.lastRedeemedAt) || 'Never'}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="visibility" className="mt-0 space-y-6">
+                <Card className="rounded-md shadow-sm">
+                  <CardContent className="p-0">
+                    <div className="p-4 border-b">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Eye className="h-4 w-4 text-gray-600" />
+                          <h3 className="text-sm font-medium">Customer Visibility</h3>
+                        </div>
+                        <Badge className="bg-blue-50 text-blue-700 border-blue-200 rounded-sm">
+                          {customerVisibility.length} customers
+                        </Badge>
+                      </div>
+                    </div>
+                    <div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">Customer</TableHead>
+                            <TableHead className="text-xs">Email</TableHead>
+                            <TableHead className="text-xs">Redeemable</TableHead>
+                            <TableHead className="text-xs">Visible</TableHead>
+                            <TableHead className="text-xs">Reason</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {visibilityLoading ? (
+                            <TableRow>
+                              <TableCell colSpan={5} className="h-24 text-center">
+                                <div className="flex justify-center">
+                                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ) : customerVisibility.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={5} className="h-24 text-center">
+                                <div className="flex flex-col items-center justify-center py-6">
+                                  <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
+                                    <Users className="h-5 w-5 text-gray-400" />
+                                  </div>
+                                  <h3 className="mt-3 text-sm font-medium">No customers found</h3>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    No customers are registered for this merchant
+                                  </p>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            customerVisibility.map((customer) => (
+                              <TableRow 
+                                key={customer.id}
+                                className="hover:bg-gray-50"
+                              >
+                                <TableCell className="text-xs py-2">
+                                  <div className="flex items-center gap-2">
+                                    {customer.profilePictureUrl ? (
+                                      <img 
+                                        src={customer.profilePictureUrl} 
+                                        alt={customer.name} 
+                                        className="h-6 w-6 rounded-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center">
+                                        <Users className="h-3 w-3 text-gray-400" />
+                                      </div>
+                                    )}
+                                    <span className="truncate max-w-[120px] font-medium">{customer.name}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs py-2">
+                                  <span className="text-gray-600 truncate max-w-[150px]">
+                                    {customer.email || 'No email'}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-xs py-2">
+                                  <Badge 
+                                    variant="outline" 
+                                    className={cn(
+                                      "rounded-sm text-xs",
+                                      customer.redeemable
+                                        ? "bg-green-50 text-green-700 border-green-200" 
+                                        : "bg-red-50 text-red-700 border-red-200"
+                                    )}
+                                  >
+                                    {customer.redeemable ? 'true' : 'false'}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-xs py-2">
+                                  <Badge 
+                                    variant="outline" 
+                                    className={cn(
+                                      "rounded-sm text-xs",
+                                      customer.visible
+                                        ? "bg-green-50 text-green-700 border-green-200" 
+                                        : "bg-red-50 text-red-700 border-red-200"
+                                    )}
+                                  >
+                                    {customer.visible ? 'true' : 'false'}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-xs py-2">
+                                  <span className="text-gray-600 truncate max-w-[120px]">
+                                    {customer.visibilityReason || 'No reason'}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                {/* Visibility Summary */}
+                <div className="grid grid-cols-2 gap-3">
+                  <Card className="rounded-md shadow-sm">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-md bg-blue-50 flex items-center justify-center">
+                          <Eye className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Can See</div>
+                          <div className="font-medium">
+                            {customerVisibility.filter(c => c.visible).length} customers
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="rounded-md shadow-sm">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-md bg-green-50 flex items-center justify-center">
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Can Redeem</div>
+                          <div className="font-medium">
+                            {customerVisibility.filter(c => c.visible && c.redeemable).length} customers
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="debug" className="mt-0 space-y-6">
+                <Card className="rounded-md shadow-sm">
+                  <CardContent className="p-0">
+                    <div className="p-4 border-b">
+                      <div className="flex items-center gap-2">
+                        <Tag className="h-4 w-4 text-gray-600" />
+                        <h3 className="text-sm font-medium">Debug Information</h3>
+                        <Badge className="bg-orange-50 text-orange-700 border-orange-200 rounded-sm">
+                          Raw Data
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Complete reward document structure for debugging purposes
+                      </p>
+                    </div>
+                    <div className="p-4">
+                      <div className="bg-gray-50 rounded-md border p-4 font-mono text-xs overflow-auto max-h-96">
+                        <pre className="whitespace-pre-wrap text-gray-800">
+                          {JSON.stringify(reward, null, 2)}
+                        </pre>
+                      </div>
+                      
+                      {/* Additional Debug Info */}
+                      <div className="mt-4 pt-4 border-t">
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">Quick Debug Stats</h4>
+                        <div className="grid grid-cols-2 gap-4 text-xs">
+                          <div>
+                            <span className="text-gray-500">Document ID:</span>
+                            <div className="font-mono bg-gray-100 px-2 py-1 rounded mt-1">{reward?.id || 'N/A'}</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Collection Path:</span>
+                            <div className="font-mono bg-gray-100 px-2 py-1 rounded mt-1">
+                              merchants/{user?.uid}/rewards/{reward?.id}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Object Keys Count:</span>
+                            <div className="font-mono bg-gray-100 px-2 py-1 rounded mt-1">
+                              {reward ? Object.keys(reward).length : 0}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Data Size (approx):</span>
+                            <div className="font-mono bg-gray-100 px-2 py-1 rounded mt-1">
+                              {reward ? `${JSON.stringify(reward).length} chars` : 'N/A'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Copy to Clipboard Button */}
+                      <div className="mt-4 pt-4 border-t flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="gap-2 rounded-md text-xs"
+                          onClick={() => {
+                            if (reward) {
+                              navigator.clipboard.writeText(JSON.stringify(reward, null, 2));
+                              showToast({
+                                title: "Copied!",
+                                description: "Reward JSON copied to clipboard",
+                              });
+                            }
+                          }}
+                        >
+                          <Copy className="h-3 w-3" />
+                          Copy JSON
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="gap-2 rounded-md text-xs"
+                          onClick={() => {
+                            if (reward) {
+                              const debugInfo = {
+                                documentId: reward.id,
+                                collectionPath: `merchants/${user?.uid}/rewards/${reward.id}`,
+                                keyCount: Object.keys(reward).length,
+                                dataSize: JSON.stringify(reward).length,
+                                timestamp: new Date().toISOString(),
+                                reward: reward
+                              };
+                              navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2));
+                              showToast({
+                                title: "Debug Info Copied!",
+                                description: "Complete debug information copied to clipboard",
+                              });
+                            }
+                          }}
+                        >
+                          <Tag className="h-3 w-3" />
+                          Copy Debug Info
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              </div>
+            </ScrollArea>
+          </Tabs>
+        )}
 
         <div className="border-t border-gray-200 p-4 bg-gray-50 flex-shrink-0 sticky bottom-0">
           <div className="flex flex-col sm:flex-row justify-between gap-3 max-w-5xl">
@@ -1455,7 +1973,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
       <CreateRewardDialog 
         open={isEditModalOpen}
         onOpenChange={setIsEditModalOpen}
-        defaultValues={createRewardDialogData}
+        defaultValues={getCreateRewardDialogData()}
         isEditing={true}
         rewardId={rewardId as string}
       />
@@ -1464,10 +1982,10 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
       <CreateRewardDialog 
         open={isDuplicateModalOpen}
         onOpenChange={setIsDuplicateModalOpen}
-        defaultValues={{
-          ...createRewardDialogData,
-          rewardName: createRewardDialogData ? `${createRewardDialogData.rewardName} (Copy)` : '',
-        }}
+        defaultValues={(() => {
+          const data = getCreateRewardDialogData();
+          return data ? { ...data, rewardName: `${data.rewardName} (Copy)` } : null;
+        })()}
         isEditing={false}
       />
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { collection, query, getDocs, orderBy, limit, where, doc, getDoc, Timestamp, serverTimestamp } from "firebase/firestore"
-import { format, formatDistanceToNow } from "date-fns"
+import { format, formatDistanceToNow, isToday, isYesterday } from "date-fns"
 import Link from "next/link"
 import { useCustomers } from "@/hooks/use-customers"
 
@@ -132,6 +132,53 @@ import {
   TableRow as KiboTableRow,
 } from '@/components/ui/kibo-ui/table'
 import type { ColumnDef } from '@/components/ui/kibo-ui/table'
+
+// Utility functions
+const formatCreatedDate = (createdAt: any) => {
+  if (!createdAt) return "Unknown";
+
+  try {
+    // Convert Firestore timestamp to JavaScript Date
+    let date: Date;
+    if (createdAt.toDate && typeof createdAt.toDate === 'function') {
+      // Firestore Timestamp
+      date = createdAt.toDate();
+    } else if (createdAt.seconds) {
+      // Firestore timestamp object
+      date = new Date(createdAt.seconds * 1000);
+    } else {
+      // Already a Date object or string
+      date = new Date(createdAt);
+    }
+
+    // Convert to Melbourne time (UTC+10)
+    // Note: This is a simple UTC+10 offset, doesn't account for daylight saving
+    const melbourneTime = new Date(date.getTime() + (10 * 60 * 60 * 1000));
+    const today = new Date();
+    const todayMelbourne = new Date(today.getTime() + (10 * 60 * 60 * 1000));
+    
+    // Reset time to start of day for comparison
+    const dateMelbourne = new Date(melbourneTime);
+    dateMelbourne.setHours(0, 0, 0, 0);
+    
+    const todayStart = new Date(todayMelbourne);
+    todayStart.setHours(0, 0, 0, 0);
+    
+    const yesterdayStart = new Date(todayStart);
+    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+
+    if (dateMelbourne.getTime() === todayStart.getTime()) {
+      return "Today";
+    } else if (dateMelbourne.getTime() === yesterdayStart.getTime()) {
+      return "Yesterday";
+    } else {
+      return format(melbourneTime, 'MMM d, yyyy');
+    }
+  } catch (error) {
+    console.error('Error formatting created date:', error);
+    return "Unknown";
+  }
+};
 
 // Component interfaces
 interface Reward {
@@ -552,6 +599,434 @@ const ProgramCard = ({
   );
 };
 
+// Program Customers Table Component  
+const ProgramCustomersTable = () => {
+  const { user } = useAuth()
+  const [customerInteractions, setCustomerInteractions] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filterType, setFilterType] = useState('all')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [availablePrograms, setAvailablePrograms] = useState<any[]>([])
+
+  useEffect(() => {
+    const fetchCustomerInteractions = async () => {
+      if (!user?.uid) return
+
+      try {
+        setLoading(true)
+        const interactions: any[] = []
+
+        // First, fetch all custom programs
+        const customProgramsRef = collection(db, 'merchants', user.uid, 'customprograms')
+        const customProgramsSnapshot = await getDocs(customProgramsRef)
+        
+        const programs = new Map()
+        const programsList: any[] = []
+        customProgramsSnapshot.docs.forEach(doc => {
+          const programData = doc.data()
+          const programInfo = {
+            id: doc.id,
+            name: programData.name || 'Custom Program',
+            type: programData.type || 'manual'
+          }
+          programs.set(doc.id, programInfo)
+          programsList.push(programInfo)
+        })
+        
+        // Set available programs for the dropdown
+        setAvailablePrograms(programsList)
+
+        // Then, fetch all customers
+        const customersRef = collection(db, 'merchants', user.uid, 'customers')
+        const customersSnapshot = await getDocs(customersRef)
+
+        for (const customerDoc of customersSnapshot.docs) {
+          const customerData = customerDoc.data()
+          const customerId = customerDoc.id
+          
+          const customerInteraction = {
+            id: customerId,
+            name: customerData.fullName || customerData.firstName || 'Unknown Customer',
+            email: customerData.email || '',
+            profilePictureUrl: customerData.profilePictureUrl,
+            programs: [] as any[],
+            lastInteraction: null as Date | null,
+            totalInteractions: 0,
+            programTypes: [] as string[],
+            // New fields from programProgress
+            totalSpend: 0,
+            transactionCount: 0,
+            visitCount: 0,
+            rewardsEarned: 0,
+            lastTransactionDate: null as Date | null
+          }
+
+          // Check built-in programs first (coffee, voucher, transaction, cashback)
+          // Check coffee program interactions
+          try {
+            const coffeeDoc = await getDoc(doc(db, 'merchants', user.uid, 'customers', customerId, 'coffeeLoyalty', 'record'))
+            if (coffeeDoc.exists()) {
+              const coffeeData = coffeeDoc.data()
+              if (coffeeData.stampsEarned > 0 || coffeeData.freeRedeemed > 0) {
+                customerInteraction.programs.push({
+                  type: 'coffee',
+                  name: 'Coffee Program',
+                  progress: `${coffeeData.stampsEarned || 0} stamps, ${coffeeData.freeRedeemed || 0} redeemed`,
+                  programType: 'built-in'
+                })
+                customerInteraction.totalInteractions += (coffeeData.stampsEarned || 0) + (coffeeData.freeRedeemed || 0)
+                if (!customerInteraction.programTypes.includes('Coffee')) {
+                  customerInteraction.programTypes.push('Coffee')
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching coffee data for customer:', customerId, error)
+          }
+
+          // Check voucher program interactions
+          try {
+            const voucherDoc = await getDoc(doc(db, 'merchants', user.uid, 'customers', customerId, 'voucherLoyalty', 'record'))
+            if (voucherDoc.exists()) {
+              const voucherData = voucherDoc.data()
+              if (voucherData.totalSpend > 0 || voucherData.vouchersRedeemed > 0) {
+                customerInteraction.programs.push({
+                  type: 'voucher',
+                  name: 'Voucher Program',
+                  progress: `$${voucherData.totalSpend || 0} spent, ${voucherData.vouchersRedeemed || 0} redeemed`,
+                  programType: 'built-in'
+                })
+                customerInteraction.totalInteractions += (voucherData.vouchersRedeemed || 0)
+                if (!customerInteraction.programTypes.includes('Voucher')) {
+                  customerInteraction.programTypes.push('Voucher')
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching voucher data for customer:', customerId, error)
+          }
+
+          // Check transaction program interactions
+          if (customerData.transactionRewardCount && customerData.transactionRewardCount > 0) {
+            customerInteraction.programs.push({
+              type: 'transaction',
+              name: 'Transaction Rewards',
+              progress: `${customerData.transactionRewardCount} rewards earned`,
+              programType: 'built-in'
+            })
+            customerInteraction.totalInteractions += customerData.transactionRewardCount
+            if (!customerInteraction.programTypes.includes('Transaction')) {
+              customerInteraction.programTypes.push('Transaction')
+            }
+          }
+
+          // Check cashback interactions
+          if (customerData.cashback && customerData.cashback > 0) {
+            customerInteraction.programs.push({
+              type: 'cashback',
+              name: 'Tap Cash',
+              progress: `$${(customerData.cashback || 0).toFixed(2)} earned`,
+              programType: 'built-in'
+            })
+            if (!customerInteraction.programTypes.includes('Cashback')) {
+              customerInteraction.programTypes.push('Cashback')
+            }
+          }
+
+          // Check custom program interactions from programProgress
+          try {
+            const programProgressRef = collection(db, 'merchants', user.uid, 'customers', customerId, 'programProgress')
+            const programProgressSnapshot = await getDocs(programProgressRef)
+            
+            for (const progressDoc of programProgressSnapshot.docs) {
+              const progressData = progressDoc.data()
+              const programId = progressDoc.id
+              
+              // Get program name from the programs map
+              const program = programs.get(programId)
+              if (program) {
+                const rewardsEarned = progressData.rewardsEarned?.length || 0
+                const totalSpend = progressData.totalSpend || 0
+                const transactionCount = progressData.transactionCount || 0
+                const visitCount = progressData.visitCount || 0
+                
+                if (rewardsEarned > 0 || totalSpend > 0 || transactionCount > 0 || visitCount > 0) {
+                  customerInteraction.programs.push({
+                    type: 'custom',
+                    name: program.name,
+                    programId: programId,
+                    progress: `${rewardsEarned} rewards, ${transactionCount} transactions, $${totalSpend.toFixed(2)} spent, ${visitCount} visits`,
+                    programType: 'custom',
+                    // Add the individual progress fields
+                    rewardsEarned: rewardsEarned,
+                    totalSpend: totalSpend,
+                    transactionCount: transactionCount,
+                    visitCount: visitCount,
+                    lastTransactionDate: progressData.lastTransactionDate?.toDate() || null,
+                    createdAt: progressData.createdAt?.toDate() || null,
+                    updatedAt: progressData.updatedAt?.toDate() || null
+                  })
+                  
+                  // Update customer totals
+                  customerInteraction.totalInteractions += rewardsEarned + transactionCount
+                  customerInteraction.totalSpend += totalSpend
+                  customerInteraction.transactionCount += transactionCount
+                  customerInteraction.visitCount += visitCount
+                  customerInteraction.rewardsEarned += rewardsEarned
+                  
+                  if (!customerInteraction.programTypes.includes('Custom')) {
+                    customerInteraction.programTypes.push('Custom')
+                  }
+                  
+                  // Update last interaction date
+                  if (progressData.updatedAt) {
+                    const updatedDate = progressData.updatedAt.toDate()
+                    if (!customerInteraction.lastInteraction || updatedDate > customerInteraction.lastInteraction) {
+                      customerInteraction.lastInteraction = updatedDate
+                    }
+                  }
+                  
+                  // Update last transaction date
+                  if (progressData.lastTransactionDate) {
+                    const lastTxnDate = progressData.lastTransactionDate.toDate()
+                    if (!customerInteraction.lastTransactionDate || lastTxnDate > customerInteraction.lastTransactionDate) {
+                      customerInteraction.lastTransactionDate = lastTxnDate
+                    }
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching program progress for customer:', customerId, error)
+          }
+
+          // Get last transaction date if no other interaction date found
+          if (!customerInteraction.lastInteraction && customerData.lastTransactionDate) {
+            customerInteraction.lastInteraction = customerData.lastTransactionDate.toDate()
+          }
+
+          // Only include customers who have program interactions
+          if (customerInteraction.programs.length > 0) {
+            interactions.push(customerInteraction)
+          }
+        }
+
+        // Sort by total interactions descending
+        interactions.sort((a, b) => b.totalInteractions - a.totalInteractions)
+        setCustomerInteractions(interactions)
+      } catch (error) {
+        console.error('Error fetching customer interactions:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCustomerInteractions()
+  }, [user?.uid])
+
+  // Filter customers based on filter type and search term
+  const filteredCustomers = customerInteractions.filter(customer => {
+    const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         customer.email.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    if (!matchesSearch) return false
+    
+    if (filterType === 'all') return true
+    if (filterType === 'built-in') {
+      return customer.programs.some((p: any) => p.programType === 'built-in')
+    }
+    if (filterType === 'custom') {
+      return customer.programs.some((p: any) => p.programType === 'custom')
+    }
+    // Filter by specific program ID
+    return customer.programs.some((p: any) => p.programId === filterType)
+  })
+
+  return (
+    <div className="mt-8">
+      <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-900">Program Customer Interactions</h3>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Search customers..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Programs</option>
+                <option value="built-in">Built-in Programs</option>
+                <option value="custom">Custom Programs</option>
+                <optgroup label="Individual Programs">
+                  {availablePrograms.map((program) => (
+                    <option key={program.id} value={program.id}>
+                      {program.name}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
+          </div>
+          <p className="text-xs text-gray-600">
+            Showing {filteredCustomers.length} customers with program interactions
+          </p>
+        </div>
+        
+        <div className="overflow-x-auto">
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
+            </div>
+          ) : filteredCustomers.length === 0 ? (
+            <div className="py-8 text-center">
+              <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
+                <Users className="h-6 w-6 text-gray-400" />
+              </div>
+              <p className="text-sm font-medium text-gray-700">No customer interactions found</p>
+              <p className="text-xs text-gray-500 mt-1">Customer program interactions will appear here</p>
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead className="bg-gray-50/80">
+                <tr className="border-b border-gray-100">
+                  <th className="px-4 py-3 text-left">
+                    <span className="text-xs font-medium text-gray-600">Customer</span>
+                  </th>
+                  <th className="px-4 py-3 text-center">
+                    <span className="text-xs font-medium text-gray-600">Programs</span>
+                  </th>
+                  <th className="px-4 py-3 text-center">
+                    <span className="text-xs font-medium text-gray-600">Total Spend</span>
+                  </th>
+                  <th className="px-4 py-3 text-center">
+                    <span className="text-xs font-medium text-gray-600">Transactions</span>
+                  </th>
+                  <th className="px-4 py-3 text-center">
+                    <span className="text-xs font-medium text-gray-600">Visits</span>
+                  </th>
+                  <th className="px-4 py-3 text-center">
+                    <span className="text-xs font-medium text-gray-600">Rewards Earned</span>
+                  </th>
+                  <th className="px-4 py-3 text-center">
+                    <span className="text-xs font-medium text-gray-600">Last Transaction</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredCustomers.map((customer) => (
+                  <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 flex-shrink-0">
+                          {customer.profilePictureUrl ? (
+                            <img 
+                              src={customer.profilePictureUrl} 
+                              alt={customer.name}
+                              className="h-8 w-8 rounded-full object-cover border border-gray-200"
+                            />
+                          ) : (
+                            <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-gray-100 text-gray-600">
+                              {customer.name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">{customer.name}</p>
+                          <p className="text-xs text-gray-600 truncate">{customer.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex flex-wrap gap-1 justify-center">
+                        {customer.programs.filter((p: any) => p.programType === 'custom').map((program: any, index: number) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200"
+                          >
+                            <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
+                            {program.name}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {customer.totalSpend > 0 ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                          <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                          ${customer.totalSpend.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {customer.transactionCount > 0 ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                          <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                          {customer.transactionCount}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {customer.visitCount > 0 ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                          <div className="h-1.5 w-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>
+                          {customer.visitCount}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {customer.rewardsEarned > 0 ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                          <div className="h-1.5 w-1.5 bg-yellow-500 rounded-full flex-shrink-0"></div>
+                          {customer.rewardsEarned}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {customer.lastTransactionDate ? (
+                        <div className="text-xs text-gray-600">
+                          <div>{format(customer.lastTransactionDate, 'MMM d, yyyy')}</div>
+                          <div className="text-xs text-gray-500">
+                            {formatDistanceToNow(customer.lastTransactionDate, { addSuffix: true })}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">No transactions</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        
+        {!loading && filteredCustomers.length > 0 && (
+          <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
+            <p className="text-xs text-gray-500 text-center">
+              Showing {filteredCustomers.length} customers with program interactions
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 const ProgramsTabContent = () => {
   const router = useRouter()
   const { user } = useAuth()
@@ -561,6 +1036,7 @@ const ProgramsTabContent = () => {
   const [programRewardCounts, setProgramRewardCounts] = useState<Record<string, number>>({})
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editingProgram, setEditingProgram] = useState<CustomProgram | null>(null)
+  const [showRecurringRewardDialog, setShowRecurringRewardDialog] = useState(false)
   
   // Fetch active programs from merchant document
   useEffect(() => {
@@ -749,7 +1225,7 @@ const ProgramsTabContent = () => {
   }
 
   const handleEditProgram = (programType: 'coffee' | 'voucher' | 'transaction') => {
-    router.push(`/programs?type=${programType}`)
+    setShowRecurringRewardDialog(true)
   }
 
   const getProgramTypeIcon = (programType: string) => {
@@ -1457,6 +1933,15 @@ const ProgramsTabContent = () => {
           }
         }} 
       />
+      
+      {/* Create/Edit Recurring Reward Dialog */}
+      <CreateRecurringRewardDialog 
+        open={showRecurringRewardDialog}
+        onOpenChange={setShowRecurringRewardDialog}
+      />
+      
+      {/* Customer Program Interactions Table */}
+      <ProgramCustomersTable />
     </div>
   )
 }
@@ -1707,8 +2192,7 @@ const RewardsTabContent = () => {
   const [rewardToDelete, setRewardToDelete] = useState<string | null>(null)
   const [expandedPrograms, setExpandedPrograms] = useState<Record<string, boolean>>({})
   const [customerNames, setCustomerNames] = useState<Record<string, string>>({})
-  const [isSearchOpen, setIsSearchOpen] = useState(false)
-  const [viewMode, setViewMode] = useState<"preview" | "text">("preview")
+  const [viewMode, setViewMode] = useState<"preview" | "text">("text")
   const [selectedRewardIds, setSelectedRewardIds] = useState<Set<string>>(new Set())
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false)
 
@@ -1868,6 +2352,8 @@ const RewardsTabContent = () => {
         return <Gift className="h-5 w-5 text-blue-600" />;
     }
   };
+
+
 
   const handleSort = (field: typeof sortField) => {
     if (field === sortField) {
@@ -2439,14 +2925,23 @@ const RewardsTabContent = () => {
           <div className="flex items-center gap-2">
             <div className="relative flex items-center">
               <div className="flex items-center">
+                <div className="relative w-[250px] h-9">
+                  {/* Search Input - Always Visible */}
+                  <div className="relative w-full">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                      type="search" 
+                      placeholder="Search rewards..." 
+                      className="w-full pl-9 h-9 rounded-md"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+                </div>
+                
                 {/* View Toggle - Only show for "all" tab when not in programs or customer-search */}
                 {rewardCategory === "all" && (
-                  <div className={cn(
-                    "flex items-center bg-gray-100 p-0.5 rounded-md transition-all duration-150 ease-out",
-                    isSearchOpen 
-                      ? "transform -translate-x-[260px]" 
-                      : "transform translate-x-0"
-                  )}>
+                  <div className="flex items-center bg-gray-100 p-0.5 rounded-md ml-2">
                     <button
                       onClick={() => setViewMode("preview")}
                       className={cn(
@@ -2473,51 +2968,6 @@ const RewardsTabContent = () => {
                     </button>
                   </div>
                 )}
-                
-                <div className={cn(
-                  "relative w-[250px] h-9 transition-all duration-150 ease-out",
-                  rewardCategory === "all" ? "ml-2" : ""
-                )}>
-                  {/* Search Icon Button */}
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className={cn(
-                      "absolute right-0 top-0 h-9 w-9 rounded-md transition-all duration-150 ease-out",
-                      isSearchOpen ? "opacity-0 scale-95 pointer-events-none" : "opacity-100 scale-100"
-                    )}
-                    onClick={() => setIsSearchOpen(true)}
-                  >
-                    <Search className="h-4 w-4" />
-                  </Button>
-                  
-                  {/* Search Input */}
-                  <div 
-                    className={cn(
-                      "absolute right-0 top-0 transition-all duration-150 ease-out",
-                      isSearchOpen 
-                        ? "w-full opacity-100 scale-100" 
-                        : "w-9 opacity-0 scale-95 pointer-events-none"
-                    )}
-                  >
-                    <div className="relative w-full">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    type="search" 
-                    placeholder="Search rewards..." 
-                        className="w-full pl-9 h-9 rounded-md"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                        onBlur={() => {
-                          if (!searchQuery) {
-                            setTimeout(() => setIsSearchOpen(false), 100)
-                          }
-                        }}
-                        autoFocus={isSearchOpen}
-                  />
-                </div>
-                          </div>
-                          </div>
               </div>
             </div>
           </div>
@@ -2532,28 +2982,31 @@ const RewardsTabContent = () => {
           <div className="w-full bg-white border border-gray-200 rounded-md shadow-sm overflow-hidden">
             {/* Bulk Actions Bar */}
             {selectedRewardIds.size > 0 && (
-              <div className="px-4 py-3 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-blue-900">
-                    {selectedRewardIds.size} reward{selectedRewardIds.size > 1 ? 's' : ''} selected
-                  </span>
+              <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="inline-flex items-center gap-2">
+                    <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
+                    <span className="text-sm font-medium text-gray-900">
+                      {selectedRewardIds.size} reward{selectedRewardIds.size > 1 ? 's' : ''} selected
+                    </span>
+                  </div>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setSelectedRewardIds(new Set())}
-                    className="text-blue-700 hover:text-blue-900 hover:bg-blue-100"
+                    className="text-gray-600 hover:text-gray-900 hover:bg-gray-200/70 text-xs px-3 py-1.5 h-auto"
                   >
                     Clear selection
                   </Button>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
-                    variant="destructive"
+                    variant="outline"
                     size="sm"
                     onClick={handleBulkDelete}
-                    className="gap-2"
+                    className="gap-2 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 text-xs px-3 py-1.5 h-auto"
                   >
-                    <Trash className="h-4 w-4" />
+                    <Trash className="h-3 w-3" />
                     Delete Selected
                   </Button>
                 </div>
@@ -2562,7 +3015,7 @@ const RewardsTabContent = () => {
             <div className="overflow-x-auto">
               <Table className="w-full">
                 <TableHeader>
-                  <TableRow className="bg-gray-50/80 border-b border-gray-100">
+                  <TableRow className="bg-gray-50/80">
                     <TableHead className="w-[40px] text-gray-600">
                       <Checkbox
                         checked={selectedRewardIds.size > 0 && selectedRewardIds.size === getFilteredRewards().length}
@@ -2574,14 +3027,84 @@ const RewardsTabContent = () => {
                       "text-gray-600 hover:text-gray-800 transition-colors",
                       viewMode === "preview" ? "w-[320px]" : "w-[300px]"
                     )}>
-                      {viewMode === "preview" ? "Preview" : "Reward Name"}
+                      {viewMode === "preview" ? "Preview" : (
+                        <button
+                          onClick={() => handleSort("rewardName")}
+                          className="flex items-center gap-1 hover:text-gray-800 transition-colors"
+                        >
+                          Reward Name
+                          {sortField === "rewardName" && (
+                            sortDirection === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                          )}
+                        </button>
+                      )}
                     </TableHead>
-                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">Type</TableHead>
-                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">Points</TableHead>
-                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">Redemptions</TableHead>
-                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">Visibility</TableHead>
-                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">Created</TableHead>
-                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">Active</TableHead>
+                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">
+                      <button
+                        onClick={() => handleSort("type")}
+                        className="flex items-center gap-1 hover:text-gray-800 transition-colors mx-auto"
+                      >
+                        Type
+                        {sortField === "type" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                        )}
+                      </button>
+                    </TableHead>
+                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">
+                      <button
+                        onClick={() => handleSort("pointsCost")}
+                        className="flex items-center gap-1 hover:text-gray-800 transition-colors mx-auto"
+                      >
+                        Points
+                        {sortField === "pointsCost" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                        )}
+                      </button>
+                    </TableHead>
+                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">
+                      <button
+                        onClick={() => handleSort("redemptionCount")}
+                        className="flex items-center gap-1 hover:text-gray-800 transition-colors mx-auto"
+                      >
+                        Redemptions
+                        {sortField === "redemptionCount" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                        )}
+                      </button>
+                    </TableHead>
+                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">
+                      <button
+                        onClick={() => handleSort("impressions")}
+                        className="flex items-center gap-1 hover:text-gray-800 transition-colors mx-auto"
+                      >
+                        Visibility
+                        {sortField === "impressions" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                        )}
+                      </button>
+                    </TableHead>
+                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">
+                      <button
+                        onClick={() => handleSort("createdAt")}
+                        className="flex items-center gap-1 hover:text-gray-800 transition-colors mx-auto"
+                      >
+                        Created
+                        {sortField === "createdAt" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                        )}
+                      </button>
+                    </TableHead>
+                    <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">
+                      <button
+                        onClick={() => handleSort("isActive")}
+                        className="flex items-center gap-1 hover:text-gray-800 transition-colors mx-auto"
+                      >
+                        Active
+                        {sortField === "isActive" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                        )}
+                      </button>
+                    </TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -2625,7 +3148,7 @@ const RewardsTabContent = () => {
                         className="cursor-pointer hover:bg-gray-100/50 transition-colors"
                         onClick={() => handleViewReward(reward.id)}
                       >
-                        <TableCell className="py-2.5 px-6">
+                        <TableCell className="py-2.5 px-2">
                           <Checkbox
                             checked={selectedRewardIds.has(reward.id)}
                             onCheckedChange={() => toggleRewardSelection(reward.id)}
@@ -2633,7 +3156,7 @@ const RewardsTabContent = () => {
                             aria-label={`Select ${reward.rewardName}`}
                           />
                         </TableCell>
-                        <TableCell className="font-medium py-2.5 px-6">
+                        <TableCell className="font-medium py-2.5 px-2">
                           {viewMode === "preview" ? (
                             <RewardPreviewCard reward={reward} />
                           ) : (
@@ -2689,7 +3212,7 @@ const RewardsTabContent = () => {
                         </TableCell>
                         <TableCell className="text-center px-6 py-2.5">
                           <div className="text-sm text-gray-600">
-                            {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
+                            {formatCreatedDate(reward.createdAt)}
                           </div>
                         </TableCell>
                         <TableCell className="text-center px-6 py-2.5">
@@ -2828,7 +3351,7 @@ const RewardsTabContent = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          {reward.createdAt ? formatDistanceToNow(reward.createdAt, { addSuffix: true }) : "Unknown"}
+                          {formatCreatedDate(reward.createdAt)}
                         </TableCell>
                         <TableCell className="text-center">
                           <div onClick={(e) => e.stopPropagation()}>
@@ -6514,7 +7037,7 @@ const ProgramRewardsTable = () => {
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      {reward.createdAt ? formatDistanceToNow(reward.createdAt.toDate(), { addSuffix: true }) : "Unknown"}
+                      {formatCreatedDate(reward.createdAt)}
                     </TableCell>
                     <TableCell className="text-center">
                       <div onClick={(e) => e.stopPropagation()}>

@@ -3636,7 +3636,7 @@ export default function DashboardPage() {
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
                       <h3 className="text-sm font-semibold text-gray-900">Recent Activity</h3>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 ml-[50px]">
                         <button
                           onClick={() => setIsAdvancedActivity(!isAdvancedActivity)}
                           className={cn(
@@ -4730,20 +4730,20 @@ export default function DashboardPage() {
                           <p className="text-xs text-gray-500 mt-1">Rewards will appear here once created</p>
                         </div>
                       ) : (
-                        <div className="overflow-x-auto">
+                        <div className="max-h-96 overflow-y-auto overflow-x-auto">
                           <table className="w-full">
                             <thead className="bg-gray-50/80 sticky top-0 z-10">
                               <tr className="border-b border-gray-100">
-                                <th className="px-4 py-3 text-left">
+                                <th className="px-4 py-3 text-left w-2/5">
                                   <span className="text-xs font-medium text-gray-600">Reward</span>
                                 </th>
-                                <th className="px-4 py-3 text-center">
+                                <th className="px-4 py-3 text-center w-1/5">
                                   <span className="text-xs font-medium text-gray-600">Type</span>
                                 </th>
-                                <th className="px-4 py-3 text-center">
+                                <th className="px-4 py-3 text-center w-1/5">
                                   <span className="text-xs font-medium text-gray-600">Redemptions</span>
                                 </th>
-                                <th className="px-4 py-3 text-right">
+                                <th className="px-4 py-3 text-right w-1/5">
                                   <span className="text-xs font-medium text-gray-600">Created</span>
                                 </th>
                               </tr>

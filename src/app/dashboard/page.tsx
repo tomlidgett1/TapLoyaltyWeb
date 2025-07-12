@@ -135,6 +135,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 import { TapAgentSheet } from "@/components/tap-agent-sheet"
@@ -479,6 +484,19 @@ export default function DashboardPage() {
   // Customer Reward Analytics state
   const [customerRewardAnalytics, setCustomerRewardAnalytics] = useState<any[]>([])
   const [customerRewardAnalyticsLoading, setCustomerRewardAnalyticsLoading] = useState(false)
+
+  // Customer targeted reward creation state
+  const [selectedCustomerForReward, setSelectedCustomerForReward] = useState<{id: string, name: string} | null>(null)
+  const [rewardDropdownOpen, setRewardDropdownOpen] = useState(false)
+  const [quickRewardPopupOpen, setQuickRewardPopupOpen] = useState(false)
+  const [selectedRewardType, setSelectedRewardType] = useState<'percentage' | 'dollar' | 'free_item' | null>(null)
+  const [quickRewardStep, setQuickRewardStep] = useState<'selection' | 'configuration'>('selection')
+  const [rewardConfig, setRewardConfig] = useState({
+    amount: '',
+    rewardName: '',
+    description: '',
+    pin: ''
+  })
 
   // Handle customer sorting
   const handleCustomerSort = (field: typeof customerSortField) => {
@@ -2378,6 +2396,7 @@ export default function DashboardPage() {
      const fetchCustomerRewardAnalytics = async () => {
        if (!user?.uid) return
 
+       console.log('Starting fetchCustomerRewardAnalytics for merchant:', user.uid)
        setCustomerRewardAnalyticsLoading(true)
 
        try {
@@ -2388,105 +2407,144 @@ export default function DashboardPage() {
          )
          const customersSnapshot = await getDocs(customersQuery)
 
-         const customerAnalytics = await Promise.all(
-           customersSnapshot.docs.map(async (customerDoc) => {
-             const customerData = customerDoc.data()
-             const customerId = customerDoc.id
+                  // First, get all rewards from merchant and filter for active ones
+         console.log('Starting to fetch merchant rewards...')
+         const merchantRewardsQuery = query(
+           collection(db, 'merchants', user.uid, 'rewards')
+         )
+         const merchantRewardsSnapshot = await getDocs(merchantRewardsQuery)
+         
+         // Filter for active rewards (handle various data types)
+         const activeRewardIds = merchantRewardsSnapshot.docs
+           .filter(doc => {
+             const data = doc.data()
+             const isActive = data.isActive === true || data.isActive === 'true' || data.isActive === 1
+             return isActive
+           })
+           .map(doc => doc.id)
 
-             // Get customer rewards data
-             const customerRewardsQuery = query(
-               collection(db, 'customers', customerId, 'rewards')
-             )
-             const customerRewardsSnapshot = await getDocs(customerRewardsQuery)
+         console.log('Found total merchant rewards:', merchantRewardsSnapshot.docs.length)
+         console.log('Found active merchant rewards:', activeRewardIds.length)
 
-                           let redeemableCount = 0
-              let visibleButNotRedeemableCount = 0
+         // If no active rewards, still process customers but with zero counts
+         if (activeRewardIds.length === 0) {
+           console.log('No active rewards found, processing customers with zero counts')
+         }
 
-              // Count rewards based on visibility, redeemability, and merchant reward status
-              for (const rewardDoc of customerRewardsSnapshot.docs) {
-                const rewardData = rewardDoc.data()
-                const rewardId = rewardDoc.id
-                
-                // Check if this reward belongs to our merchant
-                if (rewardData.merchantId === user.uid) {
-                  const isVisible = rewardData.visible === true || rewardData.visible === 'true' || rewardData.visible === 1
-                  const isRedeemable = rewardData.redeemable === true || rewardData.redeemable === 'true' || rewardData.redeemable === 1
+         // Process customers in batches for better performance
+         const batchSize = 10
+         const customerDocs = customersSnapshot.docs
+         const customerAnalytics: any[] = []
 
-                  // Also check if the reward is active in the merchant's rewards collection
-                  try {
-                    const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId)
-                    const merchantRewardSnapshot = await getDoc(merchantRewardRef)
-                    
-                    if (merchantRewardSnapshot.exists()) {
-                      const merchantRewardData = merchantRewardSnapshot.data()
-                      const isActiveInMerchant = merchantRewardData.isActive === true || merchantRewardData.isActive === 'true' || merchantRewardData.isActive === 1
-                      
-                      // Only count if the reward is also active in merchant's collection
-                      if (isActiveInMerchant) {
-                        if (isVisible && isRedeemable) {
-                          redeemableCount++
-                        } else if (isVisible && !isRedeemable) {
-                          visibleButNotRedeemableCount++
-                        }
-                      }
-                    }
-                  } catch (error) {
-                    console.error('Error checking merchant reward status:', rewardId, error)
-                  }
-                }
-              }
+         console.log(`Processing ${customerDocs.length} customers in batches of ${batchSize}`)
 
-             // Get last transaction date
-             let lastTransactionDate = null
-             try {
-               const transactionsQuery = query(
-                 collection(db, 'merchants', user.uid, 'transactions'),
-                 where('customerId', '==', customerId),
-                 orderBy('createdAt', 'desc'),
-                 limit(1)
-               )
-               const transactionsSnapshot = await getDocs(transactionsQuery)
-               if (!transactionsSnapshot.empty) {
-                 lastTransactionDate = transactionsSnapshot.docs[0].data().createdAt?.toDate()
+         for (let i = 0; i < customerDocs.length; i += batchSize) {
+           const batch = customerDocs.slice(i, i + batchSize)
+           console.log(`Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(customerDocs.length/batchSize)}`)
+           
+           const batchResults = await Promise.allSettled(
+             batch.map(async (customerDoc) => {
+               const customerData = customerDoc.data()
+               const customerId = customerDoc.id
+
+               let redeemableCount = 0
+               let visibleButNotRedeemableCount = 0
+
+               // If no active rewards, skip the reward checking
+               if (activeRewardIds.length > 0) {
+                 // Check customer rewards for all active merchant rewards in parallel
+                 const rewardChecks = await Promise.allSettled(
+                   activeRewardIds.map(async (rewardId) => {
+                     const customerRewardRef = doc(db, 'customers', customerId, 'rewards', rewardId)
+                     const customerRewardSnapshot = await getDoc(customerRewardRef)
+                     
+                     if (customerRewardSnapshot.exists()) {
+                       const rewardData = customerRewardSnapshot.data()
+                       
+                       // Verify this reward belongs to our merchant (safety check)
+                       if (rewardData.merchantId === user.uid) {
+                         const isVisible = rewardData.visible === true || rewardData.visible === 'true' || rewardData.visible === 1
+                         const isRedeemable = rewardData.redeemable === true || rewardData.redeemable === 'true' || rewardData.redeemable === 1
+
+                         return { isVisible, isRedeemable }
+                       }
+                     }
+                     return null
+                   })
+                 )
+
+                 // Count the results
+                 rewardChecks.forEach(result => {
+                   if (result.status === 'fulfilled' && result.value) {
+                     const { isVisible, isRedeemable } = result.value
+                     if (isVisible && isRedeemable) {
+                       redeemableCount++
+                     } else if (isVisible && !isRedeemable) {
+                       visibleButNotRedeemableCount++
+                     }
+                   }
+                 })
                }
-             } catch (error) {
-               console.error('Error fetching last transaction for customer:', customerId, error)
-             }
 
-             // Get last store view
-             let lastStoreView = null
-             try {
-               const storeViewsQuery = query(
-                 collection(db, 'merchants', user.uid, 'storeViews'),
-                 where('customerId', '==', customerId),
-                 orderBy('timestamp', 'desc'),
-                 limit(1)
-               )
-               const storeViewsSnapshot = await getDocs(storeViewsQuery)
-               if (!storeViewsSnapshot.empty) {
-                 lastStoreView = storeViewsSnapshot.docs[0].data().timestamp?.toDate()
+               // Get last transaction date
+               let lastTransactionDate = null
+               try {
+                 const transactionsQuery = query(
+                   collection(db, 'merchants', user.uid, 'transactions'),
+                   where('customerId', '==', customerId),
+                   orderBy('createdAt', 'desc'),
+                   limit(1)
+                 )
+                 const transactionsSnapshot = await getDocs(transactionsQuery)
+                 if (!transactionsSnapshot.empty) {
+                   lastTransactionDate = transactionsSnapshot.docs[0].data().createdAt?.toDate()
+                 }
+               } catch (error) {
+                 console.error('Error fetching last transaction for customer:', customerId, error)
                }
-             } catch (error) {
-               console.error('Error fetching last store view for customer:', customerId, error)
-             }
 
-             return {
-               id: customerId,
-               name: customerData.fullName || 'Unknown Customer',
-               email: customerData.email || '',
-               profilePicture: customerData.profilePictureUrl || null,
-               redeemableRewards: redeemableCount,
-               visibleButNotRedeemableRewards: visibleButNotRedeemableCount,
-               totalVisibleRewards: redeemableCount + visibleButNotRedeemableCount,
-               lifetimeTransactionCount: customerData.lifetimeTransactionCount || 0,
-               totalLifetimeSpend: customerData.totalLifetimeSpend || 0,
-               lastTransactionDate,
-               lastStoreView,
-               pointsBalance: customerData.pointsBalance || 0,
-               currentCohort: customerData.currentCohort
+               // Get last store view
+               let lastStoreView = null
+               try {
+                 const storeViewsQuery = query(
+                   collection(db, 'merchants', user.uid, 'storeViews'),
+                   where('customerId', '==', customerId),
+                   orderBy('timestamp', 'desc'),
+                   limit(1)
+                 )
+                 const storeViewsSnapshot = await getDocs(storeViewsQuery)
+                 if (!storeViewsSnapshot.empty) {
+                   lastStoreView = storeViewsSnapshot.docs[0].data().timestamp?.toDate()
+                 }
+               } catch (error) {
+                 console.error('Error fetching last store view for customer:', customerId, error)
+               }
+
+               return {
+                 id: customerId,
+                 name: customerData.fullName || 'Unknown Customer',
+                 email: customerData.email || '',
+                 profilePicture: customerData.profilePictureUrl || null,
+                 redeemableRewards: redeemableCount,
+                 visibleButNotRedeemableRewards: visibleButNotRedeemableCount,
+                 totalVisibleRewards: redeemableCount + visibleButNotRedeemableCount,
+                 lifetimeTransactionCount: customerData.lifetimeTransactionCount || 0,
+                 totalLifetimeSpend: customerData.totalLifetimeSpend || 0,
+                 lastTransactionDate,
+                 lastStoreView,
+                 pointsBalance: customerData.pointsBalance || 0,
+                 currentCohort: customerData.currentCohort
+               }
+             })
+           )
+
+           // Add successful results to analytics array
+           batchResults.forEach(result => {
+             if (result.status === 'fulfilled' && result.value) {
+               customerAnalytics.push(result.value)
              }
            })
-         )
+         }
 
          // Sort by least number of redeemable rewards first
          const sortedAnalytics = customerAnalytics.sort((a, b) => {
@@ -2496,11 +2554,15 @@ export default function DashboardPage() {
            return a.redeemableRewards - b.redeemableRewards
          })
 
+         console.log('Successfully processed', sortedAnalytics.length, 'customers')
          setCustomerRewardAnalytics(sortedAnalytics)
        } catch (error) {
          console.error('Error fetching customer reward analytics:', error)
+         // Set empty array on error so the UI shows "no data available"
+         setCustomerRewardAnalytics([])
        } finally {
          setCustomerRewardAnalyticsLoading(false)
+         console.log('fetchCustomerRewardAnalytics completed')
        }
      }
 
@@ -4647,7 +4709,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   
-                  <div className="overflow-x-auto">
+                  <div className="max-h-80 overflow-y-auto scrollbar-subtle">
                     {liveRewardsLoading ? (
                       <div className="flex items-center justify-center py-8">
                         <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
@@ -4668,88 +4730,90 @@ export default function DashboardPage() {
                           <p className="text-xs text-gray-500 mt-1">Rewards will appear here once created</p>
                         </div>
                       ) : (
-                        <table className="w-full">
-                          <thead className="bg-gray-50/80">
-                            <tr className="border-b border-gray-100">
-                              <th className="px-4 py-3 text-left">
-                                <span className="text-xs font-medium text-gray-600">Reward</span>
-                              </th>
-                              <th className="px-4 py-3 text-center">
-                                <span className="text-xs font-medium text-gray-600">Type</span>
-                              </th>
-                              <th className="px-4 py-3 text-center">
-                                <span className="text-xs font-medium text-gray-600">Redemptions</span>
-                              </th>
-                              <th className="px-4 py-3 text-right">
-                                <span className="text-xs font-medium text-gray-600">Created</span>
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                                                    {filteredRewards.slice(0, 10).map((reward) => (
-                          <tr 
-                            key={reward.id} 
-                            className="hover:bg-gray-100/50 transition-colors cursor-pointer"
-                            onClick={() => handleRewardClick(reward.id)}
-                          >
-                                <td className="px-4 py-2.5">
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-medium text-gray-800 truncate">{reward.rewardName || reward.title || reward.name}</p>
-                                    <p className="text-xs text-gray-600 truncate">{reward.description}</p>
-                                  </div>
-                                </td>
-                                <td className="px-4 py-2.5 text-center">
-                                  {reward.costType === 'free' ? (
-                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
-                                      <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
-                                      Free
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
-                                      <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
-                                      {reward.pointsRequired} pts
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-2.5 text-center">
-                                  <span className="text-sm font-medium text-gray-800">{reward.redemptionCount}</span>
-                                </td>
-                                                                 <td className="px-4 py-2.5 text-right">
-                                   <span className="text-xs text-gray-600">
-                                     {(() => {
-                                       if (!reward.createdAt) return 'Unknown'
-                                       try {
-                                         // Handle Firestore Timestamp
-                                         if (reward.createdAt.toDate && typeof reward.createdAt.toDate === 'function') {
-                                           return format(reward.createdAt.toDate(), 'MMM d, yyyy')
-                                         }
-                                         // Handle JavaScript Date
-                                         if (reward.createdAt instanceof Date) {
-                                           return format(reward.createdAt, 'MMM d, yyyy')
-                                         }
-                                         // Handle string dates
-                                         if (typeof reward.createdAt === 'string') {
-                                           return format(new Date(reward.createdAt), 'MMM d, yyyy')
-                                         }
-                                         // Handle seconds/milliseconds timestamps
-                                         if (typeof reward.createdAt === 'number') {
-                                           const date = reward.createdAt > 1000000000000 
-                                             ? new Date(reward.createdAt) // milliseconds
-                                             : new Date(reward.createdAt * 1000) // seconds
-                                           return format(date, 'MMM d, yyyy')
-                                         }
-                                         return 'Unknown'
-                                       } catch (error) {
-                                         console.error('Error formatting reward date:', error, reward.createdAt)
-                                         return 'Unknown'
-                                       }
-                                     })()}
-                                   </span>
-                                 </td>
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead className="bg-gray-50/80 sticky top-0 z-10">
+                              <tr className="border-b border-gray-100">
+                                <th className="px-4 py-3 text-left">
+                                  <span className="text-xs font-medium text-gray-600">Reward</span>
+                                </th>
+                                <th className="px-4 py-3 text-center">
+                                  <span className="text-xs font-medium text-gray-600">Type</span>
+                                </th>
+                                <th className="px-4 py-3 text-center">
+                                  <span className="text-xs font-medium text-gray-600">Redemptions</span>
+                                </th>
+                                <th className="px-4 py-3 text-right">
+                                  <span className="text-xs font-medium text-gray-600">Created</span>
+                                </th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {filteredRewards.map((reward) => (
+                                <tr 
+                                  key={reward.id} 
+                                  className="hover:bg-gray-100/50 transition-colors cursor-pointer"
+                                  onClick={() => handleRewardClick(reward.id)}
+                                >
+                                  <td className="px-4 py-2.5">
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-medium text-gray-800 truncate">{reward.rewardName || reward.title || reward.name}</p>
+                                      <p className="text-xs text-gray-600 truncate">{reward.description}</p>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-center">
+                                    {reward.costType === 'free' ? (
+                                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                                        <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                                        Free
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                                        <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                                        {reward.pointsRequired} pts
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-center">
+                                    <span className="text-sm font-medium text-gray-800">{reward.redemptionCount}</span>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-right">
+                                    <span className="text-xs text-gray-600">
+                                      {(() => {
+                                        if (!reward.createdAt) return 'Unknown'
+                                        try {
+                                          // Handle Firestore Timestamp
+                                          if (reward.createdAt.toDate && typeof reward.createdAt.toDate === 'function') {
+                                            return format(reward.createdAt.toDate(), 'MMM d, yyyy')
+                                          }
+                                          // Handle JavaScript Date
+                                          if (reward.createdAt instanceof Date) {
+                                            return format(reward.createdAt, 'MMM d, yyyy')
+                                          }
+                                          // Handle string dates
+                                          if (typeof reward.createdAt === 'string') {
+                                            return format(new Date(reward.createdAt), 'MMM d, yyyy')
+                                          }
+                                          // Handle seconds/milliseconds timestamps
+                                          if (typeof reward.createdAt === 'number') {
+                                            const date = reward.createdAt > 1000000000000 
+                                              ? new Date(reward.createdAt) // milliseconds
+                                              : new Date(reward.createdAt * 1000) // seconds
+                                            return format(date, 'MMM d, yyyy')
+                                          }
+                                          return 'Unknown'
+                                        } catch (error) {
+                                          console.error('Error formatting reward date:', error, reward.createdAt)
+                                          return 'Unknown'
+                                        }
+                                      })()}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       )
                     })()}
                   </div>
@@ -5183,16 +5247,39 @@ export default function DashboardPage() {
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-right">
-                                  <Button
-                                    size="sm"
-                                    onClick={() => {
-                                      setSelectedCustomer({ id: customer.id, name: customer.name })
-                                      setIsRewardDialogOpen(true)
-                                    }}
-                                    className="h-7 px-3 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-md"
-                                  >
-                                    Create Reward
-                                  </Button>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        className="h-7 px-3 text-xs font-medium bg-gray-600 hover:bg-gray-700 text-white rounded-md flex items-center gap-1"
+                                      >
+                                        Create Reward
+                                        <ChevronDown className="h-3 w-3" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-48">
+                                      <DropdownMenuItem 
+                                        onClick={() => {
+                                          setSelectedCustomerForReward({ id: customer.id, name: customer.name })
+                                          setCreateRewardPopupOpen(true)
+                                        }}
+                                        className="flex items-center gap-2"
+                                      >
+                                        <Settings className="h-4 w-4" />
+                                        Custom Reward
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem 
+                                        onClick={() => {
+                                          setSelectedCustomerForReward({ id: customer.id, name: customer.name })
+                                          setQuickRewardPopupOpen(true)
+                                        }}
+                                        className="flex items-center gap-2"
+                                      >
+                                        <Zap className="h-4 w-4" />
+                                        Quick Reward
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 </td>
                               </tr>
                             )
@@ -5872,6 +5959,260 @@ export default function DashboardPage() {
 
       {/* Popup Components */}
       <CreateRewardPopup open={createRewardPopupOpen} onOpenChange={setCreateRewardPopupOpen} />
+
+            {/* Quick Reward Popup */}
+      {quickRewardPopupOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] animate-in fade-in duration-200"
+          onClick={() => {
+            setQuickRewardPopupOpen(false)
+            setQuickRewardStep('selection')
+            setSelectedRewardType(null)
+          }}
+        >
+          <div 
+            className="bg-white rounded-lg w-[480px] h-[480px] mx-4 shadow-lg border border-gray-200 overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                {quickRewardStep === 'configuration' && (
+                  <button
+                    onClick={() => setQuickRewardStep('selection')}
+                    className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+                  >
+                    <ChevronLeft className="h-4 w-4 text-gray-600" />
+                  </button>
+                )}
+                <div className="flex-1">
+                  <h3 className="text-base font-semibold text-gray-900">
+                    {quickRewardStep === 'selection' ? (
+                      <>Quick Reward for <span style={{ color: '#007AFF' }}>{selectedCustomerForReward?.name}</span></>
+                    ) : (
+                      <>Configure {selectedRewardType === 'percentage' ? 'Percentage' : selectedRewardType === 'dollar' ? 'Dollar' : 'Free Item'} Reward</>
+                    )}
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {quickRewardStep === 'selection' 
+                      ? 'Choose a reward type to bring this customer back'
+                      : `Set up the reward details for ${selectedCustomerForReward?.name}`
+                    }
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Body with Fade Transition */}
+            <div className={`flex-1 p-4 transition-opacity duration-300 ${quickRewardStep === 'selection' ? 'opacity-100' : 'opacity-0 absolute'}`}>
+              {quickRewardStep === 'selection' && (
+                <div className="space-y-3 h-full flex flex-col justify-start pt-4">
+                  <button
+                    onClick={() => {
+                      setSelectedRewardType('percentage')
+                      setRewardConfig({
+                        amount: '',
+                        rewardName: `${selectedCustomerForReward?.name} - Percentage Discount`,
+                        description: 'Give a percentage discount on their next purchase',
+                        pin: ''
+                      })
+                      setQuickRewardStep('configuration')
+                    }}
+                    className="w-full p-3 text-left border border-gray-200 rounded-md hover:bg-gray-50 hover:border-gray-300 transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Percent className="h-4 w-4 text-gray-500" />
+                      <div className="flex-1">
+                        <h4 className="text-sm font-medium text-gray-900">Percentage Off</h4>
+                        <p className="text-xs text-gray-500">Give a percentage discount on their next purchase</p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-gray-400" />
+                    </div>
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      setSelectedRewardType('dollar')
+                      setRewardConfig({
+                        amount: '',
+                        rewardName: `${selectedCustomerForReward?.name} - Dollar Discount`,
+                        description: 'Give a fixed dollar amount off their purchase',
+                        pin: ''
+                      })
+                      setQuickRewardStep('configuration')
+                    }}
+                    className="w-full p-3 text-left border border-gray-200 rounded-md hover:bg-gray-50 hover:border-gray-300 transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <DollarSign className="h-4 w-4 text-gray-500" />
+                      <div className="flex-1">
+                        <h4 className="text-sm font-medium text-gray-900">Dollar Amount Off</h4>
+                        <p className="text-xs text-gray-500">Give a fixed dollar amount off their purchase</p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-gray-400" />
+                    </div>
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      setSelectedRewardType('free_item')
+                      setRewardConfig({
+                        amount: '',
+                        rewardName: `${selectedCustomerForReward?.name} - Free Item`,
+                        description: 'Give them a free product or service',
+                        pin: ''
+                      })
+                      setQuickRewardStep('configuration')
+                    }}
+                    className="w-full p-3 text-left border border-gray-200 rounded-md hover:bg-gray-50 hover:border-gray-300 transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Gift className="h-4 w-4 text-gray-500" />
+                      <div className="flex-1">
+                        <h4 className="text-sm font-medium text-gray-900">Free Item</h4>
+                        <p className="text-xs text-gray-500">Give them a free product or service</p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-gray-400" />
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className={`flex-1 p-4 transition-opacity duration-300 ${quickRewardStep === 'configuration' ? 'opacity-100' : 'opacity-0 absolute'} overflow-y-auto`}>
+              {quickRewardStep === 'configuration' && (
+                <div className="space-y-3">
+                  {/* Amount Field */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      {selectedRewardType === 'percentage' ? 'Percentage (%)' : 
+                       selectedRewardType === 'dollar' ? 'Dollar Amount ($)' : 
+                       'Item Name/Description'}
+                    </label>
+                    <div className="relative">
+                      {selectedRewardType === 'percentage' && (
+                        <Percent className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400" />
+                      )}
+                      {selectedRewardType === 'dollar' && (
+                        <DollarSign className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400" />
+                      )}
+                      <input
+                        type={selectedRewardType === 'free_item' ? 'text' : 'number'}
+                        value={rewardConfig.amount}
+                        onChange={(e) => setRewardConfig({...rewardConfig, amount: e.target.value})}
+                        placeholder={selectedRewardType === 'percentage' ? '10' : 
+                                   selectedRewardType === 'dollar' ? '5.00' : 
+                                   'Free Coffee'}
+                        className={`w-full ${selectedRewardType !== 'free_item' ? 'pl-8' : 'pl-3'} pr-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Reward Name */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Reward Name
+                    </label>
+                    <input
+                      type="text"
+                      value={rewardConfig.rewardName}
+                      onChange={(e) => setRewardConfig({...rewardConfig, rewardName: e.target.value})}
+                      className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Description
+                    </label>
+                    <textarea
+                      value={rewardConfig.description}
+                      onChange={(e) => setRewardConfig({...rewardConfig, description: e.target.value})}
+                      rows={2}
+                      className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent resize-none"
+                    />
+                  </div>
+
+                  {/* PIN */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      PIN (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={rewardConfig.pin}
+                      onChange={(e) => setRewardConfig({...rewardConfig, pin: e.target.value})}
+                      placeholder="Enter 4-digit PIN"
+                      maxLength={4}
+                      className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 mt-0.5">Customer will need this PIN to redeem</p>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Footer */}
+            <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+              <div className="flex justify-between items-center">
+                {quickRewardStep === 'selection' ? (
+                  <>
+                    <p className="text-xs text-gray-500 flex-1">
+                      Quick rewards help re-engage customers
+                    </p>
+                    <button
+                      onClick={() => {
+                        setQuickRewardPopupOpen(false)
+                        setQuickRewardStep('selection')
+                        setSelectedRewardType(null)
+                      }}
+                      className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <div className="flex justify-end gap-2 w-full">
+                    <button
+                      onClick={() => setQuickRewardStep('selection')}
+                      className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Here you would typically save the reward to the database
+                        toast({
+                          title: "Reward Created Successfully",
+                          description: `${rewardConfig.rewardName} has been created for ${selectedCustomerForReward?.name}`,
+                          variant: "default"
+                        })
+                        setQuickRewardPopupOpen(false)
+                        setQuickRewardStep('selection')
+                        setSelectedCustomerForReward(null)
+                        setSelectedRewardType(null)
+                        setRewardConfig({
+                          amount: '',
+                          rewardName: '',
+                          description: '',
+                          pin: ''
+                        })
+                      }}
+                      className="px-3 py-1.5 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors"
+                    >
+                      Create Reward
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+
       <IntroductoryRewardPopup open={introductoryRewardPopupOpen} onOpenChange={setIntroductoryRewardPopupOpen} />
       <CreateManualProgramDialog open={createManualProgramOpen} onOpenChange={setCreateManualProgramOpen} />
       <CreateRecurringRewardDialog open={createRecurringRewardOpen} onOpenChange={setCreateRecurringRewardOpen} />

@@ -67,6 +67,12 @@ import { PageHeader } from "@/components/page-header"
 import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banner-preview"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import {
+  Tooltip as TooltipComponent,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -75,6 +81,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
+import { RewardDetailSheet } from "@/components/reward-detail-sheet"
 import { 
   Sheet,
   SheetContent,
@@ -441,12 +448,14 @@ export default function DashboardPage() {
   const [allCustomers, setAllCustomers] = useState<any[]>([])
   const [customersLoading, setCustomersLoading] = useState(false)
   const [customerSearchTerm, setCustomerSearchTerm] = useState('')
-  const [customerSortField, setCustomerSortField] = useState<'fullName' | 'pointsBalance' | 'cashback' | 'lastTransactionDate' | 'totalLifetimeSpend' | 'lifetimeTransactionCount'>('fullName')
+  const [customerSortField, setCustomerSortField] = useState<'fullName' | 'pointsBalance' | 'cashback' | 'lastTransactionDate' | 'firstTransactionDate' | 'totalLifetimeSpend' | 'lifetimeTransactionCount'>('fullName')
   const [customerSortDirection, setCustomerSortDirection] = useState<'asc' | 'desc'>('asc')
   const [hasIntroductoryReward, setHasIntroductoryReward] = useState(false)
   const [selectedActivity, setSelectedActivity] = useState<any>(null)
   const [activityDetailOpen, setActivityDetailOpen] = useState(false)
   const [shareDropdownOpen, setShareDropdownOpen] = useState(false)
+  const [rewardDetailSheetOpen, setRewardDetailSheetOpen] = useState(false)
+  const [selectedRewardId, setSelectedRewardId] = useState<string | null>(null)
 
   // Handle customer sorting
   const handleCustomerSort = (field: typeof customerSortField) => {
@@ -462,6 +471,11 @@ export default function DashboardPage() {
   const handleActivityClick = (activity: any) => {
     setSelectedActivity(activity)
     setActivityDetailOpen(true)
+  }
+
+  const handleRewardClick = (rewardId: string) => {
+    setSelectedRewardId(rewardId)
+    setRewardDetailSheetOpen(true)
   }
 
   // Handle sharing via email
@@ -567,7 +581,7 @@ export default function DashboardPage() {
       if (bValue == null) return customerSortDirection === 'asc' ? -1 : 1
 
       // Handle date fields
-      if (customerSortField === 'lastTransactionDate') {
+      if (customerSortField === 'lastTransactionDate' || customerSortField === 'firstTransactionDate') {
         aValue = aValue?.toDate ? aValue.toDate() : new Date(aValue)
         bValue = bValue?.toDate ? bValue.toDate() : new Date(bValue)
       }
@@ -680,7 +694,7 @@ export default function DashboardPage() {
     {
       id: 'insights',
       name: 'Insights Agent',
-      description: 'Generate business insights from your data',
+      description: 'Generate business insights from your data to help grow sales and repeat business',
       icon: <Brain className="h-8 w-8 text-green-500" />,
       status: 'active',
       color: 'green',
@@ -921,15 +935,20 @@ export default function DashboardPage() {
       
       try {
         setRewardsLoading(true)
-        const { start, end } = getDateRange(timeframe)
+        
+        // Fixed 20-day timeframe for popular rewards
+        const now = new Date()
+        const twentyDaysAgo = new Date(now)
+        twentyDaysAgo.setDate(twentyDaysAgo.getDate() - 20)
+        twentyDaysAgo.setHours(0, 0, 0, 0)
         
         // Create a query to get all rewards for the merchant
         const rewardsQuery = query(
           collection(db, 'merchants', user.uid, 'rewards'),
           orderBy('redemptionCount', 'desc'),
-          where('lastRedeemedAt', '>=', start),
-          where('lastRedeemedAt', '<=', end),
-          limit(3)
+          where('lastRedeemedAt', '>=', twentyDaysAgo),
+          where('lastRedeemedAt', '<=', now),
+          limit(5)
         )
         
         // Get the rewards documents
@@ -972,7 +991,7 @@ export default function DashboardPage() {
     if (user?.uid) {
       fetchPopularRewards()
     }
-  }, [user?.uid, timeframe])
+  }, [user?.uid])
 
   useEffect(() => {
     const fetchBanners = async () => {
@@ -3392,7 +3411,7 @@ export default function DashboardPage() {
 
 
               {/* Activity and Analytics Section for Loyalty */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr_0.8fr] gap-6">
             {/* Recent Activity */}
                 <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
@@ -3446,22 +3465,38 @@ export default function DashboardPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3">
-                                {activity.type === "transaction" ? (
-                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
-                                    <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
-                                    Purchase
-                                  </span>
-                                ) : activity.tapCashUsed > 0 ? (
-                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
-                                    <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
-                                    TapCash
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
-                                    <div className="h-1.5 w-1.5 bg-gray-500 rounded-full flex-shrink-0"></div>
-                                    {activity.rewardName || "Redemption"}
-                                  </span>
-                                )}
+                                <div className="flex flex-col gap-1">
+                                  {activity.type === "transaction" ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                      <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                                      Purchase
+                                    </span>
+                                  ) : activity.tapCashUsed > 0 ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                      <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                                      TapCash
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                        <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
+                                        Redemption
+                                      </span>
+                                      {activity.rewardName && (
+                                        <div className="flex flex-col gap-0.5">
+                                          <span className="text-xs text-gray-600 truncate max-w-[150px]">
+                                            {activity.rewardName}
+                                          </span>
+                                          {activity.isNetworkReward && (
+                                            <span className="text-xs text-blue-600 font-medium">
+                                              Network Reward
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
                               </td>
                               <td className="px-4 py-3 text-right">
                                 <span className="text-sm font-medium text-gray-800">
@@ -3480,7 +3515,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Popular Rewards */}
+                        {/* Popular Rewards */}
                 <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
@@ -3508,16 +3543,15 @@ export default function DashboardPage() {
                       <table className="w-full">
                         <tbody className="divide-y divide-gray-100">
                     {popularRewards.slice(0, 5).map((reward, index) => (
-                            <tr key={reward.id} className="hover:bg-gray-100/50 transition-colors">
+                            <tr 
+                              key={reward.id} 
+                              className="hover:bg-gray-100/50 transition-colors cursor-pointer"
+                              onClick={() => handleRewardClick(reward.id)}
+                            >
                               <td className="px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                  <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                    <Star className="h-3 w-3 text-gray-600" />
-                        </div>
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-medium text-gray-800 truncate">{reward.name}</p>
-                        </div>
-                        </div>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-gray-800 truncate">{reward.name}</p>
+                                </div>
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <span className="text-xs font-medium text-gray-600">
@@ -3531,6 +3565,11 @@ export default function DashboardPage() {
                     ))}
                         </tbody>
                       </table>
+                )}
+                {!rewardsLoading && popularRewards.length > 0 && (
+                  <div className="px-4 py-2 bg-gray-50 border-t border-gray-200">
+                    <p className="text-xs text-gray-500 text-center">Based on redemptions from last 20 days</p>
+                  </div>
                 )}
               </div>
             </div>
@@ -3778,26 +3817,59 @@ export default function DashboardPage() {
                                <div className="text-xs text-gray-400">Active Participants</div>
                              </div>
                              <div className="text-center">
-                               <div className="text-sm font-medium text-gray-700">
-                                 {programCustomers.coffee.length > 0 
-                                   ? Math.round(programCustomers.coffee.reduce((sum, c) => sum + c.progress, 0) / programCustomers.coffee.length)
-                                   : 0}
-                               </div>
-                               <div className="text-xs text-gray-400">Avg Stamps</div>
+                               <TooltipProvider>
+                                 <TooltipComponent>
+                                   <TooltipTrigger asChild>
+                                     <div className="cursor-help">
+                                       <div className="text-sm font-medium text-gray-700">
+                                         {programCustomers.coffee.length > 0 
+                                           ? Math.round(programCustomers.coffee.reduce((sum, c) => sum + c.progress, 0) / programCustomers.coffee.length)
+                                           : 0}
+                                       </div>
+                                       <div className="text-xs text-gray-400">Avg Stamps</div>
+                                     </div>
+                                   </TooltipTrigger>
+                                   <TooltipContent>
+                                     <p className="text-xs">Average number of coffee stamps earned per customer</p>
+                                   </TooltipContent>
+                                 </TooltipComponent>
+                               </TooltipProvider>
                              </div>
                              <div className="text-center">
-                               <div className="text-sm font-medium text-gray-700">
-                                 {programCustomers.coffee.length > 0 
-                                   ? Math.round(programCustomers.coffee.filter(c => c.progressPercentage >= 100).length / programCustomers.coffee.length * 100)
-                                   : 0}%
-                               </div>
-                               <div className="text-xs text-gray-400">Completion Rate</div>
+                               <TooltipProvider>
+                                 <TooltipComponent>
+                                   <TooltipTrigger asChild>
+                                     <div className="cursor-help">
+                                       <div className="text-sm font-medium text-gray-700">
+                                         {programCustomers.coffee.length > 0 
+                                           ? Math.round(programCustomers.coffee.filter(c => c.progressPercentage >= 100).length / programCustomers.coffee.length * 100)
+                                           : 0}%
+                                       </div>
+                                       <div className="text-xs text-gray-400">Completion Rate</div>
+                                     </div>
+                                   </TooltipTrigger>
+                                   <TooltipContent>
+                                     <p className="text-xs">Percentage of customers who completed their coffee card</p>
+                                   </TooltipContent>
+                                 </TooltipComponent>
+                               </TooltipProvider>
                              </div>
                              <div className="text-center">
-                               <div className="text-sm font-medium text-gray-700">
-                                 {programCustomers.coffee.reduce((sum, c) => sum + c.progress, 0)}
-                               </div>
-                               <div className="text-xs text-gray-400">Total Stamps</div>
+                               <TooltipProvider>
+                                 <TooltipComponent>
+                                   <TooltipTrigger asChild>
+                                     <div className="cursor-help">
+                                       <div className="text-sm font-medium text-gray-700">
+                                         {programCustomers.coffee.reduce((sum, c) => sum + c.progress, 0)}
+                                       </div>
+                                       <div className="text-xs text-gray-400">Total Stamps</div>
+                                     </div>
+                                   </TooltipTrigger>
+                                   <TooltipContent>
+                                     <p className="text-xs">Total coffee stamps earned across all customers</p>
+                                   </TooltipContent>
+                                 </TooltipComponent>
+                               </TooltipProvider>
                              </div>
                            </>
                          )}
@@ -3809,26 +3881,59 @@ export default function DashboardPage() {
                                <div className="text-xs text-gray-400">Active Participants</div>
                              </div>
                              <div className="text-center">
-                               <div className="text-sm font-medium text-gray-700">
-                                 ${programCustomers.voucher.length > 0 
-                                   ? (programCustomers.voucher.reduce((sum, c) => sum + c.progress, 0) / programCustomers.voucher.length).toFixed(2)
-                                   : '0.00'}
-                               </div>
-                               <div className="text-xs text-gray-400">Avg Spend</div>
+                               <TooltipProvider>
+                                 <TooltipComponent>
+                                   <TooltipTrigger asChild>
+                                     <div className="cursor-help">
+                                       <div className="text-sm font-medium text-gray-700">
+                                         ${programCustomers.voucher.length > 0 
+                                           ? (programCustomers.voucher.reduce((sum, c) => sum + c.progress, 0) / programCustomers.voucher.length).toFixed(2)
+                                           : '0.00'}
+                                       </div>
+                                       <div className="text-xs text-gray-400">Avg Spend</div>
+                                     </div>
+                                   </TooltipTrigger>
+                                   <TooltipContent>
+                                     <p className="text-xs">Average spending per customer toward voucher goals</p>
+                                   </TooltipContent>
+                                 </TooltipComponent>
+                               </TooltipProvider>
                              </div>
                              <div className="text-center">
-                               <div className="text-sm font-medium text-gray-700">
-                                 {programCustomers.voucher.length > 0 
-                                   ? Math.round(programCustomers.voucher.filter(c => c.progressPercentage >= 100).length / programCustomers.voucher.length * 100)
-                                   : 0}%
-                               </div>
-                               <div className="text-xs text-gray-400">Completion Rate</div>
+                               <TooltipProvider>
+                                 <TooltipComponent>
+                                   <TooltipTrigger asChild>
+                                     <div className="cursor-help">
+                                       <div className="text-sm font-medium text-gray-700">
+                                         {programCustomers.voucher.length > 0 
+                                           ? Math.round(programCustomers.voucher.filter(c => c.progressPercentage >= 100).length / programCustomers.voucher.length * 100)
+                                           : 0}%
+                                       </div>
+                                       <div className="text-xs text-gray-400">Completion Rate</div>
+                                     </div>
+                                   </TooltipTrigger>
+                                   <TooltipContent>
+                                     <p className="text-xs">Percentage of customers who earned their voucher</p>
+                                   </TooltipContent>
+                                 </TooltipComponent>
+                               </TooltipProvider>
                              </div>
                              <div className="text-center">
-                               <div className="text-sm font-medium text-gray-700">
-                                 ${programCustomers.voucher.reduce((sum, c) => sum + c.progress, 0).toFixed(2)}
-                               </div>
-                               <div className="text-xs text-gray-400">Total Spend</div>
+                               <TooltipProvider>
+                                 <TooltipComponent>
+                                   <TooltipTrigger asChild>
+                                     <div className="cursor-help">
+                                       <div className="text-sm font-medium text-gray-700">
+                                         ${programCustomers.voucher.reduce((sum, c) => sum + c.progress, 0).toFixed(2)}
+                                       </div>
+                                       <div className="text-xs text-gray-400">Total Spend</div>
+                                     </div>
+                                   </TooltipTrigger>
+                                   <TooltipContent>
+                                     <p className="text-xs">Total spending across all voucher program participants</p>
+                                   </TooltipContent>
+                                 </TooltipComponent>
+                               </TooltipProvider>
                              </div>
                            </>
                          )}
@@ -3840,26 +3945,59 @@ export default function DashboardPage() {
                                <div className="text-xs text-gray-400">Active Participants</div>
                              </div>
                              <div className="text-center">
-                               <div className="text-sm font-medium text-gray-700">
-                                 {programCustomers.transaction.length > 0 
-                                   ? Math.round(programCustomers.transaction.reduce((sum, c) => sum + c.progress, 0) / programCustomers.transaction.length)
-                                   : 0}
-                               </div>
-                               <div className="text-xs text-gray-400">Avg Transactions</div>
+                               <TooltipProvider>
+                                 <TooltipComponent>
+                                   <TooltipTrigger asChild>
+                                     <div className="cursor-help">
+                                       <div className="text-sm font-medium text-gray-700">
+                                         {programCustomers.transaction.length > 0 
+                                           ? Math.round(programCustomers.transaction.reduce((sum, c) => sum + c.progress, 0) / programCustomers.transaction.length)
+                                           : 0}
+                                       </div>
+                                       <div className="text-xs text-gray-400">Avg Transactions</div>
+                                     </div>
+                                   </TooltipTrigger>
+                                   <TooltipContent>
+                                     <p className="text-xs">Average number of transactions per customer toward goals</p>
+                                   </TooltipContent>
+                                 </TooltipComponent>
+                               </TooltipProvider>
                              </div>
                              <div className="text-center">
-                               <div className="text-sm font-medium text-gray-700">
-                                 {programCustomers.transaction.length > 0 
-                                   ? Math.round(programCustomers.transaction.filter(c => c.progressPercentage >= 100).length / programCustomers.transaction.length * 100)
-                                   : 0}%
-                               </div>
-                               <div className="text-xs text-gray-400">Completion Rate</div>
+                               <TooltipProvider>
+                                 <TooltipComponent>
+                                   <TooltipTrigger asChild>
+                                     <div className="cursor-help">
+                                       <div className="text-sm font-medium text-gray-700">
+                                         {programCustomers.transaction.length > 0 
+                                           ? Math.round(programCustomers.transaction.filter(c => c.progressPercentage >= 100).length / programCustomers.transaction.length * 100)
+                                           : 0}%
+                                       </div>
+                                       <div className="text-xs text-gray-400">Completion Rate</div>
+                                     </div>
+                                   </TooltipTrigger>
+                                   <TooltipContent>
+                                     <p className="text-xs">Percentage of customers who completed their transaction goals</p>
+                                   </TooltipContent>
+                                 </TooltipComponent>
+                               </TooltipProvider>
                              </div>
                              <div className="text-center">
-                               <div className="text-sm font-medium text-gray-700">
-                                 {programCustomers.transaction.reduce((sum, c) => sum + c.progress, 0)}
-                               </div>
-                               <div className="text-xs text-gray-400">Total Transactions</div>
+                               <TooltipProvider>
+                                 <TooltipComponent>
+                                   <TooltipTrigger asChild>
+                                     <div className="cursor-help">
+                                       <div className="text-sm font-medium text-gray-700">
+                                         {programCustomers.transaction.reduce((sum, c) => sum + c.progress, 0)}
+                                       </div>
+                                       <div className="text-xs text-gray-400">Total Transactions</div>
+                                     </div>
+                                   </TooltipTrigger>
+                                   <TooltipContent>
+                                     <p className="text-xs">Total transactions across all program participants</p>
+                                   </TooltipContent>
+                                 </TooltipComponent>
+                               </TooltipProvider>
                              </div>
                            </>
                          )}
@@ -3871,33 +4009,66 @@ export default function DashboardPage() {
                                <div className="text-xs text-gray-400">Total Participants</div>
                              </div>
                              <div className="text-center">
-                               <div className="text-sm font-medium text-gray-700">
-                                 ${programCustomers.cashback.length > 0 
-                                   ? (programCustomers.cashback.reduce((sum, c) => sum + c.totalCashback, 0) / programCustomers.cashback.length).toFixed(2)
-                                   : '0.00'}
-                               </div>
-                               <div className="text-xs text-gray-400">Avg Cashback</div>
+                               <TooltipProvider>
+                                 <TooltipComponent>
+                                   <TooltipTrigger asChild>
+                                     <div className="cursor-help">
+                                       <div className="text-sm font-medium text-gray-700">
+                                         ${programCustomers.cashback.length > 0 
+                                           ? (programCustomers.cashback.reduce((sum, c) => sum + c.totalCashback, 0) / programCustomers.cashback.length).toFixed(2)
+                                           : '0.00'}
+                                       </div>
+                                       <div className="text-xs text-gray-400">Avg Cashback</div>
+                                     </div>
+                                   </TooltipTrigger>
+                                   <TooltipContent>
+                                     <p className="text-xs">Average cashback earned per customer</p>
+                                   </TooltipContent>
+                                 </TooltipComponent>
+                               </TooltipProvider>
                              </div>
                              <div className="text-center">
-                               <div className="text-sm font-medium text-gray-700">
-                                 ${programCustomers.cashback.reduce((sum, c) => sum + c.totalCashback, 0).toFixed(2)}
-                               </div>
-                               <div className="text-xs text-gray-400">Total Earned</div>
+                               <TooltipProvider>
+                                 <TooltipComponent>
+                                   <TooltipTrigger asChild>
+                                     <div className="cursor-help">
+                                       <div className="text-sm font-medium text-gray-700">
+                                         ${programCustomers.cashback.reduce((sum, c) => sum + c.totalCashback, 0).toFixed(2)}
+                                       </div>
+                                       <div className="text-xs text-gray-400">Total Earned</div>
+                                     </div>
+                                   </TooltipTrigger>
+                                   <TooltipContent>
+                                     <p className="text-xs">Total cashback earned across all customers</p>
+                                   </TooltipContent>
+                                 </TooltipComponent>
+                               </TooltipProvider>
                              </div>
                              <div className="text-center">
-                               <div className="text-sm font-medium text-gray-700">
-                                 ${programCustomers.cashback.length > 0 
-                                   ? Math.max(...programCustomers.cashback.map(c => c.totalCashback)).toFixed(2)
-                                   : '0.00'}
-                               </div>
-                               <div className="text-xs text-gray-400">Top Earner</div>
+                               <TooltipProvider>
+                                 <TooltipComponent>
+                                   <TooltipTrigger asChild>
+                                     <div className="cursor-help">
+                                       <div className="text-sm font-medium text-gray-700">
+                                         ${programCustomers.cashback.length > 0 
+                                           ? Math.max(...programCustomers.cashback.map(c => c.totalCashback)).toFixed(2)
+                                           : '0.00'}
+                                       </div>
+                                       <div className="text-xs text-gray-400">Top Earner</div>
+                                     </div>
+                                   </TooltipTrigger>
+                                   <TooltipContent>
+                                     <p className="text-xs">Highest cashback amount earned by a single customer</p>
+                                   </TooltipContent>
+                                 </TooltipComponent>
+                               </TooltipProvider>
                              </div>
                            </>
                          )}
                        </div>
                      </div>
                      
-                     <div className={`overflow-x-auto tab-content-transition ${
+                     <div className={`max-h-80 overflow-y-auto scrollbar-subtle tab-content-transition ${
                        isProgramsTransitioning ? 'tab-content-fade-out' : 'tab-content-fade-in'
                      }`}>
                        {programCustomers.loading ? (
@@ -3906,8 +4077,30 @@ export default function DashboardPage() {
                          </div>
                        ) : (
                          <table className="w-full">
+                           <thead className="bg-gray-50/50">
+                             <tr className="border-b border-gray-100">
+                               <th className="px-3 py-2 text-left">
+                                 <span className="text-xs font-medium text-gray-600">
+                                   Customer & Progress
+                                 </span>
+                               </th>
+                               <th className="px-3 py-2 text-center">
+                                 <span className="text-xs font-medium text-gray-600">
+                                   Last Activity
+                                 </span>
+                               </th>
+                               <th className="px-3 py-2 text-right">
+                                 <span className="text-xs font-medium text-gray-600">
+                                   {liveProgramsTab === 'coffee' ? 'Stamps' :
+                                    liveProgramsTab === 'voucher' ? 'Spent ($)' :
+                                    liveProgramsTab === 'transaction' ? 'Transactions' :
+                                    'Earned ($)'}
+                                 </span>
+                               </th>
+                             </tr>
+                           </thead>
                            <tbody className="divide-y divide-gray-100">
-                             {liveProgramsTab === 'coffee' && programCustomers.coffee.map((customer, index) => (
+                             {liveProgramsTab === 'coffee' && programCustomers.coffee.slice(0, 7).map((customer, index) => (
                                <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
                                  <td className="px-3 py-2">
                                    <div className="flex items-center gap-2">
@@ -3933,17 +4126,40 @@ export default function DashboardPage() {
                                              style={{ width: `${Math.min(customer.progressPercentage, 100)}%` }}
                                            ></div>
                                          </div>
-                                         <span className="text-xs text-gray-500 whitespace-nowrap">
-                                           {customer.progress}/{customer.target}
-                                         </span>
+                                         <TooltipProvider>
+                                           <TooltipComponent>
+                                             <TooltipTrigger asChild>
+                                               <span className="text-xs text-gray-500 whitespace-nowrap cursor-help">
+                                                 {customer.progress}/{customer.target}
+                                               </span>
+                                             </TooltipTrigger>
+                                             <TooltipContent>
+                                               <p className="text-xs">{customer.progress} stamps earned out of {customer.target} needed</p>
+                                             </TooltipContent>
+                                           </TooltipComponent>
+                                         </TooltipProvider>
                                        </div>
                                      </div>
                                    </div>
                                  </td>
                                  <td className="px-3 py-2 text-center">
-                                   <span className="text-xs text-gray-600">
-                                     {customer.lastTransactionDate ? format(customer.lastTransactionDate, 'MMM d') : 'No recent activity'}
-                                   </span>
+                                   <TooltipProvider>
+                                     <TooltipComponent>
+                                       <TooltipTrigger asChild>
+                                         <span className="text-xs text-gray-600 cursor-help">
+                                           {customer.lastTransactionDate ? format(customer.lastTransactionDate, 'MMM d') : 'No recent activity'}
+                                         </span>
+                                       </TooltipTrigger>
+                                       <TooltipContent>
+                                         <p className="text-xs">
+                                           {customer.lastTransactionDate 
+                                             ? `Last transaction: ${format(customer.lastTransactionDate, 'MMM d, yyyy')}`
+                                             : 'This customer has not made any recent transactions'
+                                           }
+                                         </p>
+                                       </TooltipContent>
+                                     </TooltipComponent>
+                                   </TooltipProvider>
                                  </td>
                                  <td className="px-3 py-2 text-right">
                                    <span className="text-xs font-medium text-gray-800">{customer.progress}</span>
@@ -3951,7 +4167,7 @@ export default function DashboardPage() {
                                </tr>
                              ))}
                              
-                             {liveProgramsTab === 'voucher' && programCustomers.voucher.map((customer, index) => (
+                             {liveProgramsTab === 'voucher' && programCustomers.voucher.slice(0, 7).map((customer, index) => (
                                <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
                                  <td className="px-3 py-2">
                                    <div className="flex items-center gap-2">
@@ -3977,9 +4193,18 @@ export default function DashboardPage() {
                                              style={{ width: `${Math.min(customer.progressPercentage, 100)}%` }}
                                            ></div>
                                          </div>
-                                         <span className="text-xs text-gray-500 whitespace-nowrap">
-                                           ${customer.progress.toFixed(2)}/${customer.target}
-                                         </span>
+                                         <TooltipProvider>
+                                           <TooltipComponent>
+                                             <TooltipTrigger asChild>
+                                               <span className="text-xs text-gray-500 whitespace-nowrap cursor-help">
+                                                 ${customer.progress.toFixed(2)}/${customer.target}
+                                               </span>
+                                             </TooltipTrigger>
+                                             <TooltipContent>
+                                               <p className="text-xs">${customer.progress.toFixed(2)} spent out of ${customer.target} needed for voucher</p>
+                                             </TooltipContent>
+                                           </TooltipComponent>
+                                         </TooltipProvider>
                                        </div>
                                      </div>
                                    </div>
@@ -3995,7 +4220,7 @@ export default function DashboardPage() {
                                </tr>
                              ))}
                              
-                             {liveProgramsTab === 'transaction' && programCustomers.transaction.map((customer, index) => (
+                             {liveProgramsTab === 'transaction' && programCustomers.transaction.slice(0, 7).map((customer, index) => (
                                <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
                                  <td className="px-3 py-2">
                                    <div className="flex items-center gap-2">
@@ -4021,9 +4246,18 @@ export default function DashboardPage() {
                                              style={{ width: `${Math.min(customer.progressPercentage, 100)}%` }}
                                            ></div>
                                          </div>
-                                         <span className="text-xs text-gray-500 whitespace-nowrap">
-                                           {customer.progress}/{customer.target}
-                                         </span>
+                                         <TooltipProvider>
+                                           <TooltipComponent>
+                                             <TooltipTrigger asChild>
+                                               <span className="text-xs text-gray-500 whitespace-nowrap cursor-help">
+                                                 {customer.progress}/{customer.target}
+                                               </span>
+                                             </TooltipTrigger>
+                                             <TooltipContent>
+                                               <p className="text-xs">{customer.progress} transactions completed out of {customer.target} needed</p>
+                                             </TooltipContent>
+                                           </TooltipComponent>
+                                         </TooltipProvider>
                                        </div>
                                      </div>
                                    </div>
@@ -4039,7 +4273,7 @@ export default function DashboardPage() {
                                </tr>
                              ))}
                              
-                             {liveProgramsTab === 'cashback' && programCustomers.cashback.map((customer, index) => (
+                             {liveProgramsTab === 'cashback' && programCustomers.cashback.slice(0, 7).map((customer, index) => (
                                <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
                                  <td className="px-3 py-2">
                                    <div className="flex items-center gap-2">
@@ -4212,11 +4446,15 @@ export default function DashboardPage() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100">
-                            {filteredRewards.slice(0, 7).map((reward) => (
-                              <tr key={reward.id} className="hover:bg-gray-100/50 transition-colors">
+                                                    {filteredRewards.slice(0, 7).map((reward) => (
+                          <tr 
+                            key={reward.id} 
+                            className="hover:bg-gray-100/50 transition-colors cursor-pointer"
+                            onClick={() => handleRewardClick(reward.id)}
+                          >
                                 <td className="px-4 py-3">
                                   <div className="min-w-0">
-                                    <p className="text-sm font-medium text-gray-800 truncate">{reward.title || reward.name}</p>
+                                    <p className="text-sm font-medium text-gray-800 truncate">{reward.rewardName || reward.title || reward.name}</p>
                                     <p className="text-xs text-gray-600 truncate">{reward.description}</p>
                                   </div>
                                 </td>
@@ -4366,6 +4604,20 @@ export default function DashboardPage() {
                                 )}
                               </button>
                             </th>
+                            <th className="px-4 py-3 text-center">
+                              <button
+                                onClick={() => handleCustomerSort('firstTransactionDate')}
+                                className="w-full flex items-center justify-center gap-1 text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors"
+                              >
+                                Date Joined
+                                {customerSortField === 'firstTransactionDate' && (
+                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                )}
+                              </button>
+                            </th>
+                            <th className="px-4 py-3 text-center">
+                              <span className="text-xs font-medium text-gray-600">Cohort</span>
+                            </th>
                             <th className="px-4 py-3 text-right">
                               <button
                                 onClick={() => handleCustomerSort('totalLifetimeSpend')}
@@ -4441,6 +4693,24 @@ export default function DashboardPage() {
                                       : 'Never'
                                     }
                                   </span>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className="text-xs text-gray-600">
+                                    {customer.firstTransactionDate 
+                                      ? format(customer.firstTransactionDate.toDate ? customer.firstTransactionDate.toDate() : new Date(customer.firstTransactionDate), 'MMM d, yyyy')
+                                      : 'N/A'
+                                    }
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  {customer.currentCohort?.name ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
+                                      <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
+                                      {customer.currentCohort.name.charAt(0).toUpperCase() + customer.currentCohort.name.slice(1)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-gray-400">—</span>
+                                  )}
                                 </td>
                                 <td className="px-4 py-3 text-right">
                                   <span className="text-sm font-medium text-gray-800">
@@ -4650,7 +4920,30 @@ export default function DashboardPage() {
                         <div key={agent.id} className="group relative bg-gray-50 border border-blue-200 rounded-lg p-4 transition-all hover:border-blue-300 hover:shadow-sm">
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-2">
-                              <Bot className="h-5 w-5 text-gray-500" />
+                              {(agent.id === 'customer-service' || agent.id === 'email-summary') ? (
+                                <div className="relative flex items-center h-6 w-10">
+                                  <div className="absolute left-0 h-6 w-6 bg-white rounded-full border border-gray-200 flex items-center justify-center z-10">
+                                    <Image 
+                                      src="/gmail.png" 
+                                      alt="Gmail" 
+                                      width={16} 
+                                      height={16} 
+                                      className="rounded-sm"
+                                    />
+                                  </div>
+                                  <div className="absolute left-4 h-6 w-6 bg-white rounded-full border border-gray-200 flex items-center justify-center">
+                                    <Image 
+                                      src="/outlook.png" 
+                                      alt="Outlook" 
+                                      width={16} 
+                                      height={16} 
+                                      className="rounded-sm"
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <Bot className="h-5 w-5 text-gray-500" />
+                              )}
                               <h4 className="text-sm font-medium text-gray-900">{agent.name}</h4>
                             </div>
                             <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
@@ -4776,9 +5069,15 @@ export default function DashboardPage() {
       />
 
       {/* Tap Agent Sheet */}
-      <TapAgentSheet 
+            <TapAgentSheet
         open={isTapAgentSheetOpen}
         onOpenChange={setIsTapAgentSheetOpen}
+      />
+
+      <RewardDetailSheet
+        open={rewardDetailSheetOpen}
+        onOpenChange={setRewardDetailSheetOpen}
+        rewardId={selectedRewardId || undefined}
       />
 
       {/* Daily Summary Popup */}

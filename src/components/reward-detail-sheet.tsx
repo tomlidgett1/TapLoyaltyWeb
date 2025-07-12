@@ -521,7 +521,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-lg md:max-w-xl lg:max-w-2xl p-0 overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-lg md:max-w-xl lg:max-w-2xl p-0 overflow-y-auto animate-in slide-in-from-right duration-[30ms] data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:duration-[70ms] focus:outline-none focus-visible:outline-none">
         <div className="sticky top-0 z-20 bg-white border-b p-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -1419,30 +1419,34 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
           </ScrollArea>
         </Tabs>
 
-        <div className="border-t sticky bottom-0 bg-white p-4 flex justify-between">
-          <button 
-            className="text-sm text-red-600 hover:text-red-700 hover:underline transition-colors" 
-            onClick={() => setIsDeleteConfirmOpen(true)}
-          >
-            Delete reward
-          </button>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline"
-              className="gap-2 rounded-md" 
-              onClick={() => setIsDuplicateModalOpen(true)}
-            >
-              <Copy className="h-4 w-4" />
-              Duplicate
-            </Button>
-            <Button 
-              variant="outline" 
-              className="gap-2 rounded-md text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700" 
-              onClick={() => setIsEditModalOpen(true)}
-            >
-              <Edit className="h-4 w-4" />
-              Edit
-            </Button>
+        <div className="border-t border-gray-200 p-4 bg-gray-50 flex-shrink-0 sticky bottom-0">
+          <div className="flex flex-col sm:flex-row justify-between gap-3 max-w-5xl">
+            <div className="flex flex-col sm:flex-row gap-2 order-2 sm:order-1">
+              <button 
+                className="text-sm text-red-600 hover:text-red-700 hover:underline transition-colors w-full sm:w-auto text-left sm:text-center" 
+                onClick={() => setIsDeleteConfirmOpen(true)}
+              >
+                Delete reward
+              </button>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 order-1 sm:order-2">
+              <Button 
+                variant="outline"
+                className="gap-2 rounded-md w-full sm:w-auto" 
+                onClick={() => setIsDuplicateModalOpen(true)}
+              >
+                <Copy className="h-4 w-4" />
+                Duplicate
+              </Button>
+              <Button 
+                variant="outline" 
+                className="gap-2 rounded-md text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700 w-full sm:w-auto" 
+                onClick={() => setIsEditModalOpen(true)}
+              >
+                <Edit className="h-4 w-4" />
+                Edit
+              </Button>
+            </div>
           </div>
         </div>
       </SheetContent>
@@ -1469,25 +1473,27 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px] animate-in fade-in duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:duration-200">
           <DialogHeader>
-            <DialogTitle className="text-red-600">Delete Reward</DialogTitle>
+            <DialogTitle>Delete Reward</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete this reward? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="bg-red-50 border border-red-100 rounded-md p-4 text-sm text-red-800">
-              <strong>Warning:</strong> Deleting this reward will:
-              <ul className="list-disc ml-5 mt-2 space-y-1">
-                <li>Remove it from all customer accounts</li>
-                <li>Make it unavailable for future redemptions</li>
-                <li>Delete all associated analytics data</li>
+          
+          <div className="py-4">
+            <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
+              <p className="text-sm font-medium text-gray-700 mb-2">Warning: Deleting this reward will:</p>
+              <ul className="text-sm text-gray-600 space-y-1">
+                <li>• Remove it from all customer accounts</li>
+                <li>• Make it unavailable for future redemptions</li>
+                <li>• Delete all associated analytics data</li>
               </ul>
             </div>
           </div>
+          
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteConfirmOpen(false)}>
+            <Button variant="outline" onClick={() => setIsDeleteConfirmOpen(false)} className="rounded-md">
               Cancel
             </Button>
             <Button 
@@ -1524,6 +1530,7 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                   setIsDeleteConfirmOpen(false);
                 }
               }}
+              className="rounded-md"
             >
               Delete Reward
             </Button>

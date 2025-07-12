@@ -34,7 +34,10 @@ import {
   Crown,
   Star,
   Globe,
-  Zap as ZapIcon
+  Zap as ZapIcon,
+  Headphones,
+  Send,
+  X
 } from "lucide-react"
 
 import {
@@ -53,7 +56,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { TapAiButton } from "@/components/tap-ai-button"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/use-toast"
-import { collection, getDocs, query, where, limit, onSnapshot, updateDoc } from "firebase/firestore"
+import { collection, getDocs, query, where, limit, onSnapshot, updateDoc, addDoc, serverTimestamp } from "firebase/firestore"
 import { CreateSheet } from "@/components/create-sheet"
 import { CreateRewardSheet } from "@/components/create-reward-sheet"
 import { CreateRewardPopup } from "@/components/create-reward-popup"
@@ -262,6 +265,9 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isInternalChange, setIsInternalChange] = useState(true)
   const [createDropdownOpen, setCreateDropdownOpen] = useState(false)
+  const [supportBoxOpen, setSupportBoxOpen] = useState(false)
+  const [supportMessage, setSupportMessage] = useState("")
+  const [supportLoading, setSupportLoading] = useState(false)
   
   // Merchant status and plan state
   const [merchantStatus, setMerchantStatus] = useState<'active' | 'inactive'>('active')
@@ -507,6 +513,40 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
     }
   }
 
+  const handleSupportSubmit = async () => {
+    if (!supportMessage.trim() || !user?.uid) return;
+
+    setSupportLoading(true);
+    try {
+      const enquiryRef = collection(db, 'merchantenquiry');
+      await addDoc(enquiryRef, {
+        message: supportMessage.trim(),
+        merchantId: user.uid,
+        merchantName: merchantName,
+        merchantEmail: merchantEmail,
+        timestamp: serverTimestamp(),
+        status: 'open'
+      });
+
+      toast({
+        title: "Support Request Sent",
+        description: "We'll get back to you soon!",
+      });
+
+      setSupportMessage("");
+      setSupportBoxOpen(false);
+    } catch (error) {
+      console.error("Error submitting support request:", error);
+      toast({
+        title: "Error",
+        description: "Failed to send support request. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setSupportLoading(false);
+    }
+  }
+
   const toggleSection = (section: string) => {
     setOpenSections(prev => ({
       ...prev,
@@ -591,10 +631,6 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" side="right" className="w-48">
-              <DropdownMenuItem onClick={() => setCreateRewardSheetOpen(true)}>
-                <Gift className="h-4 w-4 mr-2" />
-                New Reward
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setCreateRewardPopupOpen(true)}>
                 <Gift className="h-4 w-4 mr-2" />
                 Create Reward New
@@ -658,10 +694,6 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuItem onClick={() => setCreateRewardSheetOpen(true)}>
-                <Gift className="h-4 w-4 mr-2" />
-                New Reward
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setCreateRewardPopupOpen(true)}>
                 <Gift className="h-4 w-4 mr-2" />
                 Create Reward New
@@ -934,6 +966,10 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                       <span>Help Guide</span>
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSupportBoxOpen(true)} className="cursor-pointer">
+                    <Headphones className="h-4 w-4 mr-2" />
+                    <span>Customer Support</span>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
                     <LogOut className="h-4 w-4 mr-2" />
@@ -1006,6 +1042,10 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                         <FileText className="h-4 w-4 mr-2" />
                         <span>Help Guide</span>
                       </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSupportBoxOpen(true)} className="cursor-pointer">
+                      <Headphones className="h-4 w-4 mr-2" />
+                      <span>Customer Support</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
@@ -1137,8 +1177,8 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
 
       {/* Program Type Selector Popup */}
       {programTypeSelectorOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
-          <div className="bg-white rounded-lg max-w-md mx-4 shadow-lg border border-gray-200 overflow-hidden">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] animate-in fade-in duration-200">
+          <div className="bg-white rounded-lg max-w-md mx-4 shadow-lg border border-gray-200 overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out">
             {/* Header */}
             <div className="px-6 py-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">
@@ -1181,6 +1221,81 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
                 >
                   Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Customer Support Input Box */}
+      {supportBoxOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] animate-in fade-in duration-200">
+          <div className="bg-white rounded-md max-w-md mx-4 shadow-lg border border-gray-200 overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Headphones className="h-5 w-5 text-blue-600" />
+                  <h3 className="text-lg font-semibold text-gray-900">Customer Support</h3>
+                </div>
+                <button
+                  onClick={() => setSupportBoxOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            
+            {/* Body */}
+            <div className="p-6">
+              <p className="text-sm text-gray-600 mb-4">
+                How can we help you today? Send us a message and we'll get back to you soon.
+              </p>
+              <textarea
+                value={supportMessage}
+                onChange={(e) => setSupportMessage(e.target.value)}
+                placeholder="Type your question or issue here..."
+                className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-sm"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    handleSupportSubmit();
+                  }
+                }}
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Tip: Press Ctrl+Enter (Cmd+Enter on Mac) to send quickly
+              </p>
+            </div>
+            
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setSupportBoxOpen(false)}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
+                  disabled={supportLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSupportSubmit}
+                  disabled={!supportMessage.trim() || supportLoading}
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                >
+                  {supportLoading ? (
+                    <>
+                      <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin"></div>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4" />
+                      Send Message
+                    </>
+                  )}
                 </button>
               </div>
             </div>

@@ -599,283 +599,197 @@ const ProgramCard = ({
   );
 };
 
-// Program Customers Table Component  
+// Program Customers Table Component (Custom Programs Only)
 const ProgramCustomersTable = () => {
   const { user } = useAuth()
-  const [customerInteractions, setCustomerInteractions] = useState<any[]>([])
+  const [customerPrograms, setCustomerPrograms] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [filterType, setFilterType] = useState('all')
+  const [selectedProgram, setSelectedProgram] = useState<string>('')
   const [searchTerm, setSearchTerm] = useState('')
   const [availablePrograms, setAvailablePrograms] = useState<any[]>([])
+  const [selectedProgramDetails, setSelectedProgramDetails] = useState<any>(null)
 
   useEffect(() => {
-    const fetchCustomerInteractions = async () => {
+    const fetchCustomPrograms = async () => {
       if (!user?.uid) return
 
       try {
         setLoading(true)
-        const interactions: any[] = []
-
-        // First, fetch all custom programs
+        
+        // Fetch all custom programs
         const customProgramsRef = collection(db, 'merchants', user.uid, 'customprograms')
         const customProgramsSnapshot = await getDocs(customProgramsRef)
         
-        const programs = new Map()
-        const programsList: any[] = []
-        customProgramsSnapshot.docs.forEach(doc => {
-          const programData = doc.data()
-          const programInfo = {
-            id: doc.id,
-            name: programData.name || 'Custom Program',
-            type: programData.type || 'manual'
-          }
-          programs.set(doc.id, programInfo)
-          programsList.push(programInfo)
-        })
+        const programs = customProgramsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name || 'Custom Program',
+          type: doc.data().type || 'manual'
+        }))
         
-        // Set available programs for the dropdown
-        setAvailablePrograms(programsList)
+        setAvailablePrograms(programs)
 
-        // Then, fetch all customers
-        const customersRef = collection(db, 'merchants', user.uid, 'customers')
-        const customersSnapshot = await getDocs(customersRef)
-
-        for (const customerDoc of customersSnapshot.docs) {
-          const customerData = customerDoc.data()
-          const customerId = customerDoc.id
-          
-          const customerInteraction = {
-            id: customerId,
-            name: customerData.fullName || customerData.firstName || 'Unknown Customer',
-            email: customerData.email || '',
-            profilePictureUrl: customerData.profilePictureUrl,
-            programs: [] as any[],
-            lastInteraction: null as Date | null,
-            totalInteractions: 0,
-            programTypes: [] as string[],
-            // New fields from programProgress
-            totalSpend: 0,
-            transactionCount: 0,
-            visitCount: 0,
-            rewardsEarned: 0,
-            lastTransactionDate: null as Date | null
-          }
-
-          // Check built-in programs first (coffee, voucher, transaction, cashback)
-          // Check coffee program interactions
-          try {
-            const coffeeDoc = await getDoc(doc(db, 'merchants', user.uid, 'customers', customerId, 'coffeeLoyalty', 'record'))
-            if (coffeeDoc.exists()) {
-              const coffeeData = coffeeDoc.data()
-              if (coffeeData.stampsEarned > 0 || coffeeData.freeRedeemed > 0) {
-                customerInteraction.programs.push({
-                  type: 'coffee',
-                  name: 'Coffee Program',
-                  progress: `${coffeeData.stampsEarned || 0} stamps, ${coffeeData.freeRedeemed || 0} redeemed`,
-                  programType: 'built-in'
-                })
-                customerInteraction.totalInteractions += (coffeeData.stampsEarned || 0) + (coffeeData.freeRedeemed || 0)
-                if (!customerInteraction.programTypes.includes('Coffee')) {
-                  customerInteraction.programTypes.push('Coffee')
-                }
-              }
-            }
-          } catch (error) {
-            console.error('Error fetching coffee data for customer:', customerId, error)
-          }
-
-          // Check voucher program interactions
-          try {
-            const voucherDoc = await getDoc(doc(db, 'merchants', user.uid, 'customers', customerId, 'voucherLoyalty', 'record'))
-            if (voucherDoc.exists()) {
-              const voucherData = voucherDoc.data()
-              if (voucherData.totalSpend > 0 || voucherData.vouchersRedeemed > 0) {
-                customerInteraction.programs.push({
-                  type: 'voucher',
-                  name: 'Voucher Program',
-                  progress: `$${voucherData.totalSpend || 0} spent, ${voucherData.vouchersRedeemed || 0} redeemed`,
-                  programType: 'built-in'
-                })
-                customerInteraction.totalInteractions += (voucherData.vouchersRedeemed || 0)
-                if (!customerInteraction.programTypes.includes('Voucher')) {
-                  customerInteraction.programTypes.push('Voucher')
-                }
-              }
-            }
-          } catch (error) {
-            console.error('Error fetching voucher data for customer:', customerId, error)
-          }
-
-          // Check transaction program interactions
-          if (customerData.transactionRewardCount && customerData.transactionRewardCount > 0) {
-            customerInteraction.programs.push({
-              type: 'transaction',
-              name: 'Transaction Rewards',
-              progress: `${customerData.transactionRewardCount} rewards earned`,
-              programType: 'built-in'
-            })
-            customerInteraction.totalInteractions += customerData.transactionRewardCount
-            if (!customerInteraction.programTypes.includes('Transaction')) {
-              customerInteraction.programTypes.push('Transaction')
-            }
-          }
-
-          // Check cashback interactions
-          if (customerData.cashback && customerData.cashback > 0) {
-            customerInteraction.programs.push({
-              type: 'cashback',
-              name: 'Tap Cash',
-              progress: `$${(customerData.cashback || 0).toFixed(2)} earned`,
-              programType: 'built-in'
-            })
-            if (!customerInteraction.programTypes.includes('Cashback')) {
-              customerInteraction.programTypes.push('Cashback')
-            }
-          }
-
-          // Check custom program interactions from programProgress
-          try {
-            const programProgressRef = collection(db, 'merchants', user.uid, 'customers', customerId, 'programProgress')
-            const programProgressSnapshot = await getDocs(programProgressRef)
-            
-            for (const progressDoc of programProgressSnapshot.docs) {
-              const progressData = progressDoc.data()
-              const programId = progressDoc.id
-              
-              // Get program name from the programs map
-              const program = programs.get(programId)
-              if (program) {
-                const rewardsEarned = progressData.rewardsEarned?.length || 0
-                const totalSpend = progressData.totalSpend || 0
-                const transactionCount = progressData.transactionCount || 0
-                const visitCount = progressData.visitCount || 0
-                
-                if (rewardsEarned > 0 || totalSpend > 0 || transactionCount > 0 || visitCount > 0) {
-                  customerInteraction.programs.push({
-                    type: 'custom',
-                    name: program.name,
-                    programId: programId,
-                    progress: `${rewardsEarned} rewards, ${transactionCount} transactions, $${totalSpend.toFixed(2)} spent, ${visitCount} visits`,
-                    programType: 'custom',
-                    // Add the individual progress fields
-                    rewardsEarned: rewardsEarned,
-                    totalSpend: totalSpend,
-                    transactionCount: transactionCount,
-                    visitCount: visitCount,
-                    lastTransactionDate: progressData.lastTransactionDate?.toDate() || null,
-                    createdAt: progressData.createdAt?.toDate() || null,
-                    updatedAt: progressData.updatedAt?.toDate() || null
-                  })
-                  
-                  // Update customer totals
-                  customerInteraction.totalInteractions += rewardsEarned + transactionCount
-                  customerInteraction.totalSpend += totalSpend
-                  customerInteraction.transactionCount += transactionCount
-                  customerInteraction.visitCount += visitCount
-                  customerInteraction.rewardsEarned += rewardsEarned
-                  
-                  if (!customerInteraction.programTypes.includes('Custom')) {
-                    customerInteraction.programTypes.push('Custom')
-                  }
-                  
-                  // Update last interaction date
-                  if (progressData.updatedAt) {
-                    const updatedDate = progressData.updatedAt.toDate()
-                    if (!customerInteraction.lastInteraction || updatedDate > customerInteraction.lastInteraction) {
-                      customerInteraction.lastInteraction = updatedDate
-                    }
-                  }
-                  
-                  // Update last transaction date
-                  if (progressData.lastTransactionDate) {
-                    const lastTxnDate = progressData.lastTransactionDate.toDate()
-                    if (!customerInteraction.lastTransactionDate || lastTxnDate > customerInteraction.lastTransactionDate) {
-                      customerInteraction.lastTransactionDate = lastTxnDate
-                    }
-                  }
-                }
-              }
-            }
-          } catch (error) {
-            console.error('Error fetching program progress for customer:', customerId, error)
-          }
-
-          // Get last transaction date if no other interaction date found
-          if (!customerInteraction.lastInteraction && customerData.lastTransactionDate) {
-            customerInteraction.lastInteraction = customerData.lastTransactionDate.toDate()
-          }
-
-          // Only include customers who have program interactions
-          if (customerInteraction.programs.length > 0) {
-            interactions.push(customerInteraction)
-          }
+        // If no program is selected and we have programs, select the first one
+        if (!selectedProgram && programs.length > 0) {
+          setSelectedProgram(programs[0].id)
         }
 
-        // Sort by total interactions descending
-        interactions.sort((a, b) => b.totalInteractions - a.totalInteractions)
-        setCustomerInteractions(interactions)
+        setCustomerPrograms([])
       } catch (error) {
-        console.error('Error fetching customer interactions:', error)
+        console.error('Error fetching programs:', error)
       } finally {
         setLoading(false)
       }
     }
 
-    fetchCustomerInteractions()
+    fetchCustomPrograms()
   }, [user?.uid])
 
-  // Filter customers based on filter type and search term
-  const filteredCustomers = customerInteractions.filter(customer => {
-    const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         customer.email.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    if (!matchesSearch) return false
-    
-    if (filterType === 'all') return true
-    if (filterType === 'built-in') {
-      return customer.programs.some((p: any) => p.programType === 'built-in')
+  useEffect(() => {
+    const fetchCustomersByProgram = async () => {
+      if (!user?.uid || !selectedProgram) return
+
+      try {
+        setLoading(true)
+        const customerProgramData: any[] = []
+
+        // Get selected program details first
+        const programDoc = await getDoc(doc(db, 'merchants', user.uid, 'customprograms', selectedProgram))
+        let programDetails = null
+        if (programDoc.exists()) {
+          programDetails = programDoc.data()
+          setSelectedProgramDetails(programDetails)
+        }
+
+        // Get all customers
+        const customersRef = collection(db, 'merchants', user.uid, 'customers')
+        const customersSnapshot = await getDocs(customersRef)
+
+        // Get selected program data from available programs
+        const selectedProgramData = availablePrograms.find(p => p.id === selectedProgram)
+
+        for (const customerDoc of customersSnapshot.docs) {
+          const customerData = customerDoc.data()
+          const customerId = customerDoc.id
+          
+          // Get program progress for this customer and selected program
+          try {
+            const programProgressDoc = await getDoc(doc(db, 'merchants', user.uid, 'customers', customerId, 'programProgress', selectedProgram))
+            
+            if (programProgressDoc.exists()) {
+              const progressData = programProgressDoc.data()
+              
+              // Only include customers with meaningful interactions
+              const rewardsEarned = progressData.rewardsEarned?.length || 0
+              const totalSpend = progressData.totalSpend || 0
+              const transactionCount = progressData.transactionCount || 0
+              const visitCount = progressData.visitCount || 0
+              
+              if (rewardsEarned > 0 || totalSpend > 0 || transactionCount > 0 || visitCount > 0) {
+                customerProgramData.push({
+                  customerId: customerId,
+                  customerName: customerData.fullName || customerData.firstName || 'Unknown Customer',
+                  customerEmail: customerData.email || '',
+                  profilePictureUrl: customerData.profilePictureUrl,
+                  programName: selectedProgramData?.name || 'Unknown Program',
+                  programId: selectedProgram,
+                  rewardsEarned: rewardsEarned,
+                  totalRewards: programDetails?.rewards?.length || 0,
+                  totalSpend: totalSpend,
+                  transactionCount: transactionCount,
+                  visitCount: visitCount,
+                  lastTransactionDate: progressData.lastTransactionDate?.toDate() || null,
+                  createdAt: progressData.createdAt?.toDate() || null,
+                  updatedAt: progressData.updatedAt?.toDate() || null
+                })
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching program progress for customer:', customerId, error)
+          }
+        }
+
+        setCustomerPrograms(customerProgramData.sort((a, b) => (b.rewardsEarned + b.transactionCount) - (a.rewardsEarned + a.transactionCount)))
+      } catch (error) {
+        console.error('Error fetching customer program data:', error)
+      } finally {
+        setLoading(false)
+      }
     }
-    if (filterType === 'custom') {
-      return customer.programs.some((p: any) => p.programType === 'custom')
-    }
-    // Filter by specific program ID
-    return customer.programs.some((p: any) => p.programId === filterType)
+
+    fetchCustomersByProgram()
+  }, [user?.uid, selectedProgram, availablePrograms])
+
+  // Filter customers based on search term only
+  const filteredCustomers = customerPrograms.filter(customer => {
+    const matchesSearch = customer.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         customer.customerEmail.toLowerCase().includes(searchTerm.toLowerCase())
+    return matchesSearch
   })
 
   return (
     <div className="mt-8">
       <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-gray-900">Program Customer Interactions</h3>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <h3 className="text-sm font-semibold text-gray-900">Custom Program Customer Details</h3>
+              {selectedProgramDetails && (
+                <div className="flex items-center gap-3 text-xs text-gray-500">
+                  <span className="flex items-center gap-1">
+                    <div className="h-1.5 w-1.5 bg-gray-400 rounded-full"></div>
+                    {selectedProgramDetails.rewards?.length || 0} rewards available
+                  </span>
+                  {selectedProgramDetails.pin && (
+                    <span className="flex items-center gap-1">
+                      <div className="h-1.5 w-1.5 bg-gray-400 rounded-full"></div>
+                      PIN: {selectedProgramDetails.pin}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="flex items-center gap-2">
-              <input
+              <Input
                 type="text"
                 placeholder="Search customers..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-64 h-8 text-sm rounded-md"
               />
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Programs</option>
-                <option value="built-in">Built-in Programs</option>
-                <option value="custom">Custom Programs</option>
-                <optgroup label="Individual Programs">
+              <Select value={selectedProgram} onValueChange={setSelectedProgram}>
+                <SelectTrigger className="w-48 h-8 text-sm rounded-md">
+                  <SelectValue placeholder="Select a program..." />
+                </SelectTrigger>
+                <SelectContent>
                   {availablePrograms.map((program) => (
-                    <option key={program.id} value={program.id}>
+                    <SelectItem key={program.id} value={program.id}>
                       {program.name}
-                    </option>
+                    </SelectItem>
                   ))}
-                </optgroup>
-              </select>
+                </SelectContent>
+              </Select>
             </div>
           </div>
+          
+          {selectedProgramDetails?.rewards && selectedProgramDetails.rewards.length > 0 && (
+            <div className="mb-3">
+              <div className="flex flex-wrap gap-1 items-center">
+                <span className="text-xs text-gray-500 mr-2">Available Rewards:</span>
+                {selectedProgramDetails.rewards.map((reward: any, index: number) => (
+                  <span 
+                    key={index}
+                    className="text-xs px-2 py-1 bg-white text-gray-600 rounded-md border border-gray-200"
+                    title={reward.description || reward.name || 'Reward'}
+                  >
+                    {reward.name || reward.description || `Reward ${index + 1}`}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          
           <p className="text-xs text-gray-600">
-            Showing {filteredCustomers.length} customers with program interactions
+            Showing {filteredCustomers.length} customers for {availablePrograms.find(p => p.id === selectedProgram)?.name || 'selected program'}
           </p>
         </div>
         
@@ -900,9 +814,6 @@ const ProgramCustomersTable = () => {
                     <span className="text-xs font-medium text-gray-600">Customer</span>
                   </th>
                   <th className="px-4 py-3 text-center">
-                    <span className="text-xs font-medium text-gray-600">Programs</span>
-                  </th>
-                  <th className="px-4 py-3 text-center">
                     <span className="text-xs font-medium text-gray-600">Total Spend</span>
                   </th>
                   <th className="px-4 py-3 text-center">
@@ -912,89 +823,79 @@ const ProgramCustomersTable = () => {
                     <span className="text-xs font-medium text-gray-600">Visits</span>
                   </th>
                   <th className="px-4 py-3 text-center">
-                    <span className="text-xs font-medium text-gray-600">Rewards Earned</span>
+                    <span className="text-xs font-medium text-gray-600">Rewards Progress</span>
                   </th>
                   <th className="px-4 py-3 text-center">
-                    <span className="text-xs font-medium text-gray-600">Last Transaction</span>
+                    <span className="text-xs font-medium text-gray-600">Last Activity</span>
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredCustomers.map((customer) => (
-                  <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
+                  <tr key={customer.customerId} className="hover:bg-gray-100/50 transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="h-8 w-8 flex-shrink-0">
                           {customer.profilePictureUrl ? (
                             <img 
                               src={customer.profilePictureUrl} 
-                              alt={customer.name}
+                              alt={customer.customerName}
                               className="h-8 w-8 rounded-full object-cover border border-gray-200"
                             />
                           ) : (
                             <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-gray-100 text-gray-600">
-                              {customer.name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                              {customer.customerName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                             </div>
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-800 truncate">{customer.name}</p>
-                          <p className="text-xs text-gray-600 truncate">{customer.email}</p>
+                          <p className="text-sm font-medium text-gray-800 truncate">{customer.customerName}</p>
+                          <p className="text-xs text-gray-600 truncate">{customer.customerEmail}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <div className="flex flex-wrap gap-1 justify-center">
-                        {customer.programs.filter((p: any) => p.programType === 'custom').map((program: any, index: number) => (
-                          <span
-                            key={index}
-                            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200"
-                          >
-                            <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
-                            {program.name}
-                          </span>
-                        ))}
+                      <span className="text-sm font-medium text-gray-900">
+                        ${customer.totalSpend.toFixed(2)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className="text-sm font-medium text-gray-900">
+                        {customer.transactionCount}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className="text-sm font-medium text-gray-900">
+                        {customer.visitCount}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-2 w-full max-w-32 mx-auto">
+                        {customer.rewardsEarned === customer.totalRewards && customer.totalRewards > 0 ? (
+                          <div className="flex items-center gap-1">
+                            <div className="h-4 w-4 bg-blue-500 rounded-full flex items-center justify-center">
+                              <svg className="h-2.5 w-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                            <span className="text-xs font-medium text-blue-600">Complete</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 w-full">
+                            <div className="flex-1 bg-gray-200 rounded-full h-2">
+                              <div 
+                                className="bg-orange-500 h-2 rounded-full transition-all duration-300"
+                                style={{ 
+                                  width: `${customer.totalRewards > 0 ? (customer.rewardsEarned / customer.totalRewards) * 100 : 0}%` 
+                                }}
+                              ></div>
+                            </div>
+                            <span className="text-xs text-gray-600 font-medium min-w-fit">
+                              {customer.rewardsEarned}/{customer.totalRewards}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {customer.totalSpend > 0 ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
-                          <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
-                          ${customer.totalSpend.toFixed(2)}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {customer.transactionCount > 0 ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
-                          <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
-                          {customer.transactionCount}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {customer.visitCount > 0 ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
-                          <div className="h-1.5 w-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>
-                          {customer.visitCount}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {customer.rewardsEarned > 0 ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
-                          <div className="h-1.5 w-1.5 bg-yellow-500 rounded-full flex-shrink-0"></div>
-                          {customer.rewardsEarned}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       {customer.lastTransactionDate ? (
@@ -1005,7 +906,7 @@ const ProgramCustomersTable = () => {
                           </div>
                         </div>
                       ) : (
-                        <span className="text-xs text-gray-400">No transactions</span>
+                        <span className="text-xs text-gray-400">No recent activity</span>
                       )}
                     </td>
                   </tr>
@@ -1018,7 +919,7 @@ const ProgramCustomersTable = () => {
         {!loading && filteredCustomers.length > 0 && (
           <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
             <p className="text-xs text-gray-500 text-center">
-              Showing {filteredCustomers.length} customers with program interactions
+              Showing {filteredCustomers.length} customers with interactions for {availablePrograms.find(p => p.id === selectedProgram)?.name || 'selected program'}
             </p>
           </div>
         )}

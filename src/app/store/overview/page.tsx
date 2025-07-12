@@ -684,6 +684,25 @@ const ProgramCustomersTable = () => {
               const transactionCount = progressData.transactionCount || 0
               const visitCount = progressData.visitCount || 0
               
+              // Get redemptions for this customer and count those matching this program's rewards
+              let rewardsRedeemed = 0
+              try {
+                const redemptionsRef = collection(db, 'merchants', user.uid, 'customers', customerId, 'redemptions')
+                const redemptionsSnapshot = await getDocs(redemptionsRef)
+                
+                // Get reward IDs from the selected program
+                const programRewardIds = programDetails?.rewards?.map((reward: any) => reward.id) || []
+                
+                redemptionsSnapshot.docs.forEach(redemptionDoc => {
+                  const redemptionData = redemptionDoc.data()
+                  if (redemptionData.rewardId && programRewardIds.includes(redemptionData.rewardId)) {
+                    rewardsRedeemed++
+                  }
+                })
+              } catch (error) {
+                console.error('Error fetching redemptions for customer:', customerId, error)
+              }
+              
               if (rewardsEarned > 0 || totalSpend > 0 || transactionCount > 0 || visitCount > 0) {
                 customerProgramData.push({
                   customerId: customerId,
@@ -694,6 +713,7 @@ const ProgramCustomersTable = () => {
                   programId: selectedProgram,
                   rewardsEarned: rewardsEarned,
                   totalRewards: programDetails?.rewards?.length || 0,
+                  rewardsRedeemed: rewardsRedeemed,
                   totalSpend: totalSpend,
                   transactionCount: transactionCount,
                   visitCount: visitCount,
@@ -826,6 +846,9 @@ const ProgramCustomersTable = () => {
                     <span className="text-xs font-medium text-gray-600">Rewards Progress</span>
                   </th>
                   <th className="px-4 py-3 text-center">
+                    <span className="text-xs font-medium text-gray-600">Rewards Redeemed</span>
+                  </th>
+                  <th className="px-4 py-3 text-center">
                     <span className="text-xs font-medium text-gray-600">Last Activity</span>
                   </th>
                 </tr>
@@ -896,6 +919,11 @@ const ProgramCustomersTable = () => {
                           </div>
                         )}
                       </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className="text-sm text-gray-500">
+                        TBD
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-center">
                       {customer.lastTransactionDate ? (

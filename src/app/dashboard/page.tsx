@@ -217,7 +217,26 @@ export default function DashboardPage() {
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const [timeframe, setTimeframe] = useState<TimeframeType>("today")
+  const [isTimeframeOpen, setIsTimeframeOpen] = useState(false)
+  const [isAdvancedActivity, setIsAdvancedActivity] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isTimeframeOpen) {
+        setIsTimeframeOpen(false)
+      }
+    }
+    
+    if (isTimeframeOpen) {
+      document.addEventListener('click', handleClickOutside)
+    }
+    
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+    }
+  }, [isTimeframeOpen])
   const [metricsLoading, setMetricsLoading] = useState(false)
   const [activityLoading, setActivityLoading] = useState(false)
   const [rewardsLoading, setRewardsLoading] = useState(false)
@@ -3411,16 +3430,32 @@ export default function DashboardPage() {
 
 
               {/* Activity and Analytics Section for Loyalty */}
-          <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr_0.8fr] gap-6">
+          <div className={cn(
+            "grid grid-cols-1 gap-6 overflow-hidden transition-all duration-300 ease-in-out",
+            isAdvancedActivity ? "md:grid-cols-[2fr_1fr]" : "md:grid-cols-[1.2fr_0.9fr_0.9fr]"
+          )}>
             {/* Recent Activity */}
-                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                <div className="bg-white rounded-md border border-gray-200 overflow-hidden transition-all duration-300 ease-in-out">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
                       <h3 className="text-sm font-semibold text-gray-900">Recent Activity</h3>
-                  <Link href="/store/activity" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
-                    View all
-                    <ChevronRight className="h-3 w-3" />
-                  </Link>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setIsAdvancedActivity(!isAdvancedActivity)}
+                          className={cn(
+                            "px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-300 ease-in-out",
+                            isAdvancedActivity
+                              ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                          )}
+                        >
+                          {isAdvancedActivity ? 'Simple' : 'Advanced'}
+                        </button>
+                        <Link href="/store/activity" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
+                          View all
+                          <ChevronRight className="h-3 w-3" />
+                        </Link>
+                      </div>
                 </div>
               </div>
                   <div className="max-h-80 overflow-y-auto scrollbar-subtle">
@@ -3438,10 +3473,28 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                       <table className="w-full">
+                        {isAdvancedActivity && (
+                          <thead className="bg-gray-50/80">
+                            <tr className="border-b border-gray-100">
+                              <th className="px-4 py-3 text-left">
+                                <span className="text-xs font-medium text-gray-600">Customer</span>
+                              </th>
+                              <th className="px-4 py-3 text-left">
+                                <span className="text-xs font-medium text-gray-600">Activity</span>
+                              </th>
+                              <th className="px-4 py-3 text-left">
+                                <span className="text-xs font-medium text-gray-600">Reward</span>
+                              </th>
+                              <th className="px-4 py-3 text-right">
+                                <span className="text-xs font-medium text-gray-600">Amount</span>
+                              </th>
+                            </tr>
+                          </thead>
+                        )}
                         <tbody className="divide-y divide-gray-100">
-                    {recentActivity.slice(0, 7).map((activity, index) => (
+                    {recentActivity.slice(0, isAdvancedActivity ? 10 : 7).map((activity, index) => (
                             <tr key={activity.id} className="hover:bg-gray-100/50 transition-colors cursor-pointer" onClick={() => handleActivityClick(activity)}>
-                              <td className="px-4 py-3">
+                              <td className="px-4 py-2.5">
                                 <div className="flex items-center gap-3">
                                   <div className="h-8 w-8 flex-shrink-0">
                                     {activity.customer.profilePicture ? (
@@ -3464,7 +3517,7 @@ export default function DashboardPage() {
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-4 py-3">
+                              <td className="px-4 py-2.5">
                                 <div className="flex flex-col gap-1">
                                   {activity.type === "transaction" ? (
                                     <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
@@ -3478,27 +3531,41 @@ export default function DashboardPage() {
                                     </span>
                                   ) : (
                                     <>
-                                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                                        <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
-                                        Redemption
-                                      </span>
-                                      {activity.rewardName && (
-                                        <div className="flex flex-col gap-0.5">
-                                          <span className="text-xs text-gray-600 truncate max-w-[150px]">
-                                            {activity.rewardName}
-                                          </span>
-                                          {activity.isNetworkReward && (
-                                            <span className="text-xs text-blue-600 font-medium">
-                                              Network Reward
-                                            </span>
-                                          )}
-                                        </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                          <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
+                                          Redemption
+                                        </span>
+                                        {activity.isNetworkReward && (
+                                          <Globe className="h-3 w-3 text-blue-500 flex-shrink-0" />
+                                        )}
+                                      </div>
+                                      {!isAdvancedActivity && activity.rewardName && (
+                                        <span className="text-xs text-gray-600 truncate max-w-[150px]">
+                                          {activity.rewardName}
+                                        </span>
                                       )}
                                     </>
                                   )}
                                 </div>
                               </td>
-                              <td className="px-4 py-3 text-right">
+                              {isAdvancedActivity && (
+                                <td className="px-4 py-2.5">
+                                  <div className="min-w-0">
+                                    {activity.type === "redemption" && activity.rewardName ? (
+                                      <div className="flex items-center gap-2">
+                                        <p className="text-sm font-medium text-gray-800 truncate">{activity.rewardName}</p>
+                                        {activity.isNetworkReward && (
+                                          <Globe className="h-3 w-3 text-blue-500 flex-shrink-0" />
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <span className="text-xs text-gray-500">—</span>
+                                    )}
+                                  </div>
+                                </td>
+                              )}
+                              <td className="px-4 py-2.5 text-right">
                                 <span className="text-sm font-medium text-gray-800">
                             {activity.type === "transaction" 
                               ? `$${activity.amount.toFixed(2)}` 
@@ -3575,11 +3642,12 @@ export default function DashboardPage() {
             </div>
 
                 {/* Metrics */}
+                {!isAdvancedActivity && (
                 <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
                   <div className="px-6 py-3.5 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
                       <h3 className="text-sm font-semibold text-gray-900">Metrics</h3>
-                      {/* Metrics Tab Container */}
+                      {/* Metrics Tab and Filter Container */}
                       <div className="flex items-center gap-4">
                         <button
                           className={cn(
@@ -3605,6 +3673,57 @@ export default function DashboardPage() {
                           <Gift className="h-3 w-3" />
                           Loyalty
                         </button>
+                        <div className="h-3 w-px bg-gray-300"></div>
+                        <div className="relative">
+                          <button
+                            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-md border border-gray-200 hover:bg-gray-150 transition-colors"
+                            onClick={() => setIsTimeframeOpen(!isTimeframeOpen)}
+                          >
+                            {timeframe === 'today' ? 'Today' : 
+                             timeframe === 'yesterday' ? 'Yesterday' :
+                             timeframe === '7days' ? '7 days' : '30 days'}
+                          </button>
+                          {isTimeframeOpen && (
+                            <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[80px]">
+                              <button
+                                className="block w-full px-3 py-2 text-xs text-left text-gray-700 hover:bg-gray-50 first:rounded-t-md"
+                                onClick={() => {
+                                  setTimeframe('today')
+                                  setIsTimeframeOpen(false)
+                                }}
+                              >
+                                Today
+                              </button>
+                              <button
+                                className="block w-full px-3 py-2 text-xs text-left text-gray-700 hover:bg-gray-50"
+                                onClick={() => {
+                                  setTimeframe('yesterday')
+                                  setIsTimeframeOpen(false)
+                                }}
+                              >
+                                Yesterday
+                              </button>
+                              <button
+                                className="block w-full px-3 py-2 text-xs text-left text-gray-700 hover:bg-gray-50"
+                                onClick={() => {
+                                  setTimeframe('7days')
+                                  setIsTimeframeOpen(false)
+                                }}
+                              >
+                                7 days
+                              </button>
+                              <button
+                                className="block w-full px-3 py-2 text-xs text-left text-gray-700 hover:bg-gray-50 last:rounded-b-md"
+                                onClick={() => {
+                                  setTimeframe('30days')
+                                  setIsTimeframeOpen(false)
+                                }}
+                              >
+                                30 days
+                              </button>
+                            </div>
+                          )}
+                        </div>
                   </div>
                     </div>
                   </div>
@@ -3648,17 +3767,7 @@ export default function DashboardPage() {
                                 <span className="text-sm font-medium text-gray-800">{metrics.totalTransactions}</span>
                               </td>
                             </tr>
-                            <tr className="hover:bg-gray-100/50 transition-colors">
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                  <DollarSign className="h-4 w-4 text-blue-500" />
-                                  <span className="text-sm font-medium text-gray-800">Avg Order Value</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-800">${metrics.avgOrderValue}</span>
-                              </td>
-                            </tr>
+
                           </>
                         ) : (
                           <>
@@ -3734,6 +3843,7 @@ export default function DashboardPage() {
                     </table>
                   </div>
                 </div>
+                )}
               </div>
 
               {/* Live Programs and Live Rewards Section */}
@@ -4935,6 +5045,27 @@ export default function DashboardPage() {
                                     <Image 
                                       src="/outlook.png" 
                                       alt="Outlook" 
+                                      width={16} 
+                                      height={16} 
+                                      className="rounded-sm"
+                                    />
+                                  </div>
+                                </div>
+                              ) : agent.id === 'sales-analysis' ? (
+                                <div className="relative flex items-center h-6 w-10">
+                                  <div className="absolute left-0 h-6 w-6 bg-white rounded-full border border-gray-200 flex items-center justify-center z-10">
+                                    <Image 
+                                      src="/square.png" 
+                                      alt="Square" 
+                                      width={16} 
+                                      height={16} 
+                                      className="rounded-sm"
+                                    />
+                                  </div>
+                                  <div className="absolute left-4 h-6 w-6 bg-white rounded-full border border-gray-200 flex items-center justify-center">
+                                    <Image 
+                                      src="/lslogo.png" 
+                                      alt="Lightspeed" 
                                       width={16} 
                                       height={16} 
                                       className="rounded-sm"

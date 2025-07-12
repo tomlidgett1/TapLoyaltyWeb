@@ -3431,11 +3431,11 @@ export default function DashboardPage() {
 
               {/* Activity and Analytics Section for Loyalty */}
           <div className={cn(
-            "grid grid-cols-1 gap-6 overflow-hidden transition-all duration-300 ease-in-out",
+            "grid grid-cols-1 gap-6 overflow-hidden transition-all duration-500 ease-in-out",
             isAdvancedActivity ? "md:grid-cols-[2fr_1fr]" : "md:grid-cols-[1.2fr_0.9fr_0.9fr]"
           )}>
             {/* Recent Activity */}
-                <div className="bg-white rounded-md border border-gray-200 overflow-hidden transition-all duration-300 ease-in-out">
+                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
                       <h3 className="text-sm font-semibold text-gray-900">Recent Activity</h3>
@@ -3540,11 +3540,6 @@ export default function DashboardPage() {
                                           <Globe className="h-3 w-3 text-blue-500 flex-shrink-0" />
                                         )}
                                       </div>
-                                      {!isAdvancedActivity && activity.rewardName && (
-                                        <span className="text-xs text-gray-600 truncate max-w-[150px]">
-                                          {activity.rewardName}
-                                        </span>
-                                      )}
                                     </>
                                   )}
                                 </div>
@@ -3909,7 +3904,7 @@ export default function DashboardPage() {
                               onClick={() => handleLiveProgramsTabChange('cashback')}
                             >
                               <DollarSign className="h-3 w-3" />
-                              Cashback
+                              <span className="text-blue-500 font-bold">Tap</span> Cash
                             </button>
                           )}
                         </div>
@@ -4697,7 +4692,7 @@ export default function DashboardPage() {
                                 onClick={() => handleCustomerSort('cashback')}
                                 className="w-full flex items-center justify-center gap-1 text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors"
                               >
-                                TapCash
+                                <span className="text-blue-500 font-bold">Tap</span> Cash
                                 {customerSortField === 'cashback' && (
                                   customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                                 )}

@@ -1228,79 +1228,91 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
         </div>
       )}
 
-      {/* Customer Support Input Box */}
+      {/* Customer Support Small Popup */}
       {supportBoxOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] animate-in fade-in duration-200">
-          <div className="bg-white rounded-md max-w-md mx-4 shadow-lg border border-gray-200 overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out">
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Headphones className="h-5 w-5 text-blue-600" />
-                  <h3 className="text-lg font-semibold text-gray-900">Customer Support</h3>
+        <>
+          {/* Invisible backdrop to close popup when clicking outside */}
+          <div 
+            className="fixed inset-0 z-[9998]" 
+            onClick={() => setSupportBoxOpen(false)}
+          />
+          
+          {/* Small popup positioned from bottom of sidebar */}
+          <div className={cn(
+            "fixed z-[9999] animate-in fade-in slide-in-from-bottom-4 duration-200",
+            isCollapsed ? "bottom-4 left-20" : "bottom-4 left-52"
+          )}>
+            <div className="bg-white rounded-md w-80 shadow-xl border border-gray-200 overflow-hidden">
+              {/* Compact Header */}
+              <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Headphones className="h-4 w-4 text-blue-600" />
+                    <h3 className="text-sm font-semibold text-gray-900">Support</h3>
+                  </div>
+                  <button
+                    onClick={() => setSupportBoxOpen(false)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => setSupportBoxOpen(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <X className="h-5 w-5" />
-                </button>
               </div>
-            </div>
-            
-            {/* Body */}
-            <div className="p-6">
-              <p className="text-sm text-gray-600 mb-4">
-                How can we help you today? Send us a message and we'll get back to you soon.
-              </p>
-              <textarea
-                value={supportMessage}
-                onChange={(e) => setSupportMessage(e.target.value)}
-                placeholder="Type your question or issue here..."
-                className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-sm"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                    handleSupportSubmit();
-                  }
-                }}
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                Tip: Press Ctrl+Enter (Cmd+Enter on Mac) to send quickly
-              </p>
-            </div>
-            
-            {/* Footer */}
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setSupportBoxOpen(false)}
-                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
-                  disabled={supportLoading}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSupportSubmit}
-                  disabled={!supportMessage.trim() || supportLoading}
-                  className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                >
-                  {supportLoading ? (
-                    <>
-                      <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin"></div>
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4" />
-                      Send Message
-                    </>
-                  )}
-                </button>
+              
+              {/* Compact Body */}
+              <div className="p-4">
+                <p className="text-xs text-gray-600 mb-3">
+                  Quick question? We'll get back to you soon.
+                </p>
+                <textarea
+                  value={supportMessage}
+                  onChange={(e) => setSupportMessage(e.target.value)}
+                  placeholder="What can we help with?"
+                  className="w-full h-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-sm"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      handleSupportSubmit();
+                    }
+                  }}
+                />
+                
+                {/* Compact Footer */}
+                <div className="flex justify-between items-center mt-3">
+                  <p className="text-xs text-gray-500">
+                    Ctrl+Enter to send
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setSupportBoxOpen(false)}
+                      className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors"
+                      disabled={supportLoading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSupportSubmit}
+                      disabled={!supportMessage.trim() || supportLoading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {supportLoading ? (
+                        <>
+                          <div className="h-3 w-3 rounded-full border-2 border-white border-t-transparent animate-spin"></div>
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="h-3 w-3" />
+                          Send
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )

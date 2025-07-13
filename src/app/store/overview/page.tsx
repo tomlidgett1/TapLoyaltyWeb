@@ -704,11 +704,27 @@ const ProgramCustomersTable = () => {
               }
               
               if (rewardsEarned > 0 || totalSpend > 0 || transactionCount > 0 || visitCount > 0) {
+                // Fetch customer profile data from top-level customers collection
+                let profilePictureUrl = undefined
+                let shareProfileWithMerchants = false
+                
+                try {
+                  const topLevelCustomerDoc = await getDoc(doc(db, 'customers', customerId))
+                  if (topLevelCustomerDoc.exists()) {
+                    const topLevelCustomerData = topLevelCustomerDoc.data()
+                    shareProfileWithMerchants = topLevelCustomerData.shareProfileWithMerchants === true
+                    profilePictureUrl = shareProfileWithMerchants ? topLevelCustomerData.profilePictureUrl : undefined
+                  }
+                } catch (error) {
+                  console.error('Error fetching top-level customer data:', customerId, error)
+                }
+                
                 customerProgramData.push({
                   customerId: customerId,
                   customerName: customerData.fullName || customerData.firstName || 'Unknown Customer',
                   customerEmail: customerData.email || '',
-                  profilePictureUrl: customerData.profilePictureUrl,
+                  profilePictureUrl: profilePictureUrl,
+                  shareProfileWithMerchants: shareProfileWithMerchants,
                   programName: selectedProgramData?.name || 'Unknown Program',
                   programId: selectedProgram,
                   rewardsEarned: rewardsEarned,
@@ -753,20 +769,6 @@ const ProgramCustomersTable = () => {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
               <h3 className="text-sm font-semibold text-gray-900">Custom Program Customer Details</h3>
-              {selectedProgramDetails && (
-                <div className="flex items-center gap-3 text-xs text-gray-500">
-                  <span className="flex items-center gap-1">
-                    <div className="h-1.5 w-1.5 bg-gray-400 rounded-full"></div>
-                    {selectedProgramDetails.rewards?.length || 0} rewards available
-                  </span>
-                  {selectedProgramDetails.pin && (
-                    <span className="flex items-center gap-1">
-                      <div className="h-1.5 w-1.5 bg-gray-400 rounded-full"></div>
-                      PIN: {selectedProgramDetails.pin}
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
             <div className="flex items-center gap-2">
               <Input

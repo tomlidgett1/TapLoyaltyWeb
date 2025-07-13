@@ -60,7 +60,7 @@ import { format, formatDistanceToNow } from "date-fns"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, where, Timestamp, onSnapshot } from "firebase/firestore"
+import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, where, Timestamp, onSnapshot, addDoc, updateDoc } from "firebase/firestore"
 import { toast } from "@/components/ui/use-toast"
 import { TapAiButton } from "@/components/tap-ai-button"
 import { PageHeader } from "@/components/page-header"
@@ -479,6 +479,16 @@ export default function DashboardPage() {
   const [activityDetailOpen, setActivityDetailOpen] = useState(false)
   const [shareDropdownOpen, setShareDropdownOpen] = useState(false)
   const [rewardDetailSheetOpen, setRewardDetailSheetOpen] = useState(false)
+  
+  // Chart data state
+  const [transactionRedemptionData, setTransactionRedemptionData] = useState<any[]>([])
+  const [transactionRedemptionLoading, setTransactionRedemptionLoading] = useState(true)
+  const [activeTransactionChart, setActiveTransactionChart] = useState<'transactions' | 'redemptions'>('transactions')
+  const [chartPeriod, setChartPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily')
+  
+  // Weekday sales data state
+  const [weekdaySalesData, setWeekdaySalesData] = useState<any[]>([])
+  const [weekdaySalesLoading, setWeekdaySalesLoading] = useState(true)
   const [selectedRewardId, setSelectedRewardId] = useState<string | null>(null)
 
   // Customer Reward Analytics state
@@ -1420,11 +1430,17 @@ export default function DashboardPage() {
               const customerDoc = await getDoc(doc(db, 'customers', customer.id))
               if (customerDoc.exists()) {
                 const data = customerDoc.data()
+                
+                // Only show profile picture if shareProfileWithMerchants is true
+                const showProfilePicture = data.shareProfileWithMerchants === true
+                
                 return {
                   ...customer,
                   name: data.fullName || data.name || 'Unknown Customer',
                   email: data.email || '',
-                  pointsBalance: data.pointsBalance || 0
+                  pointsBalance: data.pointsBalance || 0,
+                  profilePicture: showProfilePicture ? data.profilePictureUrl : undefined,
+                  shareProfileWithMerchants: data.shareProfileWithMerchants || false
                 }
               }
               return customer
@@ -2165,11 +2181,24 @@ export default function DashboardPage() {
         
         for (const customerDoc of customersSnapshot.docs) {
           const customerData = customerDoc.data()
+          
+          // Fetch profile picture from top-level customers collection with privacy check
+          let profilePicture = undefined
+          try {
+            const topLevelCustomerDoc = await getDoc(doc(db, 'customers', customerDoc.id))
+            if (topLevelCustomerDoc.exists()) {
+              const topLevelData = topLevelCustomerDoc.data()
+              const showProfilePicture = topLevelData.shareProfileWithMerchants === true
+              profilePicture = showProfilePicture ? topLevelData.profilePictureUrl : undefined
+            }
+          } catch (error) {
+            console.error('Error fetching top-level customer data:', customerDoc.id, error)
+          }
+          
           const customer: any = { 
             id: customerDoc.id, 
             ...customerData,
-            // Include profile picture if available (temporary - removed privacy check for debugging)
-            profilePicture: customerData.profilePictureUrl || null,
+            profilePicture: profilePicture,
             lastTransactionDate: null
           }
 
@@ -2293,17 +2322,32 @@ export default function DashboardPage() {
          )
          const customersSnapshot = await getDocs(customersQuery)
          
-         const customers = customersSnapshot.docs.map(doc => {
-           const data = doc.data()
-           return {
-             id: doc.id,
-             ...data,
-             // Include profile picture if available (temporary - removed privacy check for debugging)
-             profilePicture: data.profilePictureUrl || null,
-             // Include cashback for TapCash display
-             cashback: data.cashback || 0
-           }
-         })
+         const customers = await Promise.all(
+           customersSnapshot.docs.map(async (customerDoc) => {
+             const data = customerDoc.data()
+             
+             // Fetch profile picture from top-level customers collection with privacy check
+             let profilePicture = undefined
+             try {
+               const topLevelCustomerDoc = await getDoc(doc(db, 'customers', customerDoc.id))
+               if (topLevelCustomerDoc.exists()) {
+                 const topLevelData = topLevelCustomerDoc.data() as any
+                 const showProfilePicture = topLevelData.shareProfileWithMerchants === true
+                 profilePicture = showProfilePicture ? topLevelData.profilePictureUrl : undefined
+               }
+             } catch (error) {
+               console.error('Error fetching top-level customer data:', customerDoc.id, error)
+             }
+             
+             return {
+               id: customerDoc.id,
+               ...data,
+               profilePicture: profilePicture,
+               // Include cashback for TapCash display
+               cashback: data.cashback || 0
+             }
+           })
+         )
          
          setAllCustomers(customers)
        } catch (error) {
@@ -2520,11 +2564,24 @@ export default function DashboardPage() {
                  console.error('Error fetching last store view for customer:', customerId, error)
                }
 
+               // Fetch profile picture from top-level customers collection with privacy check
+               let profilePicture = undefined
+               try {
+                 const topLevelCustomerDoc = await getDoc(doc(db, 'customers', customerId))
+                 if (topLevelCustomerDoc.exists()) {
+                   const topLevelData = topLevelCustomerDoc.data() as any
+                   const showProfilePicture = topLevelData.shareProfileWithMerchants === true
+                   profilePicture = showProfilePicture ? topLevelData.profilePictureUrl : undefined
+                 }
+               } catch (error) {
+                 console.error('Error fetching top-level customer data:', customerId, error)
+               }
+
                return {
                  id: customerId,
                  name: customerData.fullName || 'Unknown Customer',
                  email: customerData.email || '',
-                 profilePicture: customerData.profilePictureUrl || null,
+                 profilePicture: profilePicture,
                  redeemableRewards: redeemableCount,
                  visibleButNotRedeemableRewards: visibleButNotRedeemableCount,
                  totalVisibleRewards: redeemableCount + visibleButNotRedeemableCount,
@@ -2567,8 +2624,8 @@ export default function DashboardPage() {
      }
 
 
-     
-     if (user?.uid) {
+    
+    if (user?.uid) {
       fetchActiveAgents()
       fetchIntegrations()
       fetchRecurringPrograms()
@@ -2641,6 +2698,157 @@ export default function DashboardPage() {
   // Handle removing a selected integration
   const removeIntegration = (id: string) => {
     setSelectedIntegrations(selectedIntegrations.filter(i => i.id !== id))
+  }
+
+  // Save quick reward function
+  const saveQuickReward = async () => {
+    if (!user || !selectedCustomerForReward || !selectedRewardType) {
+      toast({
+        title: "Error",
+        description: "Missing required information to create reward.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!rewardConfig.amount || !rewardConfig.rewardName) {
+      toast({
+        title: "Error", 
+        description: "Please fill in all required fields.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      const timestamp = new Date()
+      const utcTimestamp = new Date(Date.UTC(
+        timestamp.getFullYear(),
+        timestamp.getMonth(),
+        timestamp.getDate(),
+        timestamp.getHours(),
+        timestamp.getMinutes()
+      ))
+
+      // Create the reward data object based on the selected type
+      let rewardData: any = {
+        rewardName: rewardConfig.rewardName,
+        description: rewardConfig.description,
+        programtype: "points",
+        isActive: true,
+        pointsCost: 0, // Quick rewards are free
+        rewardVisibility: 'global', // Customer-specific reward
+        newcx: false,
+        delayedVisibility: false,
+        conditions: [],
+        limitations: [
+          {
+            type: "customerLimit",
+            value: 1 // Each customer can only redeem once
+          }
+        ],
+        pin: rewardConfig.pin || '',
+        createdAt: utcTimestamp,
+        status: 'active',
+        merchantId: user.uid,
+        updatedAt: utcTimestamp,
+        minSpend: 0,
+        reason: 'Quick reward for customer engagement',
+        customers: [selectedCustomerForReward.id],
+        redemptionCount: 0,
+        uniqueCustomersCount: 0,
+        lastRedeemedAt: null,
+        uniqueCustomerIds: [selectedCustomerForReward.id], // Specific to this customer
+        rewardSummary: `Quick ${selectedRewardType} reward for ${selectedCustomerForReward.name}`,
+        isQuickReward: true, // Flag to indicate this is a quick reward
+      }
+
+      // Add type-specific details
+      switch(selectedRewardType) {
+        case 'percentage':
+          rewardData.type = 'percentageDiscount';
+          rewardData.rewardTypeDetails = {
+            type: 'percentageDiscount',
+            discountValue: Number(rewardConfig.amount),
+            discountType: 'percentage',
+            appliesTo: 'Any purchase'
+          };
+          break;
+          
+        case 'dollar':
+          rewardData.type = 'fixedDiscount';
+          rewardData.rewardTypeDetails = {
+            type: 'fixedDiscount',
+            discountValue: Number(rewardConfig.amount),
+            discountType: 'fixed',
+            minimumPurchase: 0
+          };
+          break;
+          
+        case 'free_item':
+          rewardData.type = 'freeItem';
+          rewardData.rewardTypeDetails = {
+            type: 'freeItem',
+            itemName: rewardConfig.amount, // For free items, amount field contains item name
+            itemDescription: rewardConfig.description || ''
+          };
+          break;
+      }
+
+      // Create in merchant's rewards subcollection
+      const merchantRewardsRef = collection(db, 'merchants', user.uid, 'rewards');
+      const newRewardRef = await addDoc(merchantRewardsRef, {
+        ...rewardData,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      
+      // Add the ID to the reward data
+      const rewardWithId = {
+        ...rewardData,
+        id: newRewardRef.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Update the merchant's reward with the ID
+      await updateDoc(
+        doc(db, 'merchants', user.uid, 'rewards', newRewardRef.id),
+        { id: newRewardRef.id }
+      );
+
+      // Also save to top-level rewards collection
+      await setDoc(
+        doc(db, 'rewards', newRewardRef.id),
+        rewardWithId
+      );
+      
+      toast({
+        title: "Quick Reward Created Successfully",
+        description: `${rewardConfig.rewardName} has been created for ${selectedCustomerForReward.name}`,
+        variant: "default"
+      });
+      
+      // Close the popup and reset state
+      setQuickRewardPopupOpen(false);
+      setQuickRewardStep('selection');
+      setSelectedCustomerForReward(null);
+      setSelectedRewardType(null);
+      setRewardConfig({
+        amount: '',
+        rewardName: '',
+        description: '',
+        pin: ''
+      });
+      
+    } catch (error) {
+      console.error("Error saving quick reward:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create quick reward. Please try again.",
+        variant: "destructive"
+      });
+    }
   }
 
   // Handle sending the command
@@ -3412,6 +3620,183 @@ export default function DashboardPage() {
     }
   };
 
+  // Fetch transaction and redemption data for chart
+  const fetchTransactionRedemptionData = async () => {
+    if (!user?.uid) return
+    
+    setTransactionRedemptionLoading(true)
+    
+    try {
+      const endDate = new Date()
+      const startDate = new Date()
+      startDate.setDate(startDate.getDate() - 90) // Last 90 days
+      
+      // Fetch transactions from merchants/merchantId/transactions/transactionId
+      const transactionsRef = collection(db, 'merchants', user.uid, 'transactions')
+      const transactionsQuery = query(
+        transactionsRef,
+        where('createdAt', '>=', startDate),
+        where('createdAt', '<=', endDate),
+        orderBy('createdAt', 'desc')
+      )
+      const transactionsSnapshot = await getDocs(transactionsQuery)
+      
+      // Fetch redemptions from merchants/merchantId/redemptions/redemptionId
+      const redemptionsRef = collection(db, 'merchants', user.uid, 'redemptions')
+      const redemptionsQuery = query(
+        redemptionsRef,
+        where('redemptionDate', '>=', startDate),
+        where('redemptionDate', '<=', endDate),
+        orderBy('redemptionDate', 'desc')
+      )
+      const redemptionsSnapshot = await getDocs(redemptionsQuery)
+      
+      // Group by selected period
+      const groupedData: Record<string, { date: string; transactions: number; redemptions: number }> = {}
+      
+      // Helper function to get period key
+      const getPeriodKey = (date: Date): string => {
+        if (chartPeriod === 'daily') {
+          return date.toISOString().split('T')[0] // YYYY-MM-DD
+        } else if (chartPeriod === 'weekly') {
+          // Get the Monday of the week
+          const monday = new Date(date)
+          monday.setDate(date.getDate() - date.getDay() + 1)
+          return monday.toISOString().split('T')[0] // YYYY-MM-DD of Monday
+        } else if (chartPeriod === 'monthly') {
+          return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01` // YYYY-MM-01
+        }
+        return date.toISOString().split('T')[0]
+      }
+      
+      // Process transactions
+      transactionsSnapshot.docs.forEach(doc => {
+        const data = doc.data()
+        const date = data.createdAt?.toDate()
+        if (date) {
+          const periodKey = getPeriodKey(date)
+          if (!groupedData[periodKey]) {
+            groupedData[periodKey] = { date: periodKey, transactions: 0, redemptions: 0 }
+          }
+          groupedData[periodKey].transactions++
+        }
+      })
+      
+      // Process redemptions
+      redemptionsSnapshot.docs.forEach(doc => {
+        const data = doc.data()
+        const date = data.redemptionDate?.toDate()
+        if (date) {
+          const periodKey = getPeriodKey(date)
+          if (!groupedData[periodKey]) {
+            groupedData[periodKey] = { date: periodKey, transactions: 0, redemptions: 0 }
+          }
+          groupedData[periodKey].redemptions++
+        }
+      })
+      
+      // Convert to array and sort by date
+      const sortedData = Object.values(groupedData).sort((a, b) => a.date.localeCompare(b.date))
+      
+      setTransactionRedemptionData(sortedData)
+    } catch (error) {
+      console.error('Error fetching transaction redemption data:', error)
+    } finally {
+      setTransactionRedemptionLoading(false)
+    }
+  }
+
+  // Fetch weekday sales data
+  const fetchWeekdaySalesData = async () => {
+    if (!user?.uid) return
+    
+    setWeekdaySalesLoading(true)
+    
+    try {
+      const endDate = new Date()
+      const startDate = new Date()
+      startDate.setDate(startDate.getDate() - 90) // Last 90 days
+      
+      // Fetch transactions from merchants/merchantId/transactions/transactionId
+      const transactionsRef = collection(db, 'merchants', user.uid, 'transactions')
+      const transactionsQuery = query(
+        transactionsRef,
+        where('createdAt', '>=', startDate),
+        where('createdAt', '<=', endDate),
+        orderBy('createdAt', 'desc')
+      )
+      const transactionsSnapshot = await getDocs(transactionsQuery)
+      
+      // Group by weekday
+      const weekdayData: Record<string, { weekday: string; sales: number; count: number }> = {
+        'Monday': { weekday: 'Monday', sales: 0, count: 0 },
+        'Tuesday': { weekday: 'Tuesday', sales: 0, count: 0 },
+        'Wednesday': { weekday: 'Wednesday', sales: 0, count: 0 },
+        'Thursday': { weekday: 'Thursday', sales: 0, count: 0 },
+        'Friday': { weekday: 'Friday', sales: 0, count: 0 },
+        'Saturday': { weekday: 'Saturday', sales: 0, count: 0 },
+        'Sunday': { weekday: 'Sunday', sales: 0, count: 0 }
+      }
+      
+      const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+      
+      // Process transactions
+      transactionsSnapshot.docs.forEach(doc => {
+        const data = doc.data()
+        const date = data.createdAt?.toDate()
+        const amount = data.amount || 0
+        
+        if (date && amount > 0) {
+          const weekdayName = weekdays[date.getDay()]
+          weekdayData[weekdayName].sales += amount
+          weekdayData[weekdayName].count++
+        }
+      })
+      
+      // Convert to array with colors for each weekday
+      const weekdayColors: Record<string, string> = {
+        'Monday': '#3b82f6',    // Blue
+        'Tuesday': '#10b981',   // Green
+        'Wednesday': '#f59e0b', // Orange
+        'Thursday': '#8b5cf6',  // Purple
+        'Friday': '#ef4444',    // Red
+        'Saturday': '#06b6d4',  // Cyan
+        'Sunday': '#f97316'     // Orange-red
+      }
+      
+      const sortedData = Object.values(weekdayData).map(day => ({
+        ...day,
+        sales: Math.round(day.sales * 100) / 100, // Round to 2 decimal places
+        fill: weekdayColors[day.weekday] || '#6b7280'
+      }))
+      
+      setWeekdaySalesData(sortedData)
+    } catch (error) {
+      console.error('Error fetching weekday sales data:', error)
+    } finally {
+      setWeekdaySalesLoading(false)
+    }
+    }
+
+  // Calculate totals for chart
+  const chartTotals = React.useMemo(() => ({
+    transactions: transactionRedemptionData.reduce((acc, curr) => acc + curr.transactions, 0),
+    redemptions: transactionRedemptionData.reduce((acc, curr) => acc + curr.redemptions, 0),
+  }), [transactionRedemptionData])
+  
+  // Calculate total sales for weekday chart
+  const totalWeekdaySales = React.useMemo(() => {
+    return weekdaySalesData.reduce((acc, curr) => acc + curr.sales, 0)
+  }, [weekdaySalesData])
+
+  // Add chart data fetching to useEffect
+  useEffect(() => {
+    if (user?.uid) {
+      fetchTransactionRedemptionData()
+      fetchWeekdaySalesData()
+    }
+  }, [user?.uid, chartPeriod])
+
   if (initialLoading) {
     return (
       <div className="container mx-auto p-4">
@@ -3493,7 +3878,7 @@ export default function DashboardPage() {
                             ? 'bg-blue-500' 
                             : 'bg-gray-300 opacity-60'
                         }`}></div>
-                      </div>
+                    </div>
                     </div>
                     <p className="text-xs text-gray-500 mb-4 line-clamp-2">
                       {recurringPrograms.hasAny ? (
@@ -3564,7 +3949,7 @@ export default function DashboardPage() {
                           <Info className="h-3 w-3 text-gray-600" />
                         </button>
                         <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
-                      </div>
+                    </div>
                     </div>
                     <p className="text-xs text-gray-500 mb-4 line-clamp-2">Create eye-catching promotional banners to highlight offers, rewards and featured products</p>
                     <Button 
@@ -3599,7 +3984,7 @@ export default function DashboardPage() {
                             ? 'bg-blue-500' 
                             : 'bg-gray-300 opacity-60'
                         }`}></div>
-                      </div>
+                    </div>
                     </div>
                     <p className="text-xs text-gray-500 mb-4 line-clamp-2">Welcome new customers with special rewards like vouchers, free items or bonus points</p>
                     <Button 
@@ -3649,11 +4034,11 @@ export default function DashboardPage() {
                           {isAdvancedActivity ? 'Simple' : 'Advanced'}
                         </button>
                         <Link href="/store/activity" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
-                          View all
-                          <ChevronRight className="h-3 w-3" />
-                        </Link>
-                      </div>
+                      View all
+                      <ChevronRight className="h-3 w-3" />
+                    </Link>
                 </div>
+              </div>
               </div>
                   <div className="max-h-80 overflow-y-auto scrollbar-subtle">
                 {activityLoading ? (
@@ -3706,12 +4091,12 @@ export default function DashboardPage() {
                                       }`}>
                                         {activity.customer.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                                       </div>
-                                    )}
-                                  </div>
+                          )}
+                        </div>
                                   <div className="min-w-0">
                                     <p className="text-sm font-medium text-gray-800 truncate">{activity.customer.name}</p>
                                     <p className="text-xs text-gray-600 truncate">{formatTimeAgo(activity.timestamp)}</p>
-                                  </div>
+                        </div>
                                 </div>
                               </td>
                               <td className="px-4 py-2.5">
@@ -3720,7 +4105,7 @@ export default function DashboardPage() {
                                     <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
                                       <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
                                       Purchase
-                                    </span>
+                                </span>
                                   ) : activity.tapCashUsed > 0 ? (
                                     <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
                                       <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
@@ -3763,7 +4148,7 @@ export default function DashboardPage() {
                               ? `$${activity.amount.toFixed(2)}` 
                               : activity.tapCashUsed > 0
                                 ? `$${activity.tapCashUsed.toFixed(2)}`
-                                : `${activity.points} pts`}
+                              : `${activity.points} pts`}
                                 </span>
                               </td>
                             </tr>
@@ -3774,15 +4159,15 @@ export default function DashboardPage() {
               </div>
             </div>
 
-                        {/* Popular Rewards */}
+            {/* Popular Rewards */}
                 <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
                       <h3 className="text-sm font-semibold text-gray-900">Popular Rewards</h3>
                   <Link href="/store/rewards" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
-                    View all
-                    <ChevronRight className="h-3 w-3" />
-                  </Link>
+                      View all
+                      <ChevronRight className="h-3 w-3" />
+                    </Link>
                 </div>
               </div>
                   <div className="overflow-x-auto">
@@ -3808,9 +4193,9 @@ export default function DashboardPage() {
                               onClick={() => handleRewardClick(reward.id)}
                             >
                               <td className="px-4 py-3">
-                                <div className="min-w-0">
+                                  <div className="min-w-0">
                                   <p className="text-sm font-medium text-gray-800 truncate">{reward.name}</p>
-                                </div>
+                        </div>
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <span className="text-xs font-medium text-gray-600">
@@ -3912,10 +4297,10 @@ export default function DashboardPage() {
                                 }}
                               >
                                 30 days
-                              </button>
-                            </div>
+                        </button>
+                  </div>
                           )}
-                        </div>
+                    </div>
                   </div>
                     </div>
                   </div>
@@ -5297,6 +5682,228 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
+            
+            {/* Transactions & Redemptions Chart */}
+            <div className="mb-8 mt-8">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="py-0 rounded-md">
+                  <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
+                    <div className="flex flex-1 flex-col justify-center gap-1 px-6 pt-4 pb-3 sm:!py-0">
+                      <CardTitle>Transactions & Redemptions</CardTitle>
+                      <CardDescription>
+                        {chartPeriod === 'daily' ? 'Daily' : chartPeriod === 'weekly' ? 'Weekly' : 'Monthly'} activity over the last 90 days
+                      </CardDescription>
+                      <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit mt-2">
+                        {["daily", "weekly", "monthly"].map((period) => (
+                          <button
+                            key={period}
+                            className={cn(
+                              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                              chartPeriod === period
+                                ? "text-gray-800 bg-white shadow-sm"
+                                : "text-gray-600 hover:bg-gray-200/70"
+                            )}
+                            onClick={() => setChartPeriod(period as 'daily' | 'weekly' | 'monthly')}
+                          >
+                            {period.charAt(0).toUpperCase() + period.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex">
+                      {["transactions", "redemptions"].map((key) => {
+                        const chart = key as keyof typeof chartTotals
+                        return (
+                          <button
+                            key={chart}
+                            data-active={activeTransactionChart === chart}
+                            className="data-[active=true]:bg-muted/50 relative z-30 flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6"
+                            onClick={() => setActiveTransactionChart(chart)}
+                          >
+                            <span className="text-muted-foreground text-xs capitalize">
+                              {chart}
+                            </span>
+                            <span className="text-lg leading-none font-bold sm:text-3xl">
+                              {chartTotals[chart].toLocaleString()}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="px-2 sm:p-6">
+                    {transactionRedemptionLoading ? (
+                      <div className="aspect-auto h-[250px] w-full flex items-center justify-center">
+                        <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={250}>
+                        <BarChart
+                          data={transactionRedemptionData}
+                          margin={{
+                            left: 12,
+                            right: 12,
+                          }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis
+                            dataKey="date"
+                            tickLine={false}
+                            axisLine={false}
+                            tickMargin={8}
+                            minTickGap={32}
+                            tick={{ fontSize: 11 }}
+                            tickFormatter={(value) => {
+                              const date = new Date(value)
+                              if (chartPeriod === 'daily') {
+                                return date.toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                })
+                              } else if (chartPeriod === 'weekly') {
+                                return `Week of ${date.toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                })}`
+                              } else if (chartPeriod === 'monthly') {
+                                return date.toLocaleDateString("en-US", {
+                                  month: "short",
+                                  year: "numeric",
+                                })
+                              }
+                              return date.toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                              })
+                            }}
+                          />
+                          <YAxis 
+                            tickLine={false}
+                            axisLine={false}
+                            tickMargin={8}
+                            tick={{ fontSize: 11 }}
+                          />
+                          <Tooltip
+                            content={({ active, payload, label }) => {
+                              if (active && payload && payload.length) {
+                                const date = new Date(label)
+                                let dateLabel = ""
+                                
+                                if (chartPeriod === 'daily') {
+                                  dateLabel = date.toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  })
+                                } else if (chartPeriod === 'weekly') {
+                                  dateLabel = `Week of ${date.toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  })}`
+                                } else if (chartPeriod === 'monthly') {
+                                  dateLabel = date.toLocaleDateString("en-US", {
+                                    month: "long",
+                                    year: "numeric",
+                                  })
+                                }
+                                
+                                return (
+                                  <div className="bg-white p-3 border border-gray-200 rounded-md shadow-lg">
+                                    <p className="text-sm font-medium">
+                                      {dateLabel}
+                                    </p>
+                                    <p className="text-sm text-blue-600">
+                                      {activeTransactionChart === 'transactions' ? 'Transactions' : 'Redemptions'}: {payload[0].value}
+                                    </p>
+                                  </div>
+                                )
+                              }
+                              return null
+                            }}
+                          />
+                          <Bar 
+                            dataKey={activeTransactionChart} 
+                            fill={activeTransactionChart === 'transactions' ? '#3b82f6' : '#f59e0b'}
+                            radius={[2, 2, 0, 0]}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </CardContent>
+                </Card>
+                
+                {/* Sales by Weekday Chart */}
+                <Card className="rounded-md">
+                  <CardHeader>
+                    <CardTitle>Sales by Weekday</CardTitle>
+                    <CardDescription>Total sales over the last 90 days</CardDescription>
+                    <div className="text-xs text-muted-foreground">
+                      Total: ${totalWeekdaySales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="px-2 sm:p-6">
+                    {weekdaySalesLoading ? (
+                      <div className="aspect-auto h-[250px] w-full flex items-center justify-center">
+                        <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={250}>
+                        <BarChart
+                          data={weekdaySalesData}
+                          layout="vertical"
+                          margin={{
+                            left: 0,
+                            right: 12,
+                            top: 12,
+                            bottom: 12,
+                          }}
+                        >
+                          <XAxis 
+                            type="number" 
+                            hide 
+                          />
+                          <YAxis
+                            dataKey="weekday"
+                            type="category"
+                            tickLine={false}
+                            tickMargin={10}
+                            axisLine={false}
+                            tick={{ fontSize: 11 }}
+                          />
+                          <Tooltip
+                            content={({ active, payload, label }) => {
+                              if (active && payload && payload.length) {
+                                const data = payload[0].payload
+                                return (
+                                  <div className="bg-white p-3 border border-gray-200 rounded-md shadow-lg">
+                                    <p className="text-sm font-medium">
+                                      {label}
+                                    </p>
+                                    <p className="text-sm text-blue-600">
+                                      Sales: ${data.sales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                      {data.count} transactions
+                                    </p>
+                                  </div>
+                                )
+                              }
+                              return null
+                            }}
+                          />
+                          <Bar 
+                            dataKey="sales" 
+                            layout="vertical" 
+                            radius={5}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </CardContent>
+                </Card>
+                </div>
+              </div>
             </>
           )}
 
@@ -5323,14 +5930,14 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <p className="text-xs text-gray-500 mb-4 line-clamp-2">Connect your business tools and services like POS systems, email platforms and CRM</p>
-                    <Button 
-                      size="sm" 
+                  <Button 
+                    size="sm"
                       className="w-full rounded-md text-xs h-8 font-medium bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all"
-                      asChild
-                    >
+                    asChild
+                  >
                       <Link href="/dashboard/integrations">Setup Now</Link>
-                    </Button>
-                  </div>
+                  </Button>
+                </div>
 
                   {/* Agent Creation */}
                   <div className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
@@ -5344,7 +5951,7 @@ export default function DashboardPage() {
                           <Info className="h-3 w-3 text-gray-600" />
                         </button>
                         <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
-                      </div>
+                  </div>
                     </div>
                     <p className="text-xs text-gray-500 mb-4 line-clamp-2">Create AI agents for business automation like customer service, analytics and reporting</p>
                     <Button 
@@ -5428,7 +6035,7 @@ export default function DashboardPage() {
                             <h4 className="text-sm font-medium text-gray-900">{getIntegrationName(key)}</h4>
                           </div>
                           <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
-                        </div>
+                          </div>
                         <p className="text-xs text-gray-500 mb-4 line-clamp-2">{getIntegrationDescription(key)}</p>
                         <Button 
                           size="sm" 
@@ -5454,13 +6061,13 @@ export default function DashboardPage() {
                           <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
                         </div>
                         <p className="text-xs text-gray-500 mb-4 line-clamp-2">Connect your business tools and services like POS systems, email platforms and CRM</p>
-                        <Button 
+                      <Button
                           size="sm" 
                           className="w-full rounded-md text-xs h-8 font-medium bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all"
-                          asChild
-                        >
+                        asChild
+                      >
                           <Link href="/dashboard/integrations">Setup Now</Link>
-                        </Button>
+                      </Button>
                       </div>
                     )
 
@@ -5497,7 +6104,7 @@ export default function DashboardPage() {
                                       height={16} 
                                       className="rounded-sm"
                                     />
-                                  </div>
+                          </div>
                                   <div className="absolute left-4 h-6 w-6 bg-white rounded-full border border-gray-200 flex items-center justify-center">
                                     <Image 
                                       src="/outlook.png" 
@@ -5506,8 +6113,8 @@ export default function DashboardPage() {
                                       height={16} 
                                       className="rounded-sm"
                                     />
-                                  </div>
-                                </div>
+                            </div>
+                          </div>
                               ) : agent.id === 'sales-analysis' ? (
                                 <div className="relative flex items-center h-6 w-10">
                                   <div className="absolute left-0 h-6 w-6 bg-white rounded-full border border-gray-200 flex items-center justify-center z-10">
@@ -5518,7 +6125,7 @@ export default function DashboardPage() {
                                       height={16} 
                                       className="rounded-sm"
                                     />
-                                  </div>
+                        </div>
                                   <div className="absolute left-4 h-6 w-6 bg-white rounded-full border border-gray-200 flex items-center justify-center">
                                     <Image 
                                       src="/lslogo.png" 
@@ -5527,7 +6134,7 @@ export default function DashboardPage() {
                                       height={16} 
                                       className="rounded-sm"
                                     />
-                                  </div>
+                  </div>
                                 </div>
                               ) : (
                                 <Bot className="h-5 w-5 text-gray-500" />
@@ -5537,17 +6144,17 @@ export default function DashboardPage() {
                             <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
                           </div>
                           <p className="text-xs text-gray-500 mb-4 line-clamp-2">{agent.description}</p>
-                          <Button 
+                                            <Button
                             size="sm" 
                             className="w-full rounded-md text-xs h-8 font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-all"
-                            asChild
-                          >
+                        asChild
+                      >
                             <Link href="/dashboard/agents" className="flex items-center gap-2">
                               <CheckIcon className="h-4 w-4" />
                               {agent.lastRun ? `Active` : 'Ready'}
                             </Link>
                           </Button>
-                  </div>
+              </div>
                       ))}
                       
                       <div className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
@@ -5555,7 +6162,7 @@ export default function DashboardPage() {
                           <div className="flex items-center gap-2">
                             <PlusCircle className="h-5 w-5 text-gray-500" />
                             <h4 className="text-sm font-medium text-gray-900">Add Agents</h4>
-                          </div>
+            </div>
                           <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
                         </div>
                         <p className="text-xs text-gray-500 mb-4 line-clamp-2">Create AI agents for business automation like customer service, analytics and reporting</p>
@@ -5565,7 +6172,7 @@ export default function DashboardPage() {
                           asChild
                         >
                           <Link href="/dashboard/agents">Setup Now</Link>
-                        </Button>
+                      </Button>
                       </div>
                     </>
                   )}
@@ -5657,7 +6264,7 @@ export default function DashboardPage() {
       />
 
       {/* Tap Agent Sheet */}
-            <TapAgentSheet
+      <TapAgentSheet 
         open={isTapAgentSheetOpen}
         onOpenChange={setIsTapAgentSheetOpen}
       />
@@ -5898,8 +6505,8 @@ export default function DashboardPage() {
                         <>
                           <span style={{ color: '#007AFF' }}>{words[0]}</span>
                           <span className="text-gray-900"> {words[1]}</span>
-                        </>
-                      );
+    </>
+  );
                     } else {
                       return <span style={{ color: '#007AFF' }}>{title}</span>;
                     }
@@ -6181,24 +6788,7 @@ export default function DashboardPage() {
                       Back
                     </button>
                     <button
-                      onClick={() => {
-                        // Here you would typically save the reward to the database
-                        toast({
-                          title: "Reward Created Successfully",
-                          description: `${rewardConfig.rewardName} has been created for ${selectedCustomerForReward?.name}`,
-                          variant: "default"
-                        })
-                        setQuickRewardPopupOpen(false)
-                        setQuickRewardStep('selection')
-                        setSelectedCustomerForReward(null)
-                        setSelectedRewardType(null)
-                        setRewardConfig({
-                          amount: '',
-                          rewardName: '',
-                          description: '',
-                          pin: ''
-                        })
-                      }}
+                      onClick={saveQuickReward}
                       className="px-3 py-1.5 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors"
                     >
                       Create Reward

@@ -3,6 +3,7 @@
 import { SideNav } from "@/components/side-nav"
 import { usePathname } from "next/navigation"
 import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic, Menu, Pencil, Loader2, ExternalLink, Plug, PanelRight, Send, Activity, Clock, Wrench, Code, Layers } from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useState, useEffect, useRef } from "react"
@@ -162,6 +163,7 @@ interface Notification {
   read: boolean
   customerFirstName?: string
   customerFullName?: string
+  customerProfilePictureUrl?: string
 }
 
 interface RewardConfig {
@@ -773,7 +775,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           .map(n => n.customerId as string);
         
         // Create a map to hold customer data
-        const customerData: Record<string, { fullName?: string }> = {};
+        const customerData: Record<string, { fullName?: string, profilePictureUrl?: string }> = {};
         
         // Only fetch customer data if there are customerIds
         if (customerIds.length > 0) {
@@ -805,8 +807,21 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     customerName = `Customer ${customerId.substring(0, 4)}`;
                   }
                   
+                  // Handle profile picture following memory rules
+                  let profilePictureUrl = null;
+                  console.log(`Customer ${customerId} data:`, {
+                    shareProfileWithMerchants: data.shareProfileWithMerchants,
+                    profilePictureUrl: data.profilePictureUrl
+                  });
+                  
+                  if (data.shareProfileWithMerchants === true && data.profilePictureUrl) {
+                    profilePictureUrl = data.profilePictureUrl;
+                    console.log(`Setting profile picture for customer ${customerId}:`, profilePictureUrl);
+                  }
+                  
                   customerData[customerId] = { 
-                    fullName: customerName
+                    fullName: customerName,
+                    profilePictureUrl: profilePictureUrl
                   };
                 }
               } catch (error) {
@@ -816,12 +831,20 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           );
         }
         
-        // Attach customer names to the notifications
+        // Attach customer names and profile pictures to the notifications
         const notificationsWithCustomerNames = notificationsData.map(notification => {
           if (notification.customerId && customerData[notification.customerId]) {
+            const customerInfo = customerData[notification.customerId];
+            console.log(`Attaching customer data for notification ${notification.id}:`, {
+              customerId: notification.customerId,
+              customerFullName: customerInfo.fullName,
+              customerProfilePictureUrl: customerInfo.profilePictureUrl
+            });
+            
             return {
               ...notification,
-              customerFullName: customerData[notification.customerId].fullName
+              customerFullName: customerInfo.fullName,
+              customerProfilePictureUrl: customerInfo.profilePictureUrl
             };
           }
           return notification;
@@ -2356,7 +2379,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       <Button variant="ghost" size="icon" className="relative">
                         <Bell className="h-5 w-5" />
                         {unreadCount > 0 && (
-                          <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+                          <span className="absolute -top-0.5 -right-0.5 h-3 w-3 bg-red-500 rounded-full text-white font-bold flex items-center justify-center min-w-3 text-[8px]">
+                            {unreadCount > 9 ? '9+' : unreadCount}
+                          </span>
                         )}
                       </Button>
                     </DropdownMenuTrigger>
@@ -2396,9 +2421,29 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                               onClick={() => markAsRead(notification.id)}
                             >
                               <div className="flex gap-3">
-                                <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
-                                  {getNotificationIcon(notification.type)}
-                                </div>
+                                {/* Show customer profile picture if available, otherwise show notification icon */}
+                                {notification.customerId && notification.customerProfilePictureUrl ? (
+                                  <Avatar className="h-8 w-8 flex-shrink-0">
+                                    <AvatarImage 
+                                      src={notification.customerProfilePictureUrl} 
+                                      alt={notification.customerFullName || 'Customer'} 
+                                      onError={() => console.log('Profile picture failed to load:', notification.customerProfilePictureUrl)}
+                                    />
+                                    <AvatarFallback className="bg-muted text-muted-foreground text-xs">
+                                      {notification.customerFullName?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'C'}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                ) : notification.customerId && notification.customerFullName ? (
+                                  <Avatar className="h-8 w-8 flex-shrink-0">
+                                    <AvatarFallback className="bg-muted text-muted-foreground text-xs">
+                                      {notification.customerFullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                ) : (
+                                  <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+                                    {getNotificationIcon(notification.type)}
+                                  </div>
+                                )}
                                 <div className="flex-1 min-w-0">
                                   <div className="flex justify-between items-start gap-3">
                                     <p className="text-sm font-medium flex-1">

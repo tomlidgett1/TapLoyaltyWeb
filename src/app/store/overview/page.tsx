@@ -117,7 +117,8 @@ import {
   FileText,
   X,
   ArrowUpRight,
-  List
+  List,
+  Megaphone
 } from "lucide-react"
 
 // Kibo Table Components
@@ -4792,7 +4793,7 @@ const AdvancedCustomersView = () => {
 }
 
 // Full Customers Tab Component
-const CustomersTabContent = () => {
+const CustomersTabContent = ({ onCustomerClick }: { onCustomerClick: (customer: any) => void }) => {
   const router = useRouter()
   const { customers, loading } = useCustomers()
   const [search, setSearch] = useState("")
@@ -5322,7 +5323,7 @@ const CustomersTabContent = () => {
                   <TableRow 
                     key={customer.customerId} 
                     className="hover:bg-muted/50 cursor-pointer"
-                    onClick={() => router.push(`/customers/id?customerId=${customer.customerId}`)}
+                    onClick={() => onCustomerClick(customer)}
                   >
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -7109,12 +7110,84 @@ export default function StoreOverviewPage() {
   const [selectedMessage, setSelectedMessage] = useState<ReturnType<typeof getAllMessages>[number] | null>(null)
   const [messageDetailOpen, setMessageDetailOpen] = useState(false)
 
+  // State for customer details popup
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
+  const [customerDetailOpen, setCustomerDetailOpen] = useState(false)
+  const [customerTransactions, setCustomerTransactions] = useState<Transaction[]>([])
+  const [customerRedemptions, setCustomerRedemptions] = useState<Redemption[]>([])
+  const [customerDetailActiveTab, setCustomerDetailActiveTab] = useState('details')
+
   // Handle message click
   const handleMessageClick = (message: ReturnType<typeof getAllMessages>[number]) => {
     setSelectedMessage(message)
     setMessageDetailOpen(true)
   }
-  
+
+  // Fetch customer transactions
+  const fetchCustomerTransactions = async (customerId: string) => {
+    if (!user?.uid) return
+    
+    try {
+      const transactionsRef = collection(db, 'merchants', user.uid, 'transactions')
+      const transactionsQuery = query(
+        transactionsRef,
+        where('customerId', '==', customerId),
+        orderBy('createdAt', 'desc'),
+        limit(20)
+      )
+      const transactionsSnapshot = await getDocs(transactionsQuery)
+      
+      const transactions = transactionsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Transaction[]
+      
+      setCustomerTransactions(transactions)
+    } catch (error) {
+      console.error('Error fetching customer transactions:', error)
+      setCustomerTransactions([])
+    }
+  }
+
+  // Fetch customer redemptions
+  const fetchCustomerRedemptions = async (customerId: string) => {
+    if (!user?.uid) return
+    
+    try {
+      const redemptionsRef = collection(db, 'merchants', user.uid, 'redemptions')
+      const redemptionsQuery = query(
+        redemptionsRef,
+        where('customerId', '==', customerId),
+        orderBy('redemptionDate', 'desc'),
+        limit(20)
+      )
+      const redemptionsSnapshot = await getDocs(redemptionsQuery)
+      
+      const redemptions = redemptionsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Redemption[]
+      
+      setCustomerRedemptions(redemptions)
+    } catch (error) {
+      console.error('Error fetching customer redemptions:', error)
+      setCustomerRedemptions([])
+    }
+  }
+
+  // Handle customer click
+  const handleCustomerClick = async (customer: any) => {
+    setSelectedCustomer(customer)
+    setCustomerDetailOpen(true)
+    setCustomerDetailActiveTab('details')
+    
+    // Fetch customer transactions and redemptions
+    await Promise.all([
+      fetchCustomerTransactions(customer.customerId),
+      fetchCustomerRedemptions(customer.customerId)
+    ])
+  }
+
   // Fetch data on component mount
   useEffect(() => {
     if (user?.uid) {
@@ -7615,7 +7688,7 @@ export default function StoreOverviewPage() {
     sentAt?: any;
     recipients: number;
     openRate?: number;
-    type: 'email' | 'push';
+    notificationAction: string;
     status: 'sent' | 'draft';
     engagement: number;
     body?: string;
@@ -7625,6 +7698,7 @@ export default function StoreOverviewPage() {
     totalRecipients?: number;
     lastClickAt?: any;
     lastReadAt?: any;
+    selectedCohorts?: string[];
   }> => {
     // Return only messages from merchants/{merchantId}/broadcasts collection
     const allMessages = messages.map(msg => ({
@@ -7635,7 +7709,7 @@ export default function StoreOverviewPage() {
       sentAt: msg.sentAt,
       recipients: msg.recipients,
       openRate: msg.openRate,
-      type: 'email' as const,
+      notificationAction: msg.notificationAction,
       status: msg.sent ? 'sent' as const : 'draft' as const,
       engagement: msg.openRate || 0,
       clickRate: msg.clickRate,
@@ -7643,7 +7717,8 @@ export default function StoreOverviewPage() {
       uniqueClicks: msg.uniqueClicks || 0,
       totalRecipients: msg.totalRecipients || msg.recipients,
       lastClickAt: msg.lastClickAt,
-      lastReadAt: msg.lastReadAt
+      lastReadAt: msg.lastReadAt,
+      selectedCohorts: msg.selectedCohorts || []
     })).sort((a, b) => {
       const aTime = a.sentAt ? (a.sentAt.toDate ? a.sentAt.toDate().getTime() : new Date(a.sentAt).getTime()) : 0
       const bTime = b.sentAt ? (b.sentAt.toDate ? b.sentAt.toDate().getTime() : new Date(b.sentAt).getTime()) : 0
@@ -7693,21 +7768,32 @@ export default function StoreOverviewPage() {
       ),
     },
     {
-      accessorKey: 'type',
+      accessorKey: 'notificationAction',
       header: ({ column }) => (
-        <TableColumnHeader column={column} title="Type" />
+        <TableColumnHeader column={column} title="Action" />
       ),
-      cell: ({ row }) => (
-        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-          <div className={cn(
-            "h-1.5 w-1.5 rounded-full flex-shrink-0",
-            row.original.type === 'email' 
-              ? "bg-blue-500" 
-              : "bg-orange-500"
-          )}></div>
-          {row.original.type === 'email' ? 'Email' : 'Push Notification'}
-        </span>
-      ),
+      cell: ({ row }) => {
+        const action = row.original.notificationAction
+        const getActionDisplay = (action: string) => {
+          switch (action) {
+            case 'sendEmail':
+              return { text: 'Send Email', color: 'bg-blue-500' }
+            case 'sendPushNotification':
+              return { text: 'Push Notification', color: 'bg-orange-500' }
+            case 'showAnnouncement':
+              return { text: 'Show Announcement', color: 'bg-green-500' }
+            default:
+              return { text: action, color: 'bg-gray-500' }
+          }
+        }
+        const { text, color } = getActionDisplay(action)
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+            <div className={cn("h-1.5 w-1.5 rounded-full flex-shrink-0", color)}></div>
+            {text}
+          </span>
+        )
+      },
     },
     {
       accessorKey: 'recipients',
@@ -7722,21 +7808,35 @@ export default function StoreOverviewPage() {
       ),
     },
     {
-      accessorKey: 'status',
+      accessorKey: 'selectedCohorts',
       header: ({ column }) => (
-        <TableColumnHeader column={column} title="Status" />
+        <TableColumnHeader column={column} title="Cohorts" />
       ),
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <div
-            className="h-2 w-2 rounded-full"
-            style={{ 
-              backgroundColor: row.original.status === 'sent' ? '#10B981' : '#6B7280' 
-            }}
-          />
-          <span className="text-sm font-medium capitalize">{row.original.status}</span>
-        </div>
-      ),
+      cell: ({ row }) => {
+        const cohorts = row.original.selectedCohorts || []
+        
+        const capitalizeFirstLetter = (str: string) => {
+          return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
+        }
+        
+        if (cohorts.length === 0) {
+          return <span className="text-sm text-muted-foreground">No cohorts</span>
+        }
+        
+        return (
+          <div className="flex gap-1">
+            {cohorts.map((cohort, index) => (
+              <span 
+                key={index} 
+                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit"
+              >
+                <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                {capitalizeFirstLetter(cohort)}
+              </span>
+            ))}
+          </div>
+        )
+      },
     },
     {
       accessorKey: 'sentAt',
@@ -7928,7 +8028,7 @@ export default function StoreOverviewPage() {
           </TabsContent>
           
           <TabsContent value="customers">
-            <CustomersTabContent />
+            <CustomersTabContent onCustomerClick={handleCustomerClick} />
           </TabsContent>
           
           <TabsContent value="messages">
@@ -8332,19 +8432,25 @@ export default function StoreOverviewPage() {
               <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
                 <div className="h-10 w-10 flex-shrink-0">
                   <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-medium border border-gray-200 ${
-                    selectedMessage.type === 'email' ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
+                    selectedMessage.notificationAction === 'sendEmail' ? 'bg-blue-100 text-blue-600' : 
+                    selectedMessage.notificationAction === 'sendPushNotification' ? 'bg-orange-100 text-orange-600' : 
+                    'bg-green-100 text-green-600'
                   }`}>
-                    {selectedMessage.type === 'email' ? (
+                    {selectedMessage.notificationAction === 'sendEmail' ? (
                       <Mail className="h-5 w-5" />
-                    ) : (
+                    ) : selectedMessage.notificationAction === 'sendPushNotification' ? (
                       <BellRing className="h-5 w-5" />
+                    ) : (
+                      <Megaphone className="h-5 w-5" />
                     )}
                   </div>
                 </div>
                 <div>
                   <p className="font-medium text-gray-900">{selectedMessage.title}</p>
                   <p className="text-sm text-gray-500">
-                    {selectedMessage.type === 'email' ? 'Email Message' : 'Push Notification'}
+                    {selectedMessage.notificationAction === 'sendEmail' ? 'Email Message' : 
+                     selectedMessage.notificationAction === 'sendPushNotification' ? 'Push Notification' : 
+                     'Announcement'}
                   </p>
                 </div>
               </div>
@@ -8446,6 +8552,232 @@ export default function StoreOverviewPage() {
                   <span className="text-sm text-gray-500 font-mono">{selectedMessage.id}</span>
                 </div>
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Customer Details Dialog */}
+      <Dialog open={customerDetailOpen} onOpenChange={setCustomerDetailOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out">
+          <DialogHeader>
+            <DialogTitle>Customer Details</DialogTitle>
+          </DialogHeader>
+          
+          {selectedCustomer && (
+            <div className="space-y-6">
+              {/* Enhanced Customer Header */}
+              <div className="border-b border-gray-200 pb-4">
+                <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-md">
+                  <div className="h-16 w-16 rounded-md bg-[#007AFF]/10 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    {selectedCustomer.profileData?.shareProfileWithMerchants && selectedCustomer.profileData?.profilePictureUrl ? (
+                      <img 
+                        src={selectedCustomer.profileData.profilePictureUrl} 
+                        alt={selectedCustomer.fullName}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <User className="h-8 w-8 text-[#007AFF]" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-gray-900">{selectedCustomer.fullName}</h3>
+                    <p className="text-sm text-gray-600 font-mono">{selectedCustomer.customerId}</p>
+                    {selectedCustomer.membershipTier && (
+                      <div className="mt-1">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                          <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                          {selectedCustomer.membershipTier}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-blue-600">{selectedCustomer.pointsBalance?.toLocaleString() || '0'}</div>
+                    <div className="text-xs text-gray-500">Points Balance</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabs */}
+              <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+                <button
+                  onClick={() => setCustomerDetailActiveTab('details')}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                    customerDetailActiveTab === 'details'
+                      ? "text-gray-800 bg-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-200/70"
+                  )}
+                >
+                  <User size={15} />
+                  Details
+                </button>
+                <button
+                  onClick={() => setCustomerDetailActiveTab('transactions')}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                    customerDetailActiveTab === 'transactions'
+                      ? "text-gray-800 bg-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-200/70"
+                  )}
+                >
+                  <ShoppingBag size={15} />
+                  Transactions
+                </button>
+                <button
+                  onClick={() => setCustomerDetailActiveTab('redemptions')}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                    customerDetailActiveTab === 'redemptions'
+                      ? "text-gray-800 bg-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-200/70"
+                  )}
+                >
+                  <Gift size={15} />
+                  Redemptions
+                </button>
+              </div>
+
+              {/* Tab Content */}
+              {customerDetailActiveTab === 'details' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-700">Lifetime Spend</span>
+                      <span className="text-sm font-semibold text-green-600">${selectedCustomer.totalLifetimeSpend?.toLocaleString() || '0'}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-700">Total Transactions</span>
+                      <span className="text-sm font-semibold">{selectedCustomer.lifetimeTransactionCount || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-700">Total Redemptions</span>
+                      <span className="text-sm font-semibold">{selectedCustomer.redemptionCount || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-700">Days Since Last Visit</span>
+                      <span className="text-sm font-semibold">{selectedCustomer.daysSinceLastVisit || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-700">Average Transaction</span>
+                      <span className="text-sm font-semibold">${selectedCustomer.avg_txn_value?.toFixed(2) || '0.00'}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-700">First Purchase</span>
+                      <span className="text-sm font-semibold">{selectedCustomer.firstTransactionDate ? formatDate(selectedCustomer.firstTransactionDate) : 'N/A'}</span>
+                    </div>
+                  </div>
+                  
+                  {/* Current Cohort */}
+                  {selectedCustomer.currentCohort && (
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-gray-700">Current Cohort</h4>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                          <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                          {selectedCustomer.currentCohort.name}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {selectedCustomer.currentCohort.daysInCohort} days
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Contact Information */}
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-gray-700">Contact Information</h4>
+                    <div className="space-y-1">
+                      {selectedCustomer.email && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">Email</span>
+                          <span className="text-sm">{selectedCustomer.email}</span>
+                        </div>
+                      )}
+                      {selectedCustomer.phone && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">Phone</span>
+                          <span className="text-sm">{selectedCustomer.phone}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {customerDetailActiveTab === 'transactions' && (
+                <div className="space-y-4">
+                  <h4 className="font-medium text-gray-700">Recent Transactions ({customerTransactions.length})</h4>
+                  {customerTransactions.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-sm text-gray-500">No transactions found</p>
+                      <p className="text-xs text-gray-400 mt-1">Customer ID: {selectedCustomer?.customerId}</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {customerTransactions.map((transaction) => (
+                        <div key={transaction.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-md bg-green-100 flex items-center justify-center">
+                              <DollarSign className="h-4 w-4 text-green-600" />
+                            </div>
+                            <div>
+                              <div className="font-medium text-sm">${transaction.amount}</div>
+                              <div className="text-xs text-gray-500">
+                                {formatDate(transaction.createdAt)}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                              <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                              {transaction.status}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {customerDetailActiveTab === 'redemptions' && (
+                <div className="space-y-4">
+                  <h4 className="font-medium text-gray-700">Recent Redemptions ({customerRedemptions.length})</h4>
+                  {customerRedemptions.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-sm text-gray-500">No redemptions found</p>
+                      <p className="text-xs text-gray-400 mt-1">Customer ID: {selectedCustomer?.customerId}</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {customerRedemptions.map((redemption) => (
+                        <div key={redemption.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-md bg-blue-100 flex items-center justify-center">
+                              <Gift className="h-4 w-4 text-blue-600" />
+                            </div>
+                            <div>
+                              <div className="font-medium text-sm">{redemption.rewardName}</div>
+                              <div className="text-xs text-gray-500">
+                                {formatDate(redemption.redemptionDate)}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-blue-600">{redemption.pointsUsed} pts</span>
+                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                              <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                              {redemption.status}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
